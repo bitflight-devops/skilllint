@@ -1,0 +1,113 @@
+[project]
+name = "skilllint"
+description = "Static analysis linter for Claude Code plugins, skills, and agents"
+readme = "README.md"
+dynamic = ["version"]
+authors = [{name = "Jamie Nelson", email = "jamie@bitflight.io"}]
+maintainers = [{name = "Jamie Nelson", email = "jamie@bitflight.io"}]
+license = {text = "MIT"}
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Quality Assurance",
+]
+keywords = [
+    "claude",
+    "claude-code",
+    "agent",
+    "skill",
+    "plugin",
+    "linter",
+    "static-analysis",
+]
+requires-python = ">=3.11,<3.15"
+dependencies = [
+    "gitpython>=3.1.45",
+    "pydantic>=2.0.0",
+    "python-frontmatter>=1.1.0",
+    "ruamel.yaml>=0.18.0",
+    "tiktoken>=0.8.0",
+    "typer>=0.21.0",
+]
+
+[project.scripts]
+agentlint = "skilllint.plugin_validator:app"
+skillint = "skilllint.plugin_validator:app"
+skilllint = "skilllint.plugin_validator:app"
+
+[project.urls]
+Homepage = "https://github.com/bitflight-devops/agentskills-linter"
+Issues = "https://github.com/bitflight-devops/agentskills-linter/issues"
+Repository = "https://github.com/bitflight-devops/agentskills-linter"
+
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "basedpyright>=1.37.2",
+    "hatch-vcs>=0.5.0",
+    "hatchling>=1.14.0",
+    "prek>=0.2.19",
+    "pytest-cov>=7.0.0",
+    "pytest-mock>=3.14.0",
+    "pytest-xdist>=3.8.0",
+    "pytest>=9.0.2",
+    "ruff>=0.14.0",
+]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "packages/skilllint",
+    "README.md",
+    "LICENSE",
+    "pyproject.toml",
+]
+
+[tool.hatch.build.targets.wheel]
+include = ["packages/skilllint"]
+
+[tool.hatch.build.targets.wheel.sources]
+"packages/skilllint" = "skilllint"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.pytest.ini_options]
+addopts = [
+    "--cov-report=term-missing",
+    "--cov=packages/skilllint",
+    "-v",
+    "-n",
+    "auto",
+]
+python_classes = ["Test*"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+pythonpath = [".", "packages/"]
+testpaths = ["packages/skilllint/tests"]
+
+[tool.coverage.report]
+fail_under = 60
+show_missing = true
+
+[tool.coverage.run]
+omit = [
+    "**/tests/*",
+]
+
+[tool.ruff]
+fix = true
+src = ["packages", "scripts"]
+target-version = "py311"
+
+[tool.ruff.lint]
+extend-select = ["I", "UP", "B", "RUF"]
+
+[tool.ruff.lint.isort]
+required-imports = ["from __future__ import annotations"]
