@@ -23,8 +23,9 @@ if TYPE_CHECKING:
     from collections.abc import Generator
 
 
-# Load the plugin-validator module (has hyphen in name, so use importlib)
-_VALIDATOR_PATH = Path(__file__).parent.parent / "scripts" / "plugin_validator.py"
+# Load the plugin_validator module directly from its path using importlib so
+# tests can run without relying on it being installed as a package.
+_VALIDATOR_PATH = Path(__file__).parent.parent / "plugin_validator.py"
 spec = importlib.util.spec_from_file_location("plugin_validator", _VALIDATOR_PATH)
 if spec and spec.loader:
     plugin_validator = importlib.util.module_from_spec(spec)
