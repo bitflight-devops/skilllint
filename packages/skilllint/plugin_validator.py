@@ -5514,7 +5514,6 @@ def main(
 
 # Create Typer app
 app = typer.Typer(
-    name="plugin-validator",
     help="Validate Claude Code plugins and skills",
     add_completion=False,
 )
