@@ -53,6 +53,7 @@ dev = [
     "basedpyright>=1.37.2",
     "hatch-vcs>=0.5.0",
     "hatchling>=1.14.0",
+    "hypothesis>=6.151.9",
     "prek>=0.2.19",
     "pytest-cov>=7.0.0",
     "pytest-mock>=3.14.0",
@@ -116,3 +117,5 @@ required-imports = ["from __future__ import annotations"]
 # plugin_validator.py has intentional UTF-8 reconfigure block before some imports
 # and a sys.path.insert for sibling module resolution — both predate the package layout.
 "packages/skilllint/plugin_validator.py" = ["E402"]
+# Test files use sys.path.insert + importlib to load scripts by path before importing them.
+"packages/skilllint/tests/*.py" = ["E402"]
