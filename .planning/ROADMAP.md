@@ -32,7 +32,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. `uv build` produces a `.whl` that contains bundled schema JSON files accessible via `importlib.resources.files()`
   4. Existing pre-commit hook users are not broken — hooks run from the packaged entry point and all existing tests pass
   5. `uv run plugin_validator.py` either still works or the migration path is documented and enforced
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Merge feature/initial-packaging into main; verify 521 tests pass
+- [ ] 01-02-PLAN.md — Add pluginlint entry point, exclude tests from wheel, create bundled schema directory
+- [ ] 01-03-PLAN.md — Add .pre-commit-hooks.yaml, update conftest.py to package imports, document PEP 723 migration
 
 ### Phase 2: Platform Adapters
 **Goal**: A pluggable PlatformAdapter architecture is in place with working adapters for Claude Code, Cursor, and Codex registered via Python entry_points
@@ -111,7 +116,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Package Structure | 0/TBD | Not started | - |
+| 1. Package Structure | 0/3 | Planned | - |
 | 2. Platform Adapters | 0/TBD | Not started | - |
 | 3. Fix Mode, Config, and Validator Correctness | 0/TBD | Not started | - |
 | 4. LSP Server | 0/TBD | Not started | - |
