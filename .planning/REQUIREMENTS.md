@@ -114,21 +114,58 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PKG-01 through PKG-05 | Phase 1 | Pending |
-| ADPT-01 through ADPT-05 | Phase 2 | Pending |
-| CFG-01 through CFG-04 | Phase 3 | Pending |
-| VAL-01 through VAL-09 | Phase 3 | Pending |
-| LSP-01 through LSP-06 | Phase 4 | Pending |
-| VSCE-01 through VSCE-05 | Phase 5 | Pending |
-| MCP-01 through MCP-06 | Phase 6 | Pending |
-| PLUGIN-01 through PLUGIN-05 | Phase 7 | Pending |
-| SAM-01 | Phase 3 | Pending |
+| PKG-01 | Phase 1: Package Structure | Pending |
+| PKG-02 | Phase 1: Package Structure | Pending |
+| PKG-03 | Phase 1: Package Structure | Pending |
+| PKG-04 | Phase 1: Package Structure | Pending |
+| PKG-05 | Phase 1: Package Structure | Pending |
+| ADPT-01 | Phase 2: Platform Adapters | Pending |
+| ADPT-02 | Phase 2: Platform Adapters | Pending |
+| ADPT-03 | Phase 2: Platform Adapters | Pending |
+| ADPT-04 | Phase 2: Platform Adapters | Pending |
+| ADPT-05 | Phase 2: Platform Adapters | Pending |
+| CFG-01 | Phase 3: Fix Mode, Config, and Validator Correctness | Pending |
+| CFG-02 | Phase 3: Fix Mode, Config, and Validator Correctness | Pending |
+| CFG-03 | Phase 3: Fix Mode, Config, and Validator Correctness | Pending |
+| CFG-04 | Phase 3: Fix Mode, Config, and Validator Correctness | Pending |
+| VAL-01 | Phase 3: Fix Mode, Config, and Validator Correctness | Pending |
+| VAL-02 | Phase 3: Fix Mode, Config, and Validator Correctness | Pending |
+| VAL-03 | Phase 3: Fix Mode, Config, and Validator Correctness | Pending |
+| VAL-04 | Phase 3: Fix Mode, Config, and Validator Correctness | Pending |
+| VAL-05 | Phase 3: Fix Mode, Config, and Validator Correctness | Pending |
+| VAL-06 | Phase 3: Fix Mode, Config, and Validator Correctness | Pending |
+| VAL-07 | Phase 3: Fix Mode, Config, and Validator Correctness | Pending |
+| VAL-08 | Phase 3: Fix Mode, Config, and Validator Correctness | Pending |
+| VAL-09 | Phase 3: Fix Mode, Config, and Validator Correctness | Pending |
+| SAM-01 | Phase 3: Fix Mode, Config, and Validator Correctness | Pending |
+| LSP-01 | Phase 4: LSP Server | Pending |
+| LSP-02 | Phase 4: LSP Server | Pending |
+| LSP-03 | Phase 4: LSP Server | Pending |
+| LSP-04 | Phase 4: LSP Server | Pending |
+| LSP-05 | Phase 4: LSP Server | Pending |
+| LSP-06 | Phase 4: LSP Server | Pending |
+| VSCE-01 | Phase 5: VS Code Extension | Pending |
+| VSCE-02 | Phase 5: VS Code Extension | Pending |
+| VSCE-03 | Phase 5: VS Code Extension | Pending |
+| VSCE-04 | Phase 5: VS Code Extension | Pending |
+| VSCE-05 | Phase 5: VS Code Extension | Pending |
+| MCP-01 | Phase 6: MCP Server | Pending |
+| MCP-02 | Phase 6: MCP Server | Pending |
+| MCP-03 | Phase 6: MCP Server | Pending |
+| MCP-04 | Phase 6: MCP Server | Pending |
+| MCP-05 | Phase 6: MCP Server | Pending |
+| MCP-06 | Phase 6: MCP Server | Pending |
+| PLUGIN-01 | Phase 7: Claude Code .plugin | Pending |
+| PLUGIN-02 | Phase 7: Claude Code .plugin | Pending |
+| PLUGIN-03 | Phase 7: Claude Code .plugin | Pending |
+| PLUGIN-04 | Phase 7: Claude Code .plugin | Pending |
+| PLUGIN-05 | Phase 7: Claude Code .plugin | Pending |
 
 **Coverage:**
 - v1 requirements: 46 total
 - Mapped to phases: 46
-- Unmapped: 0 ✓
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-02*
-*Last updated: 2026-03-02 after initial definition*
+*Last updated: 2026-03-02 — traceability expanded to explicit per-requirement rows after roadmap creation*
