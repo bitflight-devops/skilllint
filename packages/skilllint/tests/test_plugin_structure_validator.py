@@ -11,7 +11,6 @@ Tests:
 from __future__ import annotations
 
 import subprocess
-import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -20,10 +19,7 @@ import pytest
 if TYPE_CHECKING:
     from pytest_mock import MockerFixture
 
-# Add parent directory to path to import plugin_validator
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
-
-from plugin_validator import PluginStructureValidator
+from skilllint.plugin_validator import PluginStructureValidator
 
 
 class TestPluginStructureValidatorBasic:
@@ -67,7 +63,9 @@ class TestClaudeCLIDetection:
         # Validator should detect claude is available
         assert validator is not None
 
-    def test_handles_claude_unavailable(self, mocker: MockerFixture, tmp_path: Path) -> None:
+    def test_handles_claude_unavailable(
+        self, mocker: MockerFixture, tmp_path: Path
+    ) -> None:
         """Test validator handles claude CLI absence gracefully.
 
         Tests: Graceful degradation when CLI unavailable
@@ -94,7 +92,9 @@ class TestClaudeCLIDetection:
 class TestNonPluginDirectory:
     """Test validation skips non-plugin directories."""
 
-    def test_skips_non_plugin_directory(self, mocker: MockerFixture, tmp_path: Path) -> None:
+    def test_skips_non_plugin_directory(
+        self, mocker: MockerFixture, tmp_path: Path
+    ) -> None:
         """Test validation skips directory without plugin.json.
 
         Tests: Plugin directory detection
@@ -208,7 +208,9 @@ class TestClaudeOutputParsing:
         mocker.patch("shutil.which", return_value="/usr/local/bin/claude")
 
         mock_run = mocker.patch("subprocess.run")
-        mock_run.return_value = mocker.Mock(returncode=0, stdout="Plugin validation passed", stderr="")
+        mock_run.return_value = mocker.Mock(
+            returncode=0, stdout="Plugin validation passed", stderr=""
+        )
 
         plugin_dir = tmp_path / "test-plugin"
         plugin_dir.mkdir()
@@ -231,10 +233,15 @@ class TestClaudeOutputParsing:
         """
         mocker.patch("shutil.which", return_value="/usr/local/bin/claude")
         # Prevent skip in Claude Code session environments (CLAUDECODE / CLAUDE_CODE_REMOTE env vars)
-        mocker.patch("plugin_validator._should_skip_claude_validate", return_value=False)
+        mocker.patch(
+            "skilllint.plugin_validator._should_skip_claude_validate",
+            return_value=False,
+        )
 
         mock_run = mocker.patch("subprocess.run")
-        mock_run.return_value = mocker.Mock(returncode=1, stdout="", stderr="Error: Invalid plugin.json")
+        mock_run.return_value = mocker.Mock(
+            returncode=1, stdout="", stderr="Error: Invalid plugin.json"
+        )
 
         plugin_dir = tmp_path / "test-plugin"
         plugin_dir.mkdir()
@@ -249,7 +256,9 @@ class TestClaudeOutputParsing:
         assert result.passed is False
         assert len(result.errors) > 0
 
-    def test_startup_failure_skips_not_fails(self, mocker: MockerFixture, tmp_path: Path) -> None:
+    def test_startup_failure_skips_not_fails(
+        self, mocker: MockerFixture, tmp_path: Path
+    ) -> None:
         """Claude env/runtime startup failure must skip validation, not fail.
 
         Tests: Git-bash / PATH / env errors are treated as skip
@@ -257,7 +266,10 @@ class TestClaudeOutputParsing:
         Why: Validator must only fail on plugin validation errors, not when claude cannot run
         """
         mocker.patch("shutil.which", return_value="/usr/local/bin/claude")
-        mocker.patch("plugin_validator._should_skip_claude_validate", return_value=False)
+        mocker.patch(
+            "skilllint.plugin_validator._should_skip_claude_validate",
+            return_value=False,
+        )
 
         mock_run = mocker.patch("subprocess.run")
         mock_run.return_value = mocker.Mock(
@@ -293,7 +305,9 @@ class TestTimeoutHandling:
         mocker.patch("shutil.which", return_value="/usr/local/bin/claude")
 
         mock_run = mocker.patch("subprocess.run")
-        mock_run.side_effect = subprocess.TimeoutExpired(cmd=["claude", "plugin", "validate"], timeout=30)
+        mock_run.side_effect = subprocess.TimeoutExpired(
+            cmd=["claude", "plugin", "validate"], timeout=30
+        )
 
         plugin_dir = tmp_path / "test-plugin"
         plugin_dir.mkdir()
@@ -312,7 +326,9 @@ class TestTimeoutHandling:
 class TestFileNotFoundHandling:
     """Test FileNotFoundError handling."""
 
-    def test_file_not_found_handled(self, mocker: MockerFixture, tmp_path: Path) -> None:
+    def test_file_not_found_handled(
+        self, mocker: MockerFixture, tmp_path: Path
+    ) -> None:
         """Test FileNotFoundError is handled gracefully.
 
         Tests: Command not found handling
@@ -340,7 +356,9 @@ class TestFileNotFoundHandling:
 class TestCommandArguments:
     """Test command construction and arguments."""
 
-    def test_command_uses_full_path(self, mocker: MockerFixture, tmp_path: Path) -> None:
+    def test_command_uses_full_path(
+        self, mocker: MockerFixture, tmp_path: Path
+    ) -> None:
         """Test command uses full path from shutil.which.
 
         Tests: Command path construction
@@ -368,7 +386,9 @@ class TestCommandArguments:
             if args:
                 assert args[0] == claude_path or args[0].startswith("/")
 
-    def test_command_arguments_correct(self, mocker: MockerFixture, tmp_path: Path) -> None:
+    def test_command_arguments_correct(
+        self, mocker: MockerFixture, tmp_path: Path
+    ) -> None:
         """Test command arguments are correct.
 
         Tests: Command argument structure
@@ -401,7 +421,9 @@ class TestCommandArguments:
 class TestEdgeCases:
     """Test edge cases and boundary conditions."""
 
-    def test_nested_plugin_directory(self, mocker: MockerFixture, tmp_path: Path) -> None:
+    def test_nested_plugin_directory(
+        self, mocker: MockerFixture, tmp_path: Path
+    ) -> None:
         """Test validation works on nested plugin directories.
 
         Tests: Path resolution for nested plugins
@@ -425,7 +447,9 @@ class TestEdgeCases:
         # Should handle nested paths
         assert isinstance(result.passed, bool)
 
-    def test_symlinked_plugin_directory(self, mocker: MockerFixture, tmp_path: Path) -> None:
+    def test_symlinked_plugin_directory(
+        self, mocker: MockerFixture, tmp_path: Path
+    ) -> None:
         """Test validation works on symlinked plugin directories.
 
         Tests: Symlink handling

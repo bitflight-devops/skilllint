@@ -9,15 +9,11 @@ Tests:
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
 
-# Add parent directory to path to import plugin_validator
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
-
-from plugin_validator import InternalLinkValidator
+from skilllint.plugin_validator import InternalLinkValidator
 
 
 class TestInternalLinkValidatorBasic:
@@ -263,7 +259,12 @@ class TestExternalLinkFiltering:
 
     @pytest.mark.parametrize(
         "external_link",
-        ["https://example.com", "http://example.com", "ftp://example.com", "https://docs.python.org/3/"],
+        [
+            "https://example.com",
+            "http://example.com",
+            "ftp://example.com",
+            "https://docs.python.org/3/",
+        ],
     )
     def test_external_links_ignored(self, tmp_path: Path, external_link: str) -> None:
         """Test external links are not validated.

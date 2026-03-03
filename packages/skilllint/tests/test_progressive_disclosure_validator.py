@@ -8,15 +8,11 @@ Tests:
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
 
-# Add parent directory to path to import plugin_validator
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
-
-from plugin_validator import ProgressiveDisclosureValidator
+from skilllint.plugin_validator import ProgressiveDisclosureValidator
 
 
 class TestProgressiveDisclosureValidatorBasic:

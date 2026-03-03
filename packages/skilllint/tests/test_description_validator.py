@@ -10,15 +10,11 @@ Tests:
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
 
-# Add parent directory to path to import plugin_validator
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
-
-from plugin_validator import CM001, DescriptionValidator, FileType
+from skilllint.plugin_validator import CM001, DescriptionValidator, FileType
 
 
 class TestDescriptionValidatorBasic:
@@ -61,7 +57,9 @@ class TestValidDescriptions:
             "This skill should be activated when you need test coverage",
         ],
     )
-    def test_valid_description_passes(self, tmp_path: Path, valid_description: str) -> None:
+    def test_valid_description_passes(
+        self, tmp_path: Path, valid_description: str
+    ) -> None:
         """Test validation passes for valid descriptions.
 
         Tests: Descriptions ≥20 chars with trigger phrases
@@ -86,9 +84,17 @@ class TestShortDescriptionWarning:
 
     @pytest.mark.parametrize(
         ("short_description", "length"),
-        [("short", 5), ("test skill", 10), ("nineteen characters", 19), ("x", 1), ("", 0)],
+        [
+            ("short", 5),
+            ("test skill", 10),
+            ("nineteen characters", 19),
+            ("x", 1),
+            ("", 0),
+        ],
     )
-    def test_short_description_warning(self, tmp_path: Path, short_description: str, length: int) -> None:
+    def test_short_description_warning(
+        self, tmp_path: Path, short_description: str, length: int
+    ) -> None:
         """Test warning when description is too short (SK004).
 
         Tests: Descriptions under 20 characters
@@ -121,7 +127,9 @@ class TestMissingTriggerPhraseWarning:
             "Validates skills, agents, and commands correctly",
         ],
     )
-    def test_missing_trigger_phrase_warning(self, tmp_path: Path, description_without_trigger: str) -> None:
+    def test_missing_trigger_phrase_warning(
+        self, tmp_path: Path, description_without_trigger: str
+    ) -> None:
         """Test warning when trigger phrases missing (SK005).
 
         Tests: Descriptions without "use when", "use this", "trigger", "activate"
@@ -159,7 +167,9 @@ class TestTriggerPhraseDetection:
             "ACTIVATE this skill for testing validation",
         ],
     )
-    def test_case_insensitive_trigger_detection(self, tmp_path: Path, trigger_phrase_variant: str) -> None:
+    def test_case_insensitive_trigger_detection(
+        self, tmp_path: Path, trigger_phrase_variant: str
+    ) -> None:
         """Test trigger phrase detection is case-insensitive.
 
         Tests: Trigger phrases in various case combinations
@@ -468,7 +478,9 @@ description: "A valid agent description without any trigger phrases here"
         assert result.passed is True
         assert not any(issue.code == "SK005" for issue in result.warnings)
 
-    def test_agent_still_receives_sk004_for_short_description(self, tmp_path: Path) -> None:
+    def test_agent_still_receives_sk004_for_short_description(
+        self, tmp_path: Path
+    ) -> None:
         """Test AGENT file still receives SK004 for short description.
 
         Tests: Agents still need minimum description length

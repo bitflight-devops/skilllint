@@ -62,8 +62,7 @@ else:
     msg = f"Could not load auto_sync_manifests from {_SCRIPT_DIR}"
     raise ImportError(msg)
 
-sys.path.insert(0, str(_SCRIPT_DIR))
-from plugin_validator import (
+from skilllint.plugin_validator import (
     PluginRegistrationValidator,
     _filter_result_by_ignore,
     _find_plugin_root,
