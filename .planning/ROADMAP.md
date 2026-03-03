@@ -12,7 +12,7 @@ skilllint starts as a PEP 723 monolith and becomes a fully packaged Python linte
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Package Structure** - Migrate PEP 723 scripts to an installable Python package distributable as a .whl
+- [x] **Phase 1: Package Structure** - Migrate PEP 723 scripts to an installable Python package distributable as a .whl (completed 2026-03-03)
 - [ ] **Phase 2: Platform Adapters** - Pluggable PlatformAdapter architecture with Claude Code, Cursor, and Codex adapters
 - [ ] **Phase 3: Fix Mode, Config, and Validator Correctness** - --fix flag, config file support, validator bug fixes, and SAM tooling
 - [ ] **Phase 4: LSP Server** - Language server with diagnostics, code actions, hover, and completions driven by the validation engine
@@ -116,7 +116,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Package Structure | 2/3 | In Progress|  |
+| 1. Package Structure | 3/3 | Complete   | 2026-03-03 |
 | 2. Platform Adapters | 0/TBD | Not started | - |
 | 3. Fix Mode, Config, and Validator Correctness | 0/TBD | Not started | - |
 | 4. LSP Server | 0/TBD | Not started | - |

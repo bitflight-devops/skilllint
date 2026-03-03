@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-02-PLAN.md — all 4 CLI aliases active, tests excluded from wheel, bundled schema accessible via importlib.resources
-last_updated: "2026-03-03T15:30:02.831Z"
-last_activity: 2026-03-03 — Completed 01-01 (merge initial-packaging, 521 tests passing)
+stopped_at: Completed 01-03-PLAN.md — pre-commit hook, test import migration, README migration guide
+last_updated: "2026-03-03T15:41:53.091Z"
+last_activity: 2026-03-03 — Completed 01-02 (pluginlint alias, bundled schema, 529 tests passing)
 progress:
   total_phases: 7
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 3
-  completed_plans: 2
+  completed_plans: 3
   percent: 67
 ---
 
@@ -50,6 +50,7 @@ Progress: [███████░░░] 67%
 - Trend: improving
 
 *Updated after each plan completion*
+| Phase 01-package-structure P03 | 8 | 3 tasks | 21 files |
 
 ## Accumulated Context
 
@@ -68,6 +69,8 @@ Recent decisions affecting current work:
 - [Phase 01-02]: Bundled schema uses __init__.py namespace markers and importlib.resources.files() pattern for runtime access
 - [Phase 01-02]: v1.json is Phase 1 placeholder; Phase 2 PlatformAdapter will override with full schemas
 - [Phase 01-02]: load_bundled_schema() exported from skilllint.__init__.__all__ for direct package-level import
+- [Phase 01-package-structure]: All 17 test files migrated from sys.path.insert/importlib to from skilllint.plugin_validator import X; conftest.py no longer acts as import gateway
+- [Phase 01-package-structure]: mocker.patch paths updated to skilllint.plugin_validator.X across all test files using patching
 
 ### Pending Todos
 
@@ -80,6 +83,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-03T15:30:02.825Z
-Stopped at: Completed 01-02-PLAN.md — all 4 CLI aliases active, tests excluded from wheel, bundled schema accessible via importlib.resources
+Last session: 2026-03-03T15:41:53.088Z
+Stopped at: Completed 01-03-PLAN.md — pre-commit hook, test import migration, README migration guide
 Resume file: None
