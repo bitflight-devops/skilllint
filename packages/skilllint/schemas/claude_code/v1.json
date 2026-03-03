@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "skilllint/schemas/claude_code/v1.json",
+  "title": "Claude Code Platform Schema v1",
+  "description": "Bundled schema snapshot for Claude Code plugins, skills, agents, and commands. Accessed via importlib.resources.files() at runtime. Full adapter-driven schema loading added in Phase 2.",
+  "version": "1.0.0",
+  "platform": "claude_code",
+  "file_types": {
+    "skill": {
+      "required_fields": ["name", "version", "description"],
+      "optional_fields": ["author", "triggers", "tools", "permissions", "dependencies"]
+    },
+    "agent": {
+      "required_fields": ["name", "version", "description"],
+      "optional_fields": ["author", "tools", "permissions", "model"]
+    },
+    "command": {
+      "required_fields": ["name", "version"],
+      "optional_fields": ["description", "author"]
+    },
+    "plugin": {
+      "required_fields": ["name", "version", "description"],
+      "optional_fields": ["author", "skills", "agents", "commands", "hooks"]
+    }
+  }
+}
