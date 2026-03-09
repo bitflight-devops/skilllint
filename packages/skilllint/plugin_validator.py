@@ -69,6 +69,7 @@ if _SCRIPTS_DIR not in sys.path:
 
 import contextlib
 
+import frontmatter as _frontmatter_lib  # python-frontmatter library
 import tiktoken
 from frontmatter_core import (
     MAX_SKILL_NAME_LENGTH,
@@ -82,6 +83,9 @@ from frontmatter_core import (
 )
 from frontmatter_utils import RuamelYAMLHandler
 
+from skilllint.adapters import load_adapters, matches_file
+from skilllint.rules.as_series import run_as_series
+
 if TYPE_CHECKING:
     from pydantic_core import ErrorDetails
 
@@ -92,6 +96,10 @@ _yaml_safe = YAML(typ="safe")
 _rt_handler = RuamelYAMLHandler()
 _rt_yaml = _rt_handler.yaml
 _rt_yaml.width = 10000  # prevent line wrapping
+
+# Platform adapter registry — loaded once at module level.
+# Keys are adapter IDs (e.g. "claude_code", "cursor", "codex").
+_ADAPTERS: dict[str, object] = {a.id(): a for a in load_adapters()}
 
 
 def _safe_load_yaml(text: str) -> YamlValue:
@@ -5338,6 +5346,109 @@ def _show_help_and_exit(ctx: typer.Context, code: int = 0) -> NoReturn:
     raise typer.Exit(code) from None
 
 
+# ---------------------------------------------------------------------------
+# Platform adapter dispatch (plan 02-05)
+# ---------------------------------------------------------------------------
+
+
+def is_skill_md(path: Path) -> bool:
+    """Return True if the path is a SKILL.md file."""
+    return path.name == "SKILL.md"
+
+
+def parse_skill_md(path: Path) -> tuple[dict, list[str]]:
+    """Parse a SKILL.md file using python-frontmatter.
+
+    Returns:
+        Tuple of (frontmatter dict, body lines list).
+    """
+    post = _frontmatter_lib.load(str(path))
+    return (dict(post.metadata), post.content.splitlines())
+
+
+def run_platform_checks(path: Path, adapter: object) -> list[dict]:
+    """Run platform-specific validation for a single adapter.
+
+    Dispatches to adapter.validate(path) for all adapter types.
+    For ClaudeCodeAdapter, also routes to the existing SK/PR/HK pipeline.
+    """
+    from skilllint.adapters.claude_code.adapter import (
+        ClaudeCodeAdapter,  # type: ignore[attr-defined]
+    )
+
+    if isinstance(adapter, ClaudeCodeAdapter):
+        # Try the existing SK/PR/HK pipeline first.  Files that the pipeline
+        # does not recognise (e.g. bare plugin.json fixtures not inside a
+        # .claude-plugin/ directory) raise typer.Exit(2) — fall back to the
+        # adapter's own validate() method in that case.
+        try:
+            file_results = _validate_single_path(
+                path, check=True, fix=False, verbose=False
+            )
+        except (SystemExit, typer.Exit):
+            return list(adapter.validate(path))
+
+        violations: list[dict] = []
+        for validator_results in file_results.values():
+            for vr in validator_results:
+                if hasattr(vr, "issues"):
+                    for issue in vr.issues:
+                        violations.append(
+                            {
+                                "code": str(getattr(issue, "code", "unknown")),
+                                "severity": str(getattr(issue, "severity", "error")),
+                                "message": str(getattr(issue, "message", str(issue))),
+                            }
+                        )
+                elif isinstance(vr, dict):
+                    violations.append(vr)
+        return violations
+
+    # Cursor and Codex adapters implement validate() directly
+    return list(adapter.validate(path))  # type: ignore[union-attr]
+
+
+def validate_file(
+    path: Path,
+    adapters: dict,
+    platform_override: str | None = None,
+) -> list[dict]:
+    """Dispatch validation for a single file using the adapter registry.
+
+    AS-series fires ONCE per file (before per-adapter loop) — structural dedup.
+
+    Args:
+        path: File to validate.
+        adapters: Dict of adapter_id -> PlatformAdapter.
+        platform_override: If set, restrict to this adapter ID.
+
+    Returns:
+        List of violation dicts with keys: code, severity, message.
+    """
+    from pathlib import PurePath
+
+    pure = PurePath(path)
+    if platform_override:
+        matching = [adapters[platform_override]]
+    else:
+        matching = [a for a in adapters.values() if matches_file(a, pure)]
+
+    if not matching:
+        return []
+
+    violations: list[dict] = []
+
+    # AS-series fires once per file — structural deduplication, not set-tracking
+    if is_skill_md(path):
+        frontmatter_data, body_lines = parse_skill_md(path)
+        violations.extend(run_as_series(path, frontmatter_data, body_lines))
+
+    for adapter in matching:
+        violations.extend(run_platform_checks(path, adapter))
+
+    return violations
+
+
 def main(
     ctx: typer.Context,
     paths: Annotated[
@@ -5406,6 +5517,16 @@ def main(
             ),
         ),
     ] = None,
+    platform: Annotated[
+        str | None,
+        typer.Option(
+            "--platform",
+            help=(
+                "Restrict validation to a specific platform adapter. "
+                "Choices: claude-code, cursor, codex."
+            ),
+        ),
+    ] = None,
 ) -> None:
     """Validate Claude Code plugins, skills, agents, and commands.
 
@@ -5467,6 +5588,20 @@ def main(
         typer.echo("", err=True)
         _show_help_and_exit(ctx, code=2)
 
+    # Validate --platform value against registered adapters
+    platform_override: str | None = None
+    if platform is not None:
+        # Typer passes the CLI value as-is; normalise hyphens to underscores
+        platform_key = platform.replace("-", "_")
+        if platform_key not in _ADAPTERS:
+            typer.echo(
+                f"Unknown platform: {platform!r}. "
+                f"Valid choices: {', '.join(k.replace('_', '-') for k in _ADAPTERS)}",
+                err=True,
+            )
+            raise typer.Exit(2) from None
+        platform_override = platform_key
+
     try:
         expanded_paths, is_batch = _resolve_filter_and_expand_paths(
             paths, filter_glob, filter_type
@@ -5484,14 +5619,42 @@ def main(
         for path in expanded_paths:
             if ignore_patterns and _is_ignored(path, ignore_patterns):
                 continue
-            file_results = _validate_single_path(
-                path, check=check, fix=fix, verbose=verbose
-            )
-            for file_path, validator_results in file_results.items():
-                if file_path in all_results:
-                    all_results[file_path].extend(validator_results)
-                else:
-                    all_results[file_path] = list(validator_results)
+            if platform_override is not None:
+                # Platform-adapter dispatch path
+                violations = validate_file(path, _ADAPTERS, platform_override)
+                issues = [
+                    ValidationIssue(
+                        field=v.get("code", "unknown"),
+                        severity=(
+                            v.get("severity", "error")
+                            if v.get("severity", "error")
+                            in ("error", "warning", "info")
+                            else "error"
+                        ),
+                        message=v.get("message", ""),
+                        code=cast(ErrorCode, v.get("code", "unknown")),
+                    )
+                    for v in violations
+                ]
+                errors = [i for i in issues if i.severity == "error"]
+                warnings = [i for i in issues if i.severity == "warning"]
+                info = [i for i in issues if i.severity == "info"]
+                vr = ValidationResult(
+                    passed=len(errors) == 0,
+                    errors=errors,
+                    warnings=warnings,
+                    info=info,
+                )
+                all_results[path] = [("platform", vr)]
+            else:
+                file_results = _validate_single_path(
+                    path, check=check, fix=fix, verbose=verbose
+                )
+                for file_path, validator_results in file_results.items():
+                    if file_path in all_results:
+                        all_results[file_path].extend(validator_results)
+                    else:
+                        all_results[file_path] = list(validator_results)
 
         reporter: Reporter = (
             CIReporter() if no_color else ConsoleReporter(no_color=no_color)

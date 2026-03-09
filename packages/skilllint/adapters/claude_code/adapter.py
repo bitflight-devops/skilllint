@@ -43,5 +43,43 @@ class ClaudeCodeAdapter:
         return None
 
     def validate(self, path: pathlib.Path) -> list[dict]:
-        """Platform-level validation. Core validation handled by plan 02-05 validator."""
-        return []
+        """Platform-level validation for files outside the core SK/PR/HK pipeline.
+
+        Validates JSON files (plugin.json variants) against the bundled schema's
+        required_fields list.  SKILL.md / agent .md / hooks.json are still
+        handled by the existing _validate_single_path pipeline in
+        plugin_validator.py; this method is the fallback for file types that
+        pipeline does not recognise.
+        """
+        if path.suffix != ".json":
+            return []
+
+        import json
+
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as exc:
+            return [
+                {
+                    "code": "PL002",
+                    "severity": "error",
+                    "message": f"Invalid JSON: {exc}",
+                }
+            ]
+
+        schema = self.get_schema("plugin")
+        if schema is None:
+            return []
+
+        required: list[str] = schema.get("required_fields", [])
+        violations: list[dict] = []
+        for field in required:
+            if field not in data:
+                violations.append(
+                    {
+                        "code": "PL003",
+                        "severity": "error",
+                        "message": f"Missing required field '{field}' in plugin manifest",
+                    }
+                )
+        return violations
