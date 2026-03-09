@@ -54,7 +54,7 @@ Plans:
 - [x] 02-01-PLAN.md — Wave 0: test scaffolds and fixtures (TDD)
 - [ ] 02-02-PLAN.md — PlatformAdapter Protocol + AS-series rules AS001-AS006
 - [ ] 02-03-PLAN.md — Cursor and Codex schema namespace packages
-- [ ] 02-04-PLAN.md — Three bundled adapters + entry_points registration
+- [x] 02-04-PLAN.md — Three bundled adapters + entry_points registration
 - [ ] 02-05-PLAN.md — CLI --platform flag + adapter dispatch
 
 ### Phase 3: Fix Mode, Config, and Validator Correctness
@@ -124,7 +124,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Package Structure | 3/3 | Complete    | 2026-03-03 |
-| 2. Platform Adapters | 3/5 | In Progress|  |
+| 2. Platform Adapters | 4/5 | In Progress|  |
 | 3. Fix Mode, Config, and Validator Correctness | 0/TBD | Not started | - |
 | 4. LSP Server | 0/TBD | Not started | - |
 | 5. VS Code Extension | 0/TBD | Not started | - |

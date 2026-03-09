@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-03 (Cursor and Codex schema namespace packages)
-last_updated: "2026-03-09T20:42:00Z"
-last_activity: 2026-03-09 — Completed 02-03 (cursor/codex schemas, 4 files, load_bundled_schema verified)
+stopped_at: Completed 02-04 (ClaudeCode, Cursor, Codex adapter implementations)
+last_updated: "2026-03-09T20:57:00Z"
+last_activity: 2026-03-09 — Completed 02-04 (3 adapter files, 547 tests green)
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 8
-  completed_plans: 6
-  percent: 63
+  completed_plans: 7
+  percent: 75
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 ## Current Position
 
 Phase: 2 of 7 (Platform Adapters)
-Plan: 3 of 5 complete in current phase
+Plan: 4 of 5 complete in current phase
 Status: In progress
-Last activity: 2026-03-09 — Completed 02-03 (cursor/codex schema packages, 4 files, load_bundled_schema verified)
+Last activity: 2026-03-09 — Completed 02-04 (ClaudeCode/Cursor/Codex adapter implementations, 3 files, 547 tests green)
 
-Progress: [██████░░░░] 63%
+Progress: [███████░░░] 75%
 
 ## Performance Metrics
 
@@ -44,7 +44,7 @@ Progress: [██████░░░░] 63%
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-package-structure | 2 | 11 min | 6 min |
-| 02-platform-adapters | 3 | 13 min | 4 min |
+| 02-platform-adapters | 4 | 25 min | 6 min |
 
 **Recent Trend:**
 - Last 5 plans: 01-01 (7 min), 01-02 (4 min), 02-01 (5 min)
@@ -55,6 +55,7 @@ Progress: [██████░░░░] 63%
 | Phase 02-platform-adapters P01 | 5 | 1 task | 14 files |
 | Phase 02-platform-adapters P02 | 18 | 2 tasks | 11 files |
 | Phase 02-platform-adapters P03 | 4 | 2 tasks | 4 files |
+| Phase 02-platform-adapters P04 | 12 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -78,6 +79,9 @@ Recent decisions affecting current work:
 - **02-03:** cursor v1.json uses JSON Schema draft-07 for mdc (description required, additionalProperties false) and skill_md (agentskills.io: name+description required)
 - **02-03:** codex v1.json uses sentinel keys (x-experimental, x-non-empty, known_fields) — Codex .rules format is experimental with no stable JSON Schema spec
 - **02-03:** skill_md schema identical across cursor and codex platforms (agentskills.io frontmatter)
+- **02-04:** CodexAdapter.validate() dispatches on .md suffix (not path.name == 'AGENTS.md') — test fixtures use different names
+- **02-04:** ClaudeCodeAdapter applicable_rules = {SK,PR,HK,AS}; Cursor/Codex = {AS} only — platform-specific series TBD
+- **02-04:** pyproject.toml entry_points were already registered in 02-02 — no edit needed in 02-04
 - **01-01:** sys.path.insert block retained in plugin_validator.py — removing it breaks frontmatter_core bare-name imports in installed CLI binary; requires module rename refactor before removal
 - **01-01:** 3 CLI entry points confirmed: skilllint, skillint, agentlint — all map to skilllint.plugin_validator:app
 - [Phase 01-02]: pluginlint added as 4th CLI alias — all four map to skilllint.plugin_validator:app
@@ -98,6 +102,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-09T20:42:00Z
-Stopped at: Completed 02-03 (Cursor and Codex schema namespace packages)
-Resume file: .planning/phases/02-platform-adapters/02-04-PLAN.md
+Last session: 2026-03-09T20:57:00Z
+Stopped at: Completed 02-04 (ClaudeCode, Cursor, Codex adapter implementations)
+Resume file: .planning/phases/02-platform-adapters/02-05-PLAN.md
