@@ -115,6 +115,16 @@ Reference: https://agentskills.io/specification.md — researcher should also ch
 - `conftest.py` test fixtures: existing fixture patterns for validation tests — adapter tests follow same structure
 - Pre-commit hook: must pass file paths through adapter detection; `--platform` may be needed for pre-commit config
 
+### Research Required: Skill Loading Locations Per Platform
+The adapter's declared path patterns must reflect where each client actually scans for skills. This is a research task — researcher must verify from official docs:
+
+- **Claude Code**: which directories are scanned for skills, agents, commands, hooks (user scope, project scope, plugin scope)
+- **Cursor**: which directories Cursor scans for `.mdc` rule files and SKILL.md files (documented as `.cursor/`, `.claude/`, `.agents/skills/` — researcher confirms complete list and any scope hierarchy)
+- **Codex**: which directories are scanned at REPO, USER, ADMIN, SYSTEM scope (documented as `$CWD/.agents/skills`, `$HOME/.agents/skills`, `/etc/codex/skills` — researcher confirms complete list)
+- **agentskills.io spec**: what the open standard says about default loading locations (`/client-implementation/adding-skills-support.md`)
+
+The adapter path patterns are derived directly from these loading locations — they are not arbitrary globs. Researcher should produce a loading location matrix before planner defines adapter path pattern declarations.
+
 ### Reference Repositories
 - `/home/ubuntulinuxqa2/repos/claude-plugins-official/plugins/`: official Claude Code plugins with platform-specific validation rules — use as reference for Claude Code adapter rule matrix
 - `/home/ubuntulinuxqa2/repos/vercel-plugin/hooks/posttooluse-validate.mjs` + `patterns.mjs`: path pattern matching approach — adapters declaring path patterns mirrors this design
