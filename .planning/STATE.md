@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 2 context gathered
-last_updated: "2026-03-09T19:25:36.795Z"
-last_activity: 2026-03-03 — Completed 01-02 (pluginlint alias, bundled schema, 529 tests passing)
+stopped_at: Completed 02-01 (Wave 0 TDD scaffold — test stubs and fixtures)
+last_updated: "2026-03-09T20:38:45Z"
+last_activity: 2026-03-09 — Completed 02-01 (Wave 0 TDD scaffold, 14 fixture files, RED state confirmed)
 progress:
   total_phases: 7
   completed_phases: 1
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-02)
 
 **Core value:** An AI agent or developer who creates a plugin/skill/agent gets instant, actionable feedback — in their editor, in CI, and from the AI itself — before their work ever ships broken.
-**Current focus:** Phase 1 — Package Structure
+**Current focus:** Phase 2 — Platform Adapters
 
 ## Current Position
 
-Phase: 1 of 7 (Package Structure)
-Plan: 2 of 3 in current phase
+Phase: 2 of 7 (Platform Adapters)
+Plan: 1 of 5 complete in current phase
 Status: In progress
-Last activity: 2026-03-03 — Completed 01-02 (pluginlint alias, bundled schema, 529 tests passing)
+Last activity: 2026-03-09 — Completed 02-01 (Wave 0 TDD scaffold, 14 fixture files, RED state confirmed)
 
 Progress: [███████░░░] 67%
 
@@ -44,13 +44,15 @@ Progress: [███████░░░] 67%
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-package-structure | 2 | 11 min | 6 min |
+| 02-platform-adapters | 1 | 5 min | 5 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (7 min), 01-02 (4 min)
-- Trend: improving
+- Last 5 plans: 01-01 (7 min), 01-02 (4 min), 02-01 (5 min)
+- Trend: stable
 
 *Updated after each plan completion*
 | Phase 01-package-structure P03 | 8 | 3 tasks | 21 files |
+| Phase 02-platform-adapters P01 | 5 | 1 task | 14 files |
 
 ## Accumulated Context
 
@@ -63,6 +65,10 @@ Recent decisions affecting current work:
 - Bundled schema snapshots, not live fetch (pending)
 - `skilllint` as primary CLI name with aliases `agentlint`, `pluginlint`, `skillint` (pending)
 - LSP + VS Code extension rather than standalone GUI (pending)
+- **02-01:** Violation dict shape {code, severity, message} locked by test assertions — implementations must conform
+- **02-01:** check_skill_md(path: pathlib.Path) -> list[dict] is the AS-series entry point
+- **02-01:** Adapter interface locked: id(), path_patterns(), applicable_rules(), validate(path)
+- **02-01:** AS005 severity must be 'warning'/'warn'; AS006 must be 'info'/'information'
 - **01-01:** sys.path.insert block retained in plugin_validator.py — removing it breaks frontmatter_core bare-name imports in installed CLI binary; requires module rename refactor before removal
 - **01-01:** 3 CLI entry points confirmed: skilllint, skillint, agentlint — all map to skilllint.plugin_validator:app
 - [Phase 01-02]: pluginlint added as 4th CLI alias — all four map to skilllint.plugin_validator:app
@@ -83,6 +89,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-09T19:25:36.794Z
-Stopped at: Phase 2 context gathered
-Resume file: .planning/phases/02-platform-adapters/02-CONTEXT.md
+Last session: 2026-03-09T20:38:45Z
+Stopped at: Completed 02-01 (Wave 0 TDD scaffold — test stubs and fixtures)
+Resume file: .planning/phases/02-platform-adapters/02-02-PLAN.md
