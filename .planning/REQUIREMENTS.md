@@ -15,7 +15,7 @@
 
 ### Platform Adapters
 
-- [ ] **ADPT-01**: `PlatformAdapter` Protocol defines the interface for platform-specific schema and rule sets
+- [x] **ADPT-01**: `PlatformAdapter` Protocol defines the interface for platform-specific schema and rule sets
 - [ ] **ADPT-02**: Adapters register via Python entry_points (`skilllint.adapters`) so third-party adapters can be installed without modifying the core package
 - [ ] **ADPT-03**: Claude Code adapter — validates plugin.json, SKILL.md, agents/*.md, commands/*.md, hooks.json against Claude Code schemas
 - [x] **ADPT-04**: Cursor adapter — validates `.mdc` rule files and Cursor-specific configuration
@@ -119,7 +119,7 @@
 | PKG-03 | Phase 1: Package Structure | Complete |
 | PKG-04 | Phase 1: Package Structure | Complete |
 | PKG-05 | Phase 1: Package Structure | Complete |
-| ADPT-01 | Phase 2: Platform Adapters | Pending |
+| ADPT-01 | Phase 2: Platform Adapters | Complete |
 | ADPT-02 | Phase 2: Platform Adapters | Pending |
 | ADPT-03 | Phase 2: Platform Adapters | Pending |
 | ADPT-04 | Phase 2: Platform Adapters | Complete |

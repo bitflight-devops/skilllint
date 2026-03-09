@@ -53,6 +53,7 @@ Progress: [██████░░░░] 63%
 *Updated after each plan completion*
 | Phase 01-package-structure P03 | 8 | 3 tasks | 21 files |
 | Phase 02-platform-adapters P01 | 5 | 1 task | 14 files |
+| Phase 02-platform-adapters P02 | 18 | 2 tasks | 11 files |
 | Phase 02-platform-adapters P03 | 4 | 2 tasks | 4 files |
 
 ## Accumulated Context
@@ -70,6 +71,10 @@ Recent decisions affecting current work:
 - **02-01:** check_skill_md(path: pathlib.Path) -> list[dict] is the AS-series entry point
 - **02-01:** Adapter interface locked: id(), path_patterns(), applicable_rules(), validate(path)
 - **02-01:** AS005 severity must be 'warning'/'warn'; AS006 must be 'info'/'information'
+- **02-02:** Protocol methods are id(), path_patterns(), applicable_rules(), validate() — test contracts override plan spec
+- **02-02:** check_skill_md(path) is primary AS-series entry point; run_as_series() is alias for pre-parsed callers
+- **02-02:** Stub adapters created in 02-02 so test collection succeeds; full validation logic in 02-04
+- **02-02:** entry_points patch target is 'skilllint.adapters.importlib.metadata.entry_points' (module-level import in adapters/__init__.py)
 - **02-03:** cursor v1.json uses JSON Schema draft-07 for mdc (description required, additionalProperties false) and skill_md (agentskills.io: name+description required)
 - **02-03:** codex v1.json uses sentinel keys (x-experimental, x-non-empty, known_fields) — Codex .rules format is experimental with no stable JSON Schema spec
 - **02-03:** skill_md schema identical across cursor and codex platforms (agentskills.io frontmatter)
