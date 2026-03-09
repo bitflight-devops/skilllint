@@ -122,6 +122,7 @@ The adapter's declared path patterns must reflect where each client actually sca
 - **Cursor**: which directories Cursor scans for `.mdc` rule files and SKILL.md files (documented as `.cursor/`, `.claude/`, `.agents/skills/` — researcher confirms complete list and any scope hierarchy)
 - **Codex**: which directories are scanned at REPO, USER, ADMIN, SYSTEM scope (documented as `$CWD/.agents/skills`, `$HOME/.agents/skills`, `/etc/codex/skills` — researcher confirms complete list)
 - **agentskills.io spec**: what the open standard says about default loading locations (`/client-implementation/adding-skills-support.md`)
+- **OpenCode**: global agents at `~/.config/opencode/agents/`, per-project at `.opencode/agents/`, config at `opencode.json`. Agent format is Markdown with YAML frontmatter (`description`, `mode`, `model`, `tools`, `permission`, `temperature`, `steps`, `color`) — this is NOT the agentskills.io SKILL.md format. Researcher should determine whether OpenCode also loads agentskills.io SKILL.md files or only its own agent format, and whether an OpenCode adapter is in v1 or v2 scope.
 
 The adapter path patterns are derived directly from these loading locations — they are not arbitrary globs. Researcher should produce a loading location matrix before planner defines adapter path pattern declarations.
 
