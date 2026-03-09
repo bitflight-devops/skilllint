@@ -1,6 +1,8 @@
 # Agents
 
-This repository uses the following agent conventions:
+This project uses AI agents for automated tasks.
 
-- All agents must include a justification field in prefix_rule() calls.
-- Agents should follow the agentskills.io specification for skill files.
+## Available Agents
+
+- code-reviewer: Reviews pull requests for quality and correctness
+- test-writer: Generates test cases for new code

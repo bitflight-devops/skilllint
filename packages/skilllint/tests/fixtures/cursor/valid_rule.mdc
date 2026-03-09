@@ -1,9 +1,7 @@
 ---
-description: Enforce TypeScript strict mode in all source files.
-globs:
-  - "*.ts"
-  - "*.tsx"
-alwaysApply: false
+description: A valid cursor rule for testing the platform adapter dispatch
 ---
 
-Always enable strict mode in TypeScript configuration files.
+# Valid Rule
+
+This rule is used when testing the cursor platform adapter.

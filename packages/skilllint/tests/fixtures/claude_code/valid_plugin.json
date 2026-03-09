@@ -1,6 +1,6 @@
 {
-  "name": "my-plugin",
-  "description": "A minimal valid Claude Code plugin for testing.",
+  "name": "test-plugin",
   "version": "1.0.0",
-  "schema_version": "v1"
+  "description": "A valid test plugin for CLI platform dispatch tests",
+  "author": "Test Author"
 }

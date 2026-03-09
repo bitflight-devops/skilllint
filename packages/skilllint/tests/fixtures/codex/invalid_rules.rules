@@ -1,6 +1,5 @@
 prefix_rule(
-    pattern = "src/",
+    pattern = "*.py",
     decision = "allow",
-    justification = "Source files are owned by the core team.",
-    owner = "core-team",
+    owner = "backend-team"
 )

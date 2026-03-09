@@ -652,3 +652,180 @@ class TestFileGroupedReporting:
         assert "Total files: 1" in result.stdout, (
             f"Expected 'Total files: 1' but got: {result.stdout}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Platform adapter dispatch tests (--platform flag)
+# ---------------------------------------------------------------------------
+
+_FIXTURES = Path(__file__).parent / "fixtures"
+
+
+class TestPlatformFlag:
+    """Test --platform flag dispatches to the correct adapter."""
+
+    def test_platform_claude_code_valid_exits_0(
+        self, cli_runner: CliRunner, no_color_env: None
+    ) -> None:
+        """--platform claude-code with a valid plugin.json exits 0.
+
+        Tests: ClaudeCodeAdapter dispatch with valid file
+        How: Pass valid_plugin.json with --platform claude-code
+        Why: Valid platform files must produce exit 0
+        """
+        fixture = _FIXTURES / "claude_code" / "valid_plugin.json"
+        result = cli_runner.invoke(
+            plugin_validator.app,
+            ["--no-color", "--platform", "claude-code", str(fixture)],
+        )
+
+        assert result.exit_code == 0, (
+            f"Expected exit 0 for valid plugin.json, got {result.exit_code}. "
+            f"Output: {result.stdout}"
+        )
+
+    def test_platform_claude_code_invalid_exits_1(
+        self, cli_runner: CliRunner, no_color_env: None
+    ) -> None:
+        """--platform claude-code with an invalid plugin.json exits 1 with violations.
+
+        Tests: ClaudeCodeAdapter dispatch with invalid file
+        How: Pass invalid_plugin.json (missing required fields) with --platform claude-code
+        Why: Invalid platform files must produce exit 1
+        """
+        fixture = _FIXTURES / "claude_code" / "invalid_plugin.json"
+        result = cli_runner.invoke(
+            plugin_validator.app,
+            ["--no-color", "--platform", "claude-code", str(fixture)],
+        )
+
+        assert result.exit_code == 1, (
+            f"Expected exit 1 for invalid plugin.json, got {result.exit_code}. "
+            f"Output: {result.stdout}"
+        )
+
+    def test_platform_cursor_valid_exits_0(
+        self, cli_runner: CliRunner, no_color_env: None
+    ) -> None:
+        """--platform cursor with a valid .mdc file exits 0.
+
+        Tests: CursorAdapter dispatch with valid file
+        How: Pass valid_rule.mdc with --platform cursor
+        Why: Valid .mdc files must produce exit 0
+        """
+        fixture = _FIXTURES / "cursor" / "valid_rule.mdc"
+        result = cli_runner.invoke(
+            plugin_validator.app, ["--no-color", "--platform", "cursor", str(fixture)]
+        )
+
+        assert result.exit_code == 0, (
+            f"Expected exit 0 for valid_rule.mdc, got {result.exit_code}. "
+            f"Output: {result.stdout}"
+        )
+
+    def test_platform_cursor_invalid_exits_1_mentions_description(
+        self, cli_runner: CliRunner, no_color_env: None
+    ) -> None:
+        """--platform cursor with invalid .mdc exits 1 mentioning 'description'.
+
+        Tests: CursorAdapter dispatch with invalid file
+        How: Pass invalid_rule.mdc (missing description) with --platform cursor
+        Why: Missing required fields must be reported with field name in output
+        """
+        fixture = _FIXTURES / "cursor" / "invalid_rule.mdc"
+        result = cli_runner.invoke(
+            plugin_validator.app, ["--no-color", "--platform", "cursor", str(fixture)]
+        )
+
+        assert result.exit_code == 1, (
+            f"Expected exit 1 for invalid_rule.mdc, got {result.exit_code}. "
+            f"Output: {result.stdout}"
+        )
+        assert "description" in result.stdout.lower(), (
+            f"Expected 'description' in output, got: {result.stdout}"
+        )
+
+    def test_platform_codex_empty_agents_exits_1_mentions_empty(
+        self, cli_runner: CliRunner, no_color_env: None
+    ) -> None:
+        """--platform codex with an empty AGENTS.md exits 1 mentioning 'empty'.
+
+        Tests: CodexAdapter dispatch with empty agents file
+        How: Pass empty_agents.md with --platform codex
+        Why: Empty AGENTS.md must be detected and reported
+        """
+        fixture = _FIXTURES / "codex" / "empty_agents.md"
+        result = cli_runner.invoke(
+            plugin_validator.app, ["--no-color", "--platform", "codex", str(fixture)]
+        )
+
+        assert result.exit_code == 1, (
+            f"Expected exit 1 for empty_agents.md, got {result.exit_code}. "
+            f"Output: {result.stdout}"
+        )
+        assert "empty" in result.stdout.lower(), (
+            f"Expected 'empty' in output, got: {result.stdout}"
+        )
+
+    def test_platform_codex_valid_agents_exits_0(
+        self, cli_runner: CliRunner, no_color_env: None
+    ) -> None:
+        """--platform codex with a non-empty AGENTS.md exits 0.
+
+        Tests: CodexAdapter dispatch with valid agents file
+        How: Pass valid_agents.md with --platform codex
+        Why: Non-empty AGENTS.md must pass validation
+        """
+        fixture = _FIXTURES / "codex" / "valid_agents.md"
+        result = cli_runner.invoke(
+            plugin_validator.app, ["--no-color", "--platform", "codex", str(fixture)]
+        )
+
+        assert result.exit_code == 0, (
+            f"Expected exit 0 for valid_agents.md, got {result.exit_code}. "
+            f"Output: {result.stdout}"
+        )
+
+    def test_platform_codex_invalid_rules_exits_1_mentions_owner(
+        self, cli_runner: CliRunner, no_color_env: None
+    ) -> None:
+        """--platform codex with .rules file containing unknown field exits 1.
+
+        Tests: CodexAdapter dispatch with invalid .rules file
+        How: Pass invalid_rules.rules (contains 'owner' unknown field) with --platform codex
+        Why: Unknown fields in prefix_rule() must be reported
+        """
+        fixture = _FIXTURES / "codex" / "invalid_rules.rules"
+        result = cli_runner.invoke(
+            plugin_validator.app, ["--no-color", "--platform", "codex", str(fixture)]
+        )
+
+        assert result.exit_code == 1, (
+            f"Expected exit 1 for invalid_rules.rules, got {result.exit_code}. "
+            f"Output: {result.stdout}"
+        )
+        assert "owner" in result.stdout.lower(), (
+            f"Expected 'owner' in output, got: {result.stdout}"
+        )
+
+    def test_platform_unknown_value_exits_2(
+        self, cli_runner: CliRunner, tmp_path: Path, no_color_env: None
+    ) -> None:
+        """--platform with unknown value exits 2.
+
+        Tests: Invalid platform name produces usage error
+        How: Pass --platform unknown-platform with any file
+        Why: Invalid platform names must be reported as usage errors (exit 2)
+        """
+        dummy_file = tmp_path / "somefile.txt"
+        dummy_file.write_text("content")
+
+        result = cli_runner.invoke(
+            plugin_validator.app,
+            ["--no-color", "--platform", "unknown-platform", str(dummy_file)],
+        )
+
+        assert result.exit_code == 2, (
+            f"Expected exit 2 for unknown platform, got {result.exit_code}. "
+            f"Output: {result.stdout}"
+        )

@@ -1,5 +1,7 @@
 ---
-unknown_field: true
+type: rule
 ---
 
-This .mdc file is missing the required description field and contains an unknown field.
+# Invalid Rule
+
+This .mdc file is missing the required "description" field.
