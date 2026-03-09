@@ -48,7 +48,14 @@ Plans:
   2. Third-party adapters installed as separate packages are discovered automatically via `skilllint.adapters` entry_points — no code changes to core required
   3. `skilllint --platform claude-code` validates plugin.json, SKILL.md, agents/*.md, commands/*.md, and hooks.json against Claude Code schemas
   4. `skilllint --platform cursor` validates `.mdc` rule files; `skilllint --platform codex` validates OpenAI Codex agent format files
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+- [ ] 02-01-PLAN.md — Wave 0: test scaffolds and fixtures (TDD)
+- [ ] 02-02-PLAN.md — PlatformAdapter Protocol + AS-series rules AS001-AS006
+- [ ] 02-03-PLAN.md — Cursor and Codex schema namespace packages
+- [ ] 02-04-PLAN.md — Three bundled adapters + entry_points registration
+- [ ] 02-05-PLAN.md — CLI --platform flag + adapter dispatch
 
 ### Phase 3: Fix Mode, Config, and Validator Correctness
 **Goal**: The CLI auto-fixes safe violations, respects per-project configuration, and all known validator bugs from GitHub issues #3–#7 and #11 are resolved
@@ -117,7 +124,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Package Structure | 3/3 | Complete    | 2026-03-03 |
-| 2. Platform Adapters | 0/TBD | Not started | - |
+| 2. Platform Adapters | 0/5 | Not started | - |
 | 3. Fix Mode, Config, and Validator Correctness | 0/TBD | Not started | - |
 | 4. LSP Server | 0/TBD | Not started | - |
 | 5. VS Code Extension | 0/TBD | Not started | - |
