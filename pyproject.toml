@@ -115,7 +115,7 @@ omit = [
 fix = true
 src = ["packages", "scripts"]
 target-version = "py311"
-exclude = ["official_sources"]
+exclude = []
 
 [tool.ruff.lint]
 extend-select = ["I", "UP", "B", "RUF"]
