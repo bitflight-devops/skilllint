@@ -5089,10 +5089,7 @@ def _get_validators_for_path(path: Path) -> list[Validator]:
         path: Path to validate.
 
     Returns:
-        List of validator instances.
-
-    Raises:
-        typer.Exit: If path type is unknown.
+        List of validator instances (empty for unknown file types).
     """
     file_type = FileType.detect_file_type(path)
     validators: list[Validator] = [SymlinkTargetValidator()]
@@ -5125,12 +5122,11 @@ def _get_validators_for_path(path: Path) -> list[Validator]:
     elif file_type in {FileType.CLAUDE_MD, FileType.REFERENCE, FileType.MARKDOWN}:
         validators.append(MarkdownTokenCounter())
     else:
-        typer.echo(f"Error: Cannot determine file type for: {path}", err=True)
-        typer.echo(
-            "Expected: SKILL.md, agent .md, command .md, hooks.json, plugin directory, or markdown file",
-            err=True,
-        )
-        raise typer.Exit(2) from None
+        # Unknown file type — return empty list.  The CLI entry point
+        # (_validate_single_path) checks for this and emits a user-facing
+        # error; library callers (run_platform_checks) receive an empty
+        # validator list and can proceed without exceptions.
+        return []
 
     return validators
 
@@ -5159,6 +5155,17 @@ def _validate_single_path(
 
     validators = _get_validators_for_path(path)
     if not validators:
+        # _get_validators_for_path returns [] for unknown file types.
+        # In CLI context this is a user error — report it and exit.
+        file_type = FileType.detect_file_type(path)
+        if file_type == FileType.UNKNOWN:
+            typer.echo(f"Error: Cannot determine file type for: {path}", err=True)
+            typer.echo(
+                "Expected: SKILL.md, agent .md, command .md, hooks.json, "
+                "plugin directory, or markdown file",
+                err=True,
+            )
+            raise typer.Exit(2) from None
         return {path: []}
 
     # Load per-plugin ignore config (once per plugin root)
@@ -5377,16 +5384,15 @@ def run_platform_checks(path: Path, adapter: object) -> list[dict]:
     )
 
     if isinstance(adapter, ClaudeCodeAdapter):
-        # Try the existing SK/PR/HK pipeline first.  Files that the pipeline
-        # does not recognise (e.g. bare plugin.json fixtures not inside a
-        # .claude-plugin/ directory) raise typer.Exit(2) — fall back to the
-        # adapter's own validate() method in that case.
-        try:
-            file_results = _validate_single_path(
-                path, check=True, fix=False, verbose=False
-            )
-        except (SystemExit, typer.Exit):
+        # Route files through the SK/PR/HK pipeline only when the pipeline
+        # has validators for the file type.  Files the pipeline does not
+        # handle (e.g. test fixtures named "valid_plugin.json" rather than
+        # "plugin.json") go directly to the adapter's own validate().
+        sk_validators = _get_validators_for_path(path)
+        if not sk_validators:
             return list(adapter.validate(path))
+
+        file_results = _validate_single_path(path, check=True, fix=False, verbose=False)
 
         violations: list[dict] = []
         for validator_results in file_results.values():
