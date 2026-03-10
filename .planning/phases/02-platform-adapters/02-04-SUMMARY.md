@@ -56,7 +56,7 @@ completed: 2026-03-09
 
 # Phase 2 Plan 4: Platform Adapters Implementation Summary
 
-**Three bundled platform adapters (ClaudeCodeAdapter, CursorAdapter, CodexAdapter) fully implemented with real validation logic — cursor mdc frontmatter schema checks, codex AGENTS.md non-empty and .rules unknown-field detection, 547 tests green**
+**Three initial bundled platform adapters (ClaudeCodeAdapter, CursorAdapter, CodexAdapter) fully implemented with real validation logic — cursor mdc frontmatter schema checks, codex AGENTS.md non-empty and .rules unknown-field detection, 547 tests green. Additional adapters for platforms in `.claude/vendor/CLAUDE.md` can be added via entry_points.**
 
 ## Performance
 

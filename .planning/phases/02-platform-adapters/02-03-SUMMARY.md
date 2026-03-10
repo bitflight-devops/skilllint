@@ -32,7 +32,7 @@ key-files:
   modified: []
 
 key-decisions:
-  - "cursor v1.json uses file_types.mdc (JSON Schema draft-07, description required, additionalProperties false) and file_types.skill_md (agentskills.io: name+description required)"
+  - "cursor v1.json uses file_types.mdc (JSON Schema draft-07, no required fields — description/globs/alwaysApply all optional, additionalProperties false) and file_types.skill_md (agentskills.io: name+description required)"
   - "codex v1.json uses custom sentinel keys (x-experimental, x-non-empty, known_fields) rather than full JSON Schema — Codex .rules format is experimental and has no stable schema spec"
   - "skill_md schema identical across cursor and codex (agentskills.io frontmatter: name, description, license, metadata)"
 
@@ -60,7 +60,7 @@ completed: 2026-03-09
 
 ## Accomplishments
 
-- cursor namespace package: `__init__.py` marker + `v1.json` with `file_types.mdc` (description required, globs/alwaysApply optional, additionalProperties false) and `file_types.skill_md` (agentskills.io frontmatter)
+- cursor namespace package: `__init__.py` marker + `v1.json` with `file_types.mdc` (no required fields — description/globs/alwaysApply all optional, additionalProperties false) and `file_types.skill_md` (agentskills.io frontmatter)
 - codex namespace package: `__init__.py` marker + `v1.json` with `file_types.prefix_rule` (x-experimental, known_fields list), `file_types.agents_md` (x-non-empty sentinel), `file_types.skill_md`
 - test_bundled_schema.py: 8 passed, no regressions
 

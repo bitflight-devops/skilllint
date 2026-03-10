@@ -77,9 +77,9 @@ completed: 2026-03-09
 ## Accomplishments
 
 - PlatformAdapter @runtime_checkable Protocol with four structural methods — any duck-typed class satisfies isinstance without inheritance
-- load_adapters() discovers adapters via importlib.metadata entry_points; third-party adapters register via their own pyproject.toml without touching core
+- load_adapters() discovers adapters via importlib.metadata entry_points; third-party adapters (including future adapters for all platforms in `.claude/vendor/CLAUDE.md`) register via their own pyproject.toml without touching core
 - check_skill_md() AS001-AS006 rule engine: name format, directory match, description presence/HTML, body length, eval queries presence
-- Stub claude_code/cursor/codex adapter classes so test_adapters.py collects; full implementations deferred to plan 02-04
+- Stub claude_code/cursor/codex adapter classes (initial bundled adapters) so test_adapters.py collects; full implementations deferred to plan 02-04
 
 ## Task Commits
 

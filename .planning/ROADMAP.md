@@ -13,7 +13,7 @@ skilllint starts as a PEP 723 monolith and becomes a fully packaged Python linte
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Package Structure** - Migrate PEP 723 scripts to an installable Python package distributable as a .whl (completed 2026-03-03)
-- [ ] **Phase 2: Platform Adapters** - Pluggable PlatformAdapter architecture with Claude Code, Cursor, and Codex adapters
+- [ ] **Phase 2: Platform Adapters** - Pluggable PlatformAdapter architecture with Claude Code, Cursor, and Codex adapters (initial bundled adapters; see `.claude/vendor/CLAUDE.md` for all supported platforms)
 - [ ] **Phase 3: Fix Mode, Config, and Validator Correctness** - --fix flag, config file support, validator bug fixes, and SAM tooling
 - [ ] **Phase 4: LSP Server** - Language server with diagnostics, code actions, hover, and completions driven by the validation engine
 - [ ] **Phase 5: VS Code Extension** - TypeScript extension shell that spawns the LSP server and surfaces diagnostics in the editor
@@ -40,14 +40,15 @@ Plans:
 - [ ] 01-03-PLAN.md — Add .pre-commit-hooks.yaml, update conftest.py to package imports, document PEP 723 migration
 
 ### Phase 2: Platform Adapters
-**Goal**: A pluggable PlatformAdapter architecture is in place with working adapters for Claude Code, Cursor, and Codex registered via Python entry_points
+**Goal**: A pluggable PlatformAdapter architecture is in place with working adapters for Claude Code, Cursor, and Codex (initial bundled adapters; see `.claude/vendor/CLAUDE.md` for all supported platforms) registered via Python entry_points
 **Depends on**: Phase 1
 **Requirements**: ADPT-01, ADPT-02, ADPT-03, ADPT-04, ADPT-05
 **Success Criteria** (what must be TRUE):
-  1. `PlatformAdapter` Protocol is defined and all three bundled adapters (Claude Code, Cursor, Codex) implement it without error
+  1. `PlatformAdapter` Protocol is defined and all three initial bundled adapters (Claude Code, Cursor, Codex) implement it without error
   2. Third-party adapters installed as separate packages are discovered automatically via `skilllint.adapters` entry_points — no code changes to core required
   3. `skilllint --platform claude-code` validates plugin.json, SKILL.md, agents/*.md, commands/*.md, and hooks.json against Claude Code schemas
   4. `skilllint --platform cursor` validates `.mdc` rule files; `skilllint --platform codex` validates OpenAI Codex agent format files
+  5. Additional platform adapters can be added for all platforms listed in `.claude/vendor/CLAUDE.md` via the entry_points mechanism
 **Plans**: 5 plans
 
 Plans:
@@ -88,7 +89,7 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. Installing the extension and opening a SKILL.md file shows violations as red/yellow squiggles and entries in the VS Code Problems panel — no manual server start required
   2. Applying a quick fix from the lightbulb or "Fix all" from the command palette corrects violations in the file
-  3. The status bar shows the active platform adapter name and current violation count; clicking it switches adapters (Claude Code / Cursor / Codex)
+  3. The status bar shows the active platform adapter name and current violation count; clicking it switches between active platform adapters (see `.claude/vendor/CLAUDE.md` for all supported platforms)
   4. Extension settings (platform adapter, rule overrides) are configurable in the VS Code Settings UI and apply per-workspace
   5. The extension is publishable as a `.vsix` and listed on the VS Code Marketplace
 **Plans**: TBD

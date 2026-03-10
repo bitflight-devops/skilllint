@@ -24,7 +24,7 @@ An AI agent or developer who creates a plugin/skill/agent gets instant, actionab
 ### Active
 
 - [ ] `pyproject.toml` + proper Python package structure for `packages/skilllint`
-- [ ] Platform adapter architecture — pluggable adapters for Claude Code, Codex, Cursor, Windsurf
+- [ ] Platform adapter architecture — pluggable adapters for Claude Code, Cursor, and Codex (initial bundled adapters); see `.claude/vendor/CLAUDE.md` for all supported platforms
 - [ ] Bundled schema snapshots — versioned schemas shipped with the package, updatable on release
 - [ ] Named CLI entry points: `skilllint` (primary), `agentlint`, `pluginlint`, `skillint` (aliases)
 - [ ] Fix mode — auto-fix violations where safe, report-only otherwise

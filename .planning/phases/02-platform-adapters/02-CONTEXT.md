@@ -6,7 +6,7 @@
 <domain>
 ## Phase Boundary
 
-Define a `PlatformAdapter` Protocol and ship bundled adapters for Claude Code, Cursor, and Codex. Enable the validator to route file validation through the correct platform-specific schema and rule set. Introduce a shared agentskills.io rule series (AS-codes) that fires across all platforms. Windsurf and other platforms are v2 scope.
+Define a `PlatformAdapter` Protocol and ship bundled adapters for Claude Code, Cursor, and Codex (initial bundled adapters; see `.claude/vendor/CLAUDE.md` for all supported platforms). Enable the validator to route file validation through the correct platform-specific schema and rule set. Introduce a shared agentskills.io rule series (AS-codes) that fires across all platforms. Windsurf and other platforms are v2 scope.
 
 </domain>
 

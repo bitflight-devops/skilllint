@@ -5529,7 +5529,8 @@ def main(
             "--platform",
             help=(
                 "Restrict validation to a specific platform adapter. "
-                "Choices: claude-code, cursor, codex."
+                "Initial bundled adapters: claude-code, cursor, codex. "
+                "See .claude/vendor/CLAUDE.md for all supported platforms."
             ),
         ),
     ] = None,

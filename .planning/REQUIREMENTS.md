@@ -20,6 +20,7 @@
 - [ ] **ADPT-03**: Claude Code adapter — validates plugin.json, SKILL.md, agents/*.md, commands/*.md, hooks.json against Claude Code schemas
 - [x] **ADPT-04**: Cursor adapter — validates `.mdc` rule files and Cursor-specific configuration
 - [x] **ADPT-05**: Codex / OpenAI adapter — validates OpenAI Codex agent format files
+  - Note: Claude Code, Cursor, and Codex are the initial bundled adapters; v2 extends to all platforms in `.claude/vendor/CLAUDE.md` via the entry_points mechanism
 
 ### Fix Mode and Configuration
 
@@ -54,7 +55,7 @@
 - [ ] **VSCE-01**: TypeScript extension shell spawns Python LSP server (`python -m skilllint.lsp.server`) via stdio; zero validation logic in TypeScript
 - [ ] **VSCE-02**: Violations appear in VS Code Problems panel (diagnostics panel integration)
 - [ ] **VSCE-03**: Status bar indicator shows active platform adapter name and violation count
-- [ ] **VSCE-04**: Platform adapter selector UI lets user switch active adapter (Claude Code / Cursor / Codex)
+- [ ] **VSCE-04**: Platform adapter selector UI lets user switch active adapter (active platform adapters; see `.claude/vendor/CLAUDE.md` for all supported platforms)
 - [ ] **VSCE-05**: Extension published to VS Code Marketplace as `.vsix`
 
 ### MCP Server

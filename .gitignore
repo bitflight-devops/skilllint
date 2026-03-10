@@ -9,4 +9,6 @@ dist/
 *.egg-info/
 
 # Platform documentation vendor clones (raw git repos, updated in-place)
-.claude/vendor/
+# Ignore contents but not the directory itself (so CLAUDE.md can be tracked)
+.claude/vendor/*
+!.claude/vendor/CLAUDE.md

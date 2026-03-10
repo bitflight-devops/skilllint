@@ -6,7 +6,7 @@
 
 ## Summary
 
-Phase 2 builds a pluggable `PlatformAdapter` architecture using `typing.Protocol` (structural subtyping) so third-party adapters never import from `skilllint`. Three bundled adapters ship with the package — Claude Code, Cursor, and Codex — registered via Python entry_points in the `skilllint.adapters` group. A new AS-series rule set fires cross-platform on any SKILL.md, layered beneath platform-specific rule series.
+Phase 2 builds a pluggable `PlatformAdapter` architecture using `typing.Protocol` (structural subtyping) so third-party adapters never import from `skilllint`. Three initial bundled adapters ship with the package — Claude Code, Cursor, and Codex — registered via Python entry_points in the `skilllint.adapters` group. Additional adapters for all platforms listed in `.claude/vendor/CLAUDE.md` can be added via the same entry_points mechanism without modifying core. A new AS-series rule set fires cross-platform on any SKILL.md, layered beneath platform-specific rule series.
 
 The key design insight from CONTEXT.md is that adapters are **data providers, not logic owners**: each adapter declares its schema, path patterns, and applicable rule codes; the core validator owns all execution. The layered validation model (AS-series baseline + platform-specific rules) means the same SKILL.md can be validated by multiple adapters simultaneously without double-counting AS violations.
 
@@ -294,7 +294,7 @@ Path patterns for adapter declaration:
 Confidence: MEDIUM — Cursor docs confirm `.cursor/rules/*.mdc` and `.cursor/skills/`; `.claude/skills/` compatibility is confirmed by community docs and the unified skills pattern; `.agents/skills/` confirmed as a widely-adopted cross-platform convention.
 
 **`.mdc` frontmatter fields** (Cursor rules):
-- `description` — required, brief explanation of the rule's purpose
+- `description` — optional (required only for "Apply Intelligently" rule type); brief explanation of the rule's purpose
 - `globs` — list of file patterns; controls auto-attach behavior
 - `alwaysApply` — boolean; when `true` rule always attaches regardless of context
 
@@ -435,7 +435,7 @@ codex       = "skilllint.adapters.codex:CodexAdapter"
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Cursor MDC Rule Frontmatter",
   "type": "object",
-  "required": ["description"],
+  "required": [],
   "properties": {
     "description": { "type": "string", "minLength": 1 },
     "globs":       { "oneOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}] },
@@ -444,7 +444,7 @@ codex       = "skilllint.adapters.codex:CodexAdapter"
   "additionalProperties": false
 }
 ```
-Confidence: HIGH — fields verified via cursor.com/docs/context/rules
+Confidence: HIGH — fields verified via cursor.com/docs/context/rules; description is only required for "Apply Intelligently" rule type per official FAQ
 
 ### Codex .rules Starlark Field Validation (structural, not full parse)
 ```python
@@ -526,7 +526,7 @@ Confidence: HIGH for field names — verified via developers.openai.com/codex/ru
 - Fixtures: `tests/fixtures/claude_code/` directory with valid and invalid examples of each file type
 
 **SC4 — cursor + codex platform validation:**
-- `tests/test_adapters.py::test_cursor_adapter_mdc_validation` — validates `.mdc` files with correct/incorrect frontmatter; asserts `description` required, `alwaysApply` must be boolean, unknown fields rejected
+- `tests/test_adapters.py::test_cursor_adapter_mdc_validation` — validates `.mdc` files with correct/incorrect frontmatter; asserts `alwaysApply` must be boolean, unknown fields rejected (description is optional)
 - `tests/test_adapters.py::test_codex_rules_field_validation` — validates `.rules` files for `prefix_rule()` field names; unknown fields produce violations; `decision` values validated against `{"allow", "prompt", "forbidden"}`
 - `tests/test_adapters.py::test_codex_agents_md_validation` — empty `AGENTS.md` produces violation; non-empty passes
 - Fixtures: `tests/fixtures/cursor/` and `tests/fixtures/codex/` directories with valid and invalid examples

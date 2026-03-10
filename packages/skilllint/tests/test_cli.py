@@ -723,14 +723,14 @@ class TestPlatformFlag:
             f"Output: {result.stdout}"
         )
 
-    def test_platform_cursor_invalid_exits_1_mentions_description(
+    def test_platform_cursor_invalid_exits_1_mentions_additional_property(
         self, cli_runner: CliRunner, no_color_env: None
     ) -> None:
-        """--platform cursor with invalid .mdc exits 1 mentioning 'description'.
+        """--platform cursor with invalid .mdc exits 1 for unknown frontmatter field.
 
         Tests: CursorAdapter dispatch with invalid file
-        How: Pass invalid_rule.mdc (missing description) with --platform cursor
-        Why: Missing required fields must be reported with field name in output
+        How: Pass invalid_rule.mdc (contains unknown 'type' field) with --platform cursor
+        Why: Unknown frontmatter fields violate additionalProperties: false
         """
         fixture = _FIXTURES / "cursor" / "invalid_rule.mdc"
         result = cli_runner.invoke(
@@ -741,8 +741,8 @@ class TestPlatformFlag:
             f"Expected exit 1 for invalid_rule.mdc, got {result.exit_code}. "
             f"Output: {result.stdout}"
         )
-        assert "description" in result.stdout.lower(), (
-            f"Expected 'description' in output, got: {result.stdout}"
+        assert "type" in result.stdout.lower(), (
+            f"Expected 'type' (the unknown field) in output, got: {result.stdout}"
         )
 
     def test_platform_codex_empty_agents_exits_1_mentions_empty(
