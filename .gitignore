@@ -7,3 +7,9 @@ __pycache__/
 .mypy_cache/
 dist/
 *.egg-info/
+
+# Platform documentation vendor clones (raw git repos, updated in-place)
+.claude/vendor/
+
+# Dated snapshots of platform docs for schema auditing
+official_sources/
