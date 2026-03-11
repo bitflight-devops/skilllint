@@ -52,14 +52,45 @@ class HttpFileDriftResult:
     before_content: str
     after_content: str
 
+    def to_dict(self) -> dict[str, str]:
+        """Serialize to a JSON-compatible dictionary.
+
+        Returns:
+            Dictionary with all fields.
+        """
+        return {
+            "filename": self.filename,
+            "before_hash": self.before_hash,
+            "after_hash": self.after_hash,
+            "before_content": self.before_content,
+            "after_content": self.after_content,
+        }
+
 
 @dataclass
 class HttpDriftResult:
     """Drift result for an HTTP doc-site platform."""
 
     provider: str
+    type_: str = "http"
     files: list[HttpFileDriftResult] = field(default_factory=list)
     changelog: str | None = None
+
+    def to_dict(self) -> dict[str, object]:
+        """Serialize to a JSON-compatible dictionary.
+
+        The ``type_`` field is serialized as ``"type"`` to avoid
+        clashing with the Python builtin.
+
+        Returns:
+            Dictionary with all fields.
+        """
+        return {
+            "provider": self.provider,
+            "type": self.type_,
+            "files": [f.to_dict() for f in self.files],
+            "changelog": self.changelog,
+        }
 
 
 @dataclass
@@ -72,6 +103,23 @@ class GitDriftResult:
     diff: str = ""
     changelog: str = ""
 
+    def to_dict(self) -> dict[str, str]:
+        """Serialize to a JSON-compatible dictionary.
+
+        Includes ``"type": "git"`` to distinguish from HTTP results.
+
+        Returns:
+            Dictionary with all fields plus a ``type`` discriminator.
+        """
+        return {
+            "type": "git",
+            "provider": self.provider,
+            "before_sha": self.before_sha,
+            "after_sha": self.after_sha,
+            "diff": self.diff,
+            "changelog": self.changelog,
+        }
+
 
 @dataclass
 class DriftReport:
@@ -79,6 +127,19 @@ class DriftReport:
 
     fetch_time: str
     changed: list[GitDriftResult | HttpDriftResult] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, object]:
+        """Serialize to a JSON-compatible dictionary.
+
+        Calls ``to_dict()`` on each item in ``changed``.
+
+        Returns:
+            Dictionary with ``fetch_time`` and serialized ``changed`` list.
+        """
+        return {
+            "fetch_time": self.fetch_time,
+            "changed": [item.to_dict() for item in self.changed],
+        }
 
 
 # ---------------------------------------------------------------------------
