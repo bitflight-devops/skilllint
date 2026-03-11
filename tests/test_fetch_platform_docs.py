@@ -23,9 +23,6 @@ from scripts.fetch_platform_docs import (
     clone_or_update_repo,
     fetch_doc_site,
 )
-from typer.testing import CliRunner
-
-runner = CliRunner()
 
 # ---------------------------------------------------------------------------
 # _sha256 tests

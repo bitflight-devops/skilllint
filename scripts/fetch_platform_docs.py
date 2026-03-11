@@ -571,7 +571,7 @@ def fetch(
 
     # Phase A: Clone/update git repos
     console.print("\n[bold]Phase A: Clone/update git repos[/bold]")
-    git_results: list[GitDriftResult | HttpDriftResult] = []
+    git_results: list[GitDriftResult] = []
     for platform in GIT_PLATFORMS:
         result = clone_or_update_repo(platform, dry_run=dry_run)
         if result is not None:
@@ -579,7 +579,7 @@ def fetch(
 
     # Phase B: Fetch doc-site pages
     console.print("\n[bold]Phase B: Fetch doc-site pages[/bold]")
-    http_results: list[GitDriftResult | HttpDriftResult] = []
+    http_results: list[HttpDriftResult] = []
     for platform in DOC_SITE_PLATFORMS:
         result = fetch_doc_site(platform, dry_run=dry_run)
         if result is not None:
