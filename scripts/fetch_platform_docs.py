@@ -15,8 +15,10 @@ Clones/updates git repos and fetches doc-site pages into .claude/vendor/.
 from __future__ import annotations
 
 import hashlib
+import json
 import subprocess
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, final
 
@@ -170,6 +172,26 @@ def _read_text_or_none(path: Path) -> str | None:
         return path.read_text(encoding="utf-8")
     except FileNotFoundError:
         return None
+
+
+# ---------------------------------------------------------------------------
+# Drift report writer
+# ---------------------------------------------------------------------------
+
+
+def _write_drift_report(report: DriftReport) -> None:
+    """Serialize and write a drift report to the pending-drift JSON file.
+
+    Creates parent directories if they do not exist.
+
+    Args:
+        report: The drift report to persist.
+    """
+    DRIFT_FILE.parent.mkdir(parents=True, exist_ok=True)
+    DRIFT_FILE.write_text(
+        json.dumps(report.to_dict(), indent=2) + "\n",
+        encoding="utf-8",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -526,6 +548,9 @@ def fetch(
 
     Idempotent: safe to run multiple times. Uses git pull for existing
     clones, git clone for first run.
+
+    Raises:
+        typer.Exit: Exit code 2 when vendor changes are detected (non-dry-run).
     """
     if dry_run:
         console.print(
@@ -546,18 +571,44 @@ def fetch(
 
     # Phase A: Clone/update git repos
     console.print("\n[bold]Phase A: Clone/update git repos[/bold]")
+    git_results: list[GitDriftResult | HttpDriftResult] = []
     for platform in GIT_PLATFORMS:
-        clone_or_update_repo(platform, dry_run=dry_run)
+        result = clone_or_update_repo(platform, dry_run=dry_run)
+        if result is not None:
+            git_results.append(result)
 
     # Phase B: Fetch doc-site pages
     console.print("\n[bold]Phase B: Fetch doc-site pages[/bold]")
+    http_results: list[GitDriftResult | HttpDriftResult] = []
     for platform in DOC_SITE_PLATFORMS:
-        fetch_doc_site(platform, dry_run=dry_run)
+        result = fetch_doc_site(platform, dry_run=dry_run)
+        if result is not None:
+            http_results.append(result)
+
+    # Collect all changes
+    changed_results = git_results + http_results
 
     # Summary
     console.print()
     if dry_run:
         console.print(":white_check_mark: [bold green]Dry run complete.[/bold green]")
+    elif changed_results:
+        report = DriftReport(
+            fetch_time=datetime.now(UTC).isoformat(),
+            changed=changed_results,
+        )
+        _write_drift_report(report)
+
+        provider_names = ", ".join(r.provider for r in changed_results)
+        console.print(
+            Panel(
+                f"Providers with changes: [bold]{provider_names}[/bold]\n"
+                f"Report written to: {DRIFT_FILE}",
+                title=":warning: Vendor Drift Detected",
+                border_style="yellow",
+            )
+        )
+        raise typer.Exit(code=2)
     else:
         console.print(
             f":white_check_mark: [bold green]Done. Vendor dir: {VENDOR_DIR}[/bold green]"

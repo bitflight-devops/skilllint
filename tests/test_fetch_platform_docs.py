@@ -23,6 +23,9 @@ from scripts.fetch_platform_docs import (
     clone_or_update_repo,
     fetch_doc_site,
 )
+from typer.testing import CliRunner
+
+runner = CliRunner()
 
 # ---------------------------------------------------------------------------
 # _sha256 tests
@@ -842,3 +845,230 @@ def test_clone_or_update_repo_first_clone_returns_none(
 
     # Assert
     assert result is None
+
+
+# ---------------------------------------------------------------------------
+# _write_drift_report tests
+# ---------------------------------------------------------------------------
+
+
+def test_write_drift_report_creates_json_file(tmp_path: Path) -> None:
+    """_write_drift_report writes a valid JSON file to DRIFT_FILE."""
+    # Arrange
+    drift_file = tmp_path / ".drift-pending.json"
+    report = DriftReport(
+        fetch_time="2026-03-11T00:00:00+00:00",
+        changed=[
+            GitDriftResult(provider="claude_code", before_sha="aaa", after_sha="bbb"),
+        ],
+    )
+
+    with patch("scripts.fetch_platform_docs.DRIFT_FILE", drift_file):
+        # Act
+        from scripts.fetch_platform_docs import _write_drift_report
+
+        _write_drift_report(report)
+
+    # Assert
+    assert drift_file.exists()
+    data = json.loads(drift_file.read_text(encoding="utf-8"))
+    assert data["fetch_time"] == "2026-03-11T00:00:00+00:00"
+    assert len(data["changed"]) == 1
+    assert data["changed"][0]["provider"] == "claude_code"
+
+
+# ---------------------------------------------------------------------------
+# fetch command integration tests (CliRunner)
+# ---------------------------------------------------------------------------
+
+
+def test_fetch_command_exits_2_when_changes_detected(
+    tmp_path: Path, mocker: MockerFixture
+) -> None:
+    """Exit code 2 when vendor drift is detected in non-dry-run mode."""
+    from scripts.fetch_platform_docs import app
+    from typer.testing import CliRunner
+
+    cli_runner = CliRunner()
+
+    # Arrange — mock git platforms to return a drift result
+    mocker.patch(
+        "scripts.fetch_platform_docs.GIT_PLATFORMS",
+        [GitPlatform("test_repo", "https://example.com/repo")],
+    )
+    mocker.patch("scripts.fetch_platform_docs.DOC_SITE_PLATFORMS", [])
+    mocker.patch(
+        "scripts.fetch_platform_docs.clone_or_update_repo",
+        return_value=GitDriftResult(
+            provider="test_repo", before_sha="aaa", after_sha="bbb"
+        ),
+    )
+    mocker.patch(
+        "scripts.fetch_platform_docs.DRIFT_FILE", tmp_path / ".drift-pending.json"
+    )
+
+    # Act
+    result = cli_runner.invoke(app)
+
+    # Assert
+    assert result.exit_code == 2
+
+
+def test_fetch_command_exits_0_when_no_changes(
+    tmp_path: Path, mocker: MockerFixture
+) -> None:
+    """Exit code 0 when no vendor drift is detected."""
+    from scripts.fetch_platform_docs import app
+    from typer.testing import CliRunner
+
+    cli_runner = CliRunner()
+
+    # Arrange — mock all platforms to return None (no changes)
+    mocker.patch(
+        "scripts.fetch_platform_docs.GIT_PLATFORMS",
+        [GitPlatform("test_repo", "https://example.com/repo")],
+    )
+    mocker.patch("scripts.fetch_platform_docs.DOC_SITE_PLATFORMS", [])
+    mocker.patch(
+        "scripts.fetch_platform_docs.clone_or_update_repo",
+        return_value=None,
+    )
+
+    # Act
+    result = cli_runner.invoke(app)
+
+    # Assert
+    assert result.exit_code == 0
+
+
+def test_fetch_command_writes_drift_pending_json(
+    tmp_path: Path, mocker: MockerFixture
+) -> None:
+    """Drift report JSON file is written when changes are detected."""
+    from scripts.fetch_platform_docs import app
+    from typer.testing import CliRunner
+
+    cli_runner = CliRunner()
+
+    # Arrange
+    drift_file = tmp_path / ".drift-pending.json"
+    mocker.patch(
+        "scripts.fetch_platform_docs.GIT_PLATFORMS",
+        [GitPlatform("test_repo", "https://example.com/repo")],
+    )
+    mocker.patch("scripts.fetch_platform_docs.DOC_SITE_PLATFORMS", [])
+    mocker.patch(
+        "scripts.fetch_platform_docs.clone_or_update_repo",
+        return_value=GitDriftResult(
+            provider="test_repo", before_sha="aaa", after_sha="bbb"
+        ),
+    )
+    mocker.patch("scripts.fetch_platform_docs.DRIFT_FILE", drift_file)
+
+    # Act
+    _ = cli_runner.invoke(app)
+
+    # Assert
+    assert drift_file.exists()
+    data = json.loads(drift_file.read_text(encoding="utf-8"))
+    assert "fetch_time" in data
+    assert "changed" in data
+    assert len(data["changed"]) == 1
+
+
+def test_fetch_command_dry_run_exits_0_regardless(
+    tmp_path: Path, mocker: MockerFixture
+) -> None:
+    """Dry-run exits 0 even when changes would be detected."""
+    from scripts.fetch_platform_docs import app
+    from typer.testing import CliRunner
+
+    cli_runner = CliRunner()
+
+    # Arrange — dry_run returns None from clone_or_update_repo
+    mocker.patch(
+        "scripts.fetch_platform_docs.GIT_PLATFORMS",
+        [GitPlatform("test_repo", "https://example.com/repo")],
+    )
+    mocker.patch("scripts.fetch_platform_docs.DOC_SITE_PLATFORMS", [])
+    mocker.patch(
+        "scripts.fetch_platform_docs.clone_or_update_repo",
+        return_value=None,
+    )
+
+    # Act
+    result = cli_runner.invoke(app, ["--dry-run"])
+
+    # Assert
+    assert result.exit_code == 0
+
+
+def test_drift_pending_json_matches_schema(
+    tmp_path: Path, mocker: MockerFixture
+) -> None:
+    """Written JSON has expected keys: fetch_time, changed array with provider entries."""
+    from scripts.fetch_platform_docs import app
+    from typer.testing import CliRunner
+
+    cli_runner = CliRunner()
+
+    # Arrange
+    drift_file = tmp_path / ".drift-pending.json"
+    mocker.patch(
+        "scripts.fetch_platform_docs.GIT_PLATFORMS",
+        [GitPlatform("repo_a", "https://example.com/a")],
+    )
+    mocker.patch(
+        "scripts.fetch_platform_docs.DOC_SITE_PLATFORMS",
+        [
+            DocSitePlatform(
+                "site_b",
+                [DocPage("https://example.com/page", "page.md")],
+            )
+        ],
+    )
+    mocker.patch(
+        "scripts.fetch_platform_docs.clone_or_update_repo",
+        return_value=GitDriftResult(
+            provider="repo_a", before_sha="aaa", after_sha="bbb"
+        ),
+    )
+    mocker.patch(
+        "scripts.fetch_platform_docs.fetch_doc_site",
+        return_value=HttpDriftResult(
+            provider="site_b",
+            files=[
+                HttpFileDriftResult(
+                    filename="page.md",
+                    before_hash="h1",
+                    after_hash="h2",
+                    before_content="old",
+                    after_content="new",
+                )
+            ],
+        ),
+    )
+    mocker.patch("scripts.fetch_platform_docs.DRIFT_FILE", drift_file)
+
+    # Act
+    _ = cli_runner.invoke(app)
+
+    # Assert — validate schema structure
+    data = json.loads(drift_file.read_text(encoding="utf-8"))
+    assert "fetch_time" in data
+    assert isinstance(data["changed"], list)
+    assert len(data["changed"]) == 2
+
+    # Check git entry
+    git_entry = data["changed"][0]
+    assert git_entry["type"] == "git"
+    assert git_entry["provider"] == "repo_a"
+    assert "before_sha" in git_entry
+    assert "after_sha" in git_entry
+
+    # Check http entry
+    http_entry = data["changed"][1]
+    assert http_entry["type"] == "http"
+    assert http_entry["provider"] == "site_b"
+    assert isinstance(http_entry["files"], list)
+    assert len(http_entry["files"]) == 1
