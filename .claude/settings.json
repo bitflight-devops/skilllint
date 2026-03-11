@@ -5,7 +5,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node .claude/hooks/gsd-check-update.js"
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/gsd-check-update.cjs\"",
+            "timeout": 5
           },
           {
             "type": "command",
@@ -20,7 +21,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node .claude/hooks/gsd-context-monitor.js"
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/gsd-context-monitor.cjs\"",
+            "timeout": 5
           }
         ]
       }
@@ -28,6 +30,6 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "node .claude/hooks/gsd-statusline.js"
+    "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/gsd-statusline.cjs\""
   }
 }
