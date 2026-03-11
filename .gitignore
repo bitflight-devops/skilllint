@@ -7,6 +7,8 @@ __pycache__/
 .mypy_cache/
 dist/
 *.egg-info/
+.coverage
+.hypothesis/
 
 # Platform documentation vendor clones (raw git repos, updated in-place)
 # Ignore contents but not the directory itself (so CLAUDE.md can be tracked)
