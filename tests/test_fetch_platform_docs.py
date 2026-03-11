@@ -3,19 +3,24 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import httpx
+from pytest_mock import MockerFixture
 from scripts.fetch_platform_docs import (
     DocPage,
     DocSitePlatform,
     DriftReport,
     GitDriftResult,
+    GitPlatform,
     HttpDriftResult,
     HttpFileDriftResult,
+    _git_head_sha,
     _read_text_or_none,
     _sha256,
+    clone_or_update_repo,
     fetch_doc_site,
 )
 
@@ -393,6 +398,304 @@ def test_fetch_doc_site_dry_run_returns_none() -> None:
 
     # Act
     result = fetch_doc_site(platform, dry_run=True)
+
+    # Assert
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# _git_head_sha tests
+# ---------------------------------------------------------------------------
+
+
+def test_git_head_sha_returns_sha_for_valid_repo(
+    tmp_path: Path, mocker: MockerFixture
+) -> None:
+    """Return the HEAD SHA when the directory is a valid git repo.
+
+    Tests: _git_head_sha correctly extracts SHA from git rev-parse output.
+    How: Create a .git directory so the is_dir() check passes, then mock
+        _run_git to return a CompletedProcess with a known SHA on stdout.
+    Why: Drift detection depends on capturing the before/after SHA to
+        determine whether vendor content changed.
+    """
+    # Arrange
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+    (repo_dir / ".git").mkdir()
+    expected_sha = "abc123def456789012345678901234567890abcd"
+
+    mock_run = mocker.patch(
+        "scripts.fetch_platform_docs._run_git",
+        return_value=subprocess.CompletedProcess(
+            args=["git", "rev-parse", "HEAD"],
+            returncode=0,
+            stdout=f"  {expected_sha}  \n",
+            stderr="",
+        ),
+    )
+
+    # Act
+    result = _git_head_sha(repo_dir)
+
+    # Assert
+    assert result == expected_sha
+    mock_run.assert_called_once_with(["rev-parse", "HEAD"], cwd=repo_dir)
+
+
+def test_git_head_sha_returns_none_for_non_repo(
+    tmp_path: Path, mocker: MockerFixture
+) -> None:
+    """Return None when the directory has no .git subdirectory.
+
+    Tests: _git_head_sha guards against non-repo directories.
+    How: Create a plain directory without .git, verify None is returned
+        and _run_git is never called.
+    Why: Before cloning a repo for the first time the destination directory
+        may not exist or may not be a git repo. The function must handle
+        this gracefully without subprocess errors.
+    """
+    # Arrange
+    repo_dir = tmp_path / "not_a_repo"
+    repo_dir.mkdir()
+    mock_run = mocker.patch("scripts.fetch_platform_docs._run_git")
+
+    # Act
+    result = _git_head_sha(repo_dir)
+
+    # Assert
+    assert result is None
+    mock_run.assert_not_called()
+
+
+def test_git_head_sha_returns_none_when_rev_parse_fails(
+    tmp_path: Path, mocker: MockerFixture
+) -> None:
+    """Return None when git rev-parse HEAD raises CalledProcessError.
+
+    Tests: _git_head_sha handles git command failures gracefully.
+    How: Create a .git directory so the guard passes, then mock _run_git
+        to raise CalledProcessError (e.g. empty repo with no commits).
+    Why: A freshly-initialized repo with no commits will fail rev-parse.
+        The function must return None instead of propagating the error.
+    """
+    # Arrange
+    repo_dir = tmp_path / "empty_repo"
+    repo_dir.mkdir()
+    (repo_dir / ".git").mkdir()
+
+    mocker.patch(
+        "scripts.fetch_platform_docs._run_git",
+        side_effect=subprocess.CalledProcessError(
+            returncode=128,
+            cmd=["git", "rev-parse", "HEAD"],
+            output="",
+            stderr="fatal: bad default revision 'HEAD'",
+        ),
+    )
+
+    # Act
+    result = _git_head_sha(repo_dir)
+
+    # Assert
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# clone_or_update_repo snapshot/compare tests
+# ---------------------------------------------------------------------------
+
+
+def _make_git_platform(
+    name: str = "test_repo",
+    url: str = "https://github.com/example/repo",
+) -> GitPlatform:
+    """Create a GitPlatform for testing.
+
+    Args:
+        name: Platform name used as the vendor subdirectory.
+        url: Repository clone URL.
+
+    Returns:
+        A GitPlatform instance.
+    """
+    return GitPlatform(name, url)
+
+
+def test_clone_or_update_repo_detects_change_returns_drift_result(
+    tmp_path: Path, mocker: MockerFixture
+) -> None:
+    """Return GitDriftResult with diff and changelog when SHA changes.
+
+    Tests: clone_or_update_repo detects vendor content drift via SHA comparison.
+    How: Set up a fake existing repo (.git dir present), mock _git_head_sha to
+        return different SHAs before and after the pull, and mock _run_git to
+        provide diff and log output.
+    Why: The drift detection pipeline requires a GitDriftResult containing the
+        before/after SHAs, diff of doc-relevant files, and commit changelog
+        to generate actionable audit reports.
+    """
+    # Arrange
+    vendor_dir = tmp_path / "vendor"
+    platform = _make_git_platform()
+    dest = vendor_dir / platform.name
+    dest.mkdir(parents=True)
+    (dest / ".git").mkdir()
+
+    before_sha = "aaaa" * 10
+    after_sha = "bbbb" * 10
+
+    mocker.patch("scripts.fetch_platform_docs.VENDOR_DIR", vendor_dir)
+
+    sha_call_count = 0
+
+    def fake_git_head_sha(repo_dir: Path) -> str | None:
+        nonlocal sha_call_count
+        sha_call_count += 1
+        if sha_call_count == 1:
+            return before_sha
+        return after_sha
+
+    mocker.patch(
+        "scripts.fetch_platform_docs._git_head_sha",
+        side_effect=fake_git_head_sha,
+    )
+
+    def fake_run_git(
+        args: list[str], *, cwd: Path | None = None
+    ) -> subprocess.CompletedProcess[str]:
+        if args[0] == "pull":
+            return subprocess.CompletedProcess(
+                args=args, returncode=0, stdout="", stderr=""
+            )
+        if args[0] == "diff":
+            return subprocess.CompletedProcess(
+                args=args,
+                returncode=0,
+                stdout="diff --git a/CLAUDE.md b/CLAUDE.md\n",
+                stderr="",
+            )
+        if args[0] == "log":
+            return subprocess.CompletedProcess(
+                args=args,
+                returncode=0,
+                stdout="abc1234 feat: update docs\ndef5678 fix: typo",
+                stderr="",
+            )
+        return subprocess.CompletedProcess(
+            args=args, returncode=0, stdout="", stderr=""
+        )
+
+    mocker.patch(
+        "scripts.fetch_platform_docs._run_git",
+        side_effect=fake_run_git,
+    )
+
+    # Act
+    result = clone_or_update_repo(platform, dry_run=False)
+
+    # Assert
+    assert result is not None
+    assert isinstance(result, GitDriftResult)
+    assert result.provider == "test_repo"
+    assert result.before_sha == before_sha
+    assert result.after_sha == after_sha
+    assert "CLAUDE.md" in result.diff
+    assert "feat: update docs" in result.changelog
+
+
+def test_clone_or_update_repo_no_change_returns_none(
+    tmp_path: Path, mocker: MockerFixture
+) -> None:
+    """Return None when HEAD SHA is the same before and after pull.
+
+    Tests: clone_or_update_repo correctly identifies no-change scenario.
+    How: Mock _git_head_sha to return the same SHA both times (before and
+        after the pull operation), mock _run_git for the pull command.
+    Why: When a vendor repo has no new commits since the last fetch, no
+        drift result should be generated to avoid false-positive reports.
+    """
+    # Arrange
+    vendor_dir = tmp_path / "vendor"
+    platform = _make_git_platform()
+    dest = vendor_dir / platform.name
+    dest.mkdir(parents=True)
+    (dest / ".git").mkdir()
+
+    same_sha = "cccc" * 10
+
+    mocker.patch("scripts.fetch_platform_docs.VENDOR_DIR", vendor_dir)
+    mocker.patch(
+        "scripts.fetch_platform_docs._git_head_sha",
+        return_value=same_sha,
+    )
+    mocker.patch(
+        "scripts.fetch_platform_docs._run_git",
+        return_value=subprocess.CompletedProcess(
+            args=["git", "pull"], returncode=0, stdout="", stderr=""
+        ),
+    )
+
+    # Act
+    result = clone_or_update_repo(platform, dry_run=False)
+
+    # Assert
+    assert result is None
+
+
+def test_clone_or_update_repo_first_clone_returns_none(
+    tmp_path: Path, mocker: MockerFixture
+) -> None:
+    """Return None on first clone when before_sha is None.
+
+    Tests: clone_or_update_repo handles first-time clone scenario.
+    How: Set up a vendor directory where the platform subdirectory does not
+        exist (no .git), so _git_head_sha returns None for the before_sha.
+        Mock _run_git for the clone command and _git_head_sha to return a
+        SHA only on the second call (after clone).
+    Why: On first clone there is no before_sha to compare against, so no
+        drift can be reported. The function must return None rather than
+        creating a misleading GitDriftResult.
+    """
+    # Arrange
+    vendor_dir = tmp_path / "vendor"
+    platform = _make_git_platform()
+
+    mocker.patch("scripts.fetch_platform_docs.VENDOR_DIR", vendor_dir)
+
+    sha_call_count = 0
+
+    def fake_git_head_sha(repo_dir: Path) -> str | None:
+        nonlocal sha_call_count
+        sha_call_count += 1
+        if sha_call_count == 1:
+            return None  # No repo before clone
+        return "dddd" * 10  # After clone
+
+    mocker.patch(
+        "scripts.fetch_platform_docs._git_head_sha",
+        side_effect=fake_git_head_sha,
+    )
+
+    def fake_run_git(
+        args: list[str], *, cwd: Path | None = None
+    ) -> subprocess.CompletedProcess[str]:
+        if args[0] == "clone":
+            # Simulate clone by creating the .git dir
+            dest = vendor_dir / platform.name
+            dest.mkdir(parents=True, exist_ok=True)
+            (dest / ".git").mkdir(exist_ok=True)
+        return subprocess.CompletedProcess(
+            args=args, returncode=0, stdout="", stderr=""
+        )
+
+    mocker.patch(
+        "scripts.fetch_platform_docs._run_git",
+        side_effect=fake_run_git,
+    )
+
+    # Act
+    result = clone_or_update_repo(platform, dry_run=False)
 
     # Assert
     assert result is None
