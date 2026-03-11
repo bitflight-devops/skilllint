@@ -7,20 +7,202 @@
   "platform": "claude_code",
   "file_types": {
     "skill": {
-      "required_fields": ["name", "version", "description"],
-      "optional_fields": ["author", "triggers", "tools", "permissions", "dependencies"]
+      "fields": {
+        "name": {
+          "required": true,
+          "x-audited": {
+            "date": "2026-03-10",
+            "source": ".claude/vendor/claude_code/plugins/plugin-dev/skills/plugin-structure/SKILL.md"
+          }
+        },
+        "description": {
+          "required": true,
+          "x-audited": {
+            "date": "2026-03-10",
+            "source": ".claude/vendor/claude_code/plugins/plugin-dev/skills/plugin-structure/SKILL.md"
+          }
+        },
+        "version": {
+          "required": false,
+          "x-audited": {
+            "date": "2026-03-10",
+            "source": ".claude/vendor/claude_code/plugins/plugin-dev/skills/plugin-structure/SKILL.md"
+          }
+        },
+        "license": {
+          "required": false,
+          "x-audited": {
+            "date": "2026-03-10",
+            "source": ".claude/vendor/claude_code/plugins/frontend-design/skills/frontend-design/SKILL.md"
+          }
+        }
+      }
     },
     "agent": {
-      "required_fields": ["name", "version", "description"],
-      "optional_fields": ["author", "tools", "permissions", "model"]
+      "fields": {
+        "name": {
+          "required": true,
+          "x-audited": {
+            "date": "2026-03-10",
+            "source": ".claude/vendor/claude_code/plugins/plugin-dev/skills/agent-development/SKILL.md"
+          }
+        },
+        "description": {
+          "required": true,
+          "x-audited": {
+            "date": "2026-03-10",
+            "source": ".claude/vendor/claude_code/plugins/plugin-dev/skills/agent-development/SKILL.md"
+          }
+        },
+        "model": {
+          "required": true,
+          "x-audited": {
+            "date": "2026-03-10",
+            "source": ".claude/vendor/claude_code/plugins/plugin-dev/skills/agent-development/SKILL.md"
+          }
+        },
+        "color": {
+          "required": true,
+          "x-audited": {
+            "date": "2026-03-10",
+            "source": ".claude/vendor/claude_code/plugins/plugin-dev/skills/agent-development/SKILL.md"
+          }
+        },
+        "tools": {
+          "required": false,
+          "x-audited": {
+            "date": "2026-03-10",
+            "source": ".claude/vendor/claude_code/plugins/plugin-dev/skills/agent-development/SKILL.md"
+          }
+        }
+      }
     },
     "command": {
-      "required_fields": ["name", "version"],
-      "optional_fields": ["description", "author"]
+      "fields": {
+        "description": {
+          "required": false,
+          "x-audited": {
+            "date": "2026-03-10",
+            "source": ".claude/vendor/claude_code/plugins/plugin-dev/skills/command-development/SKILL.md"
+          }
+        },
+        "allowed-tools": {
+          "required": false,
+          "x-audited": {
+            "date": "2026-03-10",
+            "source": ".claude/vendor/claude_code/plugins/plugin-dev/skills/command-development/SKILL.md"
+          }
+        },
+        "model": {
+          "required": false,
+          "x-audited": {
+            "date": "2026-03-10",
+            "source": ".claude/vendor/claude_code/plugins/plugin-dev/skills/command-development/SKILL.md"
+          }
+        },
+        "argument-hint": {
+          "required": false,
+          "x-audited": {
+            "date": "2026-03-10",
+            "source": ".claude/vendor/claude_code/plugins/plugin-dev/skills/command-development/SKILL.md"
+          }
+        },
+        "disable-model-invocation": {
+          "required": false,
+          "x-audited": {
+            "date": "2026-03-10",
+            "source": ".claude/vendor/claude_code/plugins/plugin-dev/skills/command-development/SKILL.md"
+          }
+        }
+      }
     },
     "plugin": {
-      "required_fields": ["name", "version", "description"],
-      "optional_fields": ["author", "skills", "agents", "commands", "hooks"]
+      "fields": {
+        "name": {
+          "required": true,
+          "x-audited": {
+            "date": "2026-03-10",
+            "source": ".claude/vendor/claude_code/plugins/plugin-dev/skills/plugin-structure/references/manifest-reference.md"
+          }
+        },
+        "version": {
+          "required": false,
+          "x-audited": {
+            "date": "2026-03-10",
+            "source": ".claude/vendor/claude_code/plugins/plugin-dev/skills/plugin-structure/references/manifest-reference.md"
+          }
+        },
+        "description": {
+          "required": false,
+          "x-audited": {
+            "date": "2026-03-10",
+            "source": ".claude/vendor/claude_code/plugins/plugin-dev/skills/plugin-structure/references/manifest-reference.md"
+          }
+        },
+        "author": {
+          "required": false,
+          "x-audited": {
+            "date": "2026-03-10",
+            "source": ".claude/vendor/claude_code/plugins/plugin-dev/skills/plugin-structure/references/manifest-reference.md"
+          }
+        },
+        "agents": {
+          "required": false,
+          "x-audited": {
+            "date": "2026-03-10",
+            "source": ".claude/vendor/claude_code/plugins/plugin-dev/skills/plugin-structure/references/manifest-reference.md"
+          }
+        },
+        "commands": {
+          "required": false,
+          "x-audited": {
+            "date": "2026-03-10",
+            "source": ".claude/vendor/claude_code/plugins/plugin-dev/skills/plugin-structure/references/manifest-reference.md"
+          }
+        },
+        "hooks": {
+          "required": false,
+          "x-audited": {
+            "date": "2026-03-10",
+            "source": ".claude/vendor/claude_code/plugins/plugin-dev/skills/plugin-structure/references/manifest-reference.md"
+          }
+        },
+        "mcpServers": {
+          "required": false,
+          "x-audited": {
+            "date": "2026-03-10",
+            "source": ".claude/vendor/claude_code/plugins/plugin-dev/skills/plugin-structure/references/manifest-reference.md"
+          }
+        },
+        "homepage": {
+          "required": false,
+          "x-audited": {
+            "date": "2026-03-10",
+            "source": ".claude/vendor/claude_code/plugins/plugin-dev/skills/plugin-structure/references/manifest-reference.md"
+          }
+        },
+        "repository": {
+          "required": false,
+          "x-audited": {
+            "date": "2026-03-10",
+            "source": ".claude/vendor/claude_code/plugins/plugin-dev/skills/plugin-structure/references/manifest-reference.md"
+          }
+        },
+        "license": {
+          "required": false,
+          "x-audited": {
+            "date": "2026-03-10",
+            "source": ".claude/vendor/claude_code/plugins/plugin-dev/skills/plugin-structure/references/manifest-reference.md"
+          }
+        },
+        "keywords": {
+          "required": false,
+          "x-audited": {
+            "date": "2026-03-10",
+            "source": ".claude/vendor/claude_code/plugins/plugin-dev/skills/plugin-structure/references/manifest-reference.md"
+          }
+        }
+      }
     }
   }
 }

@@ -3,7 +3,7 @@ Codex (OpenAI) platform adapter.
 
 Data provider and file-type validator for Codex platform files.
 Validates AGENTS.md non-empty and .rules prefix_rule() field names
-against the bundled codex v1.json known_fields sentinel list.
+against the bundled codex v1.json fields object.
 No rule-series logic lives here — rule series fire from the core validator.
 """
 
@@ -57,13 +57,13 @@ class CodexAdapter:
         """Validate prefix_rule() calls in a .rules file.
 
         Returns violation messages for:
-        - Fields not in the known_fields list from the codex v1.json schema
+        - Fields not in the fields object from the codex v1.json schema
         """
         schema = self.get_schema("prefix_rule")
         if schema is None:
             return []
 
-        known: set[str] = set(schema.get("known_fields", []))
+        known: set[str] = set(schema.get("fields", {}).keys())
         violations: list[str] = []
 
         for match in _PREFIX_RULE_RE.finditer(content):

@@ -46,7 +46,7 @@ class ClaudeCodeAdapter:
         """Platform-level validation for files outside the core SK/PR/HK pipeline.
 
         Validates JSON files (plugin.json variants) against the bundled schema's
-        required_fields list.  SKILL.md / agent .md / hooks.json are still
+        fields object (required=true entries).  SKILL.md / agent .md / hooks.json are still
         handled by the existing _validate_single_path pipeline in
         plugin_validator.py; this method is the fallback for file types that
         pipeline does not recognise.
@@ -71,7 +71,10 @@ class ClaudeCodeAdapter:
         if schema is None:
             return []
 
-        required: list[str] = schema.get("required_fields", [])
+        fields: dict = schema.get("fields", {})
+        required: list[str] = [
+            name for name, meta in fields.items() if meta.get("required", False)
+        ]
         violations: list[dict] = []
         for field in required:
             if field not in data:
