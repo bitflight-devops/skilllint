@@ -3,20 +3,20 @@
 from __future__ import annotations
 
 import json
-import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import httpx
 from scripts.fetch_platform_docs import (
+    DocPage,
+    DocSitePlatform,
     DriftReport,
     GitDriftResult,
-    GitPlatform,
     HttpDriftResult,
     HttpFileDriftResult,
-    _git_head_sha,
     _read_text_or_none,
     _sha256,
-    clone_or_update_repo,
+    fetch_doc_site,
 )
 
 # ---------------------------------------------------------------------------
@@ -213,186 +213,186 @@ def test_drift_report_to_dict_mixed_results() -> None:
 
 
 # ---------------------------------------------------------------------------
-# _git_head_sha tests
+# DocSitePlatform.releases_url tests
 # ---------------------------------------------------------------------------
 
 
-def _make_completed_process(stdout: str) -> subprocess.CompletedProcess[str]:
-    """Create a CompletedProcess with the given stdout."""
-    return subprocess.CompletedProcess(args=["git"], returncode=0, stdout=stdout)
+def test_doc_site_platform_releases_url_default_none() -> None:
+    """DocSitePlatform.releases_url defaults to None."""
+    platform = DocSitePlatform("test", [])
+    assert platform.releases_url is None
 
 
-def test_git_head_sha_returns_sha_for_valid_repo(tmp_path: Path) -> None:
-    """_git_head_sha returns the SHA when rev-parse HEAD succeeds."""
-    # Arrange
-    git_dir = tmp_path / ".git"
-    git_dir.mkdir()
-    expected_sha = "abc123def456789012345678901234567890abcd"
-
-    # Act
-    with patch(
-        "scripts.fetch_platform_docs._run_git",
-        return_value=_make_completed_process(f"{expected_sha}\n"),
-    ) as mock_git:
-        result = _git_head_sha(tmp_path)
-
-    # Assert
-    assert result == expected_sha
-    mock_git.assert_called_once_with(["rev-parse", "HEAD"], cwd=tmp_path)
-
-
-def test_git_head_sha_returns_none_for_non_repo(tmp_path: Path) -> None:
-    """_git_head_sha returns None when directory has no .git subdirectory."""
-    # Arrange — tmp_path has no .git directory
-
-    # Act
-    result = _git_head_sha(tmp_path)
-
-    # Assert
-    assert result is None
-
-
-def test_git_head_sha_returns_none_when_rev_parse_fails(tmp_path: Path) -> None:
-    """_git_head_sha returns None when git rev-parse raises CalledProcessError."""
-    # Arrange
-    git_dir = tmp_path / ".git"
-    git_dir.mkdir()
-
-    # Act
-    with patch(
-        "scripts.fetch_platform_docs._run_git",
-        side_effect=subprocess.CalledProcessError(128, "git"),
-    ):
-        result = _git_head_sha(tmp_path)
-
-    # Assert
-    assert result is None
+def test_doc_site_platform_releases_url_set() -> None:
+    """DocSitePlatform.releases_url can be set via constructor."""
+    platform = DocSitePlatform("test", [], releases_url="https://example.com/releases")
+    assert platform.releases_url == "https://example.com/releases"
 
 
 # ---------------------------------------------------------------------------
-# clone_or_update_repo snapshot/compare tests
+# fetch_doc_site snapshot/compare tests
 # ---------------------------------------------------------------------------
 
-BEFORE_SHA = "aaaa" * 10
-AFTER_SHA = "bbbb" * 10
+
+def _make_platform(
+    name: str = "testplatform",
+    pages: list[DocPage] | None = None,
+    releases_url: str | None = None,
+) -> DocSitePlatform:
+    """Create a DocSitePlatform for testing."""
+    if pages is None:
+        pages = [DocPage("https://example.com/docs/page.md", "page.md")]
+    return DocSitePlatform(name, pages, releases_url=releases_url)
 
 
-def _mock_run_git_update(
-    before_sha: str, after_sha: str, diff: str = "", log: str = ""
-) -> MagicMock:
-    """Create a mock _run_git that simulates an existing repo being updated.
-
-    Returns different SHAs for rev-parse HEAD calls (before and after pull),
-    and the provided diff/log output for the diff and log commands.
-    """
-    sha_calls: list[str] = []
-
-    def side_effect(
-        args: list[str], *, cwd: Path | None = None
-    ) -> subprocess.CompletedProcess[str]:
-        if args == ["rev-parse", "HEAD"]:
-            # First call returns before_sha, second returns after_sha
-            sha = before_sha if len(sha_calls) == 0 else after_sha
-            sha_calls.append(sha)
-            return _make_completed_process(f"{sha}\n")
-        if args[0] == "pull":
-            return _make_completed_process("")
-        if args[0] == "diff":
-            return _make_completed_process(diff)
-        if args[0] == "log":
-            return _make_completed_process(log)
-        return _make_completed_process("")
-
-    return MagicMock(side_effect=side_effect)
+def _mock_response(text: str, status_code: int = 200) -> MagicMock:
+    """Create a mock httpx.Response with given text."""
+    resp = MagicMock(spec=httpx.Response)
+    resp.text = text
+    resp.status_code = status_code
+    resp.raise_for_status = MagicMock()
+    return resp
 
 
-def test_clone_or_update_repo_detects_change_returns_drift_result(
+def test_fetch_doc_site_detects_content_change_returns_drift_result(
     tmp_path: Path,
 ) -> None:
-    """When SHAs differ after pull, clone_or_update_repo returns GitDriftResult."""
+    """When existing file has different content than fetched, return HttpDriftResult."""
     # Arrange
-    platform = GitPlatform("test_platform", "https://example.com/repo.git")
-    dest = tmp_path / "test_platform"
-    dest.mkdir()
-    (dest / ".git").mkdir()
+    platform = _make_platform()
+    vendor_dir = tmp_path / ".claude" / "vendor"
+    dest = vendor_dir / platform.name
+    dest.mkdir(parents=True)
+    (dest / "page.md").write_text("old content", encoding="utf-8")
 
-    mock_git = _mock_run_git_update(
-        BEFORE_SHA, AFTER_SHA, diff="diff content here", log="abc1234 some commit"
-    )
+    mock_resp = _mock_response("new content")
 
-    # Act
     with (
-        patch("scripts.fetch_platform_docs._run_git", mock_git),
-        patch("scripts.fetch_platform_docs.VENDOR_DIR", tmp_path),
+        patch("scripts.fetch_platform_docs.VENDOR_DIR", vendor_dir),
+        patch("scripts.fetch_platform_docs.httpx.Client") as mock_client_cls,
     ):
-        result = clone_or_update_repo(platform, dry_run=False)
+        mock_client = MagicMock()
+        mock_client.get.return_value = mock_resp
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_client_cls.return_value = mock_client
+
+        # Act
+        result = fetch_doc_site(platform, dry_run=False)
 
     # Assert
     assert result is not None
-    assert isinstance(result, GitDriftResult)
-    assert result.provider == "test_platform"
-    assert result.before_sha == BEFORE_SHA
-    assert result.after_sha == AFTER_SHA
-    assert result.diff == "diff content here"
-    assert result.changelog == "abc1234 some commit"
+    assert result.provider == "testplatform"
+    assert len(result.files) == 1
+    assert result.files[0].filename == "page.md"
+    assert result.files[0].before_content == "old content"
+    assert result.files[0].after_content == "new content"
+    assert result.files[0].before_hash == _sha256("old content")
+    assert result.files[0].after_hash == _sha256("new content")
+    assert result.files[0].before_hash != result.files[0].after_hash
 
 
-def test_clone_or_update_repo_no_change_returns_none(tmp_path: Path) -> None:
-    """When SHAs are identical after pull, clone_or_update_repo returns None."""
+def test_fetch_doc_site_no_change_returns_none(tmp_path: Path) -> None:
+    """When existing file matches fetched content, return None."""
     # Arrange
-    platform = GitPlatform("test_platform", "https://example.com/repo.git")
-    dest = tmp_path / "test_platform"
-    dest.mkdir()
-    (dest / ".git").mkdir()
+    platform = _make_platform()
+    vendor_dir = tmp_path / ".claude" / "vendor"
+    dest = vendor_dir / platform.name
+    dest.mkdir(parents=True)
+    (dest / "page.md").write_text("same content", encoding="utf-8")
 
-    mock_git = _mock_run_git_update(BEFORE_SHA, BEFORE_SHA)
+    mock_resp = _mock_response("same content")
 
-    # Act
     with (
-        patch("scripts.fetch_platform_docs._run_git", mock_git),
-        patch("scripts.fetch_platform_docs.VENDOR_DIR", tmp_path),
+        patch("scripts.fetch_platform_docs.VENDOR_DIR", vendor_dir),
+        patch("scripts.fetch_platform_docs.httpx.Client") as mock_client_cls,
     ):
-        result = clone_or_update_repo(platform, dry_run=False)
+        mock_client = MagicMock()
+        mock_client.get.return_value = mock_resp
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_client_cls.return_value = mock_client
+
+        # Act
+        result = fetch_doc_site(platform, dry_run=False)
 
     # Assert
     assert result is None
 
 
-def test_clone_or_update_repo_first_clone_returns_none(tmp_path: Path) -> None:
-    """First clone (no existing .git dir) returns None — no before_sha to compare."""
+def test_fetch_doc_site_first_fetch_returns_none(tmp_path: Path) -> None:
+    """When no existing file (first time fetch), return None."""
     # Arrange
-    platform = GitPlatform("test_platform", "https://example.com/repo.git")
-    # dest does NOT exist yet — simulates first clone
+    platform = _make_platform()
+    vendor_dir = tmp_path / ".claude" / "vendor"
 
-    call_count = 0
+    mock_resp = _mock_response("brand new content")
 
-    def side_effect(
-        args: list[str], *, cwd: Path | None = None
-    ) -> subprocess.CompletedProcess[str]:
-        nonlocal call_count
-        if args == ["rev-parse", "HEAD"]:
-            # After clone, rev-parse returns a SHA
-            call_count += 1
-            if call_count == 1:
-                # This is the post-clone call (before_sha was None)
-                return _make_completed_process(f"{AFTER_SHA}\n")
-            return _make_completed_process(f"{AFTER_SHA}\n")
-        if args[0] == "clone":
-            # Simulate clone by creating .git dir
-            dest = tmp_path / "test_platform"
-            dest.mkdir(exist_ok=True)
-            (dest / ".git").mkdir(exist_ok=True)
-            return _make_completed_process("")
-        return _make_completed_process("")
+    with (
+        patch("scripts.fetch_platform_docs.VENDOR_DIR", vendor_dir),
+        patch("scripts.fetch_platform_docs.httpx.Client") as mock_client_cls,
+    ):
+        mock_client = MagicMock()
+        mock_client.get.return_value = mock_resp
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_client_cls.return_value = mock_client
+
+        # Act
+        result = fetch_doc_site(platform, dry_run=False)
+
+    # Assert
+    assert result is None
+    # File should still be written on first fetch
+    written = (vendor_dir / platform.name / "page.md").read_text(encoding="utf-8")
+    assert written == "brand new content"
+
+
+def test_fetch_doc_site_fetches_releases_url_when_changes_detected(
+    tmp_path: Path,
+) -> None:
+    """When changes detected and releases_url set, changelog is included."""
+    # Arrange
+    platform = _make_platform(releases_url="https://example.com/changelog")
+    vendor_dir = tmp_path / ".claude" / "vendor"
+    dest = vendor_dir / platform.name
+    dest.mkdir(parents=True)
+    (dest / "page.md").write_text("old content", encoding="utf-8")
+
+    page_resp = _mock_response("new content")
+    changelog_resp = _mock_response("## v2.0\n- Big changes")
+
+    def mock_get(url: str) -> MagicMock:
+        if "changelog" in url:
+            return changelog_resp
+        return page_resp
+
+    with (
+        patch("scripts.fetch_platform_docs.VENDOR_DIR", vendor_dir),
+        patch("scripts.fetch_platform_docs.httpx.Client") as mock_client_cls,
+    ):
+        mock_client = MagicMock()
+        mock_client.get.side_effect = mock_get
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_client_cls.return_value = mock_client
+
+        # Act
+        result = fetch_doc_site(platform, dry_run=False)
+
+    # Assert
+    assert result is not None
+    assert result.changelog == "## v2.0\n- Big changes"
+    assert len(result.files) == 1
+
+
+def test_fetch_doc_site_dry_run_returns_none() -> None:
+    """Dry-run mode returns None without making HTTP requests."""
+    # Arrange
+    platform = _make_platform()
 
     # Act
-    with (
-        patch(
-            "scripts.fetch_platform_docs._run_git", MagicMock(side_effect=side_effect)
-        ),
-        patch("scripts.fetch_platform_docs.VENDOR_DIR", tmp_path),
-    ):
-        result = clone_or_update_repo(platform, dry_run=False)
+    result = fetch_doc_site(platform, dry_run=True)
 
-    # Assert — before_sha was None so result is None
+    # Assert
     assert result is None
