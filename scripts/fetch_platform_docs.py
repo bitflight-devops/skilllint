@@ -14,7 +14,9 @@ Clones/updates git repos and fetches doc-site pages into .claude/vendor/.
 
 from __future__ import annotations
 
+import hashlib
 import subprocess
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Annotated, final
 
@@ -29,9 +31,86 @@ from rich.panel import Panel
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 VENDOR_DIR = PROJECT_ROOT / ".claude" / "vendor"
+DRIFT_FILE = VENDOR_DIR / ".drift-pending.json"
 
 console = Console()
 err_console = Console(stderr=True)
+
+
+# ---------------------------------------------------------------------------
+# Drift detection data model
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class HttpFileDriftResult:
+    """Result of comparing a single HTTP-fetched file before/after."""
+
+    filename: str
+    before_hash: str
+    after_hash: str
+    before_content: str
+    after_content: str
+
+
+@dataclass
+class HttpDriftResult:
+    """Drift result for an HTTP doc-site platform."""
+
+    provider: str
+    files: list[HttpFileDriftResult] = field(default_factory=list)
+    changelog: str | None = None
+
+
+@dataclass
+class GitDriftResult:
+    """Drift result for a git-cloned platform."""
+
+    provider: str
+    before_sha: str
+    after_sha: str
+    diff: str = ""
+    changelog: str = ""
+
+
+@dataclass
+class DriftReport:
+    """Top-level drift report containing all detected changes."""
+
+    fetch_time: str
+    changed: list[GitDriftResult | HttpDriftResult] = field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _sha256(text: str) -> str:
+    """Return hex SHA-256 digest of text content.
+
+    Args:
+        text: The string content to hash.
+
+    Returns:
+        Hex-encoded SHA-256 digest.
+    """
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+def _read_text_or_none(path: Path) -> str | None:
+    """Read file content or return None if file does not exist.
+
+    Args:
+        path: Path to the file to read.
+
+    Returns:
+        File content as string, or None if file is missing.
+    """
+    try:
+        return path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None
 
 
 # ---------------------------------------------------------------------------
