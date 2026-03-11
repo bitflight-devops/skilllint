@@ -1,9 +1,6 @@
 #!/usr/bin/env node
-'use strict';
 // Check for GSD updates in background, write result to cache
 // Called by SessionStart hook - runs once per session
-//
-// Test: echo '{"hook_event_name":"SessionStart","source":"startup"}' | node "$CLAUDE_PROJECT_DIR/.claude/hooks/gsd-check-update.cjs"
 
 const fs = require('fs');
 const path = require('path');
@@ -44,11 +41,9 @@ if (!fs.existsSync(cacheDir)) {
 }
 
 // Run check in background (spawn background process, windowsHide prevents console flash)
-// The child uses execFileSync with array args — no shell injection risk, no stderr leak
 const child = spawn(process.execPath, ['-e', `
-  'use strict';
   const fs = require('fs');
-  const { execFileSync } = require('child_process');
+  const { execSync } = require('child_process');
 
   const cacheFile = ${JSON.stringify(cacheFile)};
   const projectVersionFile = ${JSON.stringify(projectVersionFile)};
@@ -66,12 +61,7 @@ const child = spawn(process.execPath, ['-e', `
 
   let latest = null;
   try {
-    latest = execFileSync('npm', ['view', 'get-shit-done-cc', 'version'], {
-      encoding: 'utf8',
-      timeout: 10000,
-      windowsHide: true,
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim();
+    latest = execSync('npm view get-shit-done-cc version', { encoding: 'utf8', timeout: 10000, windowsHide: true }).trim();
   } catch (e) {}
 
   const result = {
@@ -89,12 +79,3 @@ const child = spawn(process.execPath, ['-e', `
 });
 
 child.unref();
-
-// Emit empty JSON output — hook must write valid JSON to stdout
-console.log(JSON.stringify({
-  hookSpecificOutput: {
-    hookEventName: 'SessionStart',
-  },
-  suppressOutput: true,
-}));
-process.exit(0);
