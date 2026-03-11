@@ -9,7 +9,8 @@
           },
           {
             "type": "command",
-            "command": "node .claude/hooks/vendor-drift-check.js"
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/vendor-drift-check.cjs\"",
+            "timeout": 61
           }
         ]
       }
