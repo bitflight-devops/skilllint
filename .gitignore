@@ -51,3 +51,5 @@ tmp/
 # Benchmark artifacts
 scripts/bench-plugin/
 scripts/results/
+
+.bg-shell/*

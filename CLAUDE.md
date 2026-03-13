@@ -92,3 +92,32 @@ Project-level tests that are not owned by any package:
 - Benchmarks (subprocess/CLI invocation) → `tests/benchmarks/`
 
 Both locations are discovered by `pytest` via `testpaths = ["**/tests"]` in `pyproject.toml`.
+
+## No invented constraints
+
+A numeric limit without a source is a hallucination. Every threshold, max length, timeout, or cap must have an origin.
+
+**Invented constraint (bad):**
+```python
+if len(summary) > 60:
+    summary = summary[:57] + "..."
+```
+
+Where does 60 come from? No spec, no comment, no justification. This is made up.
+
+**Sourced constraint (good):**
+```python
+# Claude Code spec: skill names 1-64 chars, alphanumeric + hyphens
+# https://docs.anthropic.com/claude-code/skills#naming
+MAX_SKILL_NAME_LENGTH = 64
+```
+
+**Rules:**
+
+1. **Every numeric constant must have a source** — a spec URL, a config value, a library default, or a comment explaining the reasoning.
+
+2. **Check if the library already handles it** — Rich tables auto-size columns. Requests has timeouts. Don't reinvent limits the tool already provides.
+
+3. **If there's no source, there's no constraint** — don't invent a "reasonable" threshold. Either find the spec or remove the limit.
+
+**Why this matters:** Invented constraints are a leading indicator of hallucination. The model makes up something plausible-sounding but baseless. Catching these prevents subtle bugs and documents the actual requirements.
