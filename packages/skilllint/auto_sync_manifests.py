@@ -27,7 +27,7 @@ Version Bumping:
 from __future__ import annotations
 
 import argparse
-import json
+import msgspec.json
 import shutil
 import subprocess
 import sys
@@ -294,8 +294,8 @@ def _read_head_json(filepath: str | Path) -> object | None:
         return None
 
     try:
-        parsed: object = json.loads(result.stdout)
-    except (json.JSONDecodeError, ValueError):
+        parsed: object = msgspec.json.decode(result.stdout)
+    except (msgspec.DecodeError, ValueError):
         return None
     return parsed
 
@@ -332,8 +332,8 @@ def _version_already_bumped(filepath: str | Path, version_key_path: list[str]) -
         return False
 
     try:
-        current_data = json.loads(current_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, ValueError, OSError):
+        current_data = msgspec.json.decode(current_path.read_text(encoding="utf-8"))
+    except (msgspec.DecodeError, ValueError, OSError):
         return False
 
     current_version = _extract_version_from_json(current_data, version_key_path)
@@ -485,7 +485,7 @@ def update_plugin_json(plugin_name: str, changes: ComponentChanges) -> tuple[boo
         return False, "0.0.0"
 
     with plugin_json_path.open(encoding="utf-8") as f:
-        data: dict[str, list[str] | str] = json.load(f)
+        data: dict[str, list[str] | str] = msgspec.json.decode(f.read())
 
     current_version = cast("str", data.get("version", "0.0.0"))
 
@@ -511,7 +511,7 @@ def update_plugin_json(plugin_name: str, changes: ComponentChanges) -> tuple[boo
         existing_content = plugin_json_path.read_text(encoding="utf-8")
 
         data["version"] = new_version
-        new_content = json.dumps(data, indent=2) + "\n"
+        new_content = msgspec.json.format(msgspec.json.encode(data), indent=2).decode() + "\n"
 
         # Skip write when the formatted output already matches the file.
         # The primary double-bump defence is the _version_already_bumped
@@ -542,11 +542,11 @@ def _read_plugin_name(plugin_dir_name: str) -> str:
     if plugin_json_path.exists():
         try:
             with plugin_json_path.open(encoding="utf-8") as f:
-                data = json.load(f)
+                data = msgspec.json.decode(f.read())
             name = data.get("name")
             if name and isinstance(name, str):
                 return name
-        except (OSError, json.JSONDecodeError):
+        except (OSError, msgspec.DecodeError):
             pass
     return plugin_dir_name
 
@@ -611,7 +611,7 @@ def update_marketplace_json(plugin_changes: MarketplaceChanges) -> bool:
         return False
 
     with marketplace_json_path.open(encoding="utf-8") as f:
-        data: dict[str, dict[str, str] | list[dict[str, str]]] = json.load(f)
+        data: dict[str, dict[str, str] | list[dict[str, str]]] = msgspec.json.decode(f.read())
 
     metadata = cast("dict[str, str]", data.get("metadata", {}))
     current_version = metadata.get("version", "0.0.0")
@@ -642,7 +642,7 @@ def update_marketplace_json(plugin_changes: MarketplaceChanges) -> bool:
         metadata = cast("dict[str, str]", data["metadata"])
         metadata["version"] = new_version
 
-        new_content = json.dumps(data, indent=2) + "\n"
+        new_content = msgspec.json.format(msgspec.json.encode(data), indent=2).decode() + "\n"
 
         if new_content == existing_content:
             return False
@@ -975,7 +975,7 @@ def _reconcile_one_plugin(plugin_name: str, plugins_root: Path, *, dry_run: bool
         return False
 
     with plugin_json_path.open(encoding="utf-8") as f:
-        data: dict[str, list[str] | str] = json.load(f)
+        data: dict[str, list[str] | str] = msgspec.json.decode(f.read())
 
     disk_skills = _discover_skills(plugin_dir)
     disk_agents = _discover_agents(plugin_dir)
@@ -1010,7 +1010,7 @@ def _reconcile_one_plugin(plugin_name: str, plugins_root: Path, *, dry_run: bool
     if has_drift and not dry_run:
         current_version = cast("str", data.get("version", "0.0.0"))
         data["version"] = bump_version(current_version, "minor")
-        _write_json_lf(plugin_json_path, json.dumps(data, indent=2) + "\n")
+        _write_json_lf(plugin_json_path, msgspec.json.format(msgspec.json.encode(data), indent=2).decode() + "\n")
         print(f"  Updated {plugin_name} -> {data['version']}")
 
     return has_drift
@@ -1155,7 +1155,7 @@ def _reconcile_marketplace(plugins_root: Path, *, dry_run: bool) -> bool:
         return False
 
     with marketplace_path.open(encoding="utf-8") as f:
-        data: dict[str, dict[str, str] | list[dict[str, str]]] = json.load(f)
+        data: dict[str, dict[str, str] | list[dict[str, str]]] = msgspec.json.decode(f.read())
 
     plugins_list = cast("list[dict[str, str]]", data.get("plugins", []))
     registered_names = {p["name"] for p in plugins_list}
@@ -1197,7 +1197,7 @@ def _reconcile_marketplace(plugins_root: Path, *, dry_run: bool) -> bool:
         bump_type: Literal["major", "minor", "patch"] = "major" if stale else "minor"
         metadata["version"] = bump_version(current_version, bump_type)
         data["metadata"] = metadata
-        _write_json_lf(marketplace_path, json.dumps(data, indent=2) + "\n")
+        _write_json_lf(marketplace_path, msgspec.json.format(msgspec.json.encode(data), indent=2).decode() + "\n")
         print(f"  Updated marketplace -> {metadata['version']}")
 
     return has_drift
@@ -1302,7 +1302,7 @@ def _precommit_sync() -> int:
             _git_stage_file(".claude-plugin/marketplace.json")
 
             with Path(".claude-plugin/marketplace.json").open(encoding="utf-8") as f:
-                data = json.load(f)
+                data = msgspec.json.decode(f.read())
                 new_version = data["metadata"]["version"]
 
             print(f"Updated marketplace -> {new_version}")
