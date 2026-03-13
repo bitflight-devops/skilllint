@@ -14,13 +14,14 @@ Token-based complexity measurement replaces line counting for accurate AI cost e
 from __future__ import annotations
 
 import fnmatch
-import msgspec.json
 import os
 import re
 import shutil
 import subprocess
 import sys
 from io import TextIOWrapper
+
+import msgspec.json
 
 # Ensure UTF-8 output on Windows (cp1252 default cannot encode emoji/spinner chars).
 # reconfigure() is available on Python 3.7+ when stdout is a TextIOWrapper.
@@ -38,6 +39,8 @@ from typing import TYPE_CHECKING, Annotated, ClassVar, Literal, NoReturn, Protoc
 # YAML/JSON at the edge: dict, list, or JSON-serializable scalars. More specific than Any.
 YamlValue: TypeAlias = dict[str, "YamlValue"] | list["YamlValue"] | str | int | float | bool | None
 
+import contextlib
+
 import typer
 from git import Repo
 from git.exc import InvalidGitRepositoryError, NoSuchPathError
@@ -49,7 +52,10 @@ from rich.panel import Panel
 from ruamel.yaml import YAML, YAMLError
 from ruamel.yaml.scalarstring import DoubleQuotedScalarString
 
-import contextlib
+from skilllint.adapters import PlatformAdapter, load_adapters, matches_file
+from skilllint.adapters.claude_code import ClaudeCodeAdapter
+from skilllint.rules.as_series import run_as_series
+from skilllint.token_counter import TOKEN_ERROR_THRESHOLD, TOKEN_WARNING_THRESHOLD, count_tokens
 
 from .frontmatter_core import (
     MAX_SKILL_NAME_LENGTH,
@@ -62,11 +68,6 @@ from .frontmatter_core import (
     get_frontmatter_model,
 )
 from .frontmatter_utils import RuamelYAMLHandler
-
-from skilllint.adapters import PlatformAdapter, load_adapters, matches_file
-from skilllint.adapters.claude_code import ClaudeCodeAdapter
-from skilllint.rules.as_series import run_as_series
-from skilllint.token_counter import TOKEN_ERROR_THRESHOLD, TOKEN_WARNING_THRESHOLD, count_tokens
 
 if TYPE_CHECKING:
     from pydantic_core import ErrorDetails

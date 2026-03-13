@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import msgspec.json
 from importlib.resources import files
+
+import msgspec.json
 
 
 def load_bundled_schema(platform: str, version: str = "v1") -> dict:

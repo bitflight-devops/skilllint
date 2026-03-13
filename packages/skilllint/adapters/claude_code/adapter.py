@@ -7,8 +7,9 @@ logic lives here — the core validator (plan 02-05) runs the checks.
 
 from __future__ import annotations
 
-import msgspec.json
 from typing import TYPE_CHECKING
+
+import msgspec.json
 
 from skilllint import load_bundled_schema
 
