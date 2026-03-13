@@ -59,8 +59,7 @@ Use `skilllint check --filter <ID> --verbose <path>` to see detailed output for 
 | AS005 | warning | no | SKILL.md body exceeds token threshold — warning at 4400 tokens, error at 8800 tokens (body only, frontmatter excluded); split or move content to `references/` |
 | AS006 | info | no | No evaluation queries file found (optional but recommended) |
 
-**Full detail:** `skilllint rule AS001` through `skilllint rule AS006`
-**List all:** `skilllint rules` or `skilllint rules --category skill`
+**Full detail:** Use `skilllint check --filter <ID> --verbose <path>` (e.g. `skilllint check --filter AS001 --verbose <path>`) to see detailed output for any AS rule.
 
 ---
 
