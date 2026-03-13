@@ -13,7 +13,7 @@ Validate YAML frontmatter in SKILL.md, agent .md, and command .md files.
 | FM001 | error | no | Frontmatter block is missing entirely |
 | FM002 | error | no | Frontmatter is not valid YAML |
 | FM003 | error | no | Required frontmatter field is missing (e.g. `name` per agentskills spec) |
-| FM004 | error | **yes** | `description` uses a YAML multiline block scalar (`>-`, `|`, `|-`); Claude Code skill indexer reads this as literal `>-`. Use a single-line string. |
+| FM004 | error | **yes** | `description` uses a YAML multiline block scalar (`` >- ``, `` \| ``, `` \|- ``); Claude Code skill indexer reads this as literal `>-`. Use a single-line string. |
 | FM005 | error | no | `name` field contains invalid characters (must be lowercase letters, numbers, hyphens only; max 64 chars) |
 | FM006 | error | no | `description` exceeds 1024 characters |
 | FM007 | error | **yes** | `allowed-tools` is a YAML array instead of a comma-separated string |
@@ -94,11 +94,11 @@ Validate `plugin.json` structure.
 
 | Rule | Severity | Auto-fix | Description |
 |------|----------|----------|-------------|
-| PL001 | error | no | `plugin.json` is missing or not valid JSON |
-| PL002 | error | no | `name` field is missing from `plugin.json` |
-| PL003 | error | no | `agents` field is a directory string instead of an array of file paths |
-| PL004 | warning | no | A path in `plugin.json` uses `../` traversal (unsupported after plugin caching) |
-| PL005 | warning | no | A path in `plugin.json` does not start with `./` |
+| PL001 | error | no | `plugin.json` is missing |
+| PL002 | error | no | `plugin.json` is not valid JSON |
+| PL003 | error | no | Required `name` field is missing from `plugin.json` |
+| PL004 | error | no | A path in `plugin.json` does not start with `./` |
+| PL005 | error | no | Referenced file in `plugin.json` does not exist |
 
 ---
 
@@ -145,7 +145,7 @@ Validate namespace-qualified skill references (e.g. `plugin-name:skill-name`).
 
 | Rule | Severity | Auto-fix | Description |
 |------|----------|----------|-------------|
-| SL001 | warning | **yes** | Symlink target points outside the plugin directory (will break after plugin caching) |
+| SL001 | warning | **yes** | Symlink target has trailing whitespace or newline characters |
 
 ---
 

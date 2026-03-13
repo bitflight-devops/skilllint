@@ -24,7 +24,7 @@ Key pattern: `plugin.json` requires only `name`. All other fields (`version`, `d
 
 **disable-model-invocation** — Do NOT set. Per `discuss-CONTEXT.md`, the skill must auto-activate when Claude encounters linting errors, rule violations, or plugin validation topics. Setting this would make the skill invisible to Claude unless the user explicitly types `/skilllint`.
 
-**allowed-tools** — The research is split: research-2 recommends omitting it (inherits parent tools, avoids restriction); research-3 recommends `Read, Grep, Glob, Bash(skilllint:*, uv run skilllint:*)`. The task spec requires `allowed-tools="Read, Bash, Glob, Grep"`. This is the value to use — it explicitly grants the four needed tools without relying on parent inheritance.
+**allowed-tools** — The research is split: research-2 recommends omitting it (inherits parent tools, avoids restriction); research-3 recommends `Read, Grep, Glob, Bash(skilllint:*, uv run skilllint:*)`. The task spec originally called for `allowed-tools="Read, Bash, Glob, Grep"`, but the shipped SKILL.md intentionally omits this field — an inline (non-forked) skill inherits all parent tools, and adding `allowed-tools` would only restrict the parent agent unnecessarily.
 
 **argument-hint** — Use `[rule-id|path]`. The `$ARGUMENTS` substitution enables three invocation modes: no args (full guide), rule ID (explain that rule from catalog), path (run lint on that path).
 

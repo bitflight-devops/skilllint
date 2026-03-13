@@ -105,7 +105,7 @@ If no arguments, show the full usage guide...
 ### Token budget consideration
 
 - SKILL.md content only loads when the skill is activated (not at startup). The references/ files load on demand when Claude reads them. This two-tier approach keeps the initial activation cost low.
-- Per the specification, if SKILL.md exceeds 4000 tokens, the plugin assessor flags SK006 (warning) or SK007 (error). Keeping the detailed catalog in references/ avoids this.
+- Per the specification, if SKILL.md body exceeds 4400 tokens, the plugin assessor flags SK006 (warning); if it exceeds 8800 tokens, it flags SK007 (error). Keeping the detailed catalog in references/ avoids this.
 
 ### Discovered rule codes (from test files)
 
