@@ -133,7 +133,7 @@ This is the exact gap the `agentskills-skilllint` plugin is intended to fill per
 
 2. **No existing rule catalog** -- The plan calls for a `references/` file with the full rule catalog. This content needs to be authored (or generated from `skilllint rule --list` output).
 
-3. **No argument-driven skill examples in project** -- The `mmap-processor` skill does not use arguments. The planned skill needs `argument-hint` frontmatter and `` substitution for rule ID lookups. Vendor plugins (e.g., `plugin-dev` skills) provide reference patterns for this.
+3. **No argument-driven skill examples in project** -- The `mmap-processor` skill does not use arguments. The planned skill needs `argument-hint` frontmatter and `$ARGUMENTS` substitution for rule ID lookups. Vendor plugins (e.g., `plugin-dev` skills) provide reference patterns for this.
 
 ### What Already Exists and Can Be Leveraged
 
