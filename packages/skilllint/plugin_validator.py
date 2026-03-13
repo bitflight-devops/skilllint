@@ -14,7 +14,7 @@ Token-based complexity measurement replaces line counting for accurate AI cost e
 from __future__ import annotations
 
 import fnmatch
-import json
+import msgspec.json
 import os
 import re
 import shutil
@@ -453,8 +453,8 @@ def _load_ignore_config(plugin_root: Path) -> IgnoreConfig:
     if not config_path.is_file():
         return {}
     try:
-        raw = json.loads(config_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+        raw = msgspec.json.decode(config_path.read_text(encoding="utf-8"))
+    except (OSError, msgspec.DecodeError):
         return {}
     ignore = raw.get("ignore", {})
     if not isinstance(ignore, dict):
@@ -1476,10 +1476,10 @@ class NamespaceReferenceValidator:
             declared_name: str | None = None
             if plugin_json.is_file():
                 try:
-                    data = json.loads(plugin_json.read_text(encoding="utf-8"))
+                    data = msgspec.json.decode(plugin_json.read_text(encoding="utf-8"))
                     if isinstance(data, dict) and isinstance(data.get("name"), str):
                         declared_name = data["name"]
-                except (OSError, ValueError):
+                except (OSError, msgspec.DecodeError):
                     pass
             # Fall back to directory name when plugin.json is absent/invalid
             name_to_dir[declared_name or entry.name] = entry
@@ -3076,8 +3076,8 @@ class PluginRegistrationValidator:
 
         try:
             with plugin_json_path.open() as f:
-                plugin_config = json.load(f)
-        except json.JSONDecodeError as e:
+                plugin_config = msgspec.json.decode(f.read())
+        except msgspec.DecodeError as e:
             errors.append(
                 ValidationIssue(
                     field="plugin.json",
@@ -3217,7 +3217,7 @@ class PluginRegistrationValidator:
         if git_metadata:
             missing = [k for k in ("repository", "homepage", "author") if k not in plugin_config and k in git_metadata]
             if missing:
-                suggestion_json = json.dumps({k: git_metadata[k] for k in missing}, indent=2)
+                suggestion_json = msgspec.json.format(msgspec.json.encode({k: git_metadata[k] for k in missing}), indent=2).decode()
                 info.append(
                     ValidationIssue(
                         field="plugin.json",
@@ -3490,8 +3490,8 @@ class PluginStructureValidator:
         """
         try:
             with Path(plugin_json_path).open(encoding="utf-8") as f:
-                json.load(f)
-        except json.JSONDecodeError as e:
+                msgspec.json.decode(f.read())
+        except msgspec.DecodeError as e:
             return f"Invalid JSON syntax in plugin.json: {e}"
         except OSError as e:
             return f"Cannot read plugin.json: {e}"
@@ -3737,8 +3737,8 @@ class HookValidator:
             return ValidationResult(passed=False, errors=errors, warnings=warnings, info=info)
 
         try:
-            data = json.loads(content)
-        except json.JSONDecodeError as e:
+            data = msgspec.json.decode(content)
+        except msgspec.DecodeError as e:
             errors.append(
                 ValidationIssue(
                     field="(json)",
