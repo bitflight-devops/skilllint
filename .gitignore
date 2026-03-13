@@ -1,0 +1,52 @@
+.worktrees
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+dist/
+*.egg-info/
+.coverage
+.coverage*
+.hypothesis/
+
+# Platform documentation vendor clones (raw git repos, updated in-place)
+# Ignore contents but not the directory itself (so CLAUDE.md can be tracked)
+.claude/vendor/*
+!.claude/vendor/CLAUDE.md
+.claude/worktrees
+.claude/reports/*
+
+# ── GSD baseline (auto-generated) ──
+.gsd/activity/
+.gsd/runtime/
+.gsd/worktrees/
+.gsd/auto.lock
+.gsd/metrics.json
+.gsd/STATE.md
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+*.code-workspace
+.env
+.env.*
+!.env.example
+node_modules/
+.next/
+build/
+venv/
+target/
+vendor/
+*.log
+coverage/
+.cache/
+tmp/
+
+# Benchmark artifacts
+scripts/bench-plugin/
+scripts/results/
