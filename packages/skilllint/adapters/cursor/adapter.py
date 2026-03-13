@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import frontmatter
+import frontmatter  # type: ignore[attr-defined]
 
 from skilllint import load_bundled_schema
 

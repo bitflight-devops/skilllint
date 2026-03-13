@@ -33,7 +33,7 @@ def process_markdown_file(file_path: str) -> None:
 
     with pathlib.Path(file_path).open("r+b") as f, mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
         # 1. Find the frontmatter boundaries
-        if not mm.startswith(DELIMITER):
+        if mm[: len(DELIMITER)] != DELIMITER:
             return  # No frontmatter found
 
         end_pos = mm.find(DELIMITER, len(DELIMITER))
@@ -52,6 +52,8 @@ def process_markdown_file(file_path: str) -> None:
             return  # Fast exit! Lint passed, do nothing.
 
         # 3. The "Zero-Copy Body" Write
+        if new_yaml_bytes is None:
+            return
         temp_path = file_path + ".tmp"
         with pathlib.Path(temp_path).open("wb") as temp_file:
             # Write the new frontmatter
