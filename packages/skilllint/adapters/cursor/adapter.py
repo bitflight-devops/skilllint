@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import frontmatter  # type: ignore[attr-defined]
+import frontmatter
 
 from skilllint import load_bundled_schema
 
@@ -54,7 +54,7 @@ class CursorAdapter:
         if mdc_schema is None:
             return []
 
-        post = frontmatter.load(str(path))
+        post = frontmatter.load(str(path))  # type: ignore[unresolved-attribute]
         fm: dict = dict(post.metadata)
 
         known_fields: set[str] = set(mdc_schema.get("properties", {}).keys())
