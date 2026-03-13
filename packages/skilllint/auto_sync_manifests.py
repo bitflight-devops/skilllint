@@ -27,12 +27,13 @@ Version Bumping:
 from __future__ import annotations
 
 import argparse
-import msgspec.json
 import shutil
 import subprocess
 import sys
 import tempfile
 from io import TextIOWrapper
+
+import msgspec.json
 
 # Ensure UTF-8 output on Windows (cp1252 default cannot encode emoji/spinner chars).
 # reconfigure() is available on Python 3.7+ when stdout is a TextIOWrapper.
@@ -367,7 +368,6 @@ def _write_json_lf(path: Path, content: str) -> None:
     Uses write_bytes to avoid Windows CRLF conversion in text mode.
     """
     path.write_bytes(content.encode("utf-8"))
-
 
 
 def _is_standard_path_skill(field_name: str, comp_path: str) -> bool:
