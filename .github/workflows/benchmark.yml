@@ -55,7 +55,9 @@ jobs:
         run: echo 3 | sudo tee /proc/sys/vm/drop_caches || true
 
       - name: Run I/O benchmark tests
-        run: uv run pytest tests/benchmarks/test_benchmark.py -v --no-header -p no:xdist
+        run: |
+          source .venv/bin/activate
+          pytest tests/benchmarks/test_benchmark.py -v --no-header -p no:xdist
 
       - name: Run bench_io for github-action-benchmark output
         run: |
@@ -163,7 +165,9 @@ jobs:
         run: uv sync
 
       - name: Run CPU benchmark tests
-        run: uv run pytest scripts/bench_cpu.py -v --no-header
+        run: |
+          source .venv/bin/activate
+          pytest scripts/bench_cpu.py -v --no-header
 
       - name: Run bench_cpu for github-action-benchmark output
         run: |
