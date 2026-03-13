@@ -384,9 +384,9 @@ pip install skilllint
 ## Usage
 
 ```bash
-skilllint path/to/plugin/
-agentlint path/to/skill/SKILL.md
-skillint path/to/plugin/plugin.json
+skilllint check path/to/plugin/
+agentlint check path/to/skill/SKILL.md
+skillint check path/to/plugin/plugin.json
 ```
 
 ## CLI entry points

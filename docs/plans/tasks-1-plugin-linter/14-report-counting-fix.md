@@ -38,7 +38,7 @@ The fix is fully implemented in `packages/skilllint/plugin_validator.py`:
 ```bash
 cd .worktrees/initial-packaging
 # Run against a real plugin directory and check "Total files:" in output
-uv run skilllint ~/.claude/plugins/cache/jamie-bitflight-skills/plugin-creator/5.12.2/
+uv run skilllint check ~/.claude/plugins/cache/jamie-bitflight-skills/plugin-creator/5.12.2/
 ```
 
 No action required — this task is complete.
