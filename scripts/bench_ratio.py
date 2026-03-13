@@ -17,9 +17,15 @@ import sys
 def extract_duration(data: list[dict[str, object]] | dict[str, object], label: str) -> float | None:
     """Extract duration in seconds from a benchmark result payload.
 
-    Supports both list-of-results (takes the last entry) and single-dict formats.
-    Accepts either ``duration_seconds`` (already in seconds) or ``mean_ms``
-    (milliseconds, converted to seconds).
+    Supports two formats:
+
+    1. **github-action-benchmark array** (written by ``bench_io.py --output``):
+       a list of ``{name, value, unit}`` dicts.  Looks for an entry whose
+       ``name`` ends with ``_mean_ms`` and converts its ``value`` from ms to s.
+
+    2. **Raw dict** (written by ``bench_io.py`` to stdout):
+       a single dict with keys like ``scan_mean_ms`` or ``fix_mean_ms``.
+       Also accepts a bare ``mean_ms`` key for forward-compatibility.
 
     Args:
         data: Parsed JSON benchmark result — either a list of dicts or a single dict.
@@ -28,20 +34,21 @@ def extract_duration(data: list[dict[str, object]] | dict[str, object], label: s
     Returns:
         Duration in seconds, or ``None`` if the required key is missing.
     """
-    entry: dict[str, object]
     if isinstance(data, list):
-        if not data:
-            return None
-        entry = data[-1]
-    else:
-        entry = data
+        # github-action-benchmark array: [{name, value, unit}, ...]
+        for entry in data:
+            name = str(entry.get("name", ""))
+            if name.endswith("_mean_ms"):
+                return float(entry["value"]) / 1000.0  # type: ignore[arg-type]
+        print(f"{label} data missing an entry with a name ending in '_mean_ms'", file=sys.stderr)
+        return None
 
-    if "duration_seconds" in entry:
-        return float(entry["duration_seconds"])
-    if "mean_ms" in entry:
-        return float(entry["mean_ms"]) / 1000.0
+    # Raw dict output from run_benchmark()
+    for key in ("scan_mean_ms", "fix_mean_ms", "mean_ms"):
+        if key in data:
+            return float(data[key]) / 1000.0  # type: ignore[arg-type]
 
-    print(f"{label} data missing duration_seconds or mean_ms", file=sys.stderr)
+    print(f"{label} data missing scan_mean_ms, fix_mean_ms, or mean_ms", file=sys.stderr)
     return None
 
 
