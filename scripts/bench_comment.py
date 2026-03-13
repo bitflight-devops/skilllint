@@ -33,11 +33,9 @@ _SMALLER_IS_BETTER: frozenset[str] = frozenset({
     "fix_min_ms",
     "fix_mean_ms",
     "fix_max_ms",
-    "cpu_small_mean_ms",
-    "cpu_medium_mean_ms",
-    "cpu_large_mean_ms",
-    "cpu_mean_ms",
-    "cpu_total_ms",
+    "cpu_clean_mean_ms",
+    "cpu_violations_mean_ms",
+    "cpu_fix_mean_ms",
 })
 
 # Hidden marker so sticky-pull-request-comment can find and update the comment.
