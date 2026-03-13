@@ -91,19 +91,37 @@ hooks: dict[str, list[HookGroupConfig]] | None
 The outer dict key is the event-type string (one of the `VALID_EVENT_TYPES` in the
 validator). The value is a list of hook groups.
 
-### Risk level: LOW
+### Risk level: LOW-MEDIUM
 
-- Pydantic with `model_config = ConfigDict(extra="allow")` will accept any dict;
-  narrowing the annotation does not change runtime validation behaviour because Pydantic
-  does not validate `TypedDict` fields inside a `BaseModel` field by default.
-- No Pydantic validator exists for the `hooks` field on any of the three models; the
-  validator handles hook structure separately in `HooksValidator`.
-- The change is annotation-only; no runtime behaviour changes.
+- In Pydantic v2, TypedDict annotations nested inside a `BaseModel` field **are**
+  validated at runtime. When `hooks` is annotated as
+  `dict[str, list[HookGroupConfig]] | None`, Pydantic will validate that the dict
+  values conform to the `HookGroupConfig` TypedDict shape on model construction. This
+  is a behaviour change from the previous `dict[str, Any] | None` annotation, which
+  accepted any dict value without inspection.
+- The runtime validation benefit is real: malformed hook entries that previously
+  slipped through the Pydantic layer undetected will now raise `ValidationError` at
+  model construction time, before `HooksValidator` even runs. This improves early
+  error detection.
+- The `HooksValidator` provides additional structural validation (e.g. checking
+  `VALID_EVENT_TYPES`) that goes beyond what the TypedDict expresses, so it remains
+  necessary even with the tighter annotation.
+- **Risk:** any real-world YAML that contains hook entries with fields outside the
+  `HookGroupConfig` / `HookEntryConfig` shape (e.g. unknown keys, wrong value types)
+  will now fail at parse time rather than passing through silently. This is the desired
+  long-term behaviour, but warrants a scan of existing fixture files to confirm none
+  would break. With `model_config = ConfigDict(extra="allow")`, extra *top-level*
+  model keys are still permitted; however, TypedDict extra-key policy is separate and
+  defaults to allowing extra keys as well (TypedDict is structurally typed), so unknown
+  keys in hook entries will not cause failures — only wrong types for known keys will.
 
-### Test update needed: NO
+### Test update needed: POSSIBLY
 
-No test exercises the type of the `hooks` field value at the Python type level.
-The `HooksValidator` tests cover runtime structure validation independently.
+Existing tests that construct `SkillFrontmatter`, `CommandFrontmatter`, or
+`AgentFrontmatter` with `hooks` values containing non-conforming structures may now
+raise `ValidationError` at construction time. Review hook-related fixtures and test
+factories before landing this change. The `HooksValidator` tests (which construct the
+validator independently of the models) are unaffected.
 
 ---
 
@@ -329,7 +347,7 @@ Perform changes in this sequence to keep diffs reviewable:
    independently reviewable.
 
 4. **Change 4 (optional)** — add explicit `strict=False` annotation to `model_config`
-   calls as a documentation-only clarification. Can be combined with Change 2 or
+   calls as a documentation-only clarification. This can be combined with Change 2 or
    deferred to a later housekeeping pass.
 
 ---

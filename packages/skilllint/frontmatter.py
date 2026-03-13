@@ -31,7 +31,7 @@ def process_markdown_file(file_path: str) -> None:
     if pathlib.Path(file_path).stat().st_size == 0:
         return
 
-    with pathlib.Path(file_path).open("r+b") as f, mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
+    with pathlib.Path(file_path).open("rb") as f, mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
         # 1. Find the frontmatter boundaries
         if mm[: len(DELIMITER)] != DELIMITER:
             return  # No frontmatter found

@@ -153,13 +153,35 @@ jobs:
           compare_data = json.loads(compare_text)
           base_data = json.loads(base_text)
 
-          # compare_data is a list (appended by test); base_data is a plain dict
+          # compare_data: list of result dicts with duration_seconds (seconds)
           if isinstance(compare_data, list) and compare_data:
-              compare_duration = compare_data[-1].get("duration_seconds", 0)  # already in seconds
+              last = compare_data[-1]
+              if "duration_seconds" in last:
+                  compare_duration = float(last["duration_seconds"])  # already in seconds
+              elif "mean_ms" in last:
+                  compare_duration = float(last["mean_ms"]) / 1000.0  # convert ms → s
+              else:
+                  print("compare_data entry missing duration_seconds or mean_ms", file=sys.stderr)
+                  sys.exit(0)
+          elif isinstance(compare_data, dict):
+              if "duration_seconds" in compare_data:
+                  compare_duration = float(compare_data["duration_seconds"])
+              elif "mean_ms" in compare_data:
+                  compare_duration = float(compare_data["mean_ms"]) / 1000.0
+              else:
+                  print("compare_data missing duration_seconds or mean_ms", file=sys.stderr)
+                  sys.exit(0)
           else:
               compare_duration = 0
 
-          base_duration = base_data.get("mean_ms", 0) / 1000.0  # mean_ms is milliseconds; convert to seconds
+          # base_data: dict with mean_ms (milliseconds)
+          if isinstance(base_data, dict) and "mean_ms" in base_data:
+              base_duration = float(base_data["mean_ms"]) / 1000.0  # mean_ms is ms; convert to seconds
+          elif isinstance(base_data, dict) and "duration_seconds" in base_data:
+              base_duration = float(base_data["duration_seconds"])  # already in seconds
+          else:
+              print("base_data missing mean_ms or duration_seconds", file=sys.stderr)
+              sys.exit(0)
 
           if base_duration > 0 and compare_duration > 0:
               ratio = compare_duration / base_duration
@@ -194,10 +216,16 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
+      - name: Drop OS page cache (CPU benchmark)
+        run: echo 3 | sudo tee /proc/sys/vm/drop_caches || true
+
       - name: Run CPU benchmark tests
         run: |
           source .venv/bin/activate
           pytest scripts/bench_cpu.py -v --no-header -p no:xdist --no-cov --override-ini="addopts="
+
+      - name: Drop OS page cache (bench_cpu output)
+        run: echo 3 | sudo tee /proc/sys/vm/drop_caches || true
 
       - name: Run bench_cpu for github-action-benchmark output
         run: |
