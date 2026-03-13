@@ -46,3 +46,7 @@ vendor/
 coverage/
 .cache/
 tmp/
+
+# Benchmark artifacts
+bench/bench-plugin/
+bench/results/
