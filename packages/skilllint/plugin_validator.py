@@ -1825,6 +1825,132 @@ def _validate_skill_directory_name(skill_dir_name: str) -> list[tuple[str, str]]
     return results
 
 
+def _build_validation_result(
+    *, errors: list[ValidationIssue], warnings: list[ValidationIssue], info: list[ValidationIssue]
+) -> ValidationResult:
+    """Build a validation result from accumulated issue lists.
+
+    Args:
+        errors: Collected error issues.
+        warnings: Collected warning issues.
+        info: Collected informational issues.
+
+    Returns:
+        ValidationResult with pass/fail derived from whether errors exist.
+    """
+    return ValidationResult(passed=len(errors) == 0, errors=errors, warnings=warnings, info=info)
+
+
+def _validation_result_with_error(
+    *,
+    errors: list[ValidationIssue],
+    warnings: list[ValidationIssue],
+    info: list[ValidationIssue],
+    issue: ValidationIssue,
+) -> ValidationResult:
+    """Append one error issue and return a validation result.
+
+    Args:
+        errors: Collected error issues.
+        warnings: Collected warning issues.
+        info: Collected informational issues.
+        issue: Error issue to append before returning.
+
+    Returns:
+        ValidationResult containing the appended error.
+    """
+    errors.append(issue)
+    return _build_validation_result(errors=errors, warnings=warnings, info=info)
+
+
+def _validate_frontmatter_yaml(
+    frontmatter_text: str,
+    *,
+    errors: list[ValidationIssue],
+    warnings: list[ValidationIssue],
+    info: list[ValidationIssue],
+) -> tuple[dict[str, YamlValue] | None, ValidationResult | None]:
+    """Validate raw frontmatter YAML and return parsed mapping or failure result.
+
+    Args:
+        frontmatter_text: Extracted frontmatter text without outer delimiters.
+        errors: Collected error issues.
+        warnings: Collected warning issues.
+        info: Collected informational issues.
+
+    Returns:
+        Tuple of parsed mapping or None, and a terminal ValidationResult when
+        validation must stop.
+    """
+    if re.search(r"description:\s*[|>][-+]?\s*\n", frontmatter_text):
+        errors.append(
+            ValidationIssue(
+                field="description",
+                severity="error",
+                message="Uses forbidden multiline YAML syntax (|, >, |-, >-)",
+                code=FM004,
+                docs_url=generate_docs_url(FM004),
+                suggestion="Use single-line string",
+            )
+        )
+
+    try:
+        data = _safe_load_yaml(frontmatter_text)
+    except YAMLError as e:
+        fixed_fm, colon_fixes, colon_fields = _fix_unquoted_colons(frontmatter_text)
+        if colon_fixes:
+            try:
+                _safe_load_yaml(fixed_fm)
+            except YAMLError:
+                pass
+            else:
+                result = _validation_result_with_error(
+                    errors=errors,
+                    warnings=warnings,
+                    info=info,
+                    issue=ValidationIssue(
+                        field="description",
+                        severity="error",
+                        message="Frontmatter contains unquoted colons that break YAML parsing",
+                        code="AS004",
+                        docs_url="https://github.com/bitflight-devops/skilllint/blob/main/plugins/agentskills-skilllint/skills/skilllint/references/rule-catalog.md#as004",
+                        suggestion=f"Quote the following field values: {', '.join(colon_fields)}",
+                    ),
+                )
+                return None, result
+
+        result = _validation_result_with_error(
+            errors=errors,
+            warnings=warnings,
+            info=info,
+            issue=ValidationIssue(
+                field="(yaml)",
+                severity="error",
+                message=f"Invalid YAML syntax: {e}",
+                code=FM002,
+                docs_url=generate_docs_url(FM002),
+            ),
+        )
+        return None, result
+
+    if not isinstance(data, dict):
+        result = _validation_result_with_error(
+            errors=errors,
+            warnings=warnings,
+            info=info,
+            issue=ValidationIssue(
+                field="(yaml)",
+                severity="error",
+                message="Frontmatter must be a YAML mapping",
+                code=FM002,
+                docs_url=generate_docs_url(FM002),
+            ),
+        )
+        return None, result
+
+    return data, None
+
+
 # ============================================================================
 # FRONTMATTER VALIDATOR
 # ============================================================================
@@ -1865,90 +1991,54 @@ class FrontmatterValidator:
         info: list[ValidationIssue] = self._pending_fm009_info
         self._pending_fm009_info = []
 
-        # Read file
         try:
             content = path.read_text(encoding="utf-8")
         except OSError as e:
-            errors.append(
-                ValidationIssue(
+            return _validation_result_with_error(
+                errors=errors,
+                warnings=warnings,
+                info=info,
+                issue=ValidationIssue(
                     field="(file)",
                     severity="error",
                     message=f"Could not read file: {e}",
                     code=FM002,
                     docs_url=generate_docs_url(FM002),
-                )
+                ),
             )
-            return ValidationResult(passed=False, errors=errors, warnings=warnings, info=info)
 
-        # Extract frontmatter
         frontmatter_text, _start_line, _end_line = self._extract_frontmatter(content)
         if frontmatter_text is None:
-            errors.append(
-                ValidationIssue(
+            return _validation_result_with_error(
+                errors=errors,
+                warnings=warnings,
+                info=info,
+                issue=ValidationIssue(
                     field="(file)",
                     severity="error",
                     message="No YAML frontmatter found",
                     code=FM003,
                     docs_url=generate_docs_url(FM003),
                     suggestion="File must start with '---' delimiter",
-                )
+                ),
             )
-            return ValidationResult(passed=False, errors=errors, warnings=warnings, info=info)
 
-        # Detect file type
         file_type = FileType.detect_file_type(path)
         if file_type == FileType.UNKNOWN:
             file_type = FileType.SKILL
 
-        # Check for forbidden multiline indicators
-        if re.search(r"description:\s*[|>][-+]?\s*\n", frontmatter_text):
-            errors.append(
-                ValidationIssue(
-                    field="description",
-                    severity="error",
-                    message="Uses forbidden multiline YAML syntax (|, >, |-, >-)",
-                    code=FM004,
-                    docs_url=generate_docs_url(FM004),
-                    suggestion="Use single-line string",
-                )
-            )
+        data, yaml_result = _validate_frontmatter_yaml(frontmatter_text, errors=errors, warnings=warnings, info=info)
+        if yaml_result is not None:
+            return yaml_result
 
-        # Parse YAML
-        try:
-            data = _safe_load_yaml(frontmatter_text)
-        except YAMLError as e:
-            errors.append(
-                ValidationIssue(
-                    field="(yaml)",
-                    severity="error",
-                    message=f"Invalid YAML syntax: {e}",
-                    code=FM002,
-                    docs_url=generate_docs_url(FM002),
-                )
-            )
-            return ValidationResult(passed=False, errors=errors, warnings=warnings, info=info)
-
-        if not isinstance(data, dict):
-            errors.append(
-                ValidationIssue(
-                    field="(yaml)",
-                    severity="error",
-                    message="Frontmatter must be a YAML mapping",
-                    code=FM002,
-                    docs_url=generate_docs_url(FM002),
-                )
-            )
-            return ValidationResult(passed=False, errors=errors, warnings=warnings, info=info)
-
-        # Select Pydantic model based on file type
         model_class = self._get_model_class(file_type)
-        if not model_class:
-            return ValidationResult(passed=True, errors=errors, warnings=warnings, info=info)
+        if model_class is None:
+            return _build_validation_result(errors=errors, warnings=warnings, info=info)
 
-        self._validate_pydantic_model(model_class, data, file_type, path, errors=errors, warnings=warnings)
+        validated_data = cast("dict[str, YamlValue]", data)
+        self._validate_pydantic_model(model_class, validated_data, file_type, path, errors=errors, warnings=warnings)
 
-        passed = len(errors) == 0
-        return ValidationResult(passed=passed, errors=errors, warnings=warnings, info=info)
+        return _build_validation_result(errors=errors, warnings=warnings, info=info)
 
     def _validate_pydantic_model(
         self,

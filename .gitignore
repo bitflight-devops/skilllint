@@ -54,3 +54,6 @@ scripts/results/
 
 .bg-shell/*walkthrough/
 walkthrough/
+
+# ── GSD baseline (auto-generated) ──
+.gsd/completed-units.json
