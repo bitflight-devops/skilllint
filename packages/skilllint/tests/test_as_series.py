@@ -122,8 +122,8 @@ def test_as003_description_present(tmp_path: pathlib.Path):
 # ---------------------------------------------------------------------------
 
 
-def test_as004_description_no_html(tmp_path: pathlib.Path):
-    """description containing '<b>' produces AS004 error."""
+def test_as004_description_unquoted_colon(tmp_path: pathlib.Path):
+    """description containing unquoted colon produces AS004 error."""
     skill_dir = tmp_path / "my-skill"
     skill_dir.mkdir()
     skill_md = skill_dir / "SKILL.md"
@@ -131,7 +131,7 @@ def test_as004_description_no_html(tmp_path: pathlib.Path):
         textwrap.dedent("""\
             ---
             name: my-skill
-            description: A skill with <b>bold</b> HTML in the description.
+            description: Use this: for examples Context: testing
             ---
 
             Body content.
@@ -139,8 +139,31 @@ def test_as004_description_no_html(tmp_path: pathlib.Path):
     )
     violations = check_skill_md(skill_md)
     assert _violations_with_code(violations, "AS004") != [], (
-        "Expected AS004 violation when description contains HTML tags"
+        "Expected AS004 violation when description contains unquoted colons"
     )
+    # Check that fix is provided
+    as004 = _violations_with_code(violations, "AS004")[0]
+    assert "fix" in as004, "AS004 should provide a fix suggestion"
+    assert "Wrap description in quotes" in as004["fix"]
+
+
+def test_as004_angle_brackets_allowed(tmp_path: pathlib.Path):
+    """description with angle brackets but no colons should NOT trigger AS004."""
+    skill_dir = tmp_path / "my-skill"
+    skill_dir.mkdir()
+    skill_md = skill_dir / "SKILL.md"
+    skill_md.write_text(
+        textwrap.dedent("""\
+            ---
+            name: my-skill
+            description: Use this for <testing> purposes only
+            ---
+
+            Body content.
+        """)
+    )
+    violations = check_skill_md(skill_md)
+    assert _violations_with_code(violations, "AS004") == [], "AS004 should NOT fire for angle brackets without colons"
 
 
 # ---------------------------------------------------------------------------

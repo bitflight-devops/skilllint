@@ -194,9 +194,10 @@ The `name:` frontmatter field must match the directory name:
 skills/my-skill/SKILL.md  →  name: my-skill
 ```
 
-### AS004 — HTML tags in description
+### AS004 — Unquoted colons in description
 
-Remove any `<html>` tags from the `description:` frontmatter field.
+If the `description:` contains unquoted colons like `Examples: Context:`,
+YAML parsing will fail. Quote the string to fix.
 
 ---
 

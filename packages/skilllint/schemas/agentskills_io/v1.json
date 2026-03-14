@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "skilllint/schemas/agentskills_io/v1.json",
+  "title": "Agent Skills Specification v1",
+  "description": "JSON Schema for agentskills.io skill frontmatter. Generated from https://agentskills.io/specification",
+  "version": "1.0.0",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "maxLength": 64,
+      "description": "(Required) Max 64 chars"
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 1024,
+      "minLength": 1,
+      "description": "(Required) Max 1024 chars"
+    },
+    "license": {
+      "type": "string",
+      "description": "(Optional)"
+    },
+    "compatibility": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "(Optional) Max 500 chars"
+    },
+    "metadata": {
+      "type": "string",
+      "description": "(Optional)"
+    },
+    "allowed-tools": {
+      "type": "string",
+      "description": "(Optional)"
+    }
+  },
+  "required": ["name", "description"],
+  "additionalProperties": true,
+  "x-source": {
+    "url": "https://agentskills.io/specification",
+    "fetched_at": "2026-03-14"
+  }
+}

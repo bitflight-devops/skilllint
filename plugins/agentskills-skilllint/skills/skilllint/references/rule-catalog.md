@@ -55,7 +55,7 @@ Use `skilllint check --filter <ID> --verbose <path>` to see detailed output for 
 | AS001 | error | no | Invalid skill name format — must be lowercase alphanumeric with hyphens, 1–64 chars, no consecutive hyphens, start/end with letter or digit |
 | AS002 | error | **yes** | Skill `name` field does not match the parent directory name |
 | AS003 | error | no | `description` field is missing or empty |
-| AS004 | error | no | `description` contains HTML tags (not allowed) |
+| AS004 | error | no | `description` contains unquoted colons that break YAML — quote the string to fix |
 | AS005 | warning | no | SKILL.md body exceeds token threshold (`TOKEN_WARNING_THRESHOLD` warning, `TOKEN_ERROR_THRESHOLD` error — body only, frontmatter excluded); split or move content to `references/` |
 | AS006 | info | no | No evaluation queries file found (optional but recommended) |
 
