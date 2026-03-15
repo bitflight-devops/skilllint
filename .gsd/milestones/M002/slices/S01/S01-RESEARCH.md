@@ -1,30 +1,28 @@
-# S01: Validator seam map and boundary extraction
+# S01-RESEARCH.md - Validator seam map and boundary extraction
 
-## Research Summary
+## Overview
+This research maps the current monolithic structure of `packages/skilllint/plugin_validator.py` to support the M002 milestone goal of decomposing the validator into explicit layers and seams.
 
-- The validation logic for `skilllint` resides in `packages/skilllint/plugin_validator.py`.
-- It currently operates as a "brownfield validator" monolith that contains multiple validator classes implementing the `Validator(Protocol)`.
-- The entrypoint `plugin_validator.py` is quite large (over 5000 lines).
-- Discovery and scan orchestration appear to be intertwined with individual validator logic. 
-- Validation logic spans: frontmatter, structure, complexity, links, progressive disclosure, namespaces, hooks, plugin registration, names, and descriptions.
+## Findings
+- **Monolithic Validator Structure**: Found that `packages/skilllint/plugin_validator.py` acts as a monolithic entrypoint containing multiple validator classes (`ProgressiveDisclosureValidator`, `InternalLinkValidator`, `NamespaceReferenceValidator`, etc.) all implementing a `validate(self, path: Path)` method.
+- **Entrypoints**: The main validation entrypoints seem to be distributed across specialized classes rather than a single master validator. There's also a `validate_file` function and a `validate_with_claude` function, which might be the real integration points for the CLI.
+- **Seams**: The `Validator(Protocol)` defined in the file provides a promising seam for implementing cleaner dependency injection and layer separation.
+- **Dependency Issues**: Many validators are directly imported or included in the same file, making it hard to reason about shared versus provider-specific ownership.
 
-## Key Findings
+## Risks & Unknowns
+- **CLI Dependency**: Are callers using classes directly, or are they relying on the `validate_file` function? Need to confirm how `skilllint check` calls this module.
+- **Hidden Coupling**: The shared dependencies within `plugin_validator.py` might be deeper than just class definitions (e.g., shared state, helper functions).
+- **Registration**: How are these validators registered and chosen for a given file/plugin?
 
-- The monolith contains many concerns: validator implementations, CLI reporting (`Reporter` classes), and helpers for path discovery, YAML parsing, and issue formatting.
-- `Validator(Protocol)` defines the seam for individual validators (`validate`, `can_fix`, `fix`).
-- Discovery, currently implicit, needs to be made explicit (R012, R015-R017).
-- Validation and reporting are mixed within the same file (e.g., `ConsoleReporter`, `CIReporter` inside `plugin_validator.py`).
-- The validator classes are tightly coupled to the monolithic file structure.
+## Plan for S01
+1. **Confirm CLI Entrypoint**: Investigate `packages/skilllint/tests/test_cli.py` and the CLI code to see how it invokes validation.
+2. **Map Module Dependencies**: Analyze how the validators share dependencies.
+3. **Draft Separation Strategy**: Move classes into individual files under `packages/skilllint/validators/` or equivalent, and update `plugin_validator.py` to act as an orchestrator/registry instead of a container.
 
-## Risks and Unknowns
+## Deliverable Status
+- [x] Initial research on validator monolith structure.
+- [ ] Confirmation scan of scan orchestration seams.
 
-- High risk that internal dependencies (YAML helpers, error codes, logic helpers) are deeply shared, making decomposition non-trivial (R012).
-- Scan orchestration seam is currently not clearly defined; validator classes seem to be triggered for individual files/directories independently, but orchestrator logic might be hidden in higher-level functions like `validate_with_claude` or `validate_file`.
-- Official-repo scan truth (M002 Goal) depends on cleaning up the existing validator boundaries first.
-
-## Plan
-
-1. Map the monolithic file boundaries and identify internal seams to extract.
-2. Outline the decomposition plan for Validator, Reporting, and Orchestration.
-3. Establish cleaner module boundaries to support the M002 requirements (scan discovery and separator-of-concerns).
-4. Extract key components (Validation, Reporting, Discovery) into dedicated modules.
+## Next Steps
+- Investigate scan orchestration logic.
+- Plan internal module boundary extraction.
