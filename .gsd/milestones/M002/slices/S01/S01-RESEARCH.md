@@ -1,47 +1,24 @@
-
 # S01: Validator seam map and boundary extraction — Research
 
 ## Objectives
+- Map current validator monolithic responsibilities in `packages/skilllint/plugin_validator.py`.
+- Identify extraction seams for schema validation, lint-rule execution, and reporting.
+- Propose new internal module boundaries to reduce reliance on one dominant validator file.
 
-- Map the internal boundaries of the current `plugin_validator.py` monolith.
-- Identify the core responsibilities currently bundled together (scan orchestration, schema/frontmatter validation, lint-rule execution, reporting).
-- Define seams for future extraction into separate modules.
+## Findings
+- `packages/skilllint/plugin_validator.py` acts as a "god file" containing validator protocols, concrete implementations, CLI entry point, result collection, and reporter classes.
+- Validations are currently selected in `_get_validators_for_path` based on `FileType`.
+- Reporters (`ConsoleReporter`, `CIReporter`, `SummaryReporter`) and CLI support functions (like `is_ignored`, `_frontmatter_requirement`) all live together alongside validation logic.
+- Validator classes (`FrontmatterValidator`, `DescriptionValidator`, `PluginStructureValidator`, etc.) are heavily coupled with the orchestrating file's CLI logic and file type detection.
 
-## Current State Observations
+## Proposed Module Boundaries (Draft)
+1. `packages/skilllint/validator/orchestrator.py`: CLI entry point, result gathering, and orchestrator logic.
+2. `packages/skilllint/validator/registry.py`: Logic for mapping file types to validators (`_get_validators_for_path`).
+3. `packages/skilllint/validator/reporters.py`: Reporter implementations (`Reporter` protocol and concrete classes).
+4. `packages/skilllint/validator/rules`: Keep existing rule classes here or group them by responsibility (schema vs lint rules).
+5. `packages/skilllint/validator/frontmatter.py`: Extract frontmatter logic, requirements, and validation.
 
-- `plugin_validator.py` (5500+ lines) acts as the monolithic entrypoint for almost all validation logic.
-- It contains classes for every validator type: `ProgressiveDisclosureValidator`, `InternalLinkValidator`, `NamespaceReferenceValidator`, `SymlinkTargetValidator`, `FrontmatterValidator`, `NameFormatValidator`, `DescriptionValidator`, `ComplexityValidator`, `PluginRegistrationValidator`, `PluginStructureValidator`, and `HookValidator`.
-- The file also includes CLI orchestration, helper functions for YAML parsing, error handling, and registry logic.
-- Rule authority and provenance logic seem coupled within this file or closely adjacent in registry modules.
-
-## Key Risks / Unknowns
-
-- The density of `plugin_validator.py` implies high coupling. Attempting to extract single validators might reveal hidden dependencies on CLI state, YAML helpers, or global adapter registry.
-- Scan orchestration logic is currently buried in the file's primary flow, making dependency on it for CLI scan target selection ambiguous.
-- The distinction between schema-backed validation and custom lint rule validation is currently obscured by the shared `Validator` protocol implementation.
-
-## Research Findings
-
-- Scan orchestration, schema/frontmatter validation, rule execution, and reporting are all currently fused in `plugin_validator.py`.
-- The large number of validator classes (each 100-300+ lines) indicates the logic for each individual validator is likely extractable, but context-dependent helpers (like `_yaml_safe`, `_dump_yaml`, etc.) are currently global/shared.
-
-## Plan
-
-- Perform a dependency graph analysis of `plugin_validator.py`.
-- Define module boundaries:
-    - `skilllint.orchestration` (scan target discovery)
-    - `skilllint.validation.schemas` (schema/frontmatter constraints)
-    - `skilllint.validation.rules` (custom lint rule logic)
-    - `skilllint.reporting` (issue management)
-- Create a map of existing validator-to-dependency relationships to guide the actual code move in T01.
-
-## Skills Used
-
-- `rg`, `find`, `read` for dependency exploration.
-
-## Forward Intelligence
-
-- The shared utility functions (`_safe_load_yaml`, `_dump_yaml`, etc.) are used by nearly every validator. Moving these into a shared utils module is a prerequisite for extracting any validator class.
-- The `Validator` protocol requires `validate`, `can_fix`, and `fix`. Any extracted module must adhere to this to avoid breaking the existing registry.
-
-S01 researched.
+## Next Steps
+- Implement new modules incrementally.
+- Update `packages/skilllint/plugin_validator.py` to import from/delegate to new modules.
+- Ensure CLI entry point (`skilllint check`) remains functional.
