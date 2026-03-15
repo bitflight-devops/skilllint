@@ -1,24 +1,48 @@
-# S01: Validator seam map and boundary extraction — Research
+# M002/S01 Research: Validator seam map and boundary extraction
 
-## Objectives
-- Map current validator monolithic responsibilities in `packages/skilllint/plugin_validator.py`.
-- Identify extraction seams for schema validation, lint-rule execution, and reporting.
-- Propose new internal module boundaries to reduce reliance on one dominant validator file.
+## Overview
+This slice focuses on decomposing the monolithic `plugin_validator.py` and preparing internal boundaries for the rest of the M002 milestone. The monolith currently houses numerous validators and scan orchestration logic, making rule ownership and provider-specific behavior difficult to trace.
 
-## Findings
-- `packages/skilllint/plugin_validator.py` acts as a "god file" containing validator protocols, concrete implementations, CLI entry point, result collection, and reporter classes.
-- Validations are currently selected in `_get_validators_for_path` based on `FileType`.
-- Reporters (`ConsoleReporter`, `CIReporter`, `SummaryReporter`) and CLI support functions (like `is_ignored`, `_frontmatter_requirement`) all live together alongside validation logic.
-- Validator classes (`FrontmatterValidator`, `DescriptionValidator`, `PluginStructureValidator`, etc.) are heavily coupled with the orchestrating file's CLI logic and file type detection.
+## Requirements Coverage
+- R012: Decompose remaining validator monolith into explicit layers.
 
-## Proposed Module Boundaries (Draft)
-1. `packages/skilllint/validator/orchestrator.py`: CLI entry point, result gathering, and orchestrator logic.
-2. `packages/skilllint/validator/registry.py`: Logic for mapping file types to validators (`_get_validators_for_path`).
-3. `packages/skilllint/validator/reporters.py`: Reporter implementations (`Reporter` protocol and concrete classes).
-4. `packages/skilllint/validator/rules`: Keep existing rule classes here or group them by responsibility (schema vs lint rules).
-5. `packages/skilllint/validator/frontmatter.py`: Extract frontmatter logic, requirements, and validation.
+## Research Findings
 
-## Next Steps
-- Implement new modules incrementally.
-- Update `packages/skilllint/plugin_validator.py` to import from/delegate to new modules.
-- Ensure CLI entry point (`skilllint check`) remains functional.
+### Monolith Surface Analysis
+I examined `packages/skilllint/plugin_validator.py` and discovered it is not just a validator registry/runner — it contains the core implementation for:
+- Registry management (via `_ADAPTERS` and `load_adapters`).
+- File type classification (`FileType.detect_file_type`).
+- Orchestration (`ProgressiveDisclosureValidator`, `InternalLinkValidator`, `NamespaceReferenceValidator`, etc. are defined *inside* the file).
+- Error definitions (`ErrorCode` enum).
+- Utility functions (YAML parsing/dumping, fixers).
+
+The actual CLI entrypoint appears to rely on these combined responsibilities, illustrating precisely why this "monolith" is a maintenance risk for M002 boundaries.
+
+### Validator Breakdown
+The following classes are currently bundled in `plugin_validator.py`:
+- `ProgressiveDisclosureValidator`
+- `InternalLinkValidator`
+- `NamespaceReferenceValidator`
+- `SymlinkTargetValidator`
+- `FrontmatterValidator`
+- `NameFormatValidator`
+- `DescriptionValidator`
+- `ComplexityValidator`
+- `PluginRegistrationValidator`
+- `PluginStructureValidator`
+- `HookValidator`
+
+Each of these should ideally reside in a dedicated rule or validator module, allowing the orchestration layer to remain clean and agnostic of specific rule details.
+
+### Orchestration and Scan Orchestration
+The scan logic is currently mixed with validator logic. To meet the M002 requirements, the "scan orchestration" must be separated from "rule validation" to permit the three scan-target selection modes (manifest, auto-discovery, structure-only) to coexist clearly.
+
+## Risks and Unknowns
+- Refactoring `plugin_validator.py` threatens the stability of the real CLI entrypoint. Integration tests in `packages/skilllint/tests/test_cli.py` must be used during refactoring to prevent regressions.
+- The `ErrorCode` definitions remain a central point of dependency; they may need to be moved to a stable shared location before validator extraction proceeds.
+
+## Proposed Strategy
+1.  **Extract Constants & ErrorCodes:** Move `ErrorCode` and shared constants to a permanent home (e.g., `constants.py` or `errors.py`).
+2.  **Move Validators:** Migrate each validator class defined in `plugin_validator.py` into `packages/skilllint/rules/` or a new `packages/skilllint/validators/` directory.
+3.  **Extract Orchestration:** Define an explicit `ValidatorRegistry` or similar seam that manages validator lookup, keeping `plugin_validator.py` as solely the CLI-entry/orchestration layer.
+4.  **Verification:** Ensure all existing unit tests in `packages/skilllint/tests/` still pass after validator migration.
