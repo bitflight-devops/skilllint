@@ -497,7 +497,7 @@ description: "Special chars: @mention #tag & more * stuff"
 
 
 @pytest.mark.parametrize(
-    ("frontmatter", "expected_error_code"),
+    ("frontmatter", "expected_error_code", "expected_passed"),
     [
         (
             """---
@@ -506,6 +506,7 @@ description: >-
 ---
 """,
             "FM004",
+            True,  # FM004 is now a warning (runtime-accepted pattern)
         ),
         (
             """---
@@ -515,6 +516,7 @@ tools:
 ---
 """,
             "FM007",
+            True,  # FM007 is now a warning (runtime-accepted pattern)
         ),
         (
             """---
@@ -523,10 +525,13 @@ description: Test
 ---
 """,
             "FM010",
+            False,  # FM010 is still an error (directory name mismatch)
         ),
     ],
 )
-def test_parametrized_error_codes(tmp_path: Path, frontmatter: str, expected_error_code: str) -> None:
+def test_parametrized_error_codes(
+    tmp_path: Path, frontmatter: str, expected_error_code: str, expected_passed: bool
+) -> None:
     """Test specific error codes are raised for known violations.
 
     Tests: Multiple frontmatter violations with expected error codes
@@ -539,8 +544,10 @@ def test_parametrized_error_codes(tmp_path: Path, frontmatter: str, expected_err
     validator = FrontmatterValidator()
     result = validator.validate(skill_md)
 
-    assert result.passed is False
-    assert any(issue.code == expected_error_code for issue in result.errors)
+    assert result.passed is expected_passed
+    # Check for issue in both errors and warnings (FM004/FM007 are now warnings)
+    all_issues = result.errors + result.warnings
+    assert any(issue.code == expected_error_code for issue in all_issues)
 
 
 class TestNameFieldRestoration:
