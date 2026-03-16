@@ -179,21 +179,13 @@ ERROR_CODE_BASE_URL = (
 PLUGIN_MANIFEST_SCHEMA_URL = "https://code.claude.com/docs/en/plugins-reference.md#plugin-manifest-schema"
 SKILL_FRONTMATTER_SCHEMA_URL = "https://code.claude.com/docs/en/skills.md#frontmatter-reference"
 
-# Convenience glob patterns for --filter-type option
-FILTER_TYPE_MAP: dict[str, str] = {
-    "skills": "**/skills/*/SKILL.md",
-    "agents": "**/agents/*.md",
-    "commands": "**/commands/*.md",
-}
-
-# Default patterns for auto-discovering validatable files in bare directories
-DEFAULT_SCAN_PATTERNS: tuple[str, ...] = (
-    "**/skills/*/SKILL.md",
-    "**/agents/*.md",
-    "**/commands/*.md",
-    "**/.claude-plugin/plugin.json",
-    "**/hooks/hooks.json",
-    "**/CLAUDE.md",
+# Scan runtime imports - re-export for backwards compatibility
+from skilllint.scan_runtime import (
+    DEFAULT_SCAN_PATTERNS,
+    FILTER_TYPE_MAP,
+    compute_summary,
+    discover_validatable_paths,
+    resolve_filter_and_expand_paths,
 )
 
 # Description requirements (Architecture lines 349-350)
@@ -357,6 +349,128 @@ PR001, PR002, PR003, PR004, PR005 = (
     ErrorCode.PR004,
     ErrorCode.PR005,
 )
+
+# ============================================================================
+# VALIDATOR OWNERSHIP (Architecture lines 352a-352j)
+# ============================================================================
+
+
+class ValidatorOwnership(StrEnum):
+    """Ownership classification for validators.
+
+    Used to distinguish between schema-backed validation (hard failures)
+    and lint-rule validation (warnings/findings).
+    """
+
+    SCHEMA = "schema"  # Schema-backed validation (hard failures = exit code 1)
+    LINT = "lint"  # Lint rules (warnings = exit code 0 with findings)
+
+
+# Mapping from validator class name to ownership classification.
+# This establishes the explicit boundary between schema and lint validation.
+VALIDATOR_OWNERSHIP: dict[str, ValidatorOwnership] = {
+    # Schema-backed validators (hard failures)
+    "FrontmatterValidator": ValidatorOwnership.SCHEMA,
+    "PluginStructureValidator": ValidatorOwnership.SCHEMA,
+    "PluginRegistrationValidator": ValidatorOwnership.SCHEMA,
+    "HookValidator": ValidatorOwnership.SCHEMA,
+    "SymlinkTargetValidator": ValidatorOwnership.SCHEMA,
+    # Lint validators (warnings/findings)
+    "NameFormatValidator": ValidatorOwnership.LINT,
+    "DescriptionValidator": ValidatorOwnership.LINT,
+    "ComplexityValidator": ValidatorOwnership.LINT,
+    "InternalLinkValidator": ValidatorOwnership.LINT,
+    "ProgressiveDisclosureValidator": ValidatorOwnership.LINT,
+    "NamespaceReferenceValidator": ValidatorOwnership.LINT,
+    "MarkdownTokenCounter": ValidatorOwnership.LINT,
+}
+
+# ============================================================================
+# RULE TRUTH CLASSIFICATION (S04 — M002)
+# ============================================================================
+# Justified errors (genuine schema violations):
+#   FM003 — frontmatter required (agents/skills/commands need it to function)
+#   FM005 — field type mismatch (schema violation, not style preference)
+# Downgraded to warning (runtime-accepted patterns):
+#   FM004 — multiline YAML (|, >, |-, >-) accepted by Claude Code runtime
+#   FM007 — tools field as YAML array accepted by Claude Code runtime
+#   AS004 — unquoted colons in description valid in proper YAML context
+# Evidence: Official repos (claude-plugins-official, skills, claude-code-plugins)
+#   contain these patterns and Claude Code runtime accepts them.
+
+
+def get_validator_ownership(validator: Validator) -> ValidatorOwnership:
+    """Get the ownership classification for a validator.
+
+    Args:
+        validator: A validator instance.
+
+    Returns:
+        ValidatorOwnership enum value (SCHEMA or LINT).
+
+    Defaults to LINT for unknown validators (conservative assumption).
+    """
+    class_name = type(validator).__name__
+    return VALIDATOR_OWNERSHIP.get(class_name, ValidatorOwnership.LINT)
+
+
+# Mapping from validator class name to constraint scope applicability.
+# Validators that are provider-specific will only run when the adapter's
+# constraint_scopes() includes "provider_specific".
+VALIDATOR_CONSTRAINT_SCOPES: dict[str, set[str]] = {
+    # Shared validators (run for all providers)
+    "FrontmatterValidator": {"shared", "provider_specific"},
+    "PluginStructureValidator": {"shared", "provider_specific"},
+    "PluginRegistrationValidator": {"shared", "provider_specific"},
+    "HookValidator": {"shared", "provider_specific"},
+    "SymlinkTargetValidator": {"shared", "provider_specific"},
+    "NameFormatValidator": {"shared", "provider_specific"},
+    "DescriptionValidator": {"shared", "provider_specific"},
+    "ComplexityValidator": {"shared", "provider_specific"},
+    "InternalLinkValidator": {"shared", "provider_specific"},
+    "ProgressiveDisclosureValidator": {"shared", "provider_specific"},
+    "NamespaceReferenceValidator": {"shared", "provider_specific"},
+    "MarkdownTokenCounter": {"shared", "provider_specific"},
+}
+
+
+def get_validator_constraint_scopes(class_name: str) -> set[str]:
+    """Get the constraint scopes a validator applies to.
+
+    Args:
+        class_name: Validator class name (e.g. "FrontmatterValidator").
+
+    Returns:
+        Set of constraint scope strings (e.g. {"shared", "provider_specific"}).
+        Defaults to {"shared", "provider_specific"} for unknown validators.
+    """
+    return VALIDATOR_CONSTRAINT_SCOPES.get(class_name, {"shared", "provider_specific"})
+
+
+def filter_validators_by_constraint_scopes(
+    validators: list[Validator], constraint_scopes: set[str]
+) -> list[Validator]:
+    """Filter validators based on provider constraint scopes.
+
+    Validators are included if their applicable constraint scopes intersect
+    with the provider's constraint_scopes().
+
+    Args:
+        validators: List of validator instances.
+        constraint_scopes: Set of constraint scope strings from adapter.
+
+    Returns:
+        Filtered list of validators that match the constraint scopes.
+    """
+    filtered: list[Validator] = []
+    for validator in validators:
+        class_name = type(validator).__name__
+        validator_scopes = get_validator_constraint_scopes(class_name)
+        # Include validator if there's any intersection
+        if validator_scopes & constraint_scopes:
+            filtered.append(validator)
+    return filtered
+
 
 # Claude CLI timeout
 CLAUDE_TIMEOUT = 3  # seconds
@@ -784,47 +898,55 @@ def _pydantic_error_to_validation_issue(error: ErrorDetails) -> ValidationIssue:
     elif isinstance(error.get("input"), list):
         if "tools" in field.lower():
             code = FM007
-            msg = "Tools field is YAML array (should be comma-separated string)"
+            msg = "Tools field is YAML array — runtime accepts this, but CSV string is preferred style"
         elif "skills" in field.lower():
             code = FM008
-            msg = "Skills field is YAML array (should be comma-separated string)"
+            msg = "Skills field is YAML array — runtime accepts this, but CSV string is preferred style"
         suggestion = "Use format: 'tool1, tool2, tool3'"
     elif "colon" in msg.lower():
         code = FM009
         suggestion = "Quote the description or remove colons"
 
+    # FM007/FM008 (YAML arrays for tools/skills) are runtime-accepted patterns -> warning
+    severity: Literal["error", "warning", "info"] = "warning" if code in (FM007, FM008) else "error"
+
     return ValidationIssue(
-        field=field, severity="error", message=msg, code=code, docs_url=generate_docs_url(code), suggestion=suggestion
+        field=field, severity=severity, message=msg, code=code, docs_url=generate_docs_url(code), suggestion=suggestion
     )
 
 
-def _check_list_valued_tool_fields(data: dict[str, YamlValue], errors: list[ValidationIssue]) -> None:
-    """Append errors for list-valued tools/skills fields that Pydantic may not catch.
+def _check_list_valued_tool_fields(
+    data: dict[str, YamlValue],
+    errors: list[ValidationIssue],
+    warnings: list[ValidationIssue],
+) -> None:
+    """Append warnings for list-valued tools/skills fields that Pydantic may not catch.
 
     Args:
         data: Parsed frontmatter dict.
-        errors: Mutable list to append ValidationIssue objects to.
+        errors: Mutable list to append error issues to (unused, kept for API compat).
+        warnings: Mutable list to append warning issues to.
     """
     for field_name, field_val in data.items():
         if not isinstance(field_val, list):
             continue
         if field_name in {"tools", "disallowedTools", "allowed-tools"}:
-            errors.append(
+            warnings.append(
                 ValidationIssue(
                     field=field_name,
-                    severity="error",
-                    message="Tools field is YAML array (should be comma-separated string)",
+                    severity="warning",
+                    message="Tools field is YAML array — runtime accepts this, but CSV string is preferred style",
                     code=FM007,
                     docs_url=generate_docs_url(FM007),
                     suggestion="Use format: 'tool1, tool2, tool3'",
                 )
             )
         elif field_name == "skills":
-            errors.append(
+            warnings.append(
                 ValidationIssue(
                     field=field_name,
-                    severity="error",
-                    message="Skills field is YAML array (should be comma-separated string)",
+                    severity="warning",
+                    message="Skills field is YAML array — runtime accepts this, but CSV string is preferred style",
                     code=FM008,
                     docs_url=generate_docs_url(FM008),
                     suggestion="Use format: 'skill1, skill2, skill3'",
@@ -1887,14 +2009,14 @@ def _validate_frontmatter_yaml(
         validation must stop.
     """
     if re.search(r"description:\s*[|>][-+]?\s*\n", frontmatter_text):
-        errors.append(
+        warnings.append(
             ValidationIssue(
                 field="description",
-                severity="error",
-                message="Uses forbidden multiline YAML syntax (|, >, |-, >-)",
+                severity="warning",
+                message="Uses multiline YAML syntax (|, >, |-, >-) — style preference, not a schema requirement",
                 code=FM004,
                 docs_url=generate_docs_url(FM004),
-                suggestion="Use single-line string",
+                suggestion="Use single-line string for better readability",
             )
         )
 
@@ -1904,24 +2026,26 @@ def _validate_frontmatter_yaml(
         fixed_fm, colon_fixes, colon_fields = _fix_unquoted_colons(frontmatter_text)
         if colon_fixes:
             try:
-                _safe_load_yaml(fixed_fm)
+                fixed_data = _safe_load_yaml(fixed_fm)
             except YAMLError:
                 pass
             else:
-                result = _validation_result_with_error(
-                    errors=errors,
-                    warnings=warnings,
-                    info=info,
-                    issue=ValidationIssue(
+                # AS004: Unquoted colons break YAML parsing, but auto-fixable.
+                # Emit warning and continue with fixed YAML (runtime accepts quoted values).
+                warnings.append(
+                    ValidationIssue(
                         field="description",
-                        severity="error",
-                        message="Frontmatter contains unquoted colons that break YAML parsing",
+                        severity="warning",
+                        message="Frontmatter contains unquoted colons that break YAML parsing — auto-fixable by quoting",
                         code="AS004",
                         docs_url="https://github.com/bitflight-devops/skilllint/blob/main/plugins/agentskills-skilllint/skills/skilllint/references/rule-catalog.md#as004",
                         suggestion=f"Quote the following field values: {', '.join(colon_fields)}",
-                    ),
+                    )
                 )
-                return None, result
+                # Continue validation with the fixed YAML data
+                if isinstance(fixed_data, dict):
+                    return fixed_data, None
+                # Fixed data is not a dict, fall through to error below
 
         result = _validation_result_with_error(
             errors=errors,
@@ -2083,9 +2207,14 @@ class FrontmatterValidator:
                     )
                 )
         except ValidationError as e:
-            errors.extend(_pydantic_error_to_validation_issue(err) for err in e.errors())
+            for err in e.errors():
+                issue = _pydantic_error_to_validation_issue(err)
+                if issue.severity == "warning":
+                    warnings.append(issue)
+                else:
+                    errors.append(issue)
 
-        _check_list_valued_tool_fields(data, errors)
+        _check_list_valued_tool_fields(data, errors, warnings)
         _check_skill_name_and_directory(data, path, file_type, errors, warnings)
 
         hooks_value = data.get("hooks")
@@ -4938,92 +5067,10 @@ def _handle_tokens_only(paths: list[Path], *, batch: bool = False) -> None:
     raise typer.Exit(0) from None
 
 
-def _discover_validatable_paths(directory: Path) -> list[Path]:
-    """Auto-discover validatable files in a bare directory.
-
-    Globs ``DEFAULT_SCAN_PATTERNS`` against *directory* and returns
-    deduplicated, sorted paths.  For any ``.claude-plugin/plugin.json``
-    match the **plugin root directory** (grandparent of plugin.json) is
-    returned instead of the file itself, because ``detect_file_type``
-    recognises directories that contain ``.claude-plugin/plugin.json``.
-
-    Args:
-        directory: The directory to scan.
-
-    Returns:
-        Sorted list of unique paths suitable for validation.
-    """
-    discovered: set[Path] = set()
-    for pattern in DEFAULT_SCAN_PATTERNS:
-        for match in directory.glob(pattern):
-            if match.name == "plugin.json":
-                discovered.add(match.parent.parent)
-            else:
-                discovered.add(match)
-    return sorted(discovered)
-
-
-def _resolve_filter_and_expand_paths(
-    paths: list[Path], filter_glob: str | None, filter_type: str | None
-) -> tuple[list[Path], bool]:
-    """Resolve filter options and expand directory paths.
-
-    Validates mutual exclusion of --filter and --filter-type, resolves
-    filter_type to glob pattern, and expands directories.
-
-    Returns:
-        Tuple of (expanded_paths, is_batch).
-
-    Raises:
-        typer.Exit: On invalid filter options.
-    """
-    if filter_glob is not None and filter_type is not None:
-        typer.echo("Error: --filter and --filter-type are mutually exclusive", err=True)
-        raise typer.Exit(2) from None
-
-    resolved_glob: str | None = filter_glob
-    if filter_type is not None:
-        if filter_type not in FILTER_TYPE_MAP:
-            valid = ", ".join(FILTER_TYPE_MAP)
-            typer.echo(f"Error: --filter-type must be one of: {valid}", err=True)
-            raise typer.Exit(2) from None
-        resolved_glob = FILTER_TYPE_MAP[filter_type]
-
-    expanded_paths: list[Path] = []
-    is_batch = False
-    for path in paths:
-        if resolved_glob is not None and path.is_dir():
-            matched = sorted(path.glob(resolved_glob))
-            expanded_paths.extend(matched)
-            is_batch = True
-        elif resolved_glob is None and path.is_dir():
-            if (path / ".claude-plugin/plugin.json").exists():
-                expanded_paths.append(path)
-                # Also validate SKILL.md files (InternalLinkValidator, etc.)
-                expanded_paths.extend(sorted(path.glob("**/skills/*/SKILL.md")))
-            else:
-                expanded_paths.extend(_discover_validatable_paths(path))
-                is_batch = True
-        else:
-            expanded_paths.append(path)
-    return expanded_paths, is_batch
-
-
-def _compute_summary(all_results: FileResults) -> tuple[int, int, int, int]:
-    """Compute validation summary statistics from file results.
-
-    Returns:
-        Tuple of (total_files, passed, failed, warnings).
-    """
-    total_files = len(all_results)
-    passed = sum(1 for vr_list in all_results.values() if all(r.passed for _, r in vr_list))
-    failed = sum(1 for vr_list in all_results.values() if any(not r.passed for _, r in vr_list))
-    warnings = sum(
-        1
-        for vr_list in all_results.values()
-        if all(r.passed for _, r in vr_list) and any(r.warnings for _, r in vr_list)
-    )
-    return total_files, passed, failed, warnings
+# Aliases for backwards compatibility - functions now live in scan_runtime
+_discover_validatable_paths = discover_validatable_paths
+_resolve_filter_and_expand_paths = resolve_filter_and_expand_paths
+_compute_summary = compute_summary
 
 
 def _show_help_and_exit(ctx: typer.Context, code: int = 0) -> NoReturn:
@@ -5079,6 +5126,10 @@ def run_platform_checks(path: Path, adapter: PlatformAdapter) -> list[dict]:
     Dispatches to adapter.validate(path) for all adapter types.
     For ClaudeCodeAdapter, also routes to the existing SK/PR/HK pipeline.
 
+    Args:
+        path: File path to validate.
+        adapter: PlatformAdapter instance for constraint scope filtering.
+
     Returns:
         List of violation dicts with keys: code, severity, message.
     """
@@ -5088,6 +5139,9 @@ def run_platform_checks(path: Path, adapter: PlatformAdapter) -> list[dict]:
         # handle (e.g. test fixtures named "valid_plugin.json" rather than
         # "plugin.json") go directly to the adapter's own validate().
         sk_validators = _get_validators_for_path(path)
+        # Filter validators by provider constraint scopes
+        constraint_scopes = adapter.constraint_scopes()
+        sk_validators = filter_validators_by_constraint_scopes(sk_validators, constraint_scopes)
         if not sk_validators:
             return list(adapter.validate(path))
 
@@ -5138,7 +5192,7 @@ def validate_file(path: Path, adapters: dict, platform_override: str | None = No
     # Get constraint scopes from the primary adapter for filtering
     # AS-series rules are cross-platform (constraint_scope: "shared"),
     # so they always run regardless of provider.
-    # Future provider-specific rules would use constraint_scopes for filtering.
+    # Validators are filtered by constraint_scopes to support provider-specific rules.
     primary_adapter = matching[0]
     constraint_scopes = primary_adapter.constraint_scopes()
     _logger.debug(
@@ -5147,6 +5201,10 @@ def validate_file(path: Path, adapters: dict, platform_override: str | None = No
         primary_adapter.id(),
         constraint_scopes,
     )
+
+    # Filter validators based on provider constraint scopes
+    sk_validators = _get_validators_for_path(path)
+    sk_validators = filter_validators_by_constraint_scopes(sk_validators, constraint_scopes)
 
     # AS-series fires once per file — structural deduplication, not set-tracking
     if is_skill_md(path):

@@ -14,115 +14,159 @@ Guidelines:
 
 ## Active
 
-### R001 — Generate a task-level demo video from real run evidence
-- Class: primary-user-loop
-- Status: active
-- Description: An operator can generate a summary video for a task using real evidence produced by the system, not a manually assembled edit.
-- Why it matters: Task-level replay is the foundation for proving long-running work visually without supervising it second by second.
-- Source: user
-- Primary owning slice: M002/S04
-- Supporting slices: M002/S01, M002/S02, M002/S03, M002/S05
-- Validation: mapped
-- Notes: This is the core first-use case and the base primitive for higher-level slice and milestone videos.
-
-### R002 — Build demo narratives from truthful evidence only
-- Class: constraint
-- Status: active
-- Description: Generated demos must reflect only real recordings, logs, dashboard captures, prompts, task steps, and state transitions actually produced by the system.
-- Why it matters: The user explicitly does not want fake or synthetic misrepresentation; trust is the product.
-- Source: user
-- Primary owning slice: M002/S02
-- Supporting slices: M002/S03, M002/S05
-- Validation: mapped
-- Notes: Missing evidence must be handled honestly in the narrative.
-
-### R003 — Accept partial-but-real evidence bundles
-- Class: continuity
-- Status: active
-- Description: The first version of the pipeline must generate usable videos from incomplete but real evidence bundles and improve as richer capture assets become available.
-- Why it matters: The video system needs to start working before capture completeness is perfect, or it will become blocked behind infrastructure hardening.
-- Source: user
-- Primary owning slice: M002/S01
-- Supporting slices: M002/S02, M002/S03, M002/S05
-- Validation: mapped
-- Notes: Output should surface what evidence was present versus missing.
-
-### R004 — Include existing dashboard capture and literal tmux footage
-- Class: integration
-- Status: active
-- Description: Task demos must be able to incorporate the existing vm-pilot dashboard and literal recordings of tmux panes as they appeared.
-- Why it matters: These are the core truth surfaces the user wants viewers to see.
-- Source: user
-- Primary owning slice: M002/S02
-- Supporting slices: M002/S03, M002/S05
-- Validation: mapped
-- Notes: Remotion is for transitions, overlays, pacing, and explanation around real footage.
-
-### R005 — Preserve the task summary narrative contract
-- Class: core-capability
-- Status: active
-- Description: Every generated task video must be able to show task request, clarified structure/instructions, execution evidence, notable issues, resolution path, final state/outcome, carry-forward state, elapsed effort/time compression context, human steering moments, and complete/blocked/handed-off status.
-- Why it matters: Without this contract, videos risk becoming generic montages instead of operational summaries.
-- Source: user
-- Primary owning slice: M002/S03
-- Supporting slices: M002/S05
-- Validation: mapped
-- Notes: This defines what makes a task video useful to operators and QA.
-
-### R006 — Show where human steering happened
-- Class: failure-visibility
-- Status: active
-- Description: Generated demos must identify when inspector feedback or user guidance altered the run or the outcome.
-- Why it matters: The user wants to show not just automation, but how automation was steered.
-- Source: user
-- Primary owning slice: M002/S03
-- Supporting slices: M002/S05
-- Validation: mapped
-- Notes: Steering moments should be tied to evidence, not inferred vaguely.
-
-### R007 — Make task outcome state explicit
-- Class: operability
-- Status: active
-- Description: Generated demos must clearly communicate whether the task completed, blocked, or handed off, and what state is available for the next step.
-- Why it matters: Operators need replay that supports continuation, not just retrospective viewing.
-- Source: user
-- Primary owning slice: M002/S03
-- Supporting slices: M002/S05
-- Validation: mapped
-- Notes: Final state must be concrete enough to support downstream work.
-
-### R008 — Use an extendable evidence directory and input model
+### R012 — Decompose remaining validator monolith into explicit layers
 - Class: quality-attribute
-- Status: active
-- Description: The demo pipeline must use a stable, extendable evidence bundle shape and directory convention so richer assets can be added later without redesigning the workflow.
-- Why it matters: The user wants this to scale from task videos into slice, milestone, and broader product demos.
-- Source: inferred
+- Status: validated
+- Description: The remaining brownfield validator logic must be split into clearer internal modules so maintainers no longer default to editing one monolithic validator path.
+- Why it matters: Architectural drift back into one dominant validator file makes future rule and schema work harder to reason about and easier to break.
+- Source: user
 - Primary owning slice: M002/S01
-- Supporting slices: M002/S04
-- Validation: mapped
-- Notes: This should be designed for forward extension, not one-off task demos.
+- Supporting slices: M002/S02, M002/S03
+- Validation: validated
+- Notes: Extracted scan_runtime.py with path discovery, filter expansion, summary computation seams.
 
-### R009 — Run video generation as an agent-driven background workflow
-- Class: operability
-- Status: active
-- Description: Video generation should run as a background-capable agent workflow that can be steered and iterated on, not as a manual editing sidecar.
-- Why it matters: The user wants demos generated alongside the work, with feedback and revision possible without turning the process into hand-editing.
+### R013 — Separate schema validation from lint-rule validation cleanly
+- Class: core-capability
+- Status: validated
+- Description: The system must clearly distinguish schema/frontmatter/shape validation from lint-style and semantic rule validation.
+- Why it matters: Without a hard boundary, detection behavior becomes muddy and false positives are hard to diagnose.
+- Source: user
+- Primary owning slice: M002/S02
+- Supporting slices: M002/S04, M002/S06
+- Validation: validated
+- Notes: Includes classification of hard failures versus second-level findings.
+
+### R014 — Clarify provider-specific vs shared rule ownership
+- Class: quality-attribute
+- Status: validated
+- Description: The linter must make it obvious whether a constraint is shared across providers, provider-specific, schema-backed, or rule-backed.
+- Why it matters: Provider-specific behavior becomes hard to trace when ownership is implicit or mixed.
+- Source: user
+- Primary owning slice: M002/S02
+- Supporting slices: M002/S05
+- Validation: validated
+- Notes: Traceability matters both in code structure and in docs.
+
+### R015 — Use manifest-driven scanning when plugin manifests explicitly enumerate components
+- Class: integration
+- Status: validated
+- Description: When a plugin manifest explicitly lists agents, commands, skills, or hooks, `skilllint` must use that manifest as the source of truth for scan target selection.
+- Why it matters: Scan correctness depends on following the plugin's declared structure when that declaration exists.
+- Source: user
+- Primary owning slice: M002/S03
+- Supporting slices: M002/S04, M002/S06
+- Validation: validated
+- Notes: Detection correctness comes before autofix correctness.
+
+### R016 — Use documented auto-discovery when plugin manifests omit component arrays
+- Class: integration
+- Status: validated
+- Description: When plugin manifests do not explicitly enumerate components, `skilllint` must follow the documented plugin auto-discovery protocol to decide what to scan.
+- Why it matters: Real plugin repos rely on discovery behavior, and getting that wrong creates false positives and false negatives.
+- Source: user
+- Primary owning slice: M002/S03
+- Supporting slices: M002/S04, M002/S06
+- Validation: validated
+- Notes: The documented plugin behavior is part of the compatibility contract.
+
+### R017 — Use structure-based discovery for unmanifested provider directories
+- Class: integration
+- Status: validated
+- Description: When scanning `.claude/`, `.agent/`, `.agents/`, `.gemini/`, or `.cursor/` trees outside a plugin manifest context, `skilllint` must use provider-known directory structure rather than expecting a manifest.
+- Why it matters: These directory trees are valid scan roots but do not have plugin manifests to consult.
+- Source: user
+- Primary owning slice: M002/S03
+- Supporting slices: M002/S04, M002/S06
+- Validation: validated
+- Notes: This requirement is specifically about discovery and target selection.
+
+### R018 — Detect official-repo content without unjustified schema/frontmatter hard failures
+- Class: launchability
+- Status: validated
+- Description: Scans of official external repos must not produce schema/frontmatter hard failures unless those failures are supported by current authority or proven runtime behavior.
+- Why it matters: External repo scans are the proving ground for whether the linter is detecting reality or enforcing hallucinated constraints.
 - Source: user
 - Primary owning slice: M002/S04
-- Supporting slices: M002/S05
-- Validation: mapped
-- Notes: The workflow should surface diagnostics when generation fails.
+- Supporting slices: M002/S06
+- Validation: validated
+- Notes: Remaining hard failures may still be real findings and should stay visible.
 
-### R010 — Support real task-demo proof from repo evidence
-- Class: launchability
-- Status: active
-- Description: The milestone must end with at least one real task in this system rendered into a truthful summary video artifact from actual repo evidence.
-- Why it matters: Without a real proof artifact, the milestone would only establish pieces, not the promised capability.
+### R019 — Provide evidence-driven rule-truth evaluation for disputed constraints
+- Class: failure-visibility
+- Status: validated
+- Description: For disputed rules, the project must gather evidence from provider docs, runtime behavior, and current implementation before deciding whether a rule is real, legacy, provider-specific, recommendation-only, or hallucinated.
+- Why it matters: The user wants the project to blame itself first and avoid hardening invented rules into architecture.
+- Source: user
+- Primary owning slice: M002/S04
+- Supporting slices: M002/S05, M002/S06
+- Validation: validated
+- Notes: Claude CLI probes are part of the evidence set, not the sole authority.
+
+### R020 — Document how to add a schema update
+- Class: admin/support
+- Status: validated
+- Description: Maintainer docs must show a concrete worked example of how to update or add schema-backed validation.
+- Why it matters: Docs should teach the correct extension path instead of forcing contributors to reverse-engineer the architecture.
 - Source: user
 - Primary owning slice: M002/S05
 - Supporting slices: none
-- Validation: mapped
-- Notes: Partial evidence is acceptable if the output stays honest about coverage.
+- Validation: validated
+- Notes: Example reflects the post-refactor structure.
+
+### R021 — Document how to add a provider overlay
+- Class: admin/support
+- Status: validated
+- Description: Maintainer docs must show a concrete worked example of how to implement a provider-specific overlay.
+- Why it matters: Provider-specific behavior is one of the main areas the user wants to keep traceable.
+- Source: user
+- Primary owning slice: M002/S05
+- Supporting slices: none
+- Validation: validated
+- Notes: Example makes shared vs provider-specific responsibility obvious.
+
+### R022 — Document how to add a new lint rule
+- Class: admin/support
+- Status: validated
+- Description: Maintainer docs must show a concrete worked example of how to add a new lint rule in the correct layer.
+- Why it matters: Contributors need to know when something belongs in a lint rule rather than schema or provider overlay logic.
+- Source: user
+- Primary owning slice: M002/S05
+- Supporting slices: none
+- Validation: validated
+- Notes: Example is for detection behavior, not autofix behavior.
+
+### R023 — Document how to add provenance metadata
+- Class: admin/support
+- Status: validated
+- Description: Maintainer docs must show how to attach and surface provenance metadata for schemas and rules.
+- Why it matters: Docs lagging behind architecture would cause people to guess wrong about traceability.
+- Source: user
+- Primary owning slice: M002/S05
+- Supporting slices: none
+- Validation: validated
+- Notes: Provenance remains explicit and machine-readable.
+
+### R024 — Prove behavior through real CLI scans on external repos
+- Class: operability
+- Status: validated
+- Description: The milestone must prove its detection behavior using real `uv run skilllint check ...` scans against external repos, not just synthetic internal fixtures.
+- Why it matters: The user explicitly wants confidence grounded in official ecosystem content.
+- Source: user
+- Primary owning slice: M002/S06
+- Supporting slices: M002/S04
+- Validation: validated
+- Notes: Proven by S06 — `verify-s06.sh` and regression tests pass against all three external repos.
+
+### R025 — Preserve user-facing CLI scan behavior while refactoring internals
+- Class: continuity
+- Status: validated
+- Description: Internal decomposition must not break the real `skilllint check` entrypoint or make scan behavior less predictable for users.
+- Why it matters: Architecture cleanup is only useful if the real tool remains dependable.
+- Source: inferred
+- Primary owning slice: M002/S06
+- Supporting slices: M002/S01, M002/S02, M002/S03
+- Validation: validated
+- Notes: Proven by S06 — exit codes match baseline and regression tests pass.
 
 ## Validated
 
@@ -139,135 +183,103 @@ Guidelines:
 
 ## Deferred
 
-### R012 — Generate slice-level recap videos
+### R026 — Expand compatibility validation to Codex plugin repos
 - Class: differentiator
 - Status: deferred
-- Description: The system can roll task evidence and outputs up into a slice-level recap video.
-- Why it matters: Slice videos are the next layer above task summaries and support broader status communication.
+- Description: The scan-truth and compatibility proof should later include real Codex ecosystem repos.
+- Why it matters: Codex support is part of the broader multi-provider direction, but not the first external proof target.
 - Source: user
 - Primary owning slice: none
 - Supporting slices: none
 - Validation: unmapped
-- Notes: Deferred until task-level pipeline is working.
+- Notes: User explicitly said this can happen later.
 
-### R013 — Generate milestone-level narrative videos
+### R027 — Expand compatibility validation to OpenCode plugin repos
 - Class: differentiator
 - Status: deferred
-- Description: The system can roll slice/task evidence into milestone-level narrative demos.
-- Why it matters: This supports larger demonstrations and release/update storytelling.
+- Description: The scan-truth and compatibility proof should later include real OpenCode ecosystem repos.
+- Why it matters: OpenCode support matters, but it is not required for the first architecture-and-detection milestone.
 - Source: user
 - Primary owning slice: none
 - Supporting slices: none
 - Validation: unmapped
-- Notes: Deferred until task and slice composition patterns stabilize.
+- Notes: User explicitly said this can happen later.
 
-### R014 — Rich QA and diagnostic story templates
-- Class: admin/support
-- Status: deferred
-- Description: The system supports richer templates for installer verification, environment bring-up, cross-host communication proof, and inspector-driven diagnosis.
-- Why it matters: These are high-value story types, but they build on the general task-demo foundation.
-- Source: user
-- Primary owning slice: none
-- Supporting slices: none
-- Validation: unmapped
-- Notes: This is the likely focus of the next milestone after M002.
-
-### R015 — Broader capture completeness and audit hardening
-- Class: continuity
-- Status: deferred
-- Description: The traceability layer captures a richer, more complete pool of screens, terminals, events, state changes, and audit artifacts for demo generation.
-- Why it matters: Better evidence improves the quality and fidelity of generated demos.
-- Source: user
-- Primary owning slice: none
-- Supporting slices: none
-- Validation: unmapped
-- Notes: Not a prerequisite for proving the first partial-but-real pipeline.
-
-### R016 — Feedback-driven video revision loop
+### R028 — Add a repeatable automated probe harness around Claude CLI validation experiments
 - Class: operability
 - Status: deferred
-- Description: An operator can review a generated video, provide feedback, and steer an agent to revise it.
-- Why it matters: The user wants background generation that can still be steered and improved.
-- Source: user
+- Description: The project may later automate Claude CLI runtime-probe experiments into a repeatable harness rather than relying on milestone-by-milestone manual investigation.
+- Why it matters: This would improve long-term repeatability, but is not required to complete the current milestone.
+- Source: inferred
 - Primary owning slice: none
 - Supporting slices: none
 - Validation: unmapped
-- Notes: Deferred until the initial generation pipeline exists.
-
-### R017 — External-facing product demo generation
-- Class: differentiator
-- Status: deferred
-- Description: The same evidence-driven pipeline can produce outward-facing demos that showcase wins and explain how hard problems were diagnosed by AI.
-- Why it matters: This is a natural extension once internal replay and QA proof are working.
-- Source: user
-- Primary owning slice: none
-- Supporting slices: none
-- Validation: unmapped
-- Notes: Secondary audience after internal QA/stakeholder use.
+- Notes: For now, runtime probes are part of the evidence-gathering method, not a separate deliverable.
 
 ## Out of Scope
 
-### R018 — Manual video editing as the primary workflow
+### R029 — Ensure autofix implementations are correct for newly clarified rules
 - Class: anti-feature
 - Status: out-of-scope
-- Description: The demo system depends on a human manually assembling or editing each video as the normal path.
-- Why it matters: This prevents the work from turning into a sidecar editing job disconnected from the run itself.
+- Description: This milestone does not guarantee that autofix behavior is correct or updated for every rule whose detection behavior is clarified.
+- Why it matters: This prevents scope creep into fix logic when the user only wants correct detection in this phase.
 - Source: user
 - Primary owning slice: none
 - Supporting slices: none
 - Validation: n/a
-- Notes: Manual touch-ups may exist later, but not as the core contract.
+- Notes: Detection correctness comes first; autofix can follow later.
 
-### R019 — Fake or reconstructed terminal behavior without source evidence
+### R030 — Broaden scope into new lint-rule families unrelated to scan truth and architecture cleanup
 - Class: anti-feature
 - Status: out-of-scope
-- Description: The system invents terminal behavior, states, or outcomes that were not captured in the evidence.
-- Why it matters: This would violate the trust model the user explicitly wants.
-- Source: user
+- Description: This milestone does not expand into unrelated new rule families just because the architecture is being cleaned up.
+- Why it matters: Keeps the milestone focused on decomposition, scan truth, and maintainability.
+- Source: inferred
 - Primary owning slice: none
 - Supporting slices: none
 - Validation: n/a
-- Notes: Remotion may explain and sequence evidence, but not fabricate it.
+- Notes: New rule families can be planned after the boundary cleanup if needed.
 
-### R020 — Text-only summary videos detached from real recordings
+### R031 — Silence all warning-level findings in official repos
 - Class: anti-feature
 - Status: out-of-scope
-- Description: The system emits videos that are just text on a screen without grounding them in real dashboard, tmux, or other recorded evidence.
-- Why it matters: The user wants to show the hard parts being automated, not just narrate them abstractly.
-- Source: user
+- Description: This milestone does not require official repos to become completely warning-free.
+- Why it matters: The user wants to inspect second-level findings rather than force the tool to absorb or hide them.
+- Source: inferred
 - Primary owning slice: none
 - Supporting slices: none
 - Validation: n/a
-- Notes: Text overlays are allowed when attached to real evidence.
+- Notes: Warnings may remain as long as they are truthful and reviewable.
 
 ## Traceability
 
 | ID | Class | Status | Primary owner | Supporting | Proof |
 |---|---|---|---|---|---|
-| R001 | primary-user-loop | active | M002/S04 | M002/S01, M002/S02, M002/S03, M002/S05 | mapped |
-| R002 | constraint | active | M002/S02 | M002/S03, M002/S05 | mapped |
-| R003 | continuity | active | M002/S01 | M002/S02, M002/S03, M002/S05 | mapped |
-| R004 | integration | active | M002/S02 | M002/S03, M002/S05 | mapped |
-| R005 | core-capability | active | M002/S03 | M002/S05 | mapped |
-| R006 | failure-visibility | active | M002/S03 | M002/S05 | mapped |
-| R007 | operability | active | M002/S03 | M002/S05 | mapped |
-| R008 | quality-attribute | active | M002/S01 | M002/S04 | mapped |
-| R009 | operability | active | M002/S04 | M002/S05 | mapped |
-| R010 | launchability | active | M002/S05 | none | mapped |
+| R012 | quality-attribute | validated | M002/S01 | M002/S02, M002/S03 | validated |
+| R013 | core-capability | validated | M002/S02 | M002/S04, M002/S06 | validated |
+| R014 | quality-attribute | validated | M002/S02 | M002/S05 | validated |
+| R015 | integration | validated | M002/S03 | M002/S04, M002/S06 | validated |
+| R016 | integration | validated | M002/S03 | M002/S04, M002/S06 | validated |
+| R017 | integration | validated | M002/S03 | M002/S04, M002/S06 | validated |
+| R018 | launchability | validated | M002/S04 | M002/S06 | validated |
+| R019 | failure-visibility | validated | M002/S04 | M002/S05, M002/S06 | validated |
+| R020 | admin/support | validated | M002/S05 | none | validated |
+| R021 | admin/support | validated | M002/S05 | none | validated |
+| R022 | admin/support | validated | M002/S05 | none | validated |
+| R023 | admin/support | validated | M002/S05 | none | validated |
+| R024 | operability | validated | M002/S06 | M002/S04 | validated |
+| R025 | continuity | validated | M002/S06 | M002/S01, M002/S02, M002/S03 | validated |
 | R011 | integration | validated | M001/S04 | M001/S01, M001/S02, M001/S03 | validated |
-| R012 | differentiator | deferred | none | none | unmapped |
-| R013 | differentiator | deferred | none | none | unmapped |
-| R014 | admin/support | deferred | none | none | unmapped |
-| R015 | continuity | deferred | none | none | unmapped |
-| R016 | operability | deferred | none | none | unmapped |
-| R017 | differentiator | deferred | none | none | unmapped |
-| R018 | anti-feature | out-of-scope | none | none | n/a |
-| R019 | anti-feature | out-of-scope | none | none | n/a |
-| R020 | anti-feature | out-of-scope | none | none | n/a |
+| R026 | differentiator | deferred | none | none | unmapped |
+| R027 | differentiator | deferred | none | none | unmapped |
+| R028 | operability | deferred | none | none | unmapped |
+| R029 | anti-feature | out-of-scope | none | none | n/a |
+| R030 | anti-feature | out-of-scope | none | none | n/a |
+| R031 | anti-feature | out-of-scope | none | none | n/a |
 
 ## Coverage Summary
 
-- Active requirements: 10
-- Mapped to slices: 10
-- Validated: 1
+- Active requirements: 0 (all M002 requirements now validated)
+- Mapped to slices: 0
+- Validated: 15 (R011, R012-R025)
 - Unmapped active requirements: 0
