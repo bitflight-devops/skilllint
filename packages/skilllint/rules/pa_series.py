@@ -62,7 +62,9 @@ def _get_plugin_level_hooks_events(plugin_dir: Path) -> set[str]:
     """
     data = _load_json_file(plugin_dir / "hooks" / "hooks.json")
     if isinstance(data, dict):
-        return set(data.keys())
+        hooks = data.get("hooks", {})
+        if isinstance(hooks, dict):
+            return set(hooks.keys())
     return set()
 
 
@@ -175,14 +177,9 @@ def _check_mcp_servers(
     if isinstance(mcp_value, list):
         entries = mcp_value
     elif isinstance(mcp_value, dict):
-        # Dict form: keys are server names, values are config objects or simple values
-        for name, config in mcp_value.items():
-            if isinstance(config, dict):
-                # Inline definition as dict value
-                entries.append({name: config})
-            else:
-                # Simple value — treat as string reference
-                entries.append(name)
+        # Mapping form is still inline frontmatter. Only plain string list items
+        # should be treated as references to plugin-level servers.
+        entries = [{name: config} for name, config in mcp_value.items()]
 
     for entry in entries:
         if _is_inline_mcp_definition(entry):

@@ -127,7 +127,7 @@ def _add_hooks_json(plugin_dir: Path, events: dict[str, object]) -> Path:
     hooks_dir = plugin_dir / "hooks"
     hooks_dir.mkdir(exist_ok=True)
     hooks_path = hooks_dir / "hooks.json"
-    hooks_path.write_text(json.dumps(events, indent=2))
+    hooks_path.write_text(json.dumps({"hooks": events}, indent=2))
     return hooks_path
 
 
