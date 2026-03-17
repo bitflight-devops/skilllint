@@ -9,8 +9,8 @@ Each violation dict has the shape:
     {"code": str, "severity": str, "message": str}
 
 Severities:
-    "error"   — AS001, AS002, AS003, AS004
-    "warning" — AS005
+    "error"   — AS001, AS002, AS003
+    "warning" — AS004, AS005
     "info"    — AS006
 """
 
@@ -279,7 +279,7 @@ def _check_as003(description: str | None) -> dict | None:
 
 @skilllint_rule(
     "AS004",
-    severity="error",
+    severity="warning",
     category="skill",
     authority={"origin": "agentskills.io", "reference": "/specification#yaml-frontmatter"},
 )
@@ -314,7 +314,7 @@ def _check_as004(description: str | None, raw_line: str | None = None) -> dict |
         if _has_unquoted_colon(value_part):
             return _make_violation(
                 "AS004",
-                "error",
+                "warning",
                 "description contains unquoted colon that will break YAML parsing",
                 fix=f'Wrap description in quotes: description: "{value_part}"',
             )

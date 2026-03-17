@@ -54,7 +54,7 @@ from ruamel.yaml.scalarstring import DoubleQuotedScalarString
 
 from skilllint.adapters import PlatformAdapter, load_adapters, matches_file
 from skilllint.adapters.claude_code import ClaudeCodeAdapter
-from skilllint.rules.as_series import run_as_series
+from skilllint.rules.as_series import _has_unquoted_colon, run_as_series
 from skilllint.token_counter import TOKEN_ERROR_THRESHOLD, TOKEN_WARNING_THRESHOLD, count_tokens
 from skilllint.version import __version__
 
@@ -298,6 +298,9 @@ class ErrorCode(StrEnum):
     # Symlink (SL001)
     SL001 = "SL001"  # Symlink target has trailing whitespace/newlines
 
+    # AgentSkills cross-platform (AS004)
+    AS004 = "AS004"  # Unquoted colons in description (auto-fixable style warning)
+
     # Token Count (TC001)
     TC001 = "TC001"  # Token count info (total, frontmatter, body)
 
@@ -461,9 +464,7 @@ def get_validator_constraint_scopes(class_name: str) -> set[str]:
     return VALIDATOR_CONSTRAINT_SCOPES.get(class_name, {"shared", "provider_specific"})
 
 
-def filter_validators_by_constraint_scopes(
-    validators: list[Validator], constraint_scopes: set[str]
-) -> list[Validator]:
+def filter_validators_by_constraint_scopes(validators: list[Validator], constraint_scopes: set[str]) -> list[Validator]:
     """Filter validators based on provider constraint scopes.
 
     Validators are included if their applicable constraint scopes intersect
@@ -922,7 +923,7 @@ def _pydantic_error_to_validation_issue(error: ErrorDetails) -> ValidationIssue:
         suggestion = "Quote the description or remove colons"
 
     # FM007/FM008 (YAML arrays for tools/skills) are runtime-accepted patterns -> warning
-    severity: Literal["error", "warning", "info"] = "warning" if code in (FM007, FM008) else "error"
+    severity: Literal["error", "warning", "info"] = "warning" if code in {FM007, FM008} else "error"
 
     return ValidationIssue(
         field=field, severity=severity, message=msg, code=code, docs_url=generate_docs_url(code), suggestion=suggestion
@@ -930,9 +931,7 @@ def _pydantic_error_to_validation_issue(error: ErrorDetails) -> ValidationIssue:
 
 
 def _check_list_valued_tool_fields(
-    data: dict[str, YamlValue],
-    errors: list[ValidationIssue],
-    warnings: list[ValidationIssue],
+    data: dict[str, YamlValue], errors: list[ValidationIssue], warnings: list[ValidationIssue]
 ) -> None:
     """Append warnings for list-valued tools/skills fields that Pydantic may not catch.
 
@@ -2218,6 +2217,24 @@ class FrontmatterValidator:
                         code=SK004,
                         docs_url=generate_docs_url(SK004),
                         suggestion=f"Front-load critical information in first {RECOMMENDED_DESCRIPTION_LENGTH} characters. Run /plugin-creator:write-frontmatter-description to generate an optimized description",
+                    )
+                )
+            # AS004: Unquoted colons in description — auto-fixable style warning.
+            # Colons in description values can break naive YAML parsers even when
+            # ruamel.yaml handles them. Quoting the value makes it universally safe.
+            if (
+                hasattr(validated, "description")
+                and validated.description
+                and _has_unquoted_colon(validated.description)
+            ):
+                warnings.append(
+                    ValidationIssue(
+                        field="description",
+                        severity="warning",
+                        message="description contains unquoted colons — quote the value for portable YAML",
+                        code=ErrorCode.AS004,
+                        docs_url="https://github.com/bitflight-devops/skilllint/blob/main/plugins/agentskills-skilllint/skills/skilllint/references/rule-catalog.md#as004",
+                        suggestion='Wrap description in quotes: description: "..."',
                     )
                 )
         except ValidationError as e:
@@ -4701,27 +4718,50 @@ def is_skill_md(path: Path) -> bool:
     return path.name == "SKILL.md"
 
 
-def parse_skill_md(path: Path) -> tuple[dict, list[str]]:
+def parse_skill_md(path: Path) -> tuple[dict, list[str], str | None, list[str]]:
     """Parse a SKILL.md file into frontmatter dict and body lines.
 
     Uses extract_frontmatter (from frontmatter_core) and _safe_load_yaml
     to avoid the namespace conflict between the ``frontmatter`` and
     ``python-frontmatter`` PyPI packages.
 
+    When YAML parsing fails due to unquoted colons, the frontmatter is
+    auto-fixed (colons quoted) and the fixed data is returned along with
+    a list of fields that were fixed.
+
     Args:
         path: Path to the SKILL.md file.
 
     Returns:
-        Tuple of (frontmatter dict, body lines list).
+        Tuple of (frontmatter dict, body lines, yaml_error_message,
+        colon_fixed_fields).  yaml_error_message is None when parsing
+        succeeds (or when the colon auto-fix succeeds).
+        colon_fixed_fields lists field names where unquoted colons were
+        detected and auto-fixed.
     """
     content = path.read_text(encoding="utf-8")
     fm_text, _start, end_line = extract_frontmatter(content)
     if fm_text is None:
-        return {}, content.splitlines()
-    parsed = _safe_load_yaml(fm_text)
+        return {}, content.splitlines(), None, []
+    try:
+        parsed = _safe_load_yaml(fm_text)
+    except YAMLError as exc:
+        # Attempt auto-fix for unquoted colons (AS004 pattern)
+        fixed_fm, colon_fixes, colon_fields = _fix_unquoted_colons(fm_text)
+        if colon_fixes:
+            try:
+                parsed = _safe_load_yaml(fixed_fm)
+            except YAMLError:
+                pass
+            else:
+                # Colon fix succeeded — return fixed data with field list
+                frontmatter_dict = dict(parsed) if isinstance(parsed, dict) else {}
+                return frontmatter_dict, content.splitlines()[end_line:], None, colon_fields
+        # Unrecoverable YAML error
+        return {}, content.splitlines()[end_line:], str(exc), []
     frontmatter_dict: dict = dict(parsed) if isinstance(parsed, dict) else {}
     body_lines = content.splitlines()[end_line:]
-    return frontmatter_dict, body_lines
+    return frontmatter_dict, body_lines, None, []
 
 
 def run_platform_checks(path: Path, adapter: PlatformAdapter) -> list[dict]:
@@ -4807,7 +4847,19 @@ def validate_file(path: Path, adapters: dict, platform_override: str | None = No
 
     # AS-series fires once per file — structural deduplication, not set-tracking
     if is_skill_md(path):
-        frontmatter_data, body_lines = parse_skill_md(path)
+        frontmatter_data, body_lines, yaml_err, colon_fields = parse_skill_md(path)
+        if colon_fields:
+            violations.append({
+                "code": "AS004",
+                "severity": "warning",
+                "message": f"Description contains unquoted colons that break YAML — quote the following fields: {', '.join(colon_fields)}",
+            })
+        if yaml_err is not None:
+            violations.append({
+                "code": str(FM002),
+                "severity": "error",
+                "message": f"Invalid YAML frontmatter: {yaml_err}",
+            })
         violations.extend(run_as_series(path, frontmatter_data, body_lines))
 
     for adapter in matching:

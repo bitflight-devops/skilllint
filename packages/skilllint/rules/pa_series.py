@@ -22,6 +22,8 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
+from ruamel.yaml import YAMLError
+
 from skilllint.frontmatter_core import extract_frontmatter
 from skilllint.rule_registry import skilllint_rule
 
@@ -252,6 +254,69 @@ def _check_permission_mode(
     ]
 
 
+def _try_parse_agent_yaml(fm_text: str, agent_md: Path, plugin_dir: Path, errors: list, warnings: list) -> dict | None:
+    """Parse agent frontmatter YAML, attempting colon auto-fix on failure.
+
+    Args:
+        fm_text: Raw YAML frontmatter text (no ``---`` delimiters).
+        agent_md: Path to the agent markdown file.
+        plugin_dir: Plugin root directory for relative path display.
+        errors: Mutable error list — FM002 appended on unrecoverable failure.
+        warnings: Mutable warning list — AS004 appended on colon auto-fix.
+
+    Returns:
+        Parsed dict on success, or None on unrecoverable YAML error.
+    """
+    from skilllint.plugin_validator import (  # noqa: PLC0415 — deferred to break circular import
+        FM002,
+        ErrorCode,
+        ValidationIssue,
+        _fix_unquoted_colons,
+        _safe_load_yaml,
+        generate_docs_url,
+    )
+
+    try:
+        parsed = _safe_load_yaml(fm_text)
+    except YAMLError as exc:
+        # Attempt auto-fix for unquoted colons (AS004 pattern)
+        fixed_fm, colon_fixes, colon_fields = _fix_unquoted_colons(fm_text)
+        if colon_fixes:
+            try:
+                parsed = _safe_load_yaml(fixed_fm)
+            except YAMLError:
+                parsed = None
+            else:
+                rel = str(agent_md.relative_to(plugin_dir))
+                warnings.append(
+                    ValidationIssue(
+                        field="description",
+                        severity="warning",
+                        message=f"{rel}: Description contains unquoted colons that break YAML — quote the following fields: {', '.join(colon_fields)}",
+                        code=ErrorCode.AS004,
+                        docs_url="https://github.com/bitflight-devops/skilllint/blob/main/plugins/agentskills-skilllint/skills/skilllint/references/rule-catalog.md#as004",
+                    )
+                )
+                return parsed if isinstance(parsed, dict) else None
+        else:
+            parsed = None
+
+        if parsed is None:
+            rel = str(agent_md.relative_to(plugin_dir))
+            errors.append(
+                ValidationIssue(
+                    field="(yaml)",
+                    severity="error",
+                    message=f"{rel}: Invalid YAML frontmatter: {exc}",
+                    code=FM002,
+                    docs_url=generate_docs_url(FM002),
+                )
+            )
+            return None
+
+    return parsed if isinstance(parsed, dict) else None
+
+
 @skilllint_rule(
     "PA001", severity="error", category="plugin", authority={"origin": "anthropic.com", "reference": _DOCS_URL}
 )
@@ -289,7 +354,6 @@ def check_pa001(path: Path) -> ValidationResult:
         PA001 as PA001_CODE,
         ValidationIssue,
         ValidationResult,
-        _safe_load_yaml,
         find_plugin_dir,
     )
 
@@ -317,7 +381,7 @@ def check_pa001(path: Path) -> ValidationResult:
         if fm_text is None:
             continue
 
-        parsed = _safe_load_yaml(fm_text)
+        parsed = _try_parse_agent_yaml(fm_text, agent_md, plugin_dir, errors, warnings)
         if not isinstance(parsed, dict):
             continue
 
