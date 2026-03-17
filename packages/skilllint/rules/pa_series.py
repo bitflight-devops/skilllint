@@ -5,8 +5,8 @@ Rule PA001 fires when a plugin agent SKILL.md uses frontmatter fields
 
 Severity is nuanced per field:
 - ``permissionMode`` → **error** — causes agent to not appear in the plugin
-- ``hooks`` → **warning** — silently ignored; silenced if plugin hooks.json
-  covers the same events
+- ``hooks`` → **warning** — always emitted; guidance varies based on whether
+  plugin hooks.json covers the same events
 - ``mcpServers`` → **warning** with cross-checking:
   - inline definitions (config objects) → warn, suggest ``.mcp.json``
   - string references found in plugin ``.mcp.json`` / ``plugin.json`` → silenced
@@ -141,7 +141,7 @@ def _is_inline_mcp_definition(entry: object) -> bool:
 def _check_hooks(
     parsed: dict, rel_path: str, plugin_dir: Path, code: ErrorCode, issue_cls: type[ValidationIssue]
 ) -> list[ValidationIssue]:
-    """Check hooks field — warning severity, silenced if plugin hooks.json covers same events.
+    """Check hooks field — always warns, varies guidance based on plugin hooks.json coverage.
 
     Args:
         parsed: Parsed frontmatter dict.
@@ -151,7 +151,7 @@ def _check_hooks(
         issue_cls: ValidationIssue class.
 
     Returns:
-        List of warning issues (empty if silenced).
+        List of warning issues (always emitted when hooks field is present).
     """
     hooks_value = parsed.get("hooks")
     if hooks_value is None:
@@ -165,8 +165,10 @@ def _check_hooks(
     # Check if plugin-level hooks.json covers the same events
     plugin_events = _get_plugin_level_hooks_events(plugin_dir)
     if agent_events and agent_events <= plugin_events:
-        # All agent hook events are covered by plugin hooks.json — silence
-        return []
+        # All agent hook events are covered by plugin hooks.json — warn with coverage note
+        suggestion = "This field is ignored — plugin-level hooks at `hooks/hooks.json` already cover these events"
+    else:
+        suggestion = "This field is ignored — move to `hooks/hooks.json` at plugin root"
 
     return [
         issue_cls(
@@ -174,11 +176,7 @@ def _check_hooks(
             severity="warning",
             message="Frontmatter field `hooks` in plugin agent is silently ignored",
             code=code,
-            suggestion=(
-                "Plugin agents cannot define hooks in frontmatter — move to "
-                "`hooks/hooks.json` at plugin root. If agent-scoped hooks are "
-                "needed, copy agent to `.claude/agents/`"
-            ),
+            suggestion=suggestion,
             docs_url=_DOCS_URL,
         )
     ]
@@ -299,8 +297,8 @@ def check_pa001(path: Path) -> ValidationResult:
 
     - ``permissionMode`` → **error**: causes agent to not appear in the plugin.
       No plugin-level equivalent exists.
-    - ``hooks`` → **warning**: silently ignored at runtime. Silenced if the
-      plugin's ``hooks/hooks.json`` covers the same events.
+    - ``hooks`` → **warning**: always emitted (field is ignored at runtime).
+      Guidance varies based on plugin ``hooks/hooks.json`` coverage.
     - ``mcpServers`` → **warning** with cross-checking against plugin-level
       ``.mcp.json`` and ``plugin.json``:
       - inline definitions → warn, suggest ``.mcp.json``

@@ -3,7 +3,7 @@
 Tests cover nuanced severity levels and cross-checking:
 - Plugin agent with `permissionMode` in frontmatter produces error (TestProhibitedPermissionMode)
 - Plugin agent with `hooks` in frontmatter produces warning (TestHooksWarning)
-- Plugin agent with `hooks` silenced when plugin hooks.json covers same events (TestHooksSilencing)
+- Plugin agent with `hooks` always warns with varying guidance based on hooks.json coverage (TestHooksAlwaysWarns)
 - Plugin agent with `mcpServers` inline definition produces warning (TestMcpServersInline)
 - Plugin agent with `mcpServers` string reference found in .mcp.json is silenced (TestMcpServersResolved)
 - Plugin agent with `mcpServers` string reference NOT in .mcp.json produces warning (TestMcpServersUnresolved)
@@ -189,15 +189,15 @@ class TestHooksWarning:
         assert hooks_warnings[0].severity == "warning"
 
 
-class TestHooksSilencing:
-    """Test that hooks warning is silenced when plugin hooks.json covers same events."""
+class TestHooksAlwaysWarns:
+    """Test that hooks warning is always emitted with varying guidance."""
 
-    def test_hooks_silenced_when_plugin_hooks_json_covers_events(self, tmp_path: Path) -> None:
-        """Test hooks warning is silenced when plugin hooks.json covers same events.
+    def test_hooks_warns_with_coverage_note_when_plugin_hooks_json_covers_events(self, tmp_path: Path) -> None:
+        """Test hooks warning emitted with 'already cover' guidance when plugin hooks.json covers same events.
 
-        Tests: hooks silencing via plugin-level hooks.json
+        Tests: hooks always warns even when plugin hooks.json covers same events
         How: Create plugin agent with hooks, create hooks/hooks.json covering same events
-        Why: If plugin hooks.json already handles the events, no warning needed
+        Why: The hooks field is ALWAYS ignored in plugin agents — silencing hid dead weight
         """
         plugin_dir = _make_plugin(tmp_path)
         _add_agent_with_frontmatter(
@@ -212,14 +212,17 @@ class TestHooksSilencing:
 
         assert result.passed is True
         assert len(result.errors) == 0
-        assert len(result.warnings) == 0
+        hooks_warnings = [w for w in result.warnings if "hooks" in w.message]
+        assert len(hooks_warnings) >= 1
+        assert hooks_warnings[0].severity == "warning"
+        assert "already cover these events" in (hooks_warnings[0].suggestion or "")
 
-    def test_hooks_not_silenced_when_plugin_hooks_json_missing_events(self, tmp_path: Path) -> None:
-        """Test hooks warning NOT silenced when plugin hooks.json doesn't cover all events.
+    def test_hooks_warns_with_move_guidance_when_plugin_hooks_json_missing_events(self, tmp_path: Path) -> None:
+        """Test hooks warning emitted with 'move to' guidance when plugin hooks.json doesn't cover all events.
 
-        Tests: partial coverage does not silence
+        Tests: partial coverage produces 'move to' guidance
         How: Agent has preToolUse + postToolUse, plugin hooks.json only has preToolUse
-        Why: Missing event coverage should still produce a warning
+        Why: Missing event coverage means the hooks need to be moved to plugin level
         """
         plugin_dir = _make_plugin(tmp_path)
         _add_agent_with_frontmatter(
@@ -239,6 +242,7 @@ class TestHooksSilencing:
         assert result.passed is True
         hooks_warnings = [w for w in result.warnings if "hooks" in w.message]
         assert len(hooks_warnings) >= 1
+        assert "move to" in (hooks_warnings[0].suggestion or "")
 
 
 class TestMcpServersInline:
