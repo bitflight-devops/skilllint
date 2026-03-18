@@ -59,6 +59,8 @@ walkthrough/
 .gsd/completed-units.json
 *.pyc
 __pycache__
+.planning/
+plan
 
 # ── GSD baseline (auto-generated) ──
 .gsd/gsd.db
