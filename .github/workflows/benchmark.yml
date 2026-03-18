@@ -93,22 +93,12 @@ jobs:
           tool: customSmallerIsBetter
           output-file-path: scripts/results/bench_io_clean_gh.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          auto-push: false
-          save-data-file: true
+          auto-push: true
           alert-threshold: '130%'
           comment-on-alert: true
           fail-on-alert: false
           alert-comment-cc-users: '@bitflight-devops'
           benchmark-data-dir-path: docs/bench
-
-      - name: Commit updated benchmark data
-        if: github.ref == 'refs/heads/main' || github.event_name == 'release'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/bench/ || true
-          git diff --cached --quiet || git commit -m "chore: update benchmark data [skip ci]"
-          git push origin HEAD
 
       - name: Upload compare benchmark results
         uses: actions/upload-artifact@v7.0.0
@@ -261,8 +251,7 @@ jobs:
           tool: customSmallerIsBetter
           output-file-path: scripts/results/bench_cpu_gh.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          auto-push: false
-          save-data-file: true
+          auto-push: true
           alert-threshold: '130%'
           comment-on-alert: true
           fail-on-alert: false
@@ -479,21 +468,11 @@ jobs:
           tool: customSmallerIsBetter
           output-file-path: scripts/results/bench_io_gh.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          auto-push: false
-          save-data-file: true
+          auto-push: true
           alert-threshold: '130%'
           comment-on-alert: true
           fail-on-alert: false
           benchmark-data-dir-path: docs/bench
-
-      - name: Commit updated benchmark data
-        if: github.ref == 'refs/heads/main' || github.event_name == 'release'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/bench/ || true
-          git diff --cached --quiet || git commit -m "chore: update benchmark data [skip ci]"
-          git push origin HEAD
 
       - name: Upload release benchmark results
         uses: actions/upload-artifact@v7.0.0
