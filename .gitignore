@@ -54,6 +54,8 @@ scripts/results/
 
 .bg-shell/
 .claude-audit/
+docs/plans/
+docs/superpowers/
 walkthrough/
 
 # ── GSD baseline (auto-generated) ──
