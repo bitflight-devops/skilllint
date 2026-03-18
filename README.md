@@ -114,6 +114,8 @@ skilllint check --platform claude-code plugins/my-plugin
 | NR001–NR002 | Namespace refs | Cross-plugin skill/agent/command references |
 | SL001 | Symlinks | Symlink hygiene within plugin directory |
 | TC001 | Token count | Token count reporting and threshold enforcement |
+| PR001–PR005 | Plugin registration | Capability registration completeness and correctness in plugin.json |
+| PA001 | Plugin agent | Sub-agent frontmatter restrictions (hooks, mcpServers, permissionMode) |
 
 ---
 
