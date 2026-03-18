@@ -10,9 +10,11 @@
 
 set -euo pipefail
 
-OFFICIAL_REPO="~/repos/claude-plugins-official"
-SKILLS_REPO="~/repos/skills"
-PLUGINS_REPO="~/repos/claude-code-plugins"
+# Resolve from SKILLLINT_EXTERNAL_REPOS_DIR, defaulting to ~/repos
+REPOS_DIR="${SKILLLINT_EXTERNAL_REPOS_DIR:-$HOME/repos}"
+OFFICIAL_REPO="$REPOS_DIR/claude-plugins-official"
+SKILLS_REPO="$REPOS_DIR/skills"
+PLUGINS_REPO="$REPOS_DIR/claude-code-plugins"
 
 errors=0
 

@@ -27,11 +27,13 @@ import pytest
 # ANSI escape code pattern for stripping color codes from output
 _ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*[mGKHFJA-Z]")
 
-# External repo paths (absolute, per T01 verification script)
+# External repo paths — resolved from SKILLLINT_EXTERNAL_REPOS_DIR env var,
+# defaulting to ~/repos if unset.
+_REPOS_DIR = Path(os.environ.get("SKILLLINT_EXTERNAL_REPOS_DIR", Path.home() / "repos"))
 EXTERNAL_REPOS = {
-    "claude-plugins-official": Path("~/repos/claude-plugins-official"),
-    "skills": Path("~/repos/skills"),
-    "claude-code-plugins": Path("~/repos/claude-code-plugins"),
+    "claude-plugins-official": _REPOS_DIR / "claude-plugins-official",
+    "skills": _REPOS_DIR / "skills",
+    "claude-code-plugins": _REPOS_DIR / "claude-code-plugins",
 }
 
 # Expected exit codes from S04 baseline
