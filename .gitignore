@@ -52,7 +52,8 @@ tmp/
 scripts/bench-plugin/
 scripts/results/
 
-.bg-shell/*walkthrough/
+.bg-shell/
+.claude-audit/
 walkthrough/
 
 # ── GSD baseline (auto-generated) ──
