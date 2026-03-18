@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING
 
 from skilllint.frontmatter_core import extract_frontmatter
 from skilllint.rule_registry import skilllint_rule
+from skilllint.scan_runtime import _load_plugin_json
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -86,8 +87,8 @@ def _get_plugin_level_mcp_servers(plugin_dir: Path) -> set[str]:
     if isinstance(mcp_data, dict) and isinstance(mcp_data.get("mcpServers"), dict):
         names.update(mcp_data["mcpServers"].keys())
 
-    # .claude-plugin/plugin.json mcpServers section
-    plugin_data = _load_json_file(plugin_dir / ".claude-plugin" / "plugin.json")
+    # .claude-plugin/plugin.json mcpServers section — use cached loader to avoid second disk read
+    plugin_data = _load_plugin_json(plugin_dir)
     if isinstance(plugin_data, dict) and isinstance(plugin_data.get("mcpServers"), dict):
         names.update(plugin_data["mcpServers"].keys())
 

@@ -60,7 +60,7 @@ class TestIsFilePathReference:
 
 
 class TestFindPluginRoot:
-    """Test HookValidator._find_plugin_root static method."""
+    """Test HookValidator._find_hook_plugin_dir static method."""
 
     def test_directory_with_claude_plugin_parent(self, tmp_path: Path) -> None:
         """Test finding plugin root when .claude-plugin/ exists above.
@@ -76,7 +76,7 @@ class TestFindPluginRoot:
         nested_dir = plugin_root / "hooks"
         nested_dir.mkdir()
 
-        result = HookValidator._find_plugin_root(nested_dir)
+        result = HookValidator._find_hook_plugin_dir(nested_dir)
         assert result == plugin_root.resolve()
 
     def test_directory_without_claude_plugin(self, tmp_path: Path) -> None:
@@ -89,7 +89,7 @@ class TestFindPluginRoot:
         plain_dir = tmp_path / "no-plugin"
         plain_dir.mkdir()
 
-        result = HookValidator._find_plugin_root(plain_dir)
+        result = HookValidator._find_hook_plugin_dir(plain_dir)
         assert result == plain_dir
 
 

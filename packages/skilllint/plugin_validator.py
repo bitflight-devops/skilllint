@@ -639,22 +639,6 @@ def _load_ignore_config(plugin_root: Path) -> IgnoreConfig:
     return {str(k): [str(c) for c in v] for k, v in ignore.items() if isinstance(v, list)}
 
 
-def _find_plugin_root(path: Path) -> Path | None:
-    """Walk up from path to find the nearest plugin root (directory with .claude-plugin/plugin.json).
-
-    Args:
-        path: File or directory path to start from.
-
-    Returns:
-        Plugin root directory, or None if not found.
-    """
-    candidate = path if path.is_dir() else path.parent
-    for directory in [candidate, *candidate.parents]:
-        if (directory / ".claude-plugin" / "plugin.json").exists():
-            return directory
-    return None
-
-
 def _is_suppressed(ignore_config: IgnoreConfig, file_path: Path, plugin_root: Path, code: str) -> bool:
     """Check whether an issue code is suppressed for a given file path.
 
@@ -1153,10 +1137,9 @@ class ProgressiveDisclosureValidator:
                     )
                 )
             else:
-                # Directory exists - count files recursively
-                sum(1 for _ in dir_path.rglob("*") if _.is_file())
                 # No info message needed when directory exists
                 # (only report missing directories)
+                pass
 
         # Always pass - info messages don't fail validation
         return ValidationResult(passed=True, errors=errors, warnings=warnings, info=info)
@@ -3369,7 +3352,7 @@ class PluginRegistrationValidator:
         warnings: list[ValidationIssue] = []
         info: list[ValidationIssue] = []
 
-        plugin_dir = self._find_plugin_dir(path)
+        plugin_dir = find_plugin_dir(path)
         if plugin_dir is None:
             return ValidationResult(passed=True, errors=errors, warnings=warnings, info=info)
 
@@ -3573,19 +3556,6 @@ class PluginRegistrationValidator:
         """
         raise NotImplementedError("Plugin registration issues require manual edits to plugin.json.")
 
-    def _find_plugin_dir(self, path: Path) -> Path | None:
-        """Find the plugin directory containing .claude-plugin/plugin.json.
-
-        Delegates to the module-level :func:`find_plugin_dir`.
-
-        Args:
-            path: Path to start searching from.
-
-        Returns:
-            Plugin directory path, or None if not found.
-        """
-        return find_plugin_dir(path)
-
 
 # ============================================================================
 # PLUGIN AGENT FRONTMATTER VALIDATOR
@@ -3624,7 +3594,7 @@ class PluginStructureValidator:
         info: list[ValidationIssue] = []
 
         # Find plugin directory (contains .claude-plugin/plugin.json)
-        plugin_dir = self._find_plugin_directory(path)
+        plugin_dir = find_plugin_dir(path)
         if plugin_dir is None:
             # Not a plugin directory - skip validation
             return ValidationResult(passed=True, errors=errors, warnings=warnings, info=info)
@@ -3768,19 +3738,6 @@ class PluginStructureValidator:
             Full path to claude executable, or None if not found
         """
         return shutil.which("claude")
-
-    def _find_plugin_directory(self, path: Path) -> Path | None:
-        """Find plugin directory containing .claude-plugin/plugin.json.
-
-        Delegates to the module-level :func:`find_plugin_dir`.
-
-        Args:
-            path: Path to file or directory within plugin
-
-        Returns:
-            Path to plugin directory, or None if not found
-        """
-        return find_plugin_dir(path)
 
     def _validate_plugin_json_syntax(self, plugin_json_path: Path) -> str | None:
         """Validate plugin.json is parseable JSON. Catches syntax/encoding issues.
@@ -4243,17 +4200,19 @@ class HookValidator:
         return bool(command) and (command.startswith(("./", "../", "/", "${CLAUDE_PLUGIN_ROOT}/")))
 
     @staticmethod
-    def _find_plugin_root(base_dir: Path) -> Path:
-        """Walk up from *base_dir* to find the plugin root directory.
+    def _find_hook_plugin_dir(base_dir: Path) -> Path:
+        """Find the hook plugin directory by checking .claude-plugin/ directory existence.
 
-        The plugin root is the first ancestor directory that contains a
-        ``.claude-plugin/`` subdirectory.  Falls back to *base_dir* if not found.
+        Unlike find_plugin_dir, this method checks for the presence of the
+        .claude-plugin/ directory rather than plugin.json. It also returns
+        base_dir as a fallback rather than None, because hook files may exist
+        in a plugin directory even when plugin.json is absent or malformed.
 
         Args:
-            base_dir: Starting directory for the search.
+            base_dir: Base directory to search from.
 
         Returns:
-            Plugin root Path, or *base_dir* if the plugin root cannot be determined.
+            Plugin directory path if .claude-plugin/ exists, otherwise base_dir.
         """
         current = base_dir.resolve()
         for parent in [current, *current.parents]:
@@ -4282,7 +4241,7 @@ class HookValidator:
             base_dir: Directory to use as the resolution base for relative paths.
             errors: List to append HK004 errors and HK005 warnings to.
         """
-        plugin_root = self._find_plugin_root(base_dir)
+        plugin_root = self._find_hook_plugin_dir(base_dir)
 
         for entry in hook_entries:
             if not isinstance(entry, dict):
@@ -4666,7 +4625,7 @@ def validate_single_path(path: Path, *, check: bool, fix: bool, verbose: bool) -
         return {path: []}
 
     # Load per-plugin ignore config (once per plugin root)
-    plugin_root = _find_plugin_root(path)
+    plugin_root = find_plugin_dir(path)
     ignore_config: IgnoreConfig = _load_ignore_config(plugin_root) if plugin_root is not None else {}
 
     validator_results = _collect_validator_results(

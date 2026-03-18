@@ -64,8 +64,8 @@ else:
 from skilllint.plugin_validator import (
     PluginRegistrationValidator,
     _filter_result_by_ignore,
-    _find_plugin_root,
     _load_ignore_config,
+    find_plugin_dir,
 )
 
 # ---------------------------------------------------------------------------
@@ -899,7 +899,7 @@ class TestSK009ManualSkillSelectionInfo:
         result = validator.validate(plugin_root)
 
         # Apply suppression filter (mirrors what validate_path does at the top level)
-        plugin_root_found = _find_plugin_root(plugin_root)
+        plugin_root_found = find_plugin_dir(plugin_root)
         assert plugin_root_found is not None, "Plugin root must be found for suppression test"
         ignore_config = _load_ignore_config(plugin_root_found)
         filtered = _filter_result_by_ignore(result, plugin_root, plugin_root_found, ignore_config)

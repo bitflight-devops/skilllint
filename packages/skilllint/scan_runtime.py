@@ -8,6 +8,7 @@ validation loop to a dedicated module without changing user-facing behavior.
 from __future__ import annotations
 
 import fnmatch
+import functools
 import json
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -77,6 +78,27 @@ class PluginManifest:
         return any(v is not None for v in (self.agents, self.commands, self.skills))
 
 
+@functools.cache
+def _load_plugin_json(plugin_root: Path) -> dict | None:
+    """Load and cache .claude-plugin/plugin.json for a given plugin root.
+
+    Cached per ``plugin_root`` so multiple callers within a single
+    ``skilllint check`` run (e.g. path discovery in scan_runtime and
+    PA001 cross-checking in pa_series) share a single disk read.
+
+    Args:
+        plugin_root: Directory containing ``.claude-plugin/plugin.json``.
+
+    Returns:
+        Parsed dict, or None if the file is missing or invalid JSON.
+    """
+    manifest_path = plugin_root / ".claude-plugin" / "plugin.json"
+    try:
+        return json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
 def _parse_plugin_manifest(plugin_root: Path) -> PluginManifest:
     """Read plugin.json and extract declared paths.
 
@@ -89,10 +111,8 @@ def _parse_plugin_manifest(plugin_root: Path) -> PluginManifest:
     Returns:
         PluginManifest with parsed paths or None fields.
     """
-    manifest_path = plugin_root / ".claude-plugin" / "plugin.json"
-    try:
-        raw = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+    raw = _load_plugin_json(plugin_root)
+    if raw is None:
         return PluginManifest(plugin_root=plugin_root)
 
     def _extract(key: str) -> list[str] | None:
@@ -360,12 +380,14 @@ def _is_ignored(path: Path, patterns: list[str]) -> bool:
         True if the path matches any pattern and should be skipped.
     """
     path_str = path.as_posix()
+    resolved_path = path.resolve()
+    cwd = Path.cwd().resolve()
     for pattern in patterns:
         if fnmatch.fnmatch(path_str, pattern):
             return True
         # Also match against just the relative-to-cwd representation
         try:
-            rel = path.resolve().relative_to(Path.cwd().resolve()).as_posix()
+            rel = resolved_path.relative_to(cwd).as_posix()
         except ValueError:
             rel = path_str
         if fnmatch.fnmatch(rel, pattern):
@@ -385,13 +407,17 @@ def _compute_summary(all_results: FileResults) -> tuple[int, int, int, int]:
         Tuple of (total_files, passed, failed, warnings).
     """
     total_files = len(all_results)
-    passed = sum(1 for vr_list in all_results.values() if all(r.passed for _, r in vr_list))
-    failed = sum(1 for vr_list in all_results.values() if any(not r.passed for _, r in vr_list))
-    warnings = sum(
-        1
-        for vr_list in all_results.values()
-        if all(r.passed for _, r in vr_list) and any(r.warnings for _, r in vr_list)
-    )
+    passed = 0
+    failed = 0
+    warnings = 0
+    for vr_list in all_results.values():
+        all_passed = all(r.passed for _, r in vr_list)
+        if all_passed:
+            passed += 1
+            if any(r.warnings for _, r in vr_list):
+                warnings += 1
+        else:
+            failed += 1
     return total_files, passed, failed, warnings
 
 
