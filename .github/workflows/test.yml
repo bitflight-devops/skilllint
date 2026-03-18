@@ -179,9 +179,25 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Check git history connection to previous tag
+        id: history_check
+        run: |
+          PREV_TAG=$(git tag --sort=-version:refname | head -n1)
+          if [ -z "$PREV_TAG" ]; then
+            echo "connected=true" >> "$GITHUB_OUTPUT"
+          else
+            PREV_SHA=$(git rev-list -n1 "$PREV_TAG" 2>/dev/null || echo "")
+            if [ -n "$PREV_SHA" ] && git merge-base --is-ancestor "$PREV_SHA" HEAD 2>/dev/null; then
+              echo "connected=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "connected=false" >> "$GITHUB_OUTPUT"
+              echo "::warning::Previous tag $PREV_TAG ($PREV_SHA) has no common ancestor with HEAD. Skipping version bump."
+            fi
+          fi
+
       - name: Bump version and push tag
         id: tag_version
-        continue-on-error: true
+        if: steps.history_check.outputs.connected == 'true'
         uses: mathieudutour/github-tag-action@v6.2
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
