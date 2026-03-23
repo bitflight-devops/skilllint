@@ -27,6 +27,60 @@
   - `benchmark-plugin-violations.zip` — 200 skills with fixable FM004/FM007/FM008/FM009 violations
 - `skilllint check --fix` operates **in-place**, so fix benchmarks must copy the fixture to a temp dir before each timed run
 
+## Vendor documentation cache (`skilllint docs`)
+
+When agents need external documentation (Claude hooks docs, Cursor rules docs, etc.), they must **not** use WebFetch or MCP URL-reading tools to pull pages into context. Fetch to disk first, then read from disk.
+
+### CLI commands
+
+```
+# Cache a page (prints the file path to stdout)
+skilllint docs fetch URL
+
+# List sections in a cached file
+skilllint docs sections FILE
+
+# Extract a single section (heading text or markdown anchor slug)
+skilllint docs section FILE HEADING
+
+# Verify file integrity against its .meta.json sidecar
+skilllint docs verify FILE
+
+# Find the most recent cached file for a page name
+skilllint docs latest PAGE_NAME
+```
+
+### Standalone script (outside the skilllint CLI)
+
+```
+uv run --script scripts/fetch_doc_source.py fetch URL
+uv run --script scripts/fetch_doc_source.py sections FILE
+uv run --script scripts/fetch_doc_source.py section FILE HEADING
+uv run --script scripts/fetch_doc_source.py verify FILE
+uv run --script scripts/fetch_doc_source.py latest PAGE_NAME
+```
+
+`scripts/fetch_doc_source.py` is a PEP 723 standalone script with `[tool.uv.sources]` pointing to the local skilllint package. Same commands as `skilllint docs`, usable before `skilllint` is installed.
+
+### File locations
+
+- Cached pages: `.claude/vendor/sources/{page-name}-{YYYY-MM-DD-HHMM}.md`
+- Sidecar metadata: `.claude/vendor/sources/{page-name}-{YYYY-MM-DD-HHMM}.meta.json`
+- Page names are derived from the URL path (e.g. `https://docs.anthropic.com/en/docs/claude-code/settings.md` → `claude-code--settings`)
+
+### Offline-first behaviour
+
+Stale cache is served when the network is unavailable (`STALE` status, warning to stderr). The command only fails when **no cache exists AND the network is down**.
+
+### Agent instructions
+
+1. Run `skilllint docs fetch URL` to cache the page. The file path is printed to stdout.
+2. Use the Read tool on that file path. For large files, run `skilllint docs sections FILE` first to find the right section, then `skilllint docs section FILE HEADING` to extract just that part.
+
+### Relationship to `fetch_platform_docs.py`
+
+`scripts/fetch_platform_docs.py` handles **bulk vendor sync** — git clones and HTTP crawl to `.claude/vendor/{provider}/`. `skilllint docs` handles **on-demand single-page capture** to `.claude/vendor/sources/`. Both scripts import shared low-level utilities from `packages/skilllint/vendor_io.py`. `scripts/fetch_spec_schema.py` also imports from `vendor_io.py`.
+
 ## Orchestrator delegation discipline
 
 Claude operates as an orchestrator — it coordinates agents rather than doing file-level work itself.

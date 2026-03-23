@@ -179,6 +179,105 @@ Options:
   --help   Show this message and exit
 ```
 
+### docs
+
+Cache and query vendor documentation pages for offline use.
+
+```
+Usage: skilllint docs [OPTIONS] COMMAND [ARGS]...
+
+Commands:
+  fetch     Fetch a documentation page or return a cached copy.
+  latest    Find the most recent cached file for a page name.
+  sections  Print a table of sections in a cached markdown file.
+  section   Extract the text of a named section from a cached markdown file.
+  verify    Verify a cached file against its .meta.json integrity sidecar.
+```
+
+#### docs fetch
+
+```
+Usage: skilllint docs fetch [OPTIONS] URL
+
+Arguments:
+  url                   Documentation URL to fetch or serve from cache.
+
+Cache Options:
+  --ttl FLOAT           Cache time-to-live in hours before a refresh is attempted.  [default: 4.0]
+  --force               Skip the freshness check and always attempt a network fetch.
+
+Options:
+  --help                Show this message and exit.
+```
+
+Prints the cached file path to stdout. Status messages go to stderr. Exits 1 when no
+cache exists and the network is unavailable.
+
+#### docs latest
+
+```
+Usage: skilllint docs latest [OPTIONS] PAGE_NAME
+
+Arguments:
+  page_name             Filesystem-safe page name (e.g. 'claude-code--settings').
+
+Options:
+  --help                Show this message and exit.
+```
+
+Prints the file path to stdout. Exits 1 when no cached file exists for that page name.
+
+#### docs sections
+
+```
+Usage: skilllint docs sections [OPTIONS] FILE_PATH
+
+Arguments:
+  file_path             Path to the cached markdown file to index.
+
+Options:
+  --help                Show this message and exit.
+```
+
+Prints a table of headings with their line ranges to stdout.
+
+#### docs section
+
+```
+Usage: skilllint docs section [OPTIONS] FILE_PATH HEADING
+
+Arguments:
+  file_path             Path to the cached markdown file.
+  heading               Heading text or markdown anchor slug to locate.
+
+Options:
+  --help                Show this message and exit.
+```
+
+Prints the full text of the matching section to stdout. Exits 1 when the heading is not found.
+
+Heading matching is case-insensitive and accepts two forms:
+
+- Heading text: `"Hook input and output"`
+- Markdown anchor slug: `"hook-input-and-output"`
+
+Leading `#` characters are stripped before comparison.
+
+#### docs verify
+
+```
+Usage: skilllint docs verify [OPTIONS] FILE_PATH
+
+Arguments:
+  file_path             Path to the cached markdown file to verify.
+
+Options:
+  --help                Show this message and exit.
+```
+
+Exits 0 when the file is intact. Exits 1 when the file has been modified or when no
+sidecar exists.
+
 All four command names are aliases for the same tool:
 
 ```bash
@@ -186,6 +285,51 @@ skilllint   # primary
 agentlint   # alias
 pluginlint  # alias
 skillint    # alias
+```
+
+---
+
+## Vendor documentation cache
+
+`skilllint docs` provides an offline-first cache for vendor documentation pages. Pages are
+fetched once and stored locally; subsequent calls within the TTL window are served from
+disk without a network request. When the TTL has expired but the network is unavailable,
+the stale copy is served automatically.
+
+Cached files are written to `.claude/vendor/sources/` with filenames in the format
+`{page-name}-{YYYY-MM-DD-HHMM}.md`. Each file is accompanied by a `.meta.json` integrity
+sidecar that records the SHA-256 digest, byte count, source URL, and fetch timestamp.
+
+```bash
+# Cache a documentation page (default TTL: 4 hours)
+skilllint docs fetch https://docs.anthropic.com/en/docs/claude-code/settings.md
+
+# Force a network refresh regardless of TTL
+skilllint docs fetch https://docs.anthropic.com/en/docs/claude-code/settings.md --force
+
+# Find the most recently cached copy of a page
+skilllint docs latest claude-code--settings
+
+# List all sections with line ranges
+skilllint docs sections .claude/vendor/sources/claude-code--settings-2025-01-01-1200.md
+
+# Extract a section by heading text or markdown anchor slug
+skilllint docs section .claude/vendor/sources/claude-code--settings-2025-01-01-1200.md "Hook input and output"
+skilllint docs section .claude/vendor/sources/claude-code--settings-2025-01-01-1200.md "hook-input-and-output"
+
+# Verify a cached file against its sidecar
+skilllint docs verify .claude/vendor/sources/claude-code--settings-2025-01-01-1200.md
+```
+
+Section extraction uses [marko](https://github.com/frostming/marko) for AST-based
+markdown parsing, so `#` characters inside fenced code blocks are never mistaken for
+headings.
+
+The same functionality is available as a standalone script that does not require
+`skilllint` to be installed:
+
+```bash
+uv run --script scripts/fetch_doc_source.py https://docs.anthropic.com/en/docs/claude-code/settings.md
 ```
 
 ---
