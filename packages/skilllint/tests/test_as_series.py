@@ -508,3 +508,156 @@ def test_as008_non_mcp_tools_are_ignored(tmp_path: pathlib.Path):
     skill_md = _make_skill_with_tools(tmp_path, "tools:\n  - Bash\n  - Read\n  - Write\n  - Edit")
     violations = check_skill_md(skill_md)
     assert _violations_with_code(violations, "AS008") == [], "AS008 must not fire for non-MCP tool names"
+
+
+# ---------------------------------------------------------------------------
+# AS009: nested skill directory depth
+# ---------------------------------------------------------------------------
+
+
+def _make_skill_at_depth(root: pathlib.Path, rel_path: str) -> pathlib.Path:
+    """Create a minimal SKILL.md at root/rel_path."""
+    skill_md = root / rel_path
+    skill_md.parent.mkdir(parents=True, exist_ok=True)
+    skill_md.write_text(
+        textwrap.dedent("""\
+            ---
+            name: my-skill
+            description: A test skill.
+            ---
+
+            Body.
+        """)
+    )
+    return skill_md
+
+
+def test_as009_skill_at_correct_depth_passes(tmp_path: pathlib.Path):
+    """skills/my-skill/SKILL.md at depth 1 produces no AS009 violation."""
+    skill_md = _make_skill_at_depth(tmp_path, "skills/my-skill/SKILL.md")
+    violations = check_skill_md(skill_md)
+    assert _violations_with_code(violations, "AS009") == [], (
+        f"Expected no AS009 violations for depth-1 skill, got: {violations}"
+    )
+
+
+def test_as009_skill_nested_two_levels_bare_context_warns(tmp_path: pathlib.Path):
+    """skills/category/my-skill/SKILL.md at depth 2, no plugin.json, produces AS009 warning."""
+    skill_md = _make_skill_at_depth(tmp_path, "skills/category/my-skill/SKILL.md")
+    violations = check_skill_md(skill_md)
+    as009 = _violations_with_code(violations, "AS009")
+    assert as009 != [], "Expected AS009 warning for depth-2 skill in bare context"
+    assert as009[0]["severity"] == "warning"
+    assert "will not activate in Claude Code" in as009[0]["message"]
+
+
+def test_as009_skill_nested_two_levels_plugin_context_warns(tmp_path: pathlib.Path):
+    """skills/category/my-skill/SKILL.md at depth 2 inside a plugin produces AS009 plugin-variant warning."""
+    plugin_json = tmp_path / ".claude-plugin" / "plugin.json"
+    plugin_json.parent.mkdir(parents=True, exist_ok=True)
+    plugin_json.write_text('{"name": "test-plugin"}')
+    skill_md = _make_skill_at_depth(tmp_path, "skills/category/my-skill/SKILL.md")
+    violations = check_skill_md(skill_md)
+    as009 = _violations_with_code(violations, "AS009")
+    assert as009 != [], "Expected AS009 warning for depth-2 skill in plugin context"
+    assert as009[0]["severity"] == "warning"
+    assert "plugin.json" in as009[0]["message"]
+
+
+def test_as009_skill_not_under_skills_dir_is_ignored(tmp_path: pathlib.Path):
+    """A SKILL.md not under a skills/ directory produces no AS009 violation."""
+    skill_md = _make_skill_at_depth(tmp_path, "other/my-skill/SKILL.md")
+    violations = check_skill_md(skill_md)
+    assert _violations_with_code(violations, "AS009") == [], "AS009 must not fire when no skills/ ancestor is present"
+
+
+def test_as009_commands_subdir_not_affected(tmp_path: pathlib.Path):
+    """A deeply nested file under commands/ does not trigger AS009 (not a SKILL.md scenario)."""
+    # AS009 only applies to SKILL.md files. Commands can be nested.
+    # We simulate by placing a SKILL.md deeply under commands/ — no skills/ ancestor → no AS009.
+    skill_md = _make_skill_at_depth(tmp_path, "commands/rwr/sub/SKILL.md")
+    violations = check_skill_md(skill_md)
+    assert _violations_with_code(violations, "AS009") == [], (
+        "AS009 must not fire for files under commands/ (no skills/ ancestor)"
+    )
+
+
+def test_as009_depth_three_bare_context_warns(tmp_path: pathlib.Path) -> None:
+    """skills/a/b/my-skill/SKILL.md at depth 3, no plugin.json, produces AS009 warning.
+
+    Tests: AS009 fires for any depth > 1, not only exactly depth 2.
+    How: Create a real three-level structure under skills/ with no plugin.json
+         ancestor, then assert the bare-context variant of AS009 fires.
+    Why: _count_levels_under_skills returns values > 2 for deeper nesting; the
+         rule must fire for all such cases, not just the minimum two-level case.
+    """
+    skill_md = _make_skill_at_depth(tmp_path, "skills/a/b/my-skill/SKILL.md")
+    violations = check_skill_md(skill_md)
+    as009 = _violations_with_code(violations, "AS009")
+    assert as009 != [], "Expected AS009 warning for depth-3 skill in bare context"
+    assert as009[0]["severity"] == "warning"
+    assert "will not activate in Claude Code" in as009[0]["message"]
+
+
+def test_as009_plugin_context_provides_fix(tmp_path: pathlib.Path) -> None:
+    """AS009 plugin-context variant includes a fix field pointing to plugin.json.
+
+    Tests: AS009 violation dict structure for plugin context.
+    How: Create a realistic plugin layout with plugin.json above skills/ and a
+         nested SKILL.md, then assert the violation carries the expected fix text.
+    Why: The fix field is machine-consumable; callers rely on it to suggest the
+         correct remediation action for plugin-scoped skills.
+    """
+    plugin_json = tmp_path / ".claude-plugin" / "plugin.json"
+    plugin_json.parent.mkdir(parents=True, exist_ok=True)
+    plugin_json.write_text('{"name": "test-plugin"}')
+    skill_md = _make_skill_at_depth(tmp_path, "skills/category/my-skill/SKILL.md")
+    violations = check_skill_md(skill_md)
+    as009 = _violations_with_code(violations, "AS009")
+    assert as009 != [], "Expected AS009 violation in plugin context"
+    assert "fix" in as009[0], "AS009 plugin-context violation must carry a fix field"
+    assert "plugin.json" in as009[0]["fix"]
+
+
+def test_as009_plugin_json_in_grandparent_is_found(tmp_path: pathlib.Path) -> None:
+    """_find_plugin_json_in_ancestry finds plugin.json multiple hops above skills/.
+
+    Tests: AS009 emits plugin-context variant when plugin.json is above the
+           skills/ directory rather than a direct sibling.
+    How: Create tmp_path/my-plugin/.claude-plugin/plugin.json, then place a
+         nested SKILL.md at tmp_path/my-plugin/skills/category/nested/SKILL.md.
+         The ancestry walk must traverse my-plugin/ to find .claude-plugin/.
+    Why: Real plugin layouts nest skills/ inside a named plugin directory.
+         The ancestry walker must traverse multiple hops, not just check the
+         immediate parent of skills/.
+    """
+    plugin_root = tmp_path / "my-plugin"
+    plugin_json = plugin_root / ".claude-plugin" / "plugin.json"
+    plugin_json.parent.mkdir(parents=True, exist_ok=True)
+    plugin_json.write_text('{"name": "my-plugin"}')
+    skill_md = _make_skill_at_depth(plugin_root, "skills/category/nested/SKILL.md")
+    violations = check_skill_md(skill_md)
+    as009 = _violations_with_code(violations, "AS009")
+    assert as009 != [], "Expected AS009 warning when plugin.json is in a grandparent directory"
+    assert as009[0]["severity"] == "warning"
+    assert "plugin.json" in as009[0]["message"]
+
+
+def test_as009_dot_claude_skills_bare_context_warns(tmp_path: pathlib.Path) -> None:
+    """skills/category/nested-skill/SKILL.md under .claude/ with no plugin.json warns.
+
+    Tests: AS009 bare-context variant fires for the canonical .claude/skills/ layout.
+    How: Create tmp_path/.claude/skills/category/nested-skill/SKILL.md with no
+         plugin.json anywhere in the ancestry, then assert the bare-context
+         warning fires.
+    Why: Claude Code loads user skills from ~/.claude/skills/. A skill nested at
+         .claude/skills/category/name/ will not auto-activate. This is the
+         most common real-world occurrence of AS009.
+    """
+    dot_claude = tmp_path / ".claude"
+    skill_md = _make_skill_at_depth(dot_claude, "skills/category/nested-skill/SKILL.md")
+    violations = check_skill_md(skill_md)
+    as009 = _violations_with_code(violations, "AS009")
+    assert as009 != [], "Expected AS009 warning for .claude/skills/category/nested-skill/ layout"
+    assert as009[0]["severity"] == "warning"
+    assert "will not activate in Claude Code" in as009[0]["message"]

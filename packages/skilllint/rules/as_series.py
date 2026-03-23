@@ -1,6 +1,6 @@
 """AS-series rule validation for agentskills.io SKILL.md files.
 
-Rules AS001-AS008 fire on any SKILL.md file regardless of which platform
+Rules AS001-AS009 fire on any SKILL.md file regardless of which platform
 adapter is active. They enforce cross-platform quality standards.
 
 Entry point: check_skill_md(path: Path) -> list[dict]
@@ -10,7 +10,7 @@ Each violation dict has the shape:
 
 Severities:
     "error"   — AS001, AS002, AS003, AS007
-    "warning" — AS004, AS005, AS008
+    "warning" — AS004, AS005, AS008, AS009
     "info"    — AS006
 """
 
@@ -41,6 +41,7 @@ AS_RULES: dict[str, str] = {
     "AS006": "No eval_queries.json found — add evaluation queries for quality assurance",
     "AS007": "Wildcard pattern in tools field will not resolve — list each tool by its exact registered name",
     "AS008": "MCP tool name may have incorrect casing — case is sensitive in the tools field",
+    "AS009": "Nested skill will not be auto-discovered — skills must be direct children of the skills/ directory",
 }
 
 # ---------------------------------------------------------------------------
@@ -820,6 +821,106 @@ def _check_as006(path: pathlib.Path) -> dict | None:
     )
 
 
+def _find_plugin_json_in_ancestry(path: pathlib.Path) -> bool:
+    """Return True if any ancestor directory contains a .claude-plugin/plugin.json file.
+
+    Args:
+        path: Path to the SKILL.md file being validated.
+
+    Returns:
+        True if a plugin.json is found in an ancestor, False otherwise.
+    """
+    current = path.parent
+    visited: set[pathlib.Path] = set()
+    while current not in visited:
+        visited.add(current)
+        if (current / ".claude-plugin" / "plugin.json").is_file():
+            return True
+        parent = current.parent
+        if parent == current:
+            break
+        current = parent
+    return False
+
+
+def _count_levels_under_skills(path: pathlib.Path) -> int:
+    """Count the number of directory levels between a skills/ directory and path.
+
+    Walks up from path.parent until a directory named 'skills' is found.
+    Returns the number of levels between the skills/ dir and the file.
+
+    For ``skills/my-skill/SKILL.md`` the count is 1 (one level: my-skill/).
+    For ``skills/cat/my-skill/SKILL.md`` the count is 2 (two levels: cat/my-skill/).
+
+    Returns 0 if no ancestor named 'skills' is found.
+
+    Args:
+        path: Path to the SKILL.md file being validated.
+
+    Returns:
+        Number of directory levels between the skills/ ancestor and path.
+    """
+    parts = path.parts
+    # Find the rightmost 'skills' directory in the path
+    for i in range(len(parts) - 1, -1, -1):
+        if parts[i] == "skills":
+            # levels = number of path components between skills/ and the file
+            # path.parts[-1] is the filename (SKILL.md), so levels = len(parts) - i - 2
+            return len(parts) - i - 2
+    return 0
+
+
+@skilllint_rule(
+    "AS009",
+    severity="warning",
+    category="skill",
+    authority={"origin": "anthropic.com", "reference": "https://docs.anthropic.com/en/docs/claude-code/skills"},
+)
+def _check_as009(path: pathlib.Path) -> dict | None:
+    """AS009 — Nested skill will not be auto-discovered.
+
+    Claude Code skills only support single-level namespacing. A SKILL.md must be
+    a direct child of the ``skills/`` directory (e.g., ``skills/my-skill/SKILL.md``).
+    If nested deeper (e.g., ``skills/category/my-skill/SKILL.md``), it will not be
+    auto-discovered at runtime.
+
+    In a plugin context (a ``plugin.json`` ancestor is present), the skill can be
+    registered manually via the ``skills`` array in ``plugin.json``. In a user or
+    project scope, the skill simply will not activate.
+
+    Note: ``commands/`` subdirectories are valid for namespacing and are not affected
+    by this rule.
+
+    Args:
+        path: Path to the SKILL.md file being validated.
+
+    Returns:
+        Violation dict if nested more than one level under skills/, None otherwise.
+
+    Fix:
+        Move the skill directory to ``skills/<skill-name>/SKILL.md``, or if inside
+        a plugin, add the path to the ``skills`` array in ``plugin.json``.
+    """
+    levels = _count_levels_under_skills(path)
+    if levels <= 1:
+        return None
+
+    in_plugin = _find_plugin_json_in_ancestry(path)
+    if in_plugin:
+        return _make_violation(
+            "AS009",
+            "warning",
+            "Nested skill will not activate automatically — add its path to the plugin.json skills section",
+            fix="Add the skill path to the 'skills' array in .claude-plugin/plugin.json",
+        )
+    return _make_violation(
+        "AS009",
+        "warning",
+        "Nested skill will not activate in Claude Code",
+        fix="Move the skill to skills/<skill-name>/SKILL.md (one level under skills/)",
+    )
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -836,7 +937,7 @@ def check_skill_md(path: pathlib.Path) -> list[dict]:
 
     Returns:
         List of violation dicts, each with keys: code, severity, message.
-        May include 'fix' key with auto-fix suggestion for AS004, AS007, AS008.
+        May include 'fix' key with auto-fix suggestion for AS004, AS007, AS008, AS009.
     """
     frontmatter, body_lines, raw_description_line = _parse_skill_md(path)
 
@@ -878,6 +979,10 @@ def check_skill_md(path: pathlib.Path) -> list[dict]:
     tools = _extract_tools_list(path)
     violations.extend(_check_as007(tools))
     violations.extend(_check_as008(tools, path))
+
+    v = _check_as009(path)
+    if v:
+        violations.append(v)
 
     return violations
 
@@ -930,6 +1035,10 @@ def run_as_series(path: pathlib.Path, frontmatter: dict, body_lines: list[str]) 
     tools = _extract_tools_list(path)
     violations.extend(_check_as007(tools))
     violations.extend(_check_as008(tools, path))
+
+    v = _check_as009(path)
+    if v:
+        violations.append(v)
 
     return violations
 
