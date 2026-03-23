@@ -11,7 +11,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import msgspec.json
-import pytest
 
 from skilllint.plugin_validator import FileType, HookValidator
 
@@ -278,26 +277,96 @@ class TestHookConfigValidation:
         assert result.passed is False
         assert any(e.code == "HK003" for e in result.errors)
 
-    def test_can_fix_returns_false(self) -> None:
-        """Test can_fix() returns False.
+    def test_http_hook_missing_url_field_fails_hk003(self, tmp_path: Path) -> None:
+        """Test http hook without 'url' field triggers HK003 error.
+
+        Tests: HTTP hook field validation
+        How: Write type "http" but omit "url" key, validate
+        Why: HTTP hooks must have a url string
+        """
+        hooks_json = tmp_path / "hooks.json"
+        hooks_json.write_text(msgspec.json.encode({"hooks": {"PreToolUse": [{"hooks": [{"type": "http"}]}]}}).decode())
+
+        validator = HookValidator()
+        result = validator.validate(hooks_json)
+
+        assert result.passed is False
+        assert any(e.code == "HK003" for e in result.errors)
+
+    def test_agent_hook_missing_prompt_field_fails_hk003(self, tmp_path: Path) -> None:
+        """Test agent hook without 'prompt' field triggers HK003 error.
+
+        Tests: Agent hook field validation
+        How: Write type "agent" but omit "prompt" key, validate
+        Why: Agent hooks must have a prompt string
+        """
+        hooks_json = tmp_path / "hooks.json"
+        hooks_json.write_text(msgspec.json.encode({"hooks": {"PreToolUse": [{"hooks": [{"type": "agent"}]}]}}).decode())
+
+        validator = HookValidator()
+        result = validator.validate(hooks_json)
+
+        assert result.passed is False
+        assert any(e.code == "HK003" for e in result.errors)
+
+    def test_http_hook_with_url_field_passes(self, tmp_path: Path) -> None:
+        """Test http hook with 'url' field passes validation.
+
+        Tests: HTTP hook valid configuration
+        How: Write type "http" with "url" key, validate
+        Why: A well-formed http hook must not emit HK003
+        """
+        hooks_json = tmp_path / "hooks.json"
+        hooks_json.write_text(
+            msgspec.json.encode({
+                "hooks": {"PreToolUse": [{"hooks": [{"type": "http", "url": "https://example.com/hook"}]}]}
+            }).decode()
+        )
+
+        validator = HookValidator()
+        result = validator.validate(hooks_json)
+
+        assert not any(e.code == "HK003" for e in result.errors)
+
+    def test_agent_hook_with_prompt_field_passes(self, tmp_path: Path) -> None:
+        """Test agent hook with 'prompt' field passes validation.
+
+        Tests: Agent hook valid configuration
+        How: Write type "agent" with "prompt" key, validate
+        Why: A well-formed agent hook must not emit HK003
+        """
+        hooks_json = tmp_path / "hooks.json"
+        hooks_json.write_text(
+            msgspec.json.encode({
+                "hooks": {"PreToolUse": [{"hooks": [{"type": "agent", "prompt": "Summarise the output"}]}]}
+            }).decode()
+        )
+
+        validator = HookValidator()
+        result = validator.validate(hooks_json)
+
+        assert not any(e.code == "HK003" for e in result.errors)
+
+    def test_can_fix_returns_true(self) -> None:
+        """Test can_fix() returns True.
 
         Tests: HookValidator auto-fix capability
         How: Call can_fix()
-        Why: Hook validation cannot be auto-fixed
+        Why: HK005 non-executable scripts can be fixed with chmod/git
         """
         validator = HookValidator()
-        assert validator.can_fix() is False
+        assert validator.can_fix() is True
 
-    def test_fix_raises_not_implemented(self, tmp_path: Path) -> None:
-        """Test fix() raises NotImplementedError.
+    def test_fix_returns_empty_list_for_missing_file(self, tmp_path: Path) -> None:
+        """Test fix() returns empty list when hooks.json does not exist.
 
-        Tests: HookValidator fix() contract
-        How: Call fix(), expect NotImplementedError
-        Why: Hook fixes require manual correction
+        Tests: HookValidator fix() on missing file
+        How: Call fix() with a non-existent path
+        Why: fix() should return [] rather than raise when file is absent
         """
         validator = HookValidator()
-        with pytest.raises(NotImplementedError):
-            validator.fix(tmp_path / "hooks.json")
+        result = validator.fix(tmp_path / "hooks.json")
+        assert result == []
 
     def test_hooks_json_with_matcher_and_timeout(self, tmp_path: Path) -> None:
         """Test hooks.json with optional matcher and timeout fields passes.
