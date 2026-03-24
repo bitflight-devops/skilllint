@@ -199,7 +199,7 @@ def _check_as001(name: str | None) -> dict | None:
     if name is None:
         # name is RECOMMENDED but not required per AgentSkills spec
         # https://agentskills.io/specification#skill-naming
-        return _make_violation("AS001", "warning", "name field is missing (recommended but not required)")
+        return _make_violation("AS001", "warning", "name field is missing")
 
     if len(name) == 0 or len(name) > _MAX_NAME_LENGTH:
         return _make_violation(
