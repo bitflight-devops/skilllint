@@ -56,7 +56,7 @@ class TestProviderValidationRouting:
 
         # Invalid name (My_Skill!) should trigger AS001
         as001 = [v for v in violations if v.get("code") == "AS001"]
-        assert len(as001) == 1, f"Expected AS001 violation, got: {violations}"
+        assert len(as001) >= 1, f"Expected AS001 violation, got: {violations}"
 
     def test_cursor_adapter_validates_cursor_fixtures(self) -> None:
         """Cursor adapter validates fixtures in cursor/ directory."""

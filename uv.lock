@@ -916,6 +916,7 @@ name = "skilllint"
 source = { editable = "." }
 dependencies = [
     { name = "gitpython" },
+    { name = "httpx" },
     { name = "marko" },
     { name = "msgspec" },
     { name = "pydantic" },
@@ -945,6 +946,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "gitpython", specifier = ">=3.1.45" },
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "marko", specifier = ">=2.2.2" },
     { name = "msgspec", specifier = ">=0.20.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
