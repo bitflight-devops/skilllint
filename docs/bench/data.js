@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1774319596856,
+  "lastUpdate": 1774355993580,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -162,6 +162,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 65.726,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie McGregor Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "Jamie McGregor Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "id": "ad9fd96ba48e200abdaadc09c46efd34b98b2040",
+          "message": "fix: move ignore patterns from invented .markdownlintignore to .markdownlint-cli2.jsonc\n\n.markdownlintignore was not a valid config file. Patterns moved to the\nignores array in .markdownlint-cli2.jsonc where they belong.",
+          "timestamp": "2026-03-24T12:36:46Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/ad9fd96ba48e200abdaadc09c46efd34b98b2040"
+        },
+        "date": 1774355992827,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 14373.215,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 14892.401,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 15891.21,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 67.215,
             "unit": "files/s"
           }
         ]
