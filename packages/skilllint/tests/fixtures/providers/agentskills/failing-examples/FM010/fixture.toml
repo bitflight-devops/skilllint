@@ -1,0 +1,16 @@
+[fixture]
+rule_id = "FM010"
+tier = 1
+description = "name field contains underscores — does not match lowercase-hyphens pattern"
+
+[[variants]]
+name = "invalid-name-pattern"
+kind = "failing"
+# FM010 fires twice: once from Pydantic (error — pattern mismatch) and once from
+# _check_skill_name_and_directory (warning — name does not match directory name).
+expected_count = 2
+# AS001 fires as collateral because the same invalid name also triggers the
+# AS-series name format check independently.
+# AS002 fires because the name field does not match the directory name.
+# SK002 fires because the name contains underscores (separate SK-series check).
+allowed_collateral = ["AS001", "AS002", "SK002"]

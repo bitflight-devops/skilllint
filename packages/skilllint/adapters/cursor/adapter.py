@@ -90,7 +90,7 @@ class CursorAdapter:
         # Check required fields
         violations: list[dict] = [
             {
-                "code": "cursor-mdc-missing-required",
+                "code": "CU001",
                 "severity": "error",
                 "message": f"Required field '{field}' is missing from .mdc frontmatter",
             }
@@ -102,7 +102,7 @@ class CursorAdapter:
         if not additional_properties:
             violations.extend(
                 {
-                    "code": "cursor-mdc-unknown-field",
+                    "code": "CU002",
                     "severity": "error",
                     "message": (f"Unknown field '{field}' in .mdc frontmatter (additionalProperties is false)"),
                 }

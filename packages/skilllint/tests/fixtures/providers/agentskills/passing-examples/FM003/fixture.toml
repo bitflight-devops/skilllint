@@ -1,0 +1,9 @@
+[fixture]
+rule_id = "FM003"
+tier = 1
+description = "YAML frontmatter present with correct --- delimiters"
+
+[[variants]]
+name = "has-frontmatter"
+kind = "passing"
+expected_count = 0

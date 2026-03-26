@@ -1,0 +1,13 @@
+[fixture]
+rule_id = "FM003"
+tier = 1
+description = "No YAML frontmatter found — file lacks opening --- delimiter"
+
+[[variants]]
+name = "no-frontmatter"
+kind = "failing"
+expected_count = 1
+# AS001 and AS003 are collateral: when frontmatter is absent, _parse_skill_md
+# returns an empty dict, so name and description are both None, causing both
+# validators to report missing fields independently of FM003.
+allowed_collateral = ["AS001", "AS003"]

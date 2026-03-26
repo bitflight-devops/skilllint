@@ -1,0 +1,9 @@
+[fixture]
+rule_id = "FM010"
+tier = 1
+description = "name field uses valid lowercase-hyphens pattern and matches directory name"
+
+[[variants]]
+name = "valid-name-pattern"
+kind = "passing"
+expected_count = 0

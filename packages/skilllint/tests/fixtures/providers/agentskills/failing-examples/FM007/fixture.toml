@@ -1,0 +1,9 @@
+[fixture]
+rule_id = "FM007"
+tier = 1
+description = "allowed-tools field is a YAML array instead of a CSV string"
+
+[[variants]]
+name = "tools-as-yaml-array"
+kind = "failing"
+expected_count = 1

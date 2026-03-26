@@ -1,0 +1,9 @@
+[fixture]
+rule_id = "FM004"
+tier = 1
+description = "Description uses multiline YAML indicator (|, >, |-, >-)"
+
+[[variants]]
+name = "multiline-description"
+kind = "failing"
+expected_count = 1

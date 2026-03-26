@@ -122,15 +122,13 @@ class CodexAdapter:
         if path.suffix == ".md":
             content = path.read_text(encoding="utf-8")
             violations.extend(
-                {"code": "codex-agents-md-empty", "severity": "error", "message": msg}
-                for msg in self.validate_agents_md(content)
+                {"code": "CX001", "severity": "error", "message": msg} for msg in self.validate_agents_md(content)
             )
 
         elif path.suffix == ".rules":
             content = path.read_text(encoding="utf-8")
             violations.extend(
-                {"code": "codex-rules-unknown-field", "severity": "error", "message": msg}
-                for msg in self.validate_rules_file(content)
+                {"code": "CX002", "severity": "error", "message": msg} for msg in self.validate_rules_file(content)
             )
 
         return violations

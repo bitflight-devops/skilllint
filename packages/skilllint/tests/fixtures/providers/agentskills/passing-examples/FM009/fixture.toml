@@ -1,0 +1,9 @@
+[fixture]
+rule_id = "FM009"
+tier = 1
+description = "Description is properly quoted — no colon auto-fix needed"
+
+[[variants]]
+name = "quoted-description"
+kind = "passing"
+expected_count = 0

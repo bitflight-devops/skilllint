@@ -1,0 +1,9 @@
+[fixture]
+rule_id = "FM005"
+tier = 1
+description = "Field type mismatch — hooks field receives a string where a mapping is expected"
+
+[[variants]]
+name = "wrong-type-hooks"
+kind = "failing"
+expected_count = 1

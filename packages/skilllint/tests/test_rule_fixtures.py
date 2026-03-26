@@ -24,43 +24,19 @@ that setup commands (chmod, etc.) never mutate the committed fixture files.
 
 from __future__ import annotations
 
-import importlib.util
 import shutil
 import subprocess
 import sys
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
+from skilllint.fixture_loader import FixtureCase, discover_fixtures
 from skilllint.plugin_validator import ValidationIssue, ValidationResult, validate_single_path
 from skilllint.scan_runtime import _discover_validatable_paths, _load_plugin_json
 
-# ---------------------------------------------------------------------------
-# fixture_loader import
-#
-# fixture_loader.py lives in packages/skilllint/tests/ alongside the test
-# files.  That directory has no __init__.py so it is not a package and
-# relative imports do not work.  pytest adds the directory of each test file
-# to sys.path in its default "prepend" importmode, making `fixture_loader`
-# importable as a top-level name at runtime.  However the static type checker
-# (ty) does not search that path, so we load it via importlib to silence the
-# false-positive unresolved-import diagnostic while keeping full runtime
-# functionality.
-# ---------------------------------------------------------------------------
-
-_fixture_loader_spec = importlib.util.spec_from_file_location(
-    "fixture_loader", Path(__file__).parent / "fixture_loader.py"
-)
-assert _fixture_loader_spec is not None
-assert _fixture_loader_spec.loader is not None
-_fixture_loader_mod = importlib.util.module_from_spec(_fixture_loader_spec)
-# Register before exec_module so @dataclass can resolve cls.__module__ via
-# sys.modules (required on Python 3.14).
-sys.modules.setdefault("fixture_loader", _fixture_loader_mod)
-_fixture_loader_spec.loader.exec_module(_fixture_loader_mod)  # type: ignore[union-attr]
-
-FixtureCase = _fixture_loader_mod.FixtureCase
-discover_fixtures = _fixture_loader_mod.discover_fixtures
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # ---------------------------------------------------------------------------
 # Module-level fixture discovery

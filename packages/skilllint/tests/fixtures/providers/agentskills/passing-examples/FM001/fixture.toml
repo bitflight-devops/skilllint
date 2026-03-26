@@ -1,0 +1,9 @@
+[fixture]
+rule_id = "FM001"
+tier = 1
+description = "All required frontmatter fields present"
+
+[[variants]]
+name = "has-description"
+kind = "passing"
+expected_count = 0

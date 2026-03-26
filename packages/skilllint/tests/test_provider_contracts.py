@@ -100,9 +100,9 @@ class TestRuleAuthority:
             return []
 
         # Create a RuleEntry with authority
-        authority = RuleAuthority(origin="test-origin", reference="https://example.com/rules/TEST001")
+        authority = RuleAuthority(origin="test-origin", reference="https://example.com/rules/TE001")
         entry = RuleEntry(
-            id="TEST001",
+            id="TE001",
             fn=test_validator,
             severity="error",
             category="test",
@@ -113,7 +113,7 @@ class TestRuleAuthority:
 
         assert entry.authority is not None
         assert entry.authority.origin == "test-origin"
-        assert entry.authority.reference == "https://example.com/rules/TEST001"
+        assert entry.authority.reference == "https://example.com/rules/TE001"
 
     def test_rule_entry_authority_optional(self) -> None:
         """RuleEntry.authority should be optional (default None)."""
@@ -124,7 +124,7 @@ class TestRuleAuthority:
 
         # Create a RuleEntry without authority
         entry = RuleEntry(
-            id="TEST002",
+            id="TE002",
             fn=test_validator,
             severity="warning",
             category="test",
@@ -141,31 +141,31 @@ class TestRuleAuthority:
 
         # Register a rule with authority
         @skilllint_rule(
-            "TEST_AUTH_001",
+            "TA001",
             severity="error",
             category="test",
-            authority={"origin": "test-origin", "reference": "/test/rules/TEST_AUTH_001"},
+            authority={"origin": "test-origin", "reference": "/test/rules/TA001"},
         )
         def test_rule_with_authority(frontmatter: dict) -> list:
             """Test rule with authority."""
             return []
 
         # Verify the rule was registered with authority
-        entry = RULE_REGISTRY.get("TEST_AUTH_001")
+        entry = RULE_REGISTRY.get("TA001")
         assert entry is not None, "Rule should be registered"
         assert entry.authority is not None, "Rule should have authority"
         assert entry.authority.origin == "test-origin"
-        assert entry.authority.reference == "/test/rules/TEST_AUTH_001"
+        assert entry.authority.reference == "/test/rules/TA001"
 
     def test_skilllint_rule_decorator_without_authority(self) -> None:
         """skilllint_rule decorator should work without authority kwarg."""
         from skilllint.rule_registry import RULE_REGISTRY
 
-        @skilllint_rule("TEST_NO_AUTH_001", severity="info", category="test")
+        @skilllint_rule("TN001", severity="info", category="test")
         def test_rule_without_authority(frontmatter: dict) -> list:
             """Test rule without authority."""
             return []
 
-        entry = RULE_REGISTRY.get("TEST_NO_AUTH_001")
+        entry = RULE_REGISTRY.get("TN001")
         assert entry is not None
         assert entry.authority is None

@@ -23,15 +23,15 @@ The decorator registers the rule in RULE_REGISTRY for `skilllint rule <ID>` look
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated, Any, Literal
+
+from pydantic import BaseModel, ConfigDict, Field
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
 
-@dataclass
-class RuleAuthority:
+class RuleAuthority(BaseModel):
     """Structured authority metadata for a validation rule.
 
     Captures where a rule originates and where its documentation lives.
@@ -42,13 +42,14 @@ class RuleAuthority:
     reference: str | None = None  # URL or doc path, e.g., "/rules/SK001"
 
 
-@dataclass
-class RuleEntry:
+class RuleEntry(BaseModel):
     """Registry entry for a single validation rule."""
 
-    id: str
-    fn: Callable
-    severity: str  # "error", "warning", "info"
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    id: Annotated[str, Field(pattern=r"^[A-Z]{2}\d{3}$")]
+    fn: Any  # Callable — not validatable by Pydantic, stored as Any
+    severity: Literal["error", "warning", "info"]
     category: str  # "frontmatter", "skill", "plugin", "hook", etc.
     platforms: list[str]  # ["agentskills"] = all platforms, or specific like ["claude-code"]
     docstring: str
@@ -60,7 +61,12 @@ RULE_REGISTRY: dict[str, RuleEntry] = {}
 
 
 def skilllint_rule(
-    rule_id: str, *, severity: str, category: str, platforms: list[str] | None = None, authority: dict | None = None
+    rule_id: str,
+    *,
+    severity: Literal["error", "warning", "info"],
+    category: str,
+    platforms: list[str] | None = None,
+    authority: dict | None = None,
 ) -> Callable[[Callable], Callable]:
     """Decorator to register a validator function as a rule.
 

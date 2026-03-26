@@ -1,0 +1,9 @@
+[fixture]
+rule_id = "FM004"
+tier = 1
+description = "Description uses single-line string, no multiline YAML indicator"
+
+[[variants]]
+name = "single-line-description"
+kind = "passing"
+expected_count = 0

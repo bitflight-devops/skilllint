@@ -1,0 +1,21 @@
+[fixture]
+rule_id = "FM006"
+tier = 1
+description = "Invalid field value — enum constraint violated (e.g. context not in allowed set)"
+
+# FM006 cannot be exercised via the fixture harness with the current validator.
+#
+# Root cause: _pydantic_error_to_validation_issue() routes Pydantic Literal
+# constraint failures to FM006 only when "literal" appears in the error
+# message (line 987: `"literal" in msg.lower()`). Pydantic v2 generates
+# "Input should be 'fork'" for Literal["fork"] violations — this message
+# does not contain "literal", so the FM006 branch is never taken and the
+# violation is filed as FM005 instead.
+#
+# check_fm006() in fm_series.py always returns [] (metadata-registration only).
+#
+# A failing variant directory exists at invalid-context-value/ for reference,
+# but no [[variants]] entry is declared here so the loader does not create
+# a test case for it. When the validator code is fixed to correctly detect
+# FM006 from Pydantic v2 messages, add a [[variants]] entry and set the
+# expected_count to the number of FM006 violations produced.

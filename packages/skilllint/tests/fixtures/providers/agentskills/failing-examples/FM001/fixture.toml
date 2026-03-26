@@ -1,0 +1,14 @@
+[fixture]
+rule_id = "FM001"
+tier = 1
+description = "Missing required frontmatter field (description)"
+
+[[variants]]
+name = "missing-description"
+kind = "failing"
+expected_count = 1
+# AS003 fires as collateral because FrontmatterValidator and AsSeriesValidator
+# both check for a present description — when description is absent, both validators
+# independently detect and report it.  AS003 is a structural consequence of the
+# FM001 trigger, not an independent fixture defect.
+allowed_collateral = ["AS003"]

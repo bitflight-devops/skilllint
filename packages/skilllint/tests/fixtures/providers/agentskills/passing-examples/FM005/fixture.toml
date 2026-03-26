@@ -1,0 +1,9 @@
+[fixture]
+rule_id = "FM005"
+tier = 1
+description = "All fields have correct types"
+
+[[variants]]
+name = "correct-types"
+kind = "passing"
+expected_count = 0

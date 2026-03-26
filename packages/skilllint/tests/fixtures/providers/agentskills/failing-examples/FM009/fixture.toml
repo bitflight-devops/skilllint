@@ -1,0 +1,17 @@
+[fixture]
+rule_id = "FM009"
+tier = 1
+description = "Unquoted description with colons (auto-fixed, emits info)"
+
+# FM009 is an informational code emitted only after fix() runs, via the
+# _pending_fm009_info queue in FrontmatterValidator.  The fixture test harness
+# calls validate_single_path(fix=False), so FM009 is never populated in the
+# info list during a test scan.  The unquoted-colon case instead fires AS004
+# (warning) from safe_load_yaml_with_colon_fix during validate().
+#
+# No failing variant directory is created here — the loader silently skips
+# variants whose directory does not exist on disk.  This fixture exists to
+# document the limitation and reserve the FM009 namespace.
+#
+# A future test could exercise FM009 by calling fix() followed by validate()
+# in a unit test for FrontmatterValidator directly.

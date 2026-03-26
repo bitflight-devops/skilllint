@@ -49,7 +49,7 @@ import typer
 from git import Repo
 from git.exc import InvalidGitRepositoryError, NoSuchPathError
 from git.index.fun import entry_key
-from pydantic import ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from ruamel.yaml import YAML, YAMLError
 from ruamel.yaml.scalarstring import DoubleQuotedScalarString
 
@@ -57,6 +57,7 @@ from skilllint.adapters import PlatformAdapter, load_adapters, matches_file
 from skilllint.adapters.claude_code import ClaudeCodeAdapter
 from skilllint.cli_docs import docs_app
 from skilllint.rules.as_series import run_as_series
+from skilllint.rules.fm_series import check_fm004, check_fm007, check_fm008, check_fm010
 from skilllint.scan_runtime import ScanContext
 from skilllint.token_counter import TOKEN_ERROR_THRESHOLD, TOKEN_WARNING_THRESHOLD, count_tokens
 from skilllint.version import __version__
@@ -356,6 +357,14 @@ class ErrorCode(StrEnum):
 
     # Plugin Agent Frontmatter (PA001)
     PA001 = "PA001"  # Plugin agent uses prohibited frontmatter field (hooks, mcpServers, permissionMode)
+
+    # Cursor adapter (CU001-CU002)
+    CU001 = "CU001"  # Required field missing from .mdc frontmatter
+    CU002 = "CU002"  # Unknown field in .mdc frontmatter (additionalProperties is false)
+
+    # Codex adapter (CX001-CX002)
+    CX001 = "CX001"  # AGENTS.md is empty or structurally invalid
+    CX002 = "CX002"  # Unknown field in .rules prefix_rule() block
 
 
 # Aliases for backward compatibility and concise usage
@@ -793,14 +802,15 @@ class FileType(StrEnum):
         return result
 
 
-@dataclass(frozen=True)
-class ValidationIssue:
+class ValidationIssue(BaseModel):
     """A single validation issue (Architecture lines 152-160, 395-423)."""
+
+    model_config = ConfigDict(frozen=True)
 
     field: str
     severity: Literal["error", "warning", "info"]
     message: str
-    code: ErrorCode
+    code: Annotated[str, Field(pattern=r"^[A-Z]{2}\d{3}$")]
     line: int | None = None
     suggestion: str | None = None
     docs_url: str | None = None
@@ -819,9 +829,10 @@ class ValidationIssue:
         return f"  {severity_icon} [{self.code}] {self.field}{location}: {self.message}{suggestion_line}{docs}"
 
 
-@dataclass(frozen=True)
-class ValidationResult:
+class ValidationResult(BaseModel):
     """Result from a validation check (Architecture lines 143-149)."""
+
+    model_config = ConfigDict(frozen=True)
 
     passed: bool
     errors: list[ValidationIssue]
@@ -1003,36 +1014,18 @@ def _check_list_valued_tool_fields(
 ) -> None:
     """Append warnings for list-valued tools/skills fields that Pydantic may not catch.
 
+    Delegates to check_fm007 and check_fm008 from fm_series for issue construction.
+
     Args:
         data: Parsed frontmatter dict.
         errors: Mutable list to append error issues to (unused, kept for API compat).
         warnings: Mutable list to append warning issues to.
     """
-    for field_name, field_val in data.items():
-        if not isinstance(field_val, list):
-            continue
-        if field_name in {"tools", "disallowedTools", "allowed-tools"}:
-            warnings.append(
-                ValidationIssue(
-                    field=field_name,
-                    severity="warning",
-                    message="Tools field is YAML array — runtime accepts this, but CSV string is preferred style",
-                    code=FM007,
-                    docs_url=generate_docs_url(FM007),
-                    suggestion="Use format: 'tool1, tool2, tool3'",
-                )
-            )
-        elif field_name == "skills":
-            warnings.append(
-                ValidationIssue(
-                    field=field_name,
-                    severity="warning",
-                    message="Skills field is YAML array — runtime accepts this, but CSV string is preferred style",
-                    code=FM008,
-                    docs_url=generate_docs_url(FM008),
-                    suggestion="Use format: 'skill1, skill2, skill3'",
-                )
-            )
+    from pathlib import Path as _Path  # noqa: PLC0415
+
+    sentinel_path = _Path()
+    warnings.extend(check_fm007(data, sentinel_path, "skill"))
+    warnings.extend(check_fm008(data, sentinel_path, "skill"))
 
 
 def _check_skill_name_and_directory(
@@ -1071,17 +1064,12 @@ def _check_skill_name_and_directory(
                 )
             )
 
-    if skill_name_in_fm and skill_name_in_fm != skill_dir_name:
-        warnings.append(
-            ValidationIssue(
-                field="name",
-                severity="warning",
-                message=(f"'name' field value '{skill_name_in_fm}' does not match directory name '{skill_dir_name}'"),
-                code=FM010,
-                docs_url=generate_docs_url(FM010),
-                suggestion=(f"Set name: {skill_dir_name} to match the directory name"),
-            )
-        )
+    if skill_name_in_fm:
+        for issue in check_fm010(data, path, file_type.value):
+            if issue.severity == "error":
+                errors.append(issue)
+            else:
+                warnings.append(issue)
 
 
 # ============================================================================
@@ -2019,7 +2007,7 @@ class AsSeriesValidator:
                     else "error"
                 ),
                 message=v.get("message", ""),
-                code=cast("ErrorCode", v.get("code", "unknown")),
+                code=v["code"],
             )
             for v in violations
         ]
@@ -2155,18 +2143,6 @@ def _validate_frontmatter_yaml(
         Tuple of parsed mapping or None, and a terminal ValidationResult when
         validation must stop.
     """
-    if re.search(r"description:\s*[|>][-+]?\s*\n", frontmatter_text):
-        warnings.append(
-            ValidationIssue(
-                field="description",
-                severity="warning",
-                message="Uses multiline YAML syntax (|, >, |-, >-) — style preference, not a schema requirement",
-                code=FM004,
-                docs_url=generate_docs_url(FM004),
-                suggestion="Use single-line string for better readability",
-            )
-        )
-
     data, yaml_err, colon_fields, _used_text = safe_load_yaml_with_colon_fix(frontmatter_text)
     if colon_fields:
         # AS004: Unquoted colons break YAML parsing, but auto-fixable.
@@ -2352,6 +2328,7 @@ class FrontmatterValidator:
                 else:
                     errors.append(issue)
 
+        warnings.extend(check_fm004(data, path, file_type.value))
         _check_list_valued_tool_fields(data, errors, warnings)
         _check_skill_name_and_directory(data, path, file_type, errors, warnings)
 
@@ -4822,7 +4799,7 @@ def validate_single_path(path: Path, *, check: bool, fix: bool, verbose: bool) -
     # Note: --fix still runs even for suppressed issues (ignore = suppress reporting, not fixing)
     if fix:
         # Guard: never auto-fix intentionally broken test fixtures
-        if "/failing-examples/" in str(path):
+        if "failing-examples" in path.parts:
             _logger.debug("Skipping auto-fix for fixture file: %s", path)
         else:
             fixes_applied: list[str] = []
@@ -5085,12 +5062,12 @@ def violations_to_result(violations: list[dict]) -> ValidationResult:
     """
     issues = [
         ValidationIssue(
-            field=v.get("code", "unknown"),
+            field=v["code"],
             severity=(
                 v.get("severity", "error") if v.get("severity", "error") in {"error", "warning", "info"} else "error"
             ),
             message=v.get("message", ""),
-            code=v.get("code", "unknown"),
+            code=v["code"],
         )
         for v in violations
     ]
@@ -5255,6 +5232,63 @@ def _show_rules_list(platform: str | None = None, category: str | None = None, s
     _rule_console.print(table)
 
 
+def _render_examples_block(rule_id: str) -> str:
+    """Return a plain-text block listing fixture examples for rule_id.
+
+    Calls discover_fixtures() to find all FixtureCase objects for the rule,
+    then formats them grouped by kind (failing / passing).  Paths are shown
+    relative to the tests/ directory (e.g. fixtures/providers/agentskills/…).
+
+    Args:
+        rule_id: Rule identifier to look up (e.g. "FM001").
+
+    Returns:
+        Formatted string listing fixture examples, or a "No examples yet" note
+        if no fixtures exist for the rule.
+    """
+    cases = _discover_fixtures(rule_id)
+    if not cases:
+        return "No fixture examples available yet."
+
+    # FIXTURES_ROOT is packages/skilllint/tests/fixtures/providers/
+    # parent.parent is packages/skilllint/tests/ — paths shown relative to that
+    tests_dir = _FIXTURES_ROOT.parent.parent
+
+    failing = [c for c in cases if c.kind == "failing"]
+    passing = [c for c in cases if c.kind == "passing"]
+
+    lines: list[str] = ["### Examples", ""]
+    if failing:
+        lines.append(f"**Failing examples** (should trigger {rule_id}):")
+        for case in failing:
+            rel = case.path.relative_to(tests_dir)
+            lines.append(f"  - {rel}/")
+    if passing:
+        if failing:
+            lines.append("")
+        lines.append(f"**Passing examples** (should not trigger {rule_id}):")
+        for case in passing:
+            rel = case.path.relative_to(tests_dir)
+            lines.append(f"  - {rel}/")
+    return "\n".join(lines)
+
+
+def _resolve_example_markers(docstring: str) -> str:
+    """Replace <!-- examples: RULE_ID --> markers in docstring with fixture listings.
+
+    Args:
+        docstring: Raw rule docstring that may contain example markers.
+
+    Returns:
+        Docstring with every marker replaced by the corresponding fixture block.
+    """
+
+    def _replace(match: re.Match[str]) -> str:
+        return _render_examples_block(match.group(1).upper())
+
+    return _EXAMPLES_MARKER.sub(_replace, docstring)
+
+
 def _show_rule_doc(rule_id: str) -> None:
     """Show documentation for a single rule (shared logic for callback and rule_cmd)."""
     entry = _get_rule(rule_id)
@@ -5270,7 +5304,8 @@ def _show_rule_doc(rule_id: str) -> None:
     _rule_console.print(f"[bold]{entry.id}[/bold] — [{sev_color}]{entry.severity}[/{sev_color}]")
     _rule_console.print(f"[dim]Category: {entry.category} | Platforms: {', '.join(entry.platforms)}[/dim]")
     _rule_console.print()
-    _rule_console.print(_Panel(entry.docstring, title=entry.id, border_style="dim"))
+    resolved_doc = _resolve_example_markers(entry.docstring)
+    _rule_console.print(_Panel(resolved_doc, title=entry.id, border_style="dim"))
 
 
 # =============================================================================
@@ -5319,12 +5354,13 @@ from rich.console import Console as _Console
 from rich.panel import Panel as _Panel
 from rich.table import Table as _Table
 
-# Import rules to register them
-import skilllint.rules.as_series  # noqa: F401
+from skilllint.fixture_loader import FIXTURES_ROOT as _FIXTURES_ROOT, discover_fixtures as _discover_fixtures
 from skilllint.rule_registry import get_rule as _get_rule, list_rules as _list_rules
 from skilllint.rules.pa_series import PluginAgentFrontmatterValidator
 
 _rule_console = _Console()
+
+_EXAMPLES_MARKER = re.compile(r"<!--\s*examples:\s*(\w+)\s*-->", re.IGNORECASE)
 
 
 @app.command("rule")

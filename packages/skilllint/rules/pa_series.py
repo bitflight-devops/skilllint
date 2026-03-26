@@ -29,7 +29,7 @@ from skilllint.scan_runtime import _load_plugin_json
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from skilllint.plugin_validator import ErrorCode, ValidationIssue, ValidationResult
+    from skilllint.plugin_validator import ValidationIssue, ValidationResult
 
 
 _DOCS_URL = "https://docs.anthropic.com/en/docs/claude-code/sub-agents"
@@ -111,7 +111,7 @@ def _is_inline_mcp_definition(entry: object) -> bool:
 
 
 def _check_hooks(
-    parsed: dict, rel_path: str, plugin_events: set[str], code: ErrorCode, issue_cls: type[ValidationIssue]
+    parsed: dict, rel_path: str, plugin_events: set[str], code: str, issue_cls: type[ValidationIssue]
 ) -> list[ValidationIssue]:
     """Check hooks field — always warns, varies guidance based on plugin hooks.json coverage.
 
@@ -154,7 +154,7 @@ def _check_hooks(
 
 
 def _check_mcp_servers(
-    parsed: dict, rel_path: str, plugin_servers: set[str], code: ErrorCode, issue_cls: type[ValidationIssue]
+    parsed: dict, rel_path: str, plugin_servers: set[str], code: str, issue_cls: type[ValidationIssue]
 ) -> list[ValidationIssue]:
     """Check mcpServers field — warning severity with cross-checking.
 
@@ -222,7 +222,7 @@ def _check_mcp_servers(
 
 
 def _check_permission_mode(
-    parsed: dict, rel_path: str, code: ErrorCode, issue_cls: type[ValidationIssue]
+    parsed: dict, rel_path: str, code: str, issue_cls: type[ValidationIssue]
 ) -> list[ValidationIssue]:
     """Check permissionMode field — always error severity.
 

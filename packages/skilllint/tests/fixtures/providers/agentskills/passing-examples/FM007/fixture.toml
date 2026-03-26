@@ -1,0 +1,9 @@
+[fixture]
+rule_id = "FM007"
+tier = 1
+description = "allowed-tools field uses CSV string format (preferred style)"
+
+[[variants]]
+name = "tools-as-csv-string"
+kind = "passing"
+expected_count = 0

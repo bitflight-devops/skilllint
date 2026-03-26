@@ -1,0 +1,9 @@
+[fixture]
+rule_id = "FM006"
+tier = 1
+description = "context field uses the only valid enum value: fork"
+
+[[variants]]
+name = "valid-context-value"
+kind = "passing"
+expected_count = 0
