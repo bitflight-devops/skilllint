@@ -2490,7 +2490,7 @@ class FrontmatterValidator:
         fixes = list(colon_fixes)
         if file_type == FileType.SKILL and file_path is not None:
             normalized_dict = fix_skill_name_field(normalized_dict, file_path, fixes)
-        tool_fields = {"tools", "disallowedTools", "allowed-tools", "skills"}
+        tool_fields = {"tools", "disallowedTools", "allowed-tools"}
         for field_name in tool_fields:
             val = normalized_dict.get(field_name)
             if isinstance(val, list):
