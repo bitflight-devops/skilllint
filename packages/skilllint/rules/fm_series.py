@@ -6,7 +6,7 @@ the file path, and the detected file type string.
 
 Severities:
     "error"   — FM002, FM003, FM005, FM006; FM010 when the name pattern is invalid
-    "warning" — FM001 (skills), FM004, FM007; FM010 when skill name mismatches parent directory
+    "warning" — FM001 (skills), FM004, FM007, FM008; FM010 when skill name mismatches parent directory
     "error"   — FM001 (agents)
     "info"    — FM009
 

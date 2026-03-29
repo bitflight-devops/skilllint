@@ -2491,6 +2491,10 @@ class FrontmatterValidator:
         fixes = list(colon_fixes)
         if file_type == FileType.SKILL and file_path is not None:
             normalized_dict = fix_skill_name_field(normalized_dict, file_path, fixes)
+        # Restore the original `skills` value so model_validate/model_dump coercion
+        # (list → CSV string via frontmatter_core) never rewrites the field.
+        if "skills" in original_data:
+            normalized_dict["skills"] = original_data["skills"]
         tool_fields = {"tools", "disallowedTools", "allowed-tools"}
         for field_name in tool_fields:
             val = normalized_dict.get(field_name)
