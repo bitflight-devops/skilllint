@@ -67,6 +67,81 @@ Exit codes: `0` = all checks passed · `1` = validation errors · `2` = usage er
 
 ---
 
+## GitHub Action
+
+Use `bitflight-devops/skilllint` as a GitHub Action to validate skills, plugins, and agents in any repository:
+
+```yaml
+- uses: bitflight-devops/skilllint@v1
+  with:
+    paths: "plugins/"          # paths to validate (default: ".")
+    platform: "claude-code"   # restrict to one platform (optional)
+    show-summary: "true"      # show summary panel (default: true)
+```
+
+### Full input reference
+
+| Input | Description | Default |
+|---|---|---|
+| `paths` | Space-separated paths to validate | `.` |
+| `platform` | Platform adapter: `claude-code`, `cursor`, `codex` | _(all)_ |
+| `fix` | Auto-fix issues where possible | `false` |
+| `check-only` | Validate only, do not auto-fix | `false` |
+| `verbose` | Show detailed output including info messages | `false` |
+| `no-color` | Disable color output | `true` |
+| `tokens-only` | Output only the integer token count | `false` |
+| `show-progress` | Show per-file PASSED/FAILED status | `false` |
+| `show-summary` | Show summary panel at the end | `true` |
+| `filter` | Glob pattern to restrict files within a directory | _(none)_ |
+| `filter-type` | File type filter: `skills`, `agents`, `commands` | _(all)_ |
+| `version` | skilllint version to install (`latest` or `1.2.3`) | `latest` |
+| `python-version` | Python version to use | `3.12` |
+
+### Outputs
+
+| Output | Description |
+|---|---|
+| `result` | `passed` when all checks pass, `failed` when errors are found |
+| `exit-code` | Raw exit code: `0` = pass · `1` = errors · `2` = usage error |
+
+### Example: fail the CI on validation errors
+
+```yaml
+name: Validate skills
+
+on: [push, pull_request]
+
+jobs:
+  skilllint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lint skills and plugins
+        uses: bitflight-devops/skilllint@v1
+        with:
+          paths: "plugins/ .claude/"
+          platform: "claude-code"
+          show-summary: "true"
+          verbose: "false"
+```
+
+### Example: report results without blocking
+
+```yaml
+- name: Lint skills and plugins
+  id: lint
+  uses: bitflight-devops/skilllint@v1
+  with:
+    paths: "plugins/"
+  continue-on-error: true
+
+- name: Print result
+  run: echo "skilllint result=${{ steps.lint.outputs.result }}"
+```
+
+---
+
 ## Pre-commit hook
 
 Add to `.pre-commit-config.yaml`:
