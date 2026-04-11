@@ -88,7 +88,7 @@ jobs:
 
       - name: Store I/O benchmark result
         if: github.ref == 'refs/heads/main'
-        uses: benchmark-action/github-action-benchmark@v1.21.0
+        uses: benchmark-action/github-action-benchmark@v1.22.0
         with:
           tool: customSmallerIsBetter
           output-file-path: scripts/results/bench_io_clean_gh.json
@@ -246,7 +246,7 @@ jobs:
 
       - name: Store CPU benchmark result
         if: github.ref == 'refs/heads/main'
-        uses: benchmark-action/github-action-benchmark@v1.21.0
+        uses: benchmark-action/github-action-benchmark@v1.22.0
         with:
           tool: customSmallerIsBetter
           output-file-path: scripts/results/bench_cpu_gh.json
@@ -370,7 +370,7 @@ jobs:
             --pages-url "https://bitflight-devops.github.io/agentskills-linter/"
 
       - name: Post comment to PR
-        uses: marocchino/sticky-pull-request-comment@v3.0.2
+        uses: marocchino/sticky-pull-request-comment@v3.0.3
         with:
           header: benchmark-results
           path: /tmp/bench_comment.md
@@ -463,7 +463,7 @@ jobs:
             --base scripts/results/benchmark_results_base.json
 
       - name: Store I/O benchmark result
-        uses: benchmark-action/github-action-benchmark@v1.21.0
+        uses: benchmark-action/github-action-benchmark@v1.22.0
         with:
           tool: customSmallerIsBetter
           output-file-path: scripts/results/bench_io_gh.json
