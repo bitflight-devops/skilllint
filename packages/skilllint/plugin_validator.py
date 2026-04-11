@@ -5357,7 +5357,7 @@ def main(
 
     platform_override = _resolve_platform_override(platform)
 
-    record_console = _make_recording_console() if record is not None else None
+    record_console = _make_recording_console(no_color=no_color) if record is not None else None
 
     try:
         expanded_paths, is_batch = _resolve_filter_and_expand_paths(paths, filter_glob, filter_type)
@@ -5386,8 +5386,7 @@ def main(
                 record_console=record_console,
             )
         except (SystemExit, typer.Exit):
-            if record is not None and record_console is not None:
-                _export_recording(record_console, record, title=_build_svg_title(sys.argv))
+            _maybe_export_recording(record_console, record)
             raise
 
     except KeyboardInterrupt:
@@ -5592,6 +5591,11 @@ def _make_rule_console(*, record: bool = False) -> _Console:
     return _Console()
 
 
+def _maybe_export_recording(console: _Console | None, record: Path | None) -> None:
+    if record is not None and console is not None:
+        _export_recording(console, record, title=_build_svg_title(sys.argv[1:]))
+
+
 _EXAMPLES_MARKER = re.compile(r"<!--\s*examples:\s*(\w+)\s*-->", re.IGNORECASE)
 
 
@@ -5609,8 +5613,7 @@ def rule_cmd(
     """
     console = _make_rule_console(record=record is not None)
     _show_rule_doc(rule_id, console=console)
-    if record is not None:
-        _export_recording(console, record, title=_build_svg_title(sys.argv))
+    _maybe_export_recording(console, record)
 
 
 @app.command("rules")
@@ -5627,8 +5630,7 @@ def rules_cmd(
     console = _make_rule_console(record=record is not None)
     _show_rules_list(platform=platform, category=category, severity=severity, console=console)
     console.print("\n[dim]Run [bold]skilllint rule [yellow]RULE_ID[/yellow][/bold] for details.[/dim]")
-    if record is not None:
-        _export_recording(console, record, title=_build_svg_title(sys.argv))
+    _maybe_export_recording(console, record)
 
 
 if __name__ == "__main__":
