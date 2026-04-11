@@ -14,12 +14,14 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, NoReturn
+from typing import TYPE_CHECKING, Any, NoReturn
 
 import typer
-from rich.console import Console
 
 from .reporting import CIReporter, ConsoleReporter, FileResults, Reporter
+
+if TYPE_CHECKING:
+    from rich.console import Console
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -498,10 +500,10 @@ def run_validation_loop(
                     all_results[file_path] = list(validator_results)
 
     reporter: Reporter
-    if no_color:
-        reporter = CIReporter()
-    elif record_console is not None:
+    if record_console is not None:
         reporter = ConsoleReporter(console=record_console)
+    elif no_color:
+        reporter = CIReporter()
     else:
         reporter = ConsoleReporter(no_color=no_color)
     reporter.report(all_results, verbose=verbose, show_progress=show_progress)
