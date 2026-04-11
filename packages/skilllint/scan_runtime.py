@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any, NoReturn
 
 import typer
+from rich.console import Console
 
 from .reporting import CIReporter, ConsoleReporter, FileResults, Reporter
 
@@ -454,6 +455,7 @@ def run_validation_loop(
     validate_file: ValidateFileFn,
     violations_to_result: ViolationsToResultFn,
     adapters: dict[str, object],
+    record_console: Console | None = None,
 ) -> NoReturn:
     """Execute the validation loop, report results, and exit.
 
@@ -473,6 +475,8 @@ def run_validation_loop(
         validate_file: Callback to validate a file with platform adapters.
         violations_to_result: Callback to convert violations to ValidationResult.
         adapters: Platform adapter registry dict.
+        record_console: When provided, pass this Rich Console to ConsoleReporter
+            so its output is captured for export (e.g. SVG/HTML recording).
 
     Raises:
         typer.Exit: Always exits with appropriate code.
@@ -493,7 +497,13 @@ def run_validation_loop(
                 else:
                     all_results[file_path] = list(validator_results)
 
-    reporter: Reporter = CIReporter() if no_color else ConsoleReporter(no_color=no_color)
+    reporter: Reporter
+    if no_color:
+        reporter = CIReporter()
+    elif record_console is not None:
+        reporter = ConsoleReporter(console=record_console)
+    else:
+        reporter = ConsoleReporter(no_color=no_color)
     reporter.report(all_results, verbose=verbose, show_progress=show_progress)
 
     total_files, passed, failed, warnings = _compute_summary(all_results)
