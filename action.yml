@@ -1,0 +1,191 @@
+name: "skilllint"
+description: "Validate Claude Code plugins, skills, agents, and commands using skilllint"
+author: "bitflight-devops"
+
+branding:
+  icon: "check-circle"
+  color: "purple"
+
+inputs:
+  paths:
+    description: >
+      Space-separated list of paths to validate (files or directories).
+      Defaults to the current working directory.
+    required: false
+    default: "."
+
+  platform:
+    description: >
+      Platform adapter to use for validation.
+      Supported values: claude-code, cursor, codex.
+      Leave empty to validate against all platforms.
+    required: false
+    default: ""
+
+  fix:
+    description: "Auto-fix issues where possible. Mutually exclusive with check-only."
+    required: false
+    default: "false"
+
+  check-only:
+    description: "Validate only, do not auto-fix. Mutually exclusive with fix."
+    required: false
+    default: "false"
+
+  verbose:
+    description: "Show detailed validation output including info messages."
+    required: false
+    default: "false"
+
+  no-color:
+    description: "Disable color output. Recommended for CI logs."
+    required: false
+    default: "true"
+
+  tokens-only:
+    description: "Output only the integer token count (for programmatic use)."
+    required: false
+    default: "false"
+
+  show-progress:
+    description: "Show per-file PASSED/FAILED status for all scanned files."
+    required: false
+    default: "false"
+
+  show-summary:
+    description: "Show a validation summary panel at the end of the run."
+    required: false
+    default: "true"
+
+  filter:
+    description: "Glob pattern to restrict which files inside a directory are validated."
+    required: false
+    default: ""
+
+  filter-type:
+    description: >
+      Restrict validation to a specific file type.
+      Supported values: skills, agents, commands.
+    required: false
+    default: ""
+
+  version:
+    description: >
+      Version of skilllint to install (e.g. "1.2.3", "latest").
+      Use "latest" to always install the newest published release.
+    required: false
+    default: "latest"
+
+  python-version:
+    description: "Python version to use when running skilllint."
+    required: false
+    default: "3.12"
+
+outputs:
+  result:
+    description: >
+      Validation outcome: 'passed' when exit code is 0 (all checks pass),
+      'failed' for any non-zero exit code (validation errors or usage/configuration errors).
+      Use the 'exit-code' output to distinguish between exit code 1 (validation errors)
+      and exit code 2 (usage/configuration errors).
+    value: ${{ steps.run-skilllint.outputs.result }}
+
+  exit-code:
+    description: >
+      Raw exit code returned by skilllint check.
+      0 = all checks passed, 1 = validation errors found, 2 = usage/configuration error.
+    value: ${{ steps.run-skilllint.outputs.exit-code }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install uv
+      uses: astral-sh/setup-uv@v8.0.0
+      with:
+        enable-cache: false
+
+    - name: Set up Python ${{ inputs.python-version }}
+      shell: bash
+      env:
+        INPUT_PYTHON_VERSION: ${{ inputs.python-version }}
+      run: uv python install "${INPUT_PYTHON_VERSION}"
+
+    - name: Install skilllint
+      shell: bash
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
+      run: |
+        if [ "${INPUT_VERSION}" = "latest" ]; then
+          uv tool install skilllint
+        else
+          uv tool install "skilllint==${INPUT_VERSION}"
+        fi
+
+    - name: Run skilllint check
+      id: run-skilllint
+      shell: bash
+      env:
+        INPUT_CHECK_ONLY: ${{ inputs.check-only }}
+        INPUT_FIX: ${{ inputs.fix }}
+        INPUT_VERBOSE: ${{ inputs.verbose }}
+        INPUT_NO_COLOR: ${{ inputs.no-color }}
+        INPUT_TOKENS_ONLY: ${{ inputs.tokens-only }}
+        INPUT_SHOW_PROGRESS: ${{ inputs.show-progress }}
+        INPUT_SHOW_SUMMARY: ${{ inputs.show-summary }}
+        INPUT_PLATFORM: ${{ inputs.platform }}
+        INPUT_FILTER: ${{ inputs.filter }}
+        INPUT_FILTER_TYPE: ${{ inputs.filter-type }}
+        INPUT_PATHS: ${{ inputs.paths }}
+      run: |
+        set +e  # do not exit on non-zero. We capture the exit code ourselves
+
+        ARGS=()
+
+        # Boolean flags
+        if [ "${INPUT_CHECK_ONLY}" = "true" ]; then
+          ARGS+=("--check")
+        fi
+        if [ "${INPUT_FIX}" = "true" ]; then
+          ARGS+=("--fix")
+        fi
+        if [ "${INPUT_VERBOSE}" = "true" ]; then
+          ARGS+=("--verbose")
+        fi
+        if [ "${INPUT_NO_COLOR}" = "true" ]; then
+          ARGS+=("--no-color")
+        fi
+        if [ "${INPUT_TOKENS_ONLY}" = "true" ]; then
+          ARGS+=("--tokens-only")
+        fi
+        if [ "${INPUT_SHOW_PROGRESS}" = "true" ]; then
+          ARGS+=("--show-progress")
+        fi
+        if [ "${INPUT_SHOW_SUMMARY}" = "true" ]; then
+          ARGS+=("--show-summary")
+        fi
+
+        # Optional string flags
+        if [ -n "${INPUT_PLATFORM}" ]; then
+          ARGS+=("--platform" "${INPUT_PLATFORM}")
+        fi
+        if [ -n "${INPUT_FILTER}" ]; then
+          ARGS+=("--filter" "${INPUT_FILTER}")
+        fi
+        if [ -n "${INPUT_FILTER_TYPE}" ]; then
+          ARGS+=("--filter-type" "${INPUT_FILTER_TYPE}")
+        fi
+
+        # Paths (space-separated, split into individual arguments)
+        read -ra PATH_ARGS <<< "${INPUT_PATHS}"
+
+        skilllint check "${ARGS[@]}" "${PATH_ARGS[@]}"
+        EXIT_CODE=$?
+
+        echo "exit-code=${EXIT_CODE}" >> "$GITHUB_OUTPUT"
+        if [ "${EXIT_CODE}" -eq 0 ]; then
+          echo "result=passed" >> "$GITHUB_OUTPUT"
+        else
+          echo "result=failed" >> "$GITHUB_OUTPUT"
+        fi
+
+        exit "${EXIT_CODE}"
