@@ -25,8 +25,8 @@ class TestMakeRecordingConsole:
     def test_returns_console_with_force_terminal(self) -> None:
         """make_recording_console sets force_terminal so ANSI codes are emitted."""
         console = make_recording_console()
-        # Rich sets _force_terminal when force_terminal=True
-        assert console._force_terminal
+        # force_terminal=True causes Rich to report the console as a terminal
+        assert console.is_terminal
 
     def test_no_color_false_by_default(self) -> None:
         """no_color defaults to False."""

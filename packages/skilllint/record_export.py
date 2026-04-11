@@ -51,10 +51,16 @@ def export_recording(console: Console, path: Path, *, title: str) -> None:
         console: A :class:`rich.console.Console` that was created with
             ``record=True``.
         path: Destination file path.  The parent directory must already exist.
-        title: Title embedded in the exported document (SVG window title or
-            HTML ``<title>`` element).
+        title: Title string embedded in SVG exports (ignored for HTML exports,
+            which do not expose a title parameter in Rich's API).
+
+    Raises:
+        ValueError: If *path* has an unsupported extension (only ``.svg`` and
+            ``.html`` are accepted).
     """
     suffix = path.suffix.lower()
+    if suffix not in {".svg", ".html"}:
+        raise ValueError(f"Unsupported file extension {path.suffix!r}. Use .svg or .html.")
     content = console.export_html(clear=False) if suffix == ".html" else console.export_svg(title=title, clear=False)
 
     # Atomic write: write to a sibling temp file, then rename.
