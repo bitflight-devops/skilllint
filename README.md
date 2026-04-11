@@ -181,7 +181,7 @@ skilllint check --platform claude-code plugins/my-plugin
 |---|---|---|
 | FM001–FM010 | Frontmatter | Required fields, valid values, schema compliance |
 | SK001–SK009 | Skill | Description quality, token limits, complexity, internal links |
-| AS001–AS006 | AgentSkills | Cross-platform open standard compliance |
+| AS001–AS009 | AgentSkills | Cross-platform open standard compliance |
 | LK001–LK002 | Links | Markdown link validity and broken reference detection |
 | PD001–PD003 | Progressive disclosure | Directory structure for references/, examples/, scripts/ |
 | PL001–PL006 | Plugin | Structure, manifest correctness, marketplace layout, subprocess safety |
@@ -201,6 +201,7 @@ Usage: skilllint [OPTIONS] COMMAND [ARGS]...
 
 Commands:
   check   Validate Claude Code plugins, skills, agents, and commands.
+  docs    Fetch, query, and verify cached vendor documentation.
   rule    Show documentation for a validation rule.
   rules   List all available validation rules.
 
@@ -404,7 +405,7 @@ The same functionality is available as a standalone script that does not require
 `skilllint` to be installed:
 
 ```bash
-uv run --script scripts/fetch_doc_source.py https://docs.anthropic.com/en/docs/claude-code/settings.md
+uv run --script scripts/fetch_doc_source.py fetch https://docs.anthropic.com/en/docs/claude-code/settings.md
 ```
 
 ---
