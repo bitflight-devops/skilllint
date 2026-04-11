@@ -147,3 +147,12 @@ class TestExportRecording:
         # Decode HTML entities then normalise non-breaking spaces to regular spaces.
         normalised = html.unescape(content).replace("\xa0", " ")
         assert "My Custom Title" in normalised
+
+    def test_unsupported_extension_raises_value_error(self, tmp_path: Path) -> None:
+        """export_recording raises ValueError for unsupported file extensions."""
+        console = make_recording_console()
+        console.print("hello")
+        dest = tmp_path / "output.txt"
+        with pytest.raises(ValueError, match="Unsupported file extension"):
+            export_recording(console, dest, title="test")
+        assert not dest.exists(), "No file should be created when extension is invalid"
