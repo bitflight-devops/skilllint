@@ -123,7 +123,10 @@ class TestExportRecording:
             Path(src).unlink()
             raise OSError("simulated replace failure")
 
-        with patch("skilllint.record_export.os.replace", side_effect=failing_replace), pytest.raises(OSError, match="simulated replace failure"):
+        with (
+            patch("skilllint.record_export.os.replace", side_effect=failing_replace),
+            pytest.raises(OSError, match="simulated replace failure"),
+        ):
             export_recording(console, dest, title="test title")
 
         # The destination file must not exist.
