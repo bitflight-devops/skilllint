@@ -111,7 +111,7 @@ jobs:
         run: uv run python scripts/assert_rules_completeness.py
 
       - name: Upload coverage XML
-        uses: actions/upload-artifact@v7.0.0
+        uses: actions/upload-artifact@v7.0.1
         if: matrix.python-version == '3.12'
         with:
           name: coverage-xml

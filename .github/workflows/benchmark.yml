@@ -101,7 +101,7 @@ jobs:
           benchmark-data-dir-path: docs/bench
 
       - name: Upload compare benchmark results
-        uses: actions/upload-artifact@v7.0.0
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: benchmark-results-io-compare
           path: |
@@ -185,7 +185,7 @@ jobs:
 
       - name: Upload base benchmark results
         if: steps.base_ref_io.outputs.ref != ''
-        uses: actions/upload-artifact@v7.0.0
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: benchmark-results-io-base
           path: |
@@ -258,7 +258,7 @@ jobs:
           benchmark-data-dir-path: docs/bench
 
       - name: Upload CPU compare benchmark results
-        uses: actions/upload-artifact@v7.0.0
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: benchmark-results-cpu-compare
           path: scripts/results/bench_cpu_gh.json
@@ -310,7 +310,7 @@ jobs:
 
       - name: Upload CPU base benchmark results
         if: steps.base_ref_cpu.outputs.ref != ''
-        uses: actions/upload-artifact@v7.0.0
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: benchmark-results-cpu-base
           path: scripts/results/bench_cpu_base_gh.json
@@ -370,7 +370,7 @@ jobs:
             --pages-url "https://bitflight-devops.github.io/agentskills-linter/"
 
       - name: Post comment to PR
-        uses: marocchino/sticky-pull-request-comment@v3.0.3
+        uses: marocchino/sticky-pull-request-comment@v3.0.4
         with:
           header: benchmark-results
           path: /tmp/bench_comment.md
@@ -475,7 +475,7 @@ jobs:
           benchmark-data-dir-path: docs/bench
 
       - name: Upload release benchmark results
-        uses: actions/upload-artifact@v7.0.0
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: release-benchmark-${{ github.ref_name }}
           path: scripts/results/
