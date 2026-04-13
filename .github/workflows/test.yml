@@ -107,6 +107,9 @@ jobs:
         timeout-minutes: 10
         run: uv run pytest --cov=packages/skilllint --cov-report=xml --cov-report=term
 
+      - name: Assert rules completeness
+        run: uv run python scripts/assert_rules_completeness.py
+
       - name: Upload coverage XML
         uses: actions/upload-artifact@v7.0.0
         if: matrix.python-version == '3.12'
