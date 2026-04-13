@@ -1,6 +1,6 @@
 ---
 name: skilllint
-description: 'Guide for using the skilllint CLI to validate, lint, and fix Claude Code plugins, skills, agents, and commands. Use when encountering FM, SK, AS, LK, PD, PL, HK, NR, SL, TC, PR, CU, CX rule violations, when asked to lint or validate a plugin, or when asked how to install or check the version of skilllint.'
+description: 'Guide for using the skilllint CLI to validate, lint, and fix Claude Code plugins, skills, agents, and commands. Use when encountering FM, SK, AS, LK, PD, PL, HK, NR, SL, TC, PR, PA, CU, CX rule violations, when asked to lint or validate a plugin, or when asked how to install or check the version of skilllint.'
 argument-hint: '[rule-id | path]'
 ---
 
