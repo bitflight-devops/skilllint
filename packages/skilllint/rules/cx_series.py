@@ -175,7 +175,9 @@ def check_cx002(content: str, schema: dict[str, object]) -> list[ValidationIssue
     from skilllint.plugin_validator import ValidationIssue  # noqa: PLC0415
 
     fields_val: object = schema.get("fields", {})
-    known_fields: set[str] = {k for k in fields_val if isinstance(k, str)} if isinstance(fields_val, dict) else set()
+    if not isinstance(fields_val, dict):
+        return []
+    known_fields: set[str] = {k for k in fields_val if isinstance(k, str)}
 
     issues: list[ValidationIssue] = []
     for match in _PREFIX_RULE_RE.finditer(content):

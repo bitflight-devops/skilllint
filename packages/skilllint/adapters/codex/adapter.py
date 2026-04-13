@@ -76,7 +76,7 @@ class CodexAdapter:
         Returns:
             List of violation dicts.
         """
-        if path.suffix == ".md":
+        if path.name == "AGENTS.md":
             content = path.read_text(encoding="utf-8")
             issues = validate_codex_content(content, "agents_md")
             return [{"code": i.code, "severity": i.severity, "message": i.message} for i in issues]

@@ -151,11 +151,11 @@ def test_codex_agents_md_validation():
     adapter = CodexAdapter()
 
     # empty file should fail
-    empty_violations = adapter.validate(CODEX_FIXTURES / "empty_agents.md")
+    empty_violations = adapter.validate(CODEX_FIXTURES / "empty" / "AGENTS.md")
     assert len(empty_violations) > 0, "Expected violation for empty AGENTS.md"
 
     # non-empty file should pass
-    valid_violations = adapter.validate(CODEX_FIXTURES / "valid_agents.md")
+    valid_violations = adapter.validate(CODEX_FIXTURES / "valid" / "AGENTS.md")
     assert valid_violations == [], f"Expected no violations for valid AGENTS.md, got: {valid_violations}"
 
 
@@ -171,3 +171,28 @@ def test_codex_path_patterns():
     adapter = CodexAdapter()
     patterns = adapter.path_patterns()
     assert "AGENTS.md" in patterns
+
+
+def test_codex_adapter_ignores_non_agents_md(tmp_path: pathlib.Path) -> None:
+    """CodexAdapter.validate() only runs the AGENTS.md emptiness check on files
+    literally named ``AGENTS.md``.
+
+    Regression test for a CodeRabbit-flagged defect where the adapter gated the
+    AGENTS.md check on ``path.suffix == ".md"``, causing it to emit CX001
+    ("AGENTS.md is empty") on unrelated ``.md`` skill fixtures (e.g. files
+    matched by the ``.agents/skills/**/*.md`` glob pattern). After the fix the
+    check is gated on ``path.name == "AGENTS.md"`` so any other ``.md`` file
+    returns an empty violation list from the adapter.
+    """
+    adapter = CodexAdapter()
+
+    # A non-AGENTS.md markdown file — even if empty — must not trigger CX001.
+    non_agents = tmp_path / "some-skill.md"
+    non_agents.write_text("", encoding="utf-8")
+    assert adapter.validate(non_agents) == []
+
+    # The existing valid_skill.md fixture also must not produce CX001.
+    valid_skill_violations = adapter.validate(CODEX_FIXTURES / "valid_skill.md")
+    assert all(v["code"] != "CX001" for v in valid_skill_violations), (
+        f"CX001 must not fire on non-AGENTS.md files, got: {valid_skill_violations}"
+    )

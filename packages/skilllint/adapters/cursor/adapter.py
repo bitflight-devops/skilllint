@@ -77,7 +77,8 @@ class CursorAdapter:
         if path.suffix != ".mdc":
             return []
 
-        mdc_schema = self.get_schema("mdc")
+        schema = self.get_schema("mdc")
+        mdc_schema: dict[str, object] | None = schema if isinstance(schema, dict) else None
         if mdc_schema is None:
             return []
 

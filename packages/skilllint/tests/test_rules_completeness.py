@@ -14,8 +14,6 @@ from typing import TYPE_CHECKING
 import pytest
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
-
     from typer.testing import CliRunner
 
 # MIN_REGISTERED_SERIES and EXPECTED_SERIES are re-exported from skilllint.rules._constants.
@@ -26,25 +24,10 @@ from skilllint.rules import EXPECTED_SERIES, MIN_REGISTERED_SERIES
 # Local alias preserving the underscore-prefixed naming convention used in tests.
 _EXPECTED_SERIES: frozenset[str] = EXPECTED_SERIES
 
-
-@pytest.fixture(autouse=True)
-def _isolate_rule_registry() -> Iterator[None]:
-    """Snapshot and restore RULE_REGISTRY around each test.
-
-    Prevents test rules (e.g. TA001, TN001 from test_provider_contracts.py)
-    from leaking into the registry and making determinism-sensitive tests
-    like test_readme_table_matches_registered_series fail across pytest-xdist
-    workers or when tests run in certain orders.
-    """
-    import skilllint.rules  # noqa: F401 — ensure all canonical rule modules load before snapshot
-    from skilllint.rule_registry import RULE_REGISTRY
-
-    baseline = dict(RULE_REGISTRY)
-    try:
-        yield
-    finally:
-        RULE_REGISTRY.clear()
-        RULE_REGISTRY.update(baseline)
+# The _isolate_rule_registry autouse fixture now lives in conftest.py so that
+# every test under packages/skilllint/tests/ snapshots and restores the rule
+# registry (preventing test-only rules like TA001/TN001 from leaking across
+# test modules). See conftest.py and commit d81d23f for history.
 
 
 def _registered_prefixes() -> set[str]:
