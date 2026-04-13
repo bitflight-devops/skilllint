@@ -567,10 +567,11 @@ def check_sk008(frontmatter: dict[str, object], path: Path, file_type: str) -> l
     The directory containing `SKILL.md` must follow the same naming
     convention as the `name` field: lowercase letters, digits, and hyphens
     only; no leading, trailing, or consecutive hyphens; no underscores;
-    maximum 40 characters.
+    maximum 64 characters.
 
-    **Source:** agentskills.io skill directory convention; `MAX_SKILL_NAME_LENGTH = 40`
-    from `frontmatter_core`.
+    **Source:** https://agentskills.io/specification.md — the spec applies
+    the same 64-character limit to both the frontmatter ``name`` field and
+    the skill directory name (``_spec_constants.MAX_NAME_LENGTH = 64``).
 
     **Fix:** Rename the skill directory to follow the convention:
 

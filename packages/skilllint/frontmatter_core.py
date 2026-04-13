@@ -22,7 +22,6 @@ Design constraints (SOLID, DRY):
 Public API:
   Constants:
     RECOMMENDED_DESCRIPTION_LENGTH -- warn when description exceeds this many characters
-    MAX_SKILL_NAME_LENGTH          -- maximum allowed skill name length
 
   Pydantic models:
     SkillFrontmatter    -- validates SKILL.md frontmatter
@@ -58,9 +57,6 @@ MAX_DESCRIPTION_LENGTH: int = 1024
 
 RECOMMENDED_DESCRIPTION_LENGTH: int = 1024
 """Warn when a description exceeds this many characters."""
-
-MAX_SKILL_NAME_LENGTH: int = 40
-"""Maximum allowed length for a skill name or directory name."""
 
 _SKILL_DIR_NAME_PATTERN: re.Pattern[str] = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 """Pattern for valid skill directory names (and 'name' field values).

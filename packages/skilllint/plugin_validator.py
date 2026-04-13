@@ -70,7 +70,6 @@ from skilllint.token_counter import TOKEN_ERROR_THRESHOLD, TOKEN_WARNING_THRESHO
 from skilllint.version import __version__
 
 from .frontmatter_core import (
-    MAX_SKILL_NAME_LENGTH,
     AgentFrontmatter,
     CommandFrontmatter,
     SkillFrontmatter,
@@ -260,8 +259,6 @@ MARKETPLACE_METADATA_RELOCATABLE_KEYS: frozenset[str] = frozenset({
 
 # FILTER_TYPE_MAP and DEFAULT_SCAN_PATTERNS live in scan_runtime.py
 # and are re-imported at the top of this module.
-
-# MAX_SKILL_NAME_LENGTH imported from frontmatter_core
 
 # Name format — matches agentskills.io/specification and init_skill.py convention:
 # lowercase a-z/0-9/hyphen, no leading/trailing/consecutive hyphens.
@@ -1489,70 +1486,123 @@ class NamespaceReferenceValidator:
         name_to_dir = self._build_plugin_name_map(plugins_root)
 
         for label, plugin, name, ref_type in references:
-            # Skip template placeholders containing { or }
-            if "{" in plugin or "}" in plugin or "{" in name or "}" in name:
-                continue
-
-            # Skip built-in agent names before directory resolution so they are
-            # not reported as missing plugin directories.
-            if name in self.BUILTIN_AGENTS or plugin in self.BUILTIN_AGENTS:
-                continue
-
-            # Resolve the plugin directory via plugin.json name mapping
-            plugin_dir = name_to_dir.get(plugin)
-            if plugin_dir is None:
-                errors.append(
-                    ValidationIssue(
-                        field="namespace-reference",
-                        severity="error",
-                        message=(
-                            f"Namespace reference target does not exist: "
-                            f"{label} -- plugin directory '{plugin}' not found"
-                        ),
-                        code=NR001,
-                        docs_url=generate_docs_url(NR001),
-                        suggestion=(
-                            f"Expected plugin directory at: {plugins_root / plugin}. "
-                            f"Create the plugin or fix the namespace prefix."
-                        ),
-                    )
-                )
-                continue
-
-            match ref_type:
-                case "skill":
-                    found = self._resolve_skill_reference(plugin_dir, name)
-                    expected = (
-                        f"plugins/{plugin}/skills/{name}/SKILL.md "
-                        f"or plugins/{plugin}/skills/{{category}}/{name}/SKILL.md"
-                    )
-                case "agent":
-                    found = self._resolve_agent_reference(plugin_dir, name)
-                    expected = f"plugins/{plugin}/agents/{name}.md"
-                case "command":
-                    found = self._resolve_command_reference(plugin_dir, name)
-                    expected = (
-                        f"plugins/{plugin}/skills/{name}/SKILL.md, "
-                        f"plugins/{plugin}/skills/{{category}}/{name}/SKILL.md, "
-                        f"or plugins/{plugin}/commands/{name}.md"
-                    )
-                case _:
-                    continue
-
-            if not found:
-                errors.append(
-                    ValidationIssue(
-                        field="namespace-reference",
-                        severity="error",
-                        message=(f"Namespace reference target does not exist: {label}"),
-                        code=NR001,
-                        docs_url=generate_docs_url(NR001),
-                        suggestion=f"Expected file at: {expected}",
-                    )
-                )
+            issue = self._process_reference(
+                label=label,
+                plugin=plugin,
+                name=name,
+                ref_type=ref_type,
+                name_to_dir=name_to_dir,
+                plugins_root=plugins_root,
+            )
+            if issue is not None:
+                errors.append(issue)
 
         passed = len(errors) == 0
         return ValidationResult(passed=passed, errors=errors, warnings=warnings, info=info)
+
+    def _process_reference(
+        self, *, label: str, plugin: str, name: str, ref_type: str, name_to_dir: dict[str, Path], plugins_root: Path
+    ) -> ValidationIssue | None:
+        """Validate a single namespace reference and return an issue or None.
+
+        Applies the skip rules (template placeholders, built-in agents),
+        then checks NR002 (path traversal) before resolving against the
+        plugin directory (NR001).
+
+        Args:
+            label: Human-readable reference label for error messages.
+            plugin: Namespace prefix component.
+            name: Target name component.
+            ref_type: One of ``"skill"``, ``"agent"``, ``"command"``.
+            name_to_dir: Mapping from plugin declared name to directory.
+            plugins_root: Path to the ``plugins/`` root.
+
+        Returns:
+            A ValidationIssue to append to the error list, or None when
+            the reference is valid or intentionally skipped.
+        """
+        # Skip template placeholders containing { or }
+        if "{" in plugin or "}" in plugin or "{" in name or "}" in name:
+            return None
+
+        # Skip built-in agent names before directory resolution so they are
+        # not reported as missing plugin directories.
+        if name in self.BUILTIN_AGENTS or plugin in self.BUILTIN_AGENTS:
+            return None
+
+        # NR002 — reject references that attempt to escape the plugin
+        # directory boundary via path-traversal sequences.
+        nr002_issue = self._check_nr002_traversal(label, plugin, name)
+        if nr002_issue is not None:
+            return nr002_issue
+
+        # Resolve the plugin directory via plugin.json name mapping
+        plugin_dir = name_to_dir.get(plugin)
+        if plugin_dir is None:
+            return ValidationIssue(
+                field="namespace-reference",
+                severity="error",
+                message=(
+                    f"Namespace reference target does not exist: {label} -- plugin directory '{plugin}' not found"
+                ),
+                code=NR001,
+                docs_url=generate_docs_url(NR001),
+                suggestion=(
+                    f"Expected plugin directory at: {plugins_root / plugin}. "
+                    f"Create the plugin or fix the namespace prefix."
+                ),
+            )
+
+        return self._resolve_ref_or_error(
+            label=label, plugin=plugin, name=name, ref_type=ref_type, plugin_dir=plugin_dir
+        )
+
+    def _resolve_ref_or_error(
+        self, *, label: str, plugin: str, name: str, ref_type: str, plugin_dir: Path
+    ) -> ValidationIssue | None:
+        """Resolve a reference against a plugin directory, returning NR001 if missing.
+
+        Args:
+            label: Reference label for error messages.
+            plugin: Namespace prefix.
+            name: Target name.
+            ref_type: ``"skill"``, ``"agent"``, or ``"command"``.
+            plugin_dir: Resolved plugin directory path.
+
+        Returns:
+            An NR001 ValidationIssue if the target cannot be resolved, or
+            None if the reference is valid (or the ref_type is unknown).
+        """
+        match ref_type:
+            case "skill":
+                found = self._resolve_skill_reference(plugin_dir, name)
+                expected = (
+                    f"plugins/{plugin}/skills/{name}/SKILL.md or plugins/{plugin}/skills/{{category}}/{name}/SKILL.md"
+                )
+            case "agent":
+                found = self._resolve_agent_reference(plugin_dir, name)
+                expected = f"plugins/{plugin}/agents/{name}.md"
+            case "command":
+                found = self._resolve_command_reference(plugin_dir, name)
+                expected = (
+                    f"plugins/{plugin}/skills/{name}/SKILL.md, "
+                    f"plugins/{plugin}/skills/{{category}}/{name}/SKILL.md, "
+                    f"or plugins/{plugin}/commands/{name}.md"
+                )
+            case _:
+                return None
+
+        if found:
+            return None
+
+        return ValidationIssue(
+            field="namespace-reference",
+            severity="error",
+            message=(f"Namespace reference target does not exist: {label}"),
+            code=NR001,
+            docs_url=generate_docs_url(NR001),
+            suggestion=f"Expected file at: {expected}",
+        )
 
     def can_fix(self) -> bool:
         """Check if validator supports auto-fixing.
@@ -1621,6 +1671,63 @@ class NamespaceReferenceValidator:
                 if candidate.is_dir():
                     return candidate
         return None
+
+    @staticmethod
+    def _has_path_traversal(component: str) -> bool:
+        r"""Check if a namespace reference component contains path-traversal.
+
+        A well-formed namespace reference component is a plain identifier
+        (lowercase letters, digits, hyphens).  Any path separator or
+        parent-directory sequence indicates an attempt to escape the plugin
+        directory boundary and should emit NR002.
+
+        Args:
+            component: A plugin prefix or target name extracted from a
+                namespace reference.
+
+        Returns:
+            True if the component contains ``..``, ``/``, or ``\\``.
+        """
+        return ".." in component or "/" in component or "\\" in component
+
+    def _check_nr002_traversal(self, label: str, plugin: str, name: str) -> ValidationIssue | None:
+        r"""Return an NR002 ValidationIssue if a reference contains traversal.
+
+        The permissive ``Skill(...)`` / ``Task(...)`` regex patterns match
+        any quoted string (``[^"]+``), so the plugin and name components
+        can contain ``..``, ``/``, or ``\\`` even though those would never
+        appear in a well-formed namespace reference.  When either component
+        contains such a sequence, the reference is treated as escaping the
+        plugin boundary and NR002 is emitted.
+
+        Source: https://agentskills.io/specification.md — plugin boundary is
+        a portability and security constraint.
+
+        Args:
+            label: Human-readable reference label for the error message.
+            plugin: The namespace prefix extracted from the reference.
+            name: The target name extracted from the reference.
+
+        Returns:
+            A ValidationIssue with code NR002, or None if the reference is
+            free of path-traversal sequences.
+        """
+        if not (self._has_path_traversal(plugin) or self._has_path_traversal(name)):
+            return None
+        return ValidationIssue(
+            field="namespace-reference",
+            severity="error",
+            message=(
+                f"Namespace reference points outside plugin directory: {label} -- contains path-traversal sequence"
+            ),
+            code=NR002,
+            docs_url=generate_docs_url(NR002),
+            suggestion=(
+                "Remove '..', '/', and '\\\\' from the reference. "
+                "Use 'other-plugin:skill-name' with a correct "
+                "namespace prefix instead of relative paths."
+            ),
+        )
 
     @staticmethod
     def _resolve_to_directory(path: Path) -> Path | None:
@@ -2058,8 +2165,13 @@ _SKILL_DIR_CONVENTION_PATTERN = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 def _validate_skill_directory_name(skill_dir_name: str) -> list[tuple[str, str]]:
     """Validate skill directory name against naming conventions.
 
-    Checks: non-empty, max 40 chars, lowercase+digits+hyphens only,
-    no leading/trailing/consecutive hyphens, no underscores.
+    Checks: non-empty, max ``MAX_NAME_LENGTH`` (64) chars per the
+    agentskills.io specification, lowercase+digits+hyphens only, no
+    leading/trailing/consecutive hyphens, no underscores.
+
+    Source: https://agentskills.io/specification.md — the spec applies the
+    same 64-character limit to both the frontmatter ``name`` field and the
+    skill directory name (``_spec_constants.MAX_NAME_LENGTH``).
 
     Args:
         skill_dir_name: Directory name to validate.
@@ -2068,15 +2180,17 @@ def _validate_skill_directory_name(skill_dir_name: str) -> list[tuple[str, str]]
         List of (message, suggestion) tuples for each violation found.
         Empty list if the name is valid.
     """
+    from skilllint._spec_constants import MAX_NAME_LENGTH  # noqa: PLC0415
+
     if not skill_dir_name:
         return [("Skill directory name cannot be empty", "Provide a non-empty directory name")]
 
     results: list[tuple[str, str]] = []
 
-    if len(skill_dir_name) > MAX_SKILL_NAME_LENGTH:
+    if len(skill_dir_name) > MAX_NAME_LENGTH:
         results.append((
-            f"Directory name exceeds maximum length of {MAX_SKILL_NAME_LENGTH} characters (got {len(skill_dir_name)})",
-            f"Shorten directory name to {MAX_SKILL_NAME_LENGTH} characters or less",
+            f"Directory name exceeds maximum length of {MAX_NAME_LENGTH} characters (got {len(skill_dir_name)})",
+            f"Shorten directory name to {MAX_NAME_LENGTH} characters or less",
         ))
 
     if not _SKILL_DIR_CONVENTION_PATTERN.match(skill_dir_name):

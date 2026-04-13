@@ -186,10 +186,6 @@ DESCRIPTION_MIN_LENGTH: int = 20
 # These are kept for backwards compatibility but should not be used for
 # new validation logic. They may be removed in future versions.
 
-#: Legacy name length limit (used in some existing validators).
-#: WARNING: This is 40 but spec says 64. Use NAME_MAX_LENGTH instead.
-MAX_SKILL_NAME_LENGTH: int = 40  # Deprecated, use NAME_MAX_LENGTH
-
 #: Legacy description length recommendation.
 #: Matches agentskills.io spec exactly.
 RECOMMENDED_DESCRIPTION_LENGTH: int = DESCRIPTION_MAX_LENGTH

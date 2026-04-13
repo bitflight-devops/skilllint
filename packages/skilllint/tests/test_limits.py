@@ -20,7 +20,6 @@ from skilllint.limits import (
     DESCRIPTION_MAX_LENGTH,
     DESCRIPTION_MIN_LENGTH,
     LICENSE_MAX_LENGTH,
-    MAX_SKILL_NAME_LENGTH,
     METADATA_TOKEN_BUDGET,
     NAME_MAX_LENGTH,
     NAME_MIN_LENGTH,
@@ -149,10 +148,6 @@ class TestTokenThresholds:
 
 class TestLegacyAliases:
     """Tests for deprecated / legacy alias constants."""
-
-    def test_max_skill_name_length_is_40(self) -> None:
-        """Legacy MAX_SKILL_NAME_LENGTH is 40 (differs from spec 64)."""
-        assert MAX_SKILL_NAME_LENGTH == 40
 
     def test_recommended_description_length_matches_max(self) -> None:
         """RECOMMENDED_DESCRIPTION_LENGTH equals DESCRIPTION_MAX_LENGTH."""

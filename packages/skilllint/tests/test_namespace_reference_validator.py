@@ -940,3 +940,80 @@ class TestNR001NamespaceFromPluginJson:
 
         assert result.passed is True
         assert len(result.errors) == 0
+
+
+class TestNR002PathTraversal:
+    """Test NR002 — reference escapes plugin directory via path traversal.
+
+    The NR002 rule rejects namespace references whose plugin or name
+    components contain ``..``, ``/``, or ``\\``.  The permissive
+    ``Skill(...)`` and ``Task(...)`` regex patterns match any quoted
+    string, so a malicious or malformed reference can try to escape the
+    plugin boundary even though a well-formed reference never contains
+    those characters.
+
+    Source: https://agentskills.io/specification.md — plugin boundary is a
+    portability and security constraint; each plugin is a self-contained
+    unit and should only reference files within its own directory tree.
+    """
+
+    def test_parent_traversal_in_name_emits_nr002(self, tmp_path: Path) -> None:
+        """Skill(skill="plugin:../escape") emits NR002, not NR001."""
+        plugins_root = _make_plugins_root(tmp_path)
+        _make_plugin_dir(plugins_root, "target-plugin")
+
+        body = 'Escape via Skill(skill="target-plugin:../../../etc/passwd")\n'
+        source_skill = _make_skill_md_with_body(plugins_root, "source-plugin", body)
+
+        validator = NamespaceReferenceValidator()
+        result = validator.validate(source_skill)
+
+        assert result.passed is False
+        nr002_errors = [e for e in result.errors if e.code == "NR002"]
+        assert len(nr002_errors) >= 1
+        assert all(e.suggestion is not None for e in nr002_errors)
+
+    def test_parent_traversal_in_plugin_prefix_emits_nr002(self, tmp_path: Path) -> None:
+        """Skill(command: "../other:skill") emits NR002."""
+        plugins_root = _make_plugins_root(tmp_path)
+        _make_plugin_dir(plugins_root, "target-plugin")
+
+        body = 'Escape via Skill(command: "../other-plugin:my-skill")\n'
+        source_skill = _make_skill_md_with_body(plugins_root, "source-plugin", body)
+
+        validator = NamespaceReferenceValidator()
+        result = validator.validate(source_skill)
+
+        assert result.passed is False
+        nr002_errors = [e for e in result.errors if e.code == "NR002"]
+        assert len(nr002_errors) >= 1
+
+    def test_forward_slash_in_name_emits_nr002(self, tmp_path: Path) -> None:
+        """Slash characters in a reference name emit NR002."""
+        plugins_root = _make_plugins_root(tmp_path)
+        _make_plugin_dir(plugins_root, "target-plugin")
+
+        body = 'Task(agent="target-plugin:subdir/agent-name")\n'
+        source_skill = _make_skill_md_with_body(plugins_root, "source-plugin", body)
+
+        validator = NamespaceReferenceValidator()
+        result = validator.validate(source_skill)
+
+        assert result.passed is False
+        nr002_errors = [e for e in result.errors if e.code == "NR002"]
+        assert len(nr002_errors) >= 1
+
+    def test_clean_reference_does_not_emit_nr002(self, tmp_path: Path) -> None:
+        """A well-formed reference with no traversal must not emit NR002."""
+        plugins_root = _make_plugins_root(tmp_path)
+        target_plugin = _make_plugin_dir(plugins_root, "target-plugin")
+        _make_skill(target_plugin, "my-skill")
+
+        body = 'Invoke Skill(command: "target-plugin:my-skill")\n'
+        source_skill = _make_skill_md_with_body(plugins_root, "source-plugin", body)
+
+        validator = NamespaceReferenceValidator()
+        result = validator.validate(source_skill)
+
+        nr002_errors = [e for e in result.errors if e.code == "NR002"]
+        assert len(nr002_errors) == 0
