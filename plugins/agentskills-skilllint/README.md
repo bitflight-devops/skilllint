@@ -8,7 +8,7 @@ The skill teaches Claude how to:
 
 - **Install** `skilllint` via `uv`, `pipx`, or `pip`
 - **Run** validation scans on plugins, skills, agents, and commands
-- **Read** and interpret violation output (FM, SK, AS, LK, PD, PL, HK, NR, SL, TC rule IDs)
+- **Read** and interpret violation output (FM, SK, AS, LK, PD, PL, HK, NR, SL, TC, PR, PA, CU, CX rule IDs)
 - **Fix** auto-fixable violations with `skilllint check --fix`
 - **Understand** any rule ID by consulting the built-in rule catalog
 - **Check for updates** and upgrade to the latest version
@@ -71,14 +71,18 @@ The skill includes a [full rule catalog](./skills/skilllint/references/rule-cata
 |--------|--------|
 | FM001–FM010 | YAML frontmatter validity |
 | SK001–SK009 | Skill name, description, and token budget |
-| AS001–AS006 | AgentSkills open standard cross-platform compliance |
+| AS001–AS009 | AgentSkills open standard cross-platform compliance |
 | LK001–LK002 | Internal markdown links |
 | PD001–PD003 | Progressive disclosure directory structure |
-| PL001–PL005 | Plugin manifest (`plugin.json`) |
+| PL001–PL006 | Plugin manifest (`plugin.json`) |
 | HK001–HK005 | hooks.json configuration |
 | NR001–NR002 | Namespace references |
 | SL001 | Symlink hygiene |
 | TC001 | Token count reporting |
+| PR001–PR005 | Plugin registration (`plugin.json` capability paths) |
+| PA001       | Plugin-packaged agent frontmatter                  |
+| CU001–CU002 | Cursor `.mdc` frontmatter validity |
+| CX001–CX002 | Codex `AGENTS.md` and `.rules` file validity |
 
 ## skilllint Installation Reference
 

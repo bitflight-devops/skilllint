@@ -685,11 +685,11 @@ class TestPlatformFlag:
         How: Pass empty_agents.md with --platform codex
         Why: Empty AGENTS.md must be detected and reported
         """
-        fixture = _FIXTURES / "codex" / "empty_agents.md"
+        fixture = _FIXTURES / "codex" / "empty" / "AGENTS.md"
         result = cli_runner.invoke(plugin_validator.app, ["check", "--no-color", "--platform", "codex", str(fixture)])
 
         assert result.exit_code == 1, (
-            f"Expected exit 1 for empty_agents.md, got {result.exit_code}. Output: {result.stdout}"
+            f"Expected exit 1 for empty AGENTS.md, got {result.exit_code}. Output: {result.stdout}"
         )
         assert "empty" in result.stdout.lower(), f"Expected 'empty' in output, got: {result.stdout}"
 
@@ -700,11 +700,11 @@ class TestPlatformFlag:
         How: Pass valid_agents.md with --platform codex
         Why: Non-empty AGENTS.md must pass validation
         """
-        fixture = _FIXTURES / "codex" / "valid_agents.md"
+        fixture = _FIXTURES / "codex" / "valid" / "AGENTS.md"
         result = cli_runner.invoke(plugin_validator.app, ["check", "--no-color", "--platform", "codex", str(fixture)])
 
         assert result.exit_code == 0, (
-            f"Expected exit 0 for valid_agents.md, got {result.exit_code}. Output: {result.stdout}"
+            f"Expected exit 0 for valid AGENTS.md, got {result.exit_code}. Output: {result.stdout}"
         )
 
     def test_platform_codex_invalid_rules_exits_1_mentions_owner(

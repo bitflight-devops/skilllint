@@ -1,29 +1,23 @@
 """Codex (OpenAI) platform adapter.
 
 Data provider and file-type validator for Codex platform files.
-Validates AGENTS.md non-empty and .rules prefix_rule() field names
-against the provider codex v1.json fields object.
+Validation logic for CX001 (AGENTS.md non-empty) and CX002 (prefix_rule()
+field names) now lives in rules/cx_series.py and is imported here.
 No rule-series logic lives here — rule series fire from the core validator.
 """
 
 from __future__ import annotations
 
 import logging
-import re
 from typing import TYPE_CHECKING
 
+from skilllint.rules.cx_series import validate_codex_content
 from skilllint.schemas import load_provider_schema
 
 if TYPE_CHECKING:
     import pathlib
 
 _logger = logging.getLogger(__name__)
-
-# Matches: prefix_rule(\n    key = value,\n    ...\n)
-# Captures the body between the outer parentheses.
-_PREFIX_RULE_RE = re.compile(r"prefix_rule\s*\(([^)]*)\)", re.DOTALL)
-# Matches individual key = value pairs inside a prefix_rule() body.
-_FIELD_RE = re.compile(r"^\s*(\w+)\s*=", re.MULTILINE)
 
 
 class CodexAdapter:
@@ -39,7 +33,7 @@ class CodexAdapter:
 
     def applicable_rules(self) -> set[str]:
         """Return the set of rule prefixes applicable to this adapter."""
-        return {"AS"}
+        return {"AS", "CX"}
 
     def constraint_scopes(self) -> set[str]:
         """Return the set of constraint_scope values from the provider schema.
@@ -71,41 +65,6 @@ class CodexAdapter:
         return schema.get("file_types", {}).get(file_type)
 
     # ------------------------------------------------------------------
-    # Concrete validation helpers (used by validate() and plan 02-05)
-    # ------------------------------------------------------------------
-
-    def validate_agents_md(self, content: str) -> list[str]:
-        """Return violation messages for empty AGENTS.md content."""
-        if not content.strip():
-            return ["AGENTS.md is empty"]
-        return []
-
-    def validate_rules_file(self, content: str) -> list[str]:
-        """Validate prefix_rule() calls in a .rules file.
-
-        Returns violation messages for:
-        - Fields not in the fields object from the codex v1.json schema
-
-        Returns:
-            List of violation messages.
-        """
-        schema = self.get_schema("prefix_rule")
-        if schema is None:
-            return []
-
-        known: set[str] = set(schema.get("fields", {}).keys())
-        violations: list[str] = []
-
-        for match in _PREFIX_RULE_RE.finditer(content):
-            body = match.group(1)
-            for field_match in _FIELD_RE.finditer(body):
-                field = field_match.group(1)
-                if field not in known:
-                    violations.append(f"Unknown field '{field}' in prefix_rule() (known fields: {sorted(known)})")
-
-        return violations
-
-    # ------------------------------------------------------------------
     # PlatformAdapter.validate()
     # ------------------------------------------------------------------
 
@@ -117,18 +76,16 @@ class CodexAdapter:
         Returns:
             List of violation dicts.
         """
-        violations: list[dict] = []
-
-        if path.suffix == ".md":
+        if path.name == "AGENTS.md":
             content = path.read_text(encoding="utf-8")
-            violations.extend(
-                {"code": "CX001", "severity": "error", "message": msg} for msg in self.validate_agents_md(content)
-            )
+            issues = validate_codex_content(content, "agents_md")
+            return [{"code": i.code, "severity": i.severity, "message": i.message} for i in issues]
 
-        elif path.suffix == ".rules":
+        if path.suffix == ".rules":
             content = path.read_text(encoding="utf-8")
-            violations.extend(
-                {"code": "CX002", "severity": "error", "message": msg} for msg in self.validate_rules_file(content)
-            )
+            schema = self.get_schema("prefix_rule")
+            prefix_rule_schema: dict[str, object] | None = schema if isinstance(schema, dict) else None
+            issues = validate_codex_content(content, "prefix_rule", prefix_rule_schema)
+            return [{"code": i.code, "severity": i.severity, "message": i.message} for i in issues]
 
-        return violations
+        return []

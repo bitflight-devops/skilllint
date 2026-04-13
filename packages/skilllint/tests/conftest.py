@@ -17,8 +17,37 @@ import pytest
 from typer.testing import CliRunner, Result
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Generator, Iterator
     from pathlib import Path
+
+
+@pytest.fixture(autouse=True)
+def _isolate_rule_registry() -> Iterator[None]:
+    """Snapshot and restore RULE_REGISTRY around each test.
+
+    Test-only rules (e.g. TA001, TN001 from test_provider_contracts.py) are
+    registered via ``@skilllint_rule`` decorator calls inside test methods and
+    will otherwise leak into the global registry. When those tests run first
+    on a pytest-xdist worker, the leaked rules make determinism-sensitive tests
+    such as ``test_readme_table_matches_registered_series`` fail because the
+    registry then contains series prefixes (TA, TN) that are not in the README.
+
+    Placing this fixture in ``conftest.py`` (rather than in a single test
+    module) makes it autouse for every test in the directory tree, so every
+    test now snapshots and restores ``RULE_REGISTRY``. History: originally
+    added to ``test_rules_completeness.py`` in commit ``d81d23f`` (T14);
+    promoted here to fix the cross-file contamination.
+    """
+    import skilllint.rules  # noqa: F401 — ensure all canonical rule modules load before snapshot
+    from skilllint.rule_registry import RULE_REGISTRY
+
+    baseline = dict(RULE_REGISTRY)
+    try:
+        yield
+    finally:
+        RULE_REGISTRY.clear()
+        RULE_REGISTRY.update(baseline)
+
 
 _ANSI_ESCAPE = re.compile(rb"\x1b\[[0-9;]*[mGKHFJA-Z]")
 
