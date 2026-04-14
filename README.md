@@ -243,11 +243,12 @@ Options:
   --tokens-only      Output token count only
   --show-progress    Show per-file status
   --show-summary     Show summary panel
-  --filter TEXT      Glob pattern to match files within a directory
-  --filter-type TEXT Filter type (skills | agents | commands)
-  --platform TEXT    Platform adapter
-  --record PATH      Record terminal output to SVG or HTML file
-  --help             Show this message and exit
+  --filter TEXT          Glob pattern to match files within a directory
+  --filter-type TEXT     Filter type (skills | agents | commands)
+  --platform TEXT        Platform adapter
+  --include-gitignore    Scan files excluded by .gitignore (default: skip them)
+  --record PATH          Record terminal output to SVG or HTML file
+  --help                 Show this message and exit
 ```
 
 ### rules
@@ -432,6 +433,45 @@ uvx skilllint docs fetch https://docs.anthropic.com/en/docs/claude-code/settings
 commands via `uv run --script`. It is intended for contributors working directly on
 the skilllint source tree (where `[tool.uv.sources]` points the dependency at the
 local package), not for end users.
+
+---
+
+## Suppressing warnings
+
+Use a `.skilllint.json` file to suppress specific rule codes for a directory tree. Place the file at any level — skilllint walks up from each scanned file and uses the nearest config it finds.
+
+```json
+{
+  "ignore": {
+    "": ["AS008"],
+    "skills/legacy": ["LK002", "SK006"]
+  }
+}
+```
+
+**Key format:**
+
+| Key | Scope |
+|---|---|
+| `""` (empty string) | All files under this `.skilllint.json` |
+| `"skills/legacy"` | Files whose path (relative to the config file) starts with that prefix |
+
+**Plugin-level suppression** (inside a `.claude-plugin/` plugin):
+
+Place `validator.json` inside `.claude-plugin/`:
+
+```json
+{
+  "ignore": {
+    "": ["PA001"],
+    "agents/generated": ["FM004", "FM007"]
+  }
+}
+```
+
+The same key format applies. Plugin-level config takes priority over a `.skilllint.json` in a parent directory.
+
+See [`docs/ignore-config.md`](docs/ignore-config.md) for the full reference.
 
 ---
 

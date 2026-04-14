@@ -666,6 +666,92 @@ def _load_ignore_config(plugin_root: Path) -> IgnoreConfig:
     return {str(k): [str(c) for c in v] for k, v in ignore.items() if isinstance(v, list)}
 
 
+def _load_skilllint_config(config_file: Path) -> IgnoreConfig:
+    """Load ignore config from a .skilllint.json file.
+
+    Args:
+        config_file: Path to .skilllint.json.
+
+    Returns:
+        Mapping of relative path prefixes to lists of suppressed error codes.
+        Returns empty dict if the file does not exist or cannot be parsed.
+    """
+    if not config_file.is_file():
+        return {}
+    try:
+        raw = msgspec.json.decode(config_file.read_bytes())
+    except (OSError, msgspec.DecodeError):
+        return {}
+    ignore = raw.get("ignore", {})
+    if not isinstance(ignore, dict):
+        return {}
+    return {str(k): [str(c) for c in v] for k, v in ignore.items() if isinstance(v, list)}
+
+
+def _resolve_ignore_config(
+    path: Path, cache: dict[str, tuple[IgnoreConfig, Path | None]]
+) -> tuple[IgnoreConfig, Path | None]:
+    """Resolve the ignore config for *path*, walking up the directory tree.
+
+    Checks the cache first (keyed by resolved directory path string). If not
+    cached, walks up from ``path.parent`` looking for:
+
+    - ``.claude-plugin/plugin.json`` → loads from ``.claude-plugin/validator.json``
+      via :func:`_load_ignore_config`.
+    - ``.skilllint.json`` → loads the ``ignore`` dict from that file.
+
+    The first match wins. All directories in the walked chain up to the found
+    root are populated in *cache* so sibling files in the same tree do not
+    re-walk.
+
+    Args:
+        path: Absolute path to the file being validated.
+        cache: Mutable per-run cache mapping resolved directory path strings to
+            ``(ignore_config, config_root)`` tuples.
+
+    Returns:
+        Tuple of (ignore_config, config_root). ``config_root`` is the directory
+        that contained the config file, used as the base for relative-path
+        prefix matching. Both values are empty / ``None`` when nothing is found.
+    """
+    start_dir = path.parent.resolve()
+    cache_key = str(start_dir)
+    if cache_key in cache:
+        return cache[cache_key]
+
+    walked: list[Path] = []
+    current = start_dir
+    result_config: IgnoreConfig = {}
+    result_root: Path | None = None
+
+    while True:
+        walked.append(current)
+        if (current / ".claude-plugin" / "plugin.json").exists():
+            result_config = _load_ignore_config(current)
+            result_root = current
+            break
+        skilllint_cfg = current / ".skilllint.json"
+        if skilllint_cfg.exists():
+            result_config = _load_skilllint_config(skilllint_cfg)
+            result_root = current
+            break
+        parent = current.parent
+        if parent == current:
+            # Filesystem root reached
+            break
+        current = parent
+
+    # Populate cache for every directory in the walked chain so sibling files
+    # in the same tree skip the upward walk entirely.
+    result: tuple[IgnoreConfig, Path | None] = (result_config, result_root)
+    for walked_dir in walked:
+        dir_key = str(walked_dir)
+        if dir_key not in cache:
+            cache[dir_key] = result
+
+    return result
+
+
 def _is_suppressed(ignore_config: IgnoreConfig, file_path: Path, plugin_root: Path, code: str) -> bool:
     """Check whether an issue code is suppressed for a given file path.
 
@@ -689,7 +775,11 @@ def _is_suppressed(ignore_config: IgnoreConfig, file_path: Path, plugin_root: Pa
         return False
     rel_str = rel.as_posix()
     for prefix, codes in ignore_config.items():
-        if (rel_str == prefix or rel_str.startswith(prefix.rstrip("/") + "/")) and code in codes:
+        if not prefix:
+            # Empty prefix means suppress globally for all files under this root.
+            if code in codes:
+                return True
+        elif (rel_str == prefix or rel_str.startswith(prefix.rstrip("/") + "/")) and code in codes:
             return True
     return False
 
@@ -4973,15 +5063,17 @@ def _get_validators_for_path(path: Path) -> list[Validator]:
 
 
 def _collect_validator_results(
-    validators: list[Validator], path: Path, *, plugin_root: Path | None, ignore_config: IgnoreConfig
+    validators: list[Validator], path: Path, *, config_root: Path | None, ignore_config: IgnoreConfig
 ) -> list[tuple[str, ValidationResult]]:
     """Run each validator and collect results, applying ignore filtering.
 
     Args:
         validators: Validators to run.
         path: Path to validate.
-        plugin_root: Plugin root for ignore config resolution.
-        ignore_config: Per-plugin ignore configuration.
+        config_root: Directory containing the resolved config file (plugin root
+            or .skilllint.json parent). Used as the base for relative-path
+            prefix matching. Pass ``None`` to skip filtering.
+        ignore_config: Resolved ignore configuration.
 
     Returns:
         List of (validator_class_name, result) tuples.
@@ -4989,13 +5081,20 @@ def _collect_validator_results(
     results: list[tuple[str, ValidationResult]] = []
     for validator in validators:
         result = validator.validate(path)
-        if plugin_root is not None:
-            result = _filter_result_by_ignore(result, path, plugin_root, ignore_config)
+        if config_root is not None:
+            result = _filter_result_by_ignore(result, path, config_root, ignore_config)
         results.append((type(validator).__name__, result))
     return results
 
 
-def validate_single_path(path: Path, *, check: bool, fix: bool, verbose: bool) -> FileResults:
+def validate_single_path(
+    path: Path,
+    *,
+    check: bool,
+    fix: bool,
+    verbose: bool,
+    per_run_cache: dict[str, tuple[IgnoreConfig, Path | None]] | None = None,
+) -> FileResults:
     """Validate a single path and return results grouped by file.
 
     Args:
@@ -5003,6 +5102,10 @@ def validate_single_path(path: Path, *, check: bool, fix: bool, verbose: bool) -
         check: Validate only, don't auto-fix.
         fix: Auto-fix issues where possible.
         verbose: Show detailed output.
+        per_run_cache: Optional mutable cache for ignore-config resolution.
+            When provided, directory-tree walks are cached across calls so
+            sibling files share the same lookup result.  Pass the same dict
+            for the lifetime of a single scan run.
 
     Returns:
         Mapping of file path to list of (validator_class_name, result) tuples.
@@ -5028,12 +5131,13 @@ def validate_single_path(path: Path, *, check: bool, fix: bool, verbose: bool) -
             raise typer.Exit(2) from None
         return {path: []}
 
-    # Load per-plugin ignore config (once per plugin root)
-    plugin_root = find_plugin_dir(path)
-    ignore_config: IgnoreConfig = _load_ignore_config(plugin_root) if plugin_root is not None else {}
+    # Resolve ignore config — checks cache first, then walks up the directory
+    # tree looking for .claude-plugin/plugin.json or .skilllint.json.
+    cache: dict[str, tuple[IgnoreConfig, Path | None]] = per_run_cache if per_run_cache is not None else {}
+    ignore_config, config_root = _resolve_ignore_config(path, cache)
 
     validator_results = _collect_validator_results(
-        validators, path, plugin_root=plugin_root, ignore_config=ignore_config
+        validators, path, config_root=config_root, ignore_config=ignore_config
     )
 
     # Apply fixes if requested and validator supports it
@@ -5055,7 +5159,7 @@ def validate_single_path(path: Path, *, check: bool, fix: bool, verbose: bool) -
             # Re-validate after fixes
             if fixes_applied:
                 validator_results = _collect_validator_results(
-                    validators, path, plugin_root=plugin_root, ignore_config=ignore_config
+                    validators, path, config_root=config_root, ignore_config=ignore_config
                 )
 
     return {path: validator_results}
@@ -5376,6 +5480,7 @@ def main(
         ),
     ] = None,
     record: Path | None = None,
+    include_gitignore: bool = False,
 ) -> None:
     """Validate Claude Code plugins, skills, agents, and commands."""
     # If a subcommand was invoked, don't run validation
@@ -5407,6 +5512,13 @@ def main(
             typer.echo("Error: Cannot use both --check and --fix flags", err=True)
             raise typer.Exit(2) from None
 
+        # One shared cache per scan run — prevents re-walking the directory
+        # tree for every file when many files share the same config root.
+        per_run_cache: dict[str, tuple[IgnoreConfig, Path | None]] = {}
+
+        def _validate_with_cache(p: Path, *, check: bool, fix: bool, verbose: bool) -> FileResults:
+            return validate_single_path(p, check=check, fix=fix, verbose=verbose, per_run_cache=per_run_cache)
+
         try:
             run_validation_loop(
                 expanded_paths=expanded_paths,
@@ -5417,11 +5529,12 @@ def main(
                 show_progress=show_progress,
                 show_summary=show_summary,
                 platform_override=platform_override,
-                validate_single_path=validate_single_path,
+                validate_single_path=_validate_with_cache,
                 validate_file=validate_file,
                 violations_to_result=violations_to_result,
                 adapters=ADAPTERS,
                 record_console=record_console,
+                include_gitignore=include_gitignore,
             )
         except (SystemExit, typer.Exit):
             _maybe_export_recording(record_console, record)
@@ -5580,6 +5693,13 @@ def check_cmd(
     filter_type: Annotated[str | None, typer.Option("--filter-type", help="Filter type")] = None,
     platform: Annotated[str | None, typer.Option("--platform", help="Platform adapter")] = None,
     record: Annotated[Path | None, typer.Option("--record", help="Record terminal output to SVG or HTML file")] = None,
+    include_gitignore: Annotated[
+        bool,
+        typer.Option(
+            "--include-gitignore",
+            help=("Scan files that are excluded by .gitignore rules. By default, gitignored paths are skipped."),
+        ),
+    ] = False,
 ) -> None:
     """Validate Claude Code plugins, skills, agents, and commands."""
     main(
@@ -5596,6 +5716,7 @@ def check_cmd(
         filter_type=filter_type,
         platform=platform,
         record=record,
+        include_gitignore=include_gitignore,
     )
 
 
