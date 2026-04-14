@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1776175226280,
+  "lastUpdate": 1776189284424,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -414,6 +414,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 63.672,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie McGregor Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "Jamie McGregor Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "id": "3ae22370d246805a20b42e2e01029a4abe1fbed7",
+          "message": "feat(config): add .skilllint.json ignore config with upward discovery and caching\n\nExtends suppression to work outside plugin contexts. Previously,\nper-rule suppression only applied inside .claude-plugin/ plugins.\n\n- Add .skilllint.json support: walk up from each scanned file to find\n  the nearest config file (.claude-plugin/validator.json or .skilllint.json)\n- Ignore keys: \"\" suppresses globally, path prefixes scope suppression\n  to matching files relative to the config file location\n- Cache discovered config per directory within a single run so shared\n  parent directories are only walked once across all expanded paths\n- Plugin-level .claude-plugin/validator.json takes priority when inside\n  a plugin; .skilllint.json is used otherwise\n- Fix PLC1901: prefix == \"\" → not prefix\n- Add 21 tests covering discovery, caching, global/scoped suppression,\n  and end-to-end validate_single_path integration\n- Update README and add docs/ignore-config.md reference",
+          "timestamp": "2026-04-14T17:51:27Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/3ae22370d246805a20b42e2e01029a4abe1fbed7"
+        },
+        "date": 1776189283977,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 15565.009,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 16389.735,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 17417.669,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 61.075,
             "unit": "files/s"
           }
         ]
