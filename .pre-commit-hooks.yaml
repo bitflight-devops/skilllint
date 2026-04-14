@@ -1,7 +1,74 @@
+# skilllint pre-commit hooks
+# -------------------------
+# Add to .pre-commit-config.yaml (or prek equivalent), pinning `rev` to a tag or SHA:
+#
+#   repos:
+#     - repo: https://github.com/bitflight-devops/skilllint
+#       rev: v1.6.0
+#       hooks:
+#         - id: skilllint
+#
+# Common customizations (hook `args` are appended after the hook entry):
+#
+#   - id: skilllint
+#     args: [--platform, cursor]
+#
+#   - id: skilllint
+#     args: [--show-summary]
+#
+#   - id: skilllint
+#     exclude: ^(vendor/|third_party/)
+#
+# Directory-wide checks: use a local hook with pass_filenames: false, e.g.
+#
+#   - repo: local
+#     hooks:
+#       - id: skilllint-plugin
+#         name: skilllint (plugin tree)
+#         language: system
+#         entry: uv run skilllint check --no-color .claude/plugins/my-plugin
+#         pass_filenames: false
+#         files: ^\.claude/plugins/my-plugin/
+#
+# Auto-fix: enable the `skilllint-fix` hook (do not pass --fix via args on `skilllint`).
+
 - id: skilllint
-  name: skilllint
-  description: Validate AI agent plugins, skills, and agents
+  name: skilllint (check)
+  description: >-
+    Validate staged agent plugin files (skills, agents, commands, hooks, .mdc rules,
+    plugin/hooks/marketplace JSON) under typical layout roots. Uses `skilllint check`
+    with stable CI-style output (`--no-color`). Append hook `args` for `--platform`,
+    `--verbose`, `--show-summary`, `--show-progress`, `--filter`, `--filter-type`, etc.
+  entry: skilllint check --no-color
   language: python
-  entry: skilllint check
-  types_or: [markdown, json, yaml]
+  files: (?i)(^|/)(\.claude/|\.cursor/|\.agents/|\.codex/|\.claude-plugin/).+\.(md|mdc|json|ya?ml)$|(^|/)SKILL\.md$|(^|/)(plugin|hooks|marketplace)\.json$|(^|/)skills/.+\.(md|mdc)$|(^|/)agents/.+\.md$|(^|/)commands/.+\.md$
+  exclude: (^|/).*failing-examples(/|$)
   pass_filenames: true
+  minimum_pre_commit_version: "3.5.0"
+
+- id: skilllint-fix
+  name: skilllint (check --fix)
+  description: >-
+    Same file selection as `skilllint`, but apply auto-fixes where supported. Skips
+    fix application for paths containing `failing-examples/` (skilllint also guards
+    fixtures). Review `git diff` before committing.
+  entry: skilllint check --fix --no-color
+  language: python
+  files: (?i)(^|/)(\.claude/|\.cursor/|\.agents/|\.codex/|\.claude-plugin/).+\.(md|mdc|json|ya?ml)$|(^|/)SKILL\.md$|(^|/)(plugin|hooks|marketplace)\.json$|(^|/)skills/.+\.(md|mdc)$|(^|/)agents/.+\.md$|(^|/)commands/.+\.md$
+  exclude: (^|/).*failing-examples(/|$)
+  pass_filenames: true
+  minimum_pre_commit_version: "3.5.0"
+
+- id: skilllint-by-file-type
+  name: skilllint (by file type — broad)
+  description: >-
+    Runs on all staged markdown, JSON, and YAML (pre-commit file tags). Use when your
+    layout is non-standard; you must `exclude` paths skilllint does not understand
+    (e.g. package.json, docker-compose.yml) or commits will fail with “Cannot determine
+    file type”.
+  entry: skilllint check --no-color
+  language: python
+  types_or: [markdown, json, yaml]
+  exclude: (^|/).*failing-examples(/|$)
+  pass_filenames: true
+  minimum_pre_commit_version: "3.5.0"
