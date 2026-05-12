@@ -88,7 +88,7 @@ jobs:
 
       - name: Store I/O benchmark result
         if: github.ref == 'refs/heads/main'
-        uses: benchmark-action/github-action-benchmark@v1.22.0
+        uses: benchmark-action/github-action-benchmark@v1.22.1
         with:
           tool: customSmallerIsBetter
           output-file-path: scripts/results/bench_io_clean_gh.json
@@ -246,7 +246,7 @@ jobs:
 
       - name: Store CPU benchmark result
         if: github.ref == 'refs/heads/main'
-        uses: benchmark-action/github-action-benchmark@v1.22.0
+        uses: benchmark-action/github-action-benchmark@v1.22.1
         with:
           tool: customSmallerIsBetter
           output-file-path: scripts/results/bench_cpu_gh.json
@@ -463,7 +463,7 @@ jobs:
             --base scripts/results/benchmark_results_base.json
 
       - name: Store I/O benchmark result
-        uses: benchmark-action/github-action-benchmark@v1.22.0
+        uses: benchmark-action/github-action-benchmark@v1.22.1
         with:
           tool: customSmallerIsBetter
           output-file-path: scripts/results/bench_io_gh.json
