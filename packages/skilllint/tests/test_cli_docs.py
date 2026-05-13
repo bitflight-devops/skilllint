@@ -31,8 +31,10 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 _TEST_URL = "https://docs.example.com/en/docs/settings.md"
+_TEST_URL_2 = "https://docs.example.com/en/docs/hooks.md"
 _TEST_PAGE = "settings"
 _TEST_PATH = Path("/tmp/settings-2024-01-01-0000.md")
+_TEST_PATH_2 = Path("/tmp/hooks-2024-01-01-0000.md")
 
 
 def _cache_result(status: CacheStatus, path: Path = _TEST_PATH) -> CacheResult:
@@ -242,6 +244,60 @@ class TestDocsFetch:
         # Assert
         _, kwargs = mock_fetch.call_args
         assert kwargs.get("force") is False
+
+
+# ---------------------------------------------------------------------------
+# docs fetch-authorities
+# ---------------------------------------------------------------------------
+
+
+class TestDocsFetchAuthorities:
+    """Tests for the ``docs fetch-authorities`` subcommand."""
+
+    def test_fetches_all_authority_urls(self, cli_runner: CliRunner, mocker: MockerFixture) -> None:
+        """Fetches each authority URL and prints one path per success."""
+        mock_iter = mocker.patch("skilllint.cli_docs.iter_authority_urls")
+        mock_iter.return_value = iter([_TEST_URL, _TEST_URL_2])
+
+        mock_fetch = mocker.patch("skilllint.cli_docs.fetch_or_cached")
+        mock_fetch.side_effect = [
+            _cache_result(CacheStatus.FRESH, path=_TEST_PATH),
+            _cache_result(CacheStatus.NEW, path=_TEST_PATH_2),
+        ]
+
+        result = cli_runner.invoke(plugin_validator.app, ["docs", "fetch-authorities"])
+
+        assert result.exit_code == 0
+        mock_iter.assert_called_once_with(unique=True)
+        assert mock_fetch.call_count == 2
+        assert str(_TEST_PATH) in result.output
+        assert str(_TEST_PATH_2) in result.output
+
+    def test_forwards_ttl_and_force_options(self, cli_runner: CliRunner, mocker: MockerFixture) -> None:
+        """Forwards --ttl/--force values to fetch_or_cached for each URL."""
+        mocker.patch("skilllint.cli_docs.iter_authority_urls", return_value=iter([_TEST_URL]))
+        mock_fetch = mocker.patch("skilllint.cli_docs.fetch_or_cached")
+        mock_fetch.return_value = _cache_result(CacheStatus.FRESH)
+
+        result = cli_runner.invoke(plugin_validator.app, ["docs", "fetch-authorities", "--ttl", "12", "--force"])
+
+        assert result.exit_code == 0
+        mock_fetch.assert_called_once_with(_TEST_URL, ttl_hours=pytest.approx(12.0), force=True)
+
+    def test_exits_one_when_any_authority_fetch_fails(self, cli_runner: CliRunner, mocker: MockerFixture) -> None:
+        """Continues remaining URLs but exits 1 if any URL has no available cache."""
+        mocker.patch("skilllint.cli_docs.iter_authority_urls", return_value=iter([_TEST_URL, _TEST_URL_2]))
+        mock_fetch = mocker.patch("skilllint.cli_docs.fetch_or_cached")
+        mock_fetch.side_effect = [
+            NoCacheError(url=_TEST_URL, reason="network down"),
+            _cache_result(CacheStatus.STALE, path=_TEST_PATH_2),
+        ]
+
+        result = cli_runner.invoke(plugin_validator.app, ["docs", "fetch-authorities"])
+
+        assert result.exit_code == 1
+        assert mock_fetch.call_count == 2
+        assert str(_TEST_PATH_2) in result.output
 
 
 # ---------------------------------------------------------------------------
