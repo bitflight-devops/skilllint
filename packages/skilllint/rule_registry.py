@@ -23,12 +23,10 @@ The decorator registers the rule in RULE_REGISTRY for `skilllint rule <ID>` look
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Annotated, Any, Literal
+from collections.abc import Callable, Iterator
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
 
 
 class RuleAuthority(BaseModel):
@@ -159,4 +157,28 @@ def list_rules(
     return sorted(rules, key=lambda r: r.id)
 
 
-__all__ = ["RULE_REGISTRY", "RuleAuthority", "RuleEntry", "get_rule", "list_rules", "skilllint_rule"]
+def iter_authority_urls(*, unique: bool = True) -> Iterator[str]:
+    """Iterate authority reference URLs declared by registered rules.
+
+    Args:
+        unique: When True, yield each reference URL at most once while preserving
+            first-seen order (by sorted rule ID). When False, include duplicates.
+
+    Yields:
+        Authority reference URL strings from RuleEntry.authority.reference.
+    """
+    seen: set[str] = set()
+    for rule in list_rules():
+        reference = rule.authority.reference if rule.authority is not None else None
+        if not reference:
+            continue
+
+        if unique:
+            if reference in seen:
+                continue
+            seen.add(reference)
+
+        yield reference
+
+
+__all__ = ["RULE_REGISTRY", "RuleAuthority", "RuleEntry", "get_rule", "iter_authority_urls", "list_rules", "skilllint_rule"]
