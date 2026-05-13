@@ -23,10 +23,13 @@ The decorator registers the rule in RULE_REGISTRY for `skilllint rule <ID>` look
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
-from typing import Annotated, Any, Literal
+from collections.abc import Iterator
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class RuleAuthority(BaseModel):
