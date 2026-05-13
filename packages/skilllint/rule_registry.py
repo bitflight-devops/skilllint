@@ -197,4 +197,12 @@ def iter_authority_urls(*, unique: bool = True) -> Iterator[str]:
         yield normalized
 
 
-__all__ = ["RULE_REGISTRY", "RuleAuthority", "RuleEntry", "get_rule", "iter_authority_urls", "list_rules", "skilllint_rule"]
+__all__ = [
+    "RULE_REGISTRY",
+    "RuleAuthority",
+    "RuleEntry",
+    "get_rule",
+    "iter_authority_urls",
+    "list_rules",
+    "skilllint_rule",
+]
