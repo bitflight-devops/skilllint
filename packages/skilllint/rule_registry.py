@@ -25,6 +25,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from typing import TYPE_CHECKING, Annotated, Any, Literal
+from urllib.parse import urljoin
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -161,27 +162,39 @@ def list_rules(
 
 
 def iter_authority_urls(*, unique: bool = True) -> Iterator[str]:
-    """Iterate authority reference URLs declared by registered rules.
+    """Iterate normalized authority documentation URLs from registered rules.
 
     Args:
-        unique: When True, yield each reference URL at most once while preserving
+        unique: When True, yield each normalized URL at most once while preserving
             first-seen order (by sorted rule ID). When False, include duplicates.
 
     Yields:
-        Authority reference URL strings from RuleEntry.authority.reference.
+        Absolute authority documentation URLs.
     """
     seen: set[str] = set()
     for rule in list_rules():
-        reference = rule.authority.reference if rule.authority is not None else None
+        if rule.authority is None:
+            continue
+
+        reference = rule.authority.reference
         if not reference:
             continue
 
-        if unique:
-            if reference in seen:
+        normalized = reference
+        if not normalized.startswith(("https://", "http://")):
+            origin = rule.authority.origin.strip()
+            if not origin:
                 continue
-            seen.add(reference)
+            if "://" not in origin:
+                origin = f"https://{origin}"
+            normalized = urljoin(f"{origin.rstrip('/')}/", normalized)
 
-        yield reference
+        if unique:
+            if normalized in seen:
+                continue
+            seen.add(normalized)
+
+        yield normalized
 
 
 __all__ = ["RULE_REGISTRY", "RuleAuthority", "RuleEntry", "get_rule", "iter_authority_urls", "list_rules", "skilllint_rule"]
