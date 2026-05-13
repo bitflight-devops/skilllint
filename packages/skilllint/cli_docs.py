@@ -119,7 +119,7 @@ def fetch_authorities(
         ),
     ] = False,
 ) -> None:
-    """Fetch cached documentation for all rule authority reference URLs.
+    """Fetch cached documentation for all normalized rule authority URLs.
 
     Prints one cached file path per successfully fetched authority URL.
 
