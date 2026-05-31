@@ -299,6 +299,29 @@ class TestDocsFetchAuthorities:
         assert mock_fetch.call_count == 2
         assert str(_TEST_PATH_2) in result.output
 
+    def test_no_authority_urls_exits_zero_with_warning(self, cli_runner: CliRunner, mocker: MockerFixture) -> None:
+        """Empty rule registry (no authority URLs) exits 0 and emits a warning.
+
+        Tests: docs fetch-authorities early-return branch when iter_authority_urls
+               yields nothing
+        How: Patch iter_authority_urls at the cli_docs import boundary to return an
+             empty iterator; invoke the command; verify exit code and warning text
+        Why: The early-return branch (lines 131-133 in cli_docs.py) guards against
+             calling fetch_or_cached zero times and silently succeeding.  Without a
+             test this branch is invisible to coverage and a regression could go
+             undetected — e.g. an accidental ``raise SystemExit`` instead of a plain
+             ``return`` would break callers that expect a zero exit code.
+        """
+        # Arrange
+        mocker.patch("skilllint.cli_docs.iter_authority_urls", return_value=iter([]))
+
+        # Act
+        result = cli_runner.invoke(plugin_validator.app, ["docs", "fetch-authorities"])
+
+        # Assert
+        assert result.exit_code == 0
+        assert "no authority" in result.output.lower()
+
 
 # ---------------------------------------------------------------------------
 # docs latest

@@ -170,6 +170,33 @@ def iter_authority_urls(*, unique: bool = True) -> Iterator[str]:
 
     Yields:
         Absolute authority documentation URLs.
+
+    Note:
+        **urljoin root-relative reference invariant.**
+        When ``reference`` is not already absolute, this function resolves it
+        against ``origin`` using ``urljoin``.  RFC 3986 §5.2 defines a
+        root-relative reference (one that starts with ``/``) as resolving
+        against the *scheme and host only* — the path component of the base
+        URL is discarded.  Concretely::
+
+            urljoin("https://github.com/org/repo/", "/docs#foo")
+            # -> "https://github.com/docs#foo"   # /org/repo silently dropped
+
+            urljoin("https://github.com/org/repo/", "docs#foo")
+            # -> "https://github.com/org/repo/docs#foo"   # correct
+
+        The current registry is safe: every rule whose ``origin`` contains a
+        path component (e.g. ``"github.com/org/repo"``) already stores an
+        absolute URL in ``reference`` (starts with ``https://``), so the
+        ``urljoin`` branch is never reached for those entries.  Rules that
+        use a root-relative ``reference`` (e.g. ``"/rules/SK001"``) pair it
+        with a bare-host origin (e.g. ``"agentskills.io"``), where
+        root-relative resolution is correct.
+
+        **Registry constraint:** if a new rule is added with a path-containing
+        origin *and* a root-relative reference, the path portion of the origin
+        will be silently dropped.  Use an absolute URL in ``reference``
+        whenever ``origin`` contains a path segment.
     """
     seen: set[str] = set()
     for rule in list_rules():
