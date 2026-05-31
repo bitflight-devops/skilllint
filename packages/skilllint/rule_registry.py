@@ -23,6 +23,7 @@ The decorator registers the rule in RULE_REGISTRY for `skilllint rule <ID>` look
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Iterator
 from typing import TYPE_CHECKING, Annotated, Any, Literal
 from urllib.parse import urljoin
@@ -31,6 +32,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+_logger = logging.getLogger(__name__)
 
 
 class RuleAuthority(BaseModel):
@@ -164,6 +167,22 @@ def list_rules(
 def iter_authority_urls(*, unique: bool = True) -> Iterator[str]:
     """Iterate normalized authority documentation URLs from registered rules.
 
+    Rules whose ``authority`` is ``None`` are silently skipped — a ``None``
+    authority is the conventional sentinel for "this rule has no external
+    reference" and is not an authoring error.
+
+    Rules whose ``authority.reference`` is ``None`` are also silently skipped
+    for the same reason: ``None`` is the intentional "no reference" value as
+    defined by :class:`RuleAuthority`.
+
+    Rules that are malformed — where ``reference`` is present but empty or
+    whitespace-only, or where a relative ``reference`` cannot be resolved
+    because ``origin`` is empty after stripping — are skipped with a
+    ``WARNING`` log at logger ``skilllint.rule_registry`` (i.e. this module).
+    The log message identifies the rule by its ``id`` and states the reason,
+    so authoring mistakes surface in application logs without aborting
+    iteration.
+
     Args:
         unique: When True, yield each normalized URL at most once while preserving
             first-seen order (by sorted rule ID). When False, include duplicates.
@@ -204,13 +223,27 @@ def iter_authority_urls(*, unique: bool = True) -> Iterator[str]:
             continue
 
         reference = rule.authority.reference
-        if not reference:
+        # None means "intentionally no reference" — silent skip, not an error.
+        if reference is None:
+            continue
+
+        # An empty or whitespace-only string is present-but-malformed.
+        if not reference.strip():
+            _logger.warning(
+                "Rule %s: authority.reference is present but empty or whitespace — skipping URL resolution", rule.id
+            )
             continue
 
         normalized = reference
         if not normalized.startswith(("https://", "http://")):
             origin = rule.authority.origin.strip()
             if not origin:
+                _logger.warning(
+                    "Rule %s: authority.reference %r is a relative reference but authority.origin is empty"
+                    " — cannot resolve URL, skipping",
+                    rule.id,
+                    reference,
+                )
                 continue
             if "://" not in origin:
                 origin = f"https://{origin}"

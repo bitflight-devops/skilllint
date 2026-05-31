@@ -299,6 +299,45 @@ class TestDocsFetchAuthorities:
         assert mock_fetch.call_count == 2
         assert str(_TEST_PATH_2) in result.output
 
+    def test_non_cache_exception_is_collected_loop_continues_and_exits_one(
+        self, cli_runner: CliRunner, mocker: MockerFixture
+    ) -> None:
+        """A non-NoCacheError exception from fetch_or_cached is a collected failure.
+
+        Tests: fetch-authorities exception handling for arbitrary Exception subtypes
+        How: Patch iter_authority_urls to yield two URLs; patch fetch_or_cached so
+             the first URL raises OSError("disk full") (not a NoCacheError) and the
+             second returns a valid FRESH CacheResult.  Invoke the command and check:
+             - exit_code == 1 (at least one failure)
+             - the failing URL appears in output (error message identifies the source)
+             - the error text "disk full" appears in output
+             - fetch_or_cached was called twice (loop did not abort after the exception)
+             - the second URL's cached path appears in output (second URL succeeded)
+        Why: The fix extends the except clause from ``except NoCacheError`` to
+             ``except Exception`` so that I/O errors, timeout errors, and any other
+             unexpected failures are collected and reported rather than propagating
+             as an unhandled exception.  This regression test locks in that behavior
+             and guards against narrowing the clause back to NoCacheError only.
+        """
+        # Arrange
+        mocker.patch("skilllint.cli_docs.iter_authority_urls", return_value=iter([_TEST_URL, _TEST_URL_2]))
+        mock_fetch = mocker.patch("skilllint.cli_docs.fetch_or_cached")
+        mock_fetch.side_effect = [OSError("disk full"), _cache_result(CacheStatus.FRESH, path=_TEST_PATH_2)]
+
+        # Act
+        result = cli_runner.invoke(plugin_validator.app, ["docs", "fetch-authorities"])
+
+        # Assert — exit code signals partial failure
+        assert result.exit_code == 1
+        # The failing URL is identified in output
+        assert _TEST_URL in result.output
+        # The exception message is surfaced
+        assert "disk full" in result.output
+        # The loop continued: fetch_or_cached was called for both URLs
+        assert mock_fetch.call_count == 2
+        # The second URL's success is visible in output
+        assert str(_TEST_PATH_2) in result.output
+
     def test_no_authority_urls_exits_zero_with_warning(self, cli_runner: CliRunner, mocker: MockerFixture) -> None:
         """Empty rule registry (no authority URLs) exits 0 and emits a warning.
 

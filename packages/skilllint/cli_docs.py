@@ -46,6 +46,23 @@ docs_app = typer.Typer(
 
 
 # ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+
+def _format_status_label(status: CacheStatus) -> str:
+    """Return the uppercased display label for a cache status.
+
+    Args:
+        status: The :class:`CacheStatus` value to format.
+
+    Returns:
+        Uppercase string of the status enum value (e.g. ``"REFRESHED"``).
+    """
+    return status.value.upper()
+
+
+# ---------------------------------------------------------------------------
 # fetch
 # ---------------------------------------------------------------------------
 
@@ -91,7 +108,7 @@ def fetch(
     if result.status is CacheStatus.STALE:
         err_console.print(":warning: [yellow]Serving stale cache — network unavailable[/yellow]")
     else:
-        status_label = result.status.value.upper()
+        status_label = _format_status_label(result.status)
         err_console.print(f":white_check_mark: [green]{status_label}[/green] {result.page_name}")
 
     console.print(result.path)
@@ -140,11 +157,15 @@ def fetch_authorities(
             had_failure = True
             err_console.print(f":cross_mark: [red]FAILED[/red] {exc.url} ({exc.reason})")
             continue
+        except Exception as exc:  # noqa: BLE001 — collect-and-continue contract: all URLs must be attempted
+            had_failure = True
+            err_console.print(f":cross_mark: [red]FAILED[/red] {url} ({exc!s})")
+            continue
 
         if result.status is CacheStatus.STALE:
             err_console.print(f":warning: [yellow]STALE[/yellow] {url} — serving stale cache")
         else:
-            status_label = result.status.value.upper()
+            status_label = _format_status_label(result.status)
             err_console.print(f":white_check_mark: [green]{status_label}[/green] {url}")
 
         console.print(result.path)
