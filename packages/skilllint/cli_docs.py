@@ -7,13 +7,14 @@ that module — this file is a pure CLI adapter.
 
 from __future__ import annotations
 
-from pathlib import Path  # noqa: TC003
+from pathlib import Path
 from typing import Annotated
 
 import typer
 from rich.console import Console
 from rich.panel import Panel
 
+from skilllint.rule_registry import iter_authority_urls
 from skilllint.vendor_cache import (
     CacheStatus,
     IntegrityStatus,
@@ -42,6 +43,23 @@ docs_app = typer.Typer(
     no_args_is_help=True,
     rich_markup_mode="rich",
 )
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+
+def _format_status_label(status: CacheStatus) -> str:
+    """Return the uppercased display label for a cache status.
+
+    Args:
+        status: The :class:`CacheStatus` value to format.
+
+    Returns:
+        Uppercase string of the status enum value (e.g. ``"REFRESHED"``).
+    """
+    return status.value.upper()
 
 
 # ---------------------------------------------------------------------------
@@ -90,10 +108,70 @@ def fetch(
     if result.status is CacheStatus.STALE:
         err_console.print(":warning: [yellow]Serving stale cache — network unavailable[/yellow]")
     else:
-        status_label = result.status.value.upper()
+        status_label = _format_status_label(result.status)
         err_console.print(f":white_check_mark: [green]{status_label}[/green] {result.page_name}")
 
     console.print(result.path)
+
+
+# ---------------------------------------------------------------------------
+# fetch-authorities
+# ---------------------------------------------------------------------------
+
+
+@docs_app.command("fetch-authorities")
+def fetch_authorities(
+    ttl: Annotated[
+        float,
+        typer.Option(
+            "--ttl", help="Cache time-to-live in hours before a refresh is attempted.", rich_help_panel="Cache Options"
+        ),
+    ] = 4.0,
+    force: Annotated[
+        bool,
+        typer.Option(
+            "--force",
+            help="Skip the freshness check and always attempt a network fetch.",
+            rich_help_panel="Cache Options",
+        ),
+    ] = False,
+) -> None:
+    """Fetch cached documentation for all normalized rule authority URLs.
+
+    Prints one cached file path per successfully fetched authority URL.
+
+    Raises:
+        typer.Exit: Exit code 1 when one or more authority URLs cannot be fetched
+            and no stale cache can be served.
+    """
+    authority_urls = list(iter_authority_urls(unique=True))
+    if not authority_urls:
+        err_console.print(":warning: [yellow]No authority URLs found in the rule registry[/yellow]")
+        return
+
+    had_failure = False
+    for url in authority_urls:
+        try:
+            result = fetch_or_cached(url, ttl_hours=ttl, force=force)
+        except NoCacheError as exc:
+            had_failure = True
+            err_console.print(f":cross_mark: [red]FAILED[/red] {exc.url} ({exc.reason})")
+            continue
+        except Exception as exc:  # noqa: BLE001 — collect-and-continue contract: all URLs must be attempted
+            had_failure = True
+            err_console.print(f":cross_mark: [red]FAILED[/red] {url} ({exc!s})")
+            continue
+
+        if result.status is CacheStatus.STALE:
+            err_console.print(f":warning: [yellow]STALE[/yellow] {url} — serving stale cache")
+        else:
+            status_label = _format_status_label(result.status)
+            err_console.print(f":white_check_mark: [green]{status_label}[/green] {url}")
+
+        console.print(result.path)
+
+    if had_failure:
+        raise typer.Exit(code=1)
 
 
 # ---------------------------------------------------------------------------

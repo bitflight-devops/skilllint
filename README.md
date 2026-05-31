@@ -286,6 +286,7 @@ Usage: skilllint docs [OPTIONS] COMMAND [ARGS]...
 
 Commands:
   fetch     Fetch a documentation page or return a cached copy.
+  fetch-authorities  Fetch documentation for all normalized rule authority URLs.
   latest    Find the most recent cached file for a page name.
   sections  Print a table of sections in a cached markdown file.
   section   Extract the text of a named section from a cached markdown file.
@@ -310,6 +311,24 @@ Options:
 
 Prints the cached file path to stdout. Status messages go to stderr. Exits 1 when no
 cache exists and the network is unavailable.
+
+#### docs fetch-authorities
+
+```
+Usage: skilllint docs fetch-authorities [OPTIONS]
+
+Cache Options:
+  --ttl FLOAT           Cache time-to-live in hours before a refresh is attempted.  [default: 4.0]
+  --force               Skip the freshness check and always attempt a network fetch.
+
+Options:
+  --help                Show this message and exit.
+```
+
+Fetches every unique authority URL declared by the rule registry after normalizing
+origin-relative references against each rule authority origin. Prints one cached file
+path per successful fetch. Exits 1 if any URL cannot be fetched and no stale cache is
+available.
 
 #### docs latest
 
@@ -401,6 +420,9 @@ sidecar that records the SHA-256 digest, byte count, source URL, and fetch times
 ```bash
 # Cache a documentation page (default TTL: 4 hours)
 skilllint docs fetch https://docs.anthropic.com/en/docs/claude-code/settings.md
+
+# Pre-fetch all normalized rule authority URLs
+skilllint docs fetch-authorities
 
 # Force a network refresh regardless of TTL
 skilllint docs fetch https://docs.anthropic.com/en/docs/claude-code/settings.md --force

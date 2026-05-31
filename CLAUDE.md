@@ -37,6 +37,9 @@ When agents need external documentation (Claude hooks docs, Cursor rules docs, e
 # Cache a page (prints the file path to stdout)
 skilllint docs fetch URL
 
+# Cache all unique normalized rule authority URLs
+skilllint docs fetch-authorities
+
 # List sections in a cached file
 skilllint docs sections FILE
 

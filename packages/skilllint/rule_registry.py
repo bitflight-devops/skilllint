@@ -23,12 +23,17 @@ The decorator registers the rule in RULE_REGISTRY for `skilllint rule <ID>` look
 
 from __future__ import annotations
 
+import logging
+from collections.abc import Iterator
 from typing import TYPE_CHECKING, Annotated, Any, Literal
+from urllib.parse import urljoin
 
 from pydantic import BaseModel, ConfigDict, Field
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+_logger = logging.getLogger(__name__)
 
 
 class RuleAuthority(BaseModel):
@@ -159,4 +164,105 @@ def list_rules(
     return sorted(rules, key=lambda r: r.id)
 
 
-__all__ = ["RULE_REGISTRY", "RuleAuthority", "RuleEntry", "get_rule", "list_rules", "skilllint_rule"]
+def iter_authority_urls(*, unique: bool = True) -> Iterator[str]:
+    """Iterate normalized authority documentation URLs from registered rules.
+
+    Rules whose ``authority`` is ``None`` are silently skipped — a ``None``
+    authority is the conventional sentinel for "this rule has no external
+    reference" and is not an authoring error.
+
+    Rules whose ``authority.reference`` is ``None`` are also silently skipped
+    for the same reason: ``None`` is the intentional "no reference" value as
+    defined by :class:`RuleAuthority`.
+
+    Rules that are malformed — where ``reference`` is present but empty or
+    whitespace-only, or where a relative ``reference`` cannot be resolved
+    because ``origin`` is empty after stripping — are skipped with a
+    ``WARNING`` log at logger ``skilllint.rule_registry`` (i.e. this module).
+    The log message identifies the rule by its ``id`` and states the reason,
+    so authoring mistakes surface in application logs without aborting
+    iteration.
+
+    Args:
+        unique: When True, yield each normalized URL at most once while preserving
+            first-seen order (by sorted rule ID). When False, include duplicates.
+
+    Yields:
+        Absolute authority documentation URLs.
+
+    Note:
+        **urljoin root-relative reference invariant.**
+        When ``reference`` is not already absolute, this function resolves it
+        against ``origin`` using ``urljoin``.  RFC 3986 §5.2 defines a
+        root-relative reference (one that starts with ``/``) as resolving
+        against the *scheme and host only* — the path component of the base
+        URL is discarded.  Concretely::
+
+            urljoin("https://github.com/org/repo/", "/docs#foo")
+            # -> "https://github.com/docs#foo"   # /org/repo silently dropped
+
+            urljoin("https://github.com/org/repo/", "docs#foo")
+            # -> "https://github.com/org/repo/docs#foo"   # correct
+
+        The current registry is safe: every rule whose ``origin`` contains a
+        path component (e.g. ``"github.com/org/repo"``) already stores an
+        absolute URL in ``reference`` (starts with ``https://``), so the
+        ``urljoin`` branch is never reached for those entries.  Rules that
+        use a root-relative ``reference`` (e.g. ``"/rules/SK001"``) pair it
+        with a bare-host origin (e.g. ``"agentskills.io"``), where
+        root-relative resolution is correct.
+
+        **Registry constraint:** if a new rule is added with a path-containing
+        origin *and* a root-relative reference, the path portion of the origin
+        will be silently dropped.  Use an absolute URL in ``reference``
+        whenever ``origin`` contains a path segment.
+    """
+    seen: set[str] = set()
+    for rule in list_rules():
+        if rule.authority is None:
+            continue
+
+        reference = rule.authority.reference
+        # None means "intentionally no reference" — silent skip, not an error.
+        if reference is None:
+            continue
+
+        # An empty or whitespace-only string is present-but-malformed.
+        if not reference.strip():
+            _logger.warning(
+                "Rule %s: authority.reference is present but empty or whitespace — skipping URL resolution", rule.id
+            )
+            continue
+
+        normalized = reference
+        if not normalized.startswith(("https://", "http://")):
+            origin = rule.authority.origin.strip()
+            if not origin:
+                _logger.warning(
+                    "Rule %s: authority.reference %r is a relative reference but authority.origin is empty"
+                    " — cannot resolve URL, skipping",
+                    rule.id,
+                    reference,
+                )
+                continue
+            if "://" not in origin:
+                origin = f"https://{origin}"
+            normalized = urljoin(f"{origin.rstrip('/')}/", normalized)
+
+        if unique:
+            if normalized in seen:
+                continue
+            seen.add(normalized)
+
+        yield normalized
+
+
+__all__ = [
+    "RULE_REGISTRY",
+    "RuleAuthority",
+    "RuleEntry",
+    "get_rule",
+    "iter_authority_urls",
+    "list_rules",
+    "skilllint_rule",
+]

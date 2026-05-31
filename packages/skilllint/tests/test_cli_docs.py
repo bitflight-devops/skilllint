@@ -31,8 +31,10 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 _TEST_URL = "https://docs.example.com/en/docs/settings.md"
+_TEST_URL_2 = "https://docs.example.com/en/docs/hooks.md"
 _TEST_PAGE = "settings"
 _TEST_PATH = Path("/tmp/settings-2024-01-01-0000.md")
+_TEST_PATH_2 = Path("/tmp/hooks-2024-01-01-0000.md")
 
 
 def _cache_result(status: CacheStatus, path: Path = _TEST_PATH) -> CacheResult:
@@ -242,6 +244,122 @@ class TestDocsFetch:
         # Assert
         _, kwargs = mock_fetch.call_args
         assert kwargs.get("force") is False
+
+
+# ---------------------------------------------------------------------------
+# docs fetch-authorities
+# ---------------------------------------------------------------------------
+
+
+class TestDocsFetchAuthorities:
+    """Tests for the ``docs fetch-authorities`` subcommand."""
+
+    def test_fetches_all_authority_urls(self, cli_runner: CliRunner, mocker: MockerFixture) -> None:
+        """Fetches each authority URL and prints one path per success."""
+        mock_iter = mocker.patch("skilllint.cli_docs.iter_authority_urls")
+        mock_iter.return_value = iter([_TEST_URL, _TEST_URL_2])
+
+        mock_fetch = mocker.patch("skilllint.cli_docs.fetch_or_cached")
+        mock_fetch.side_effect = [
+            _cache_result(CacheStatus.FRESH, path=_TEST_PATH),
+            _cache_result(CacheStatus.NEW, path=_TEST_PATH_2),
+        ]
+
+        result = cli_runner.invoke(plugin_validator.app, ["docs", "fetch-authorities"])
+
+        assert result.exit_code == 0
+        mock_iter.assert_called_once_with(unique=True)
+        assert mock_fetch.call_count == 2
+        assert str(_TEST_PATH) in result.output
+        assert str(_TEST_PATH_2) in result.output
+
+    def test_forwards_ttl_and_force_options(self, cli_runner: CliRunner, mocker: MockerFixture) -> None:
+        """Forwards --ttl/--force values to fetch_or_cached for each URL."""
+        mocker.patch("skilllint.cli_docs.iter_authority_urls", return_value=iter([_TEST_URL]))
+        mock_fetch = mocker.patch("skilllint.cli_docs.fetch_or_cached")
+        mock_fetch.return_value = _cache_result(CacheStatus.FRESH)
+
+        result = cli_runner.invoke(plugin_validator.app, ["docs", "fetch-authorities", "--ttl", "12", "--force"])
+
+        assert result.exit_code == 0
+        mock_fetch.assert_called_once_with(_TEST_URL, ttl_hours=pytest.approx(12.0), force=True)
+
+    def test_exits_one_when_any_authority_fetch_fails(self, cli_runner: CliRunner, mocker: MockerFixture) -> None:
+        """Continues remaining URLs but exits 1 if any URL has no available cache."""
+        mocker.patch("skilllint.cli_docs.iter_authority_urls", return_value=iter([_TEST_URL, _TEST_URL_2]))
+        mock_fetch = mocker.patch("skilllint.cli_docs.fetch_or_cached")
+        mock_fetch.side_effect = [
+            NoCacheError(url=_TEST_URL, reason="network down"),
+            _cache_result(CacheStatus.STALE, path=_TEST_PATH_2),
+        ]
+
+        result = cli_runner.invoke(plugin_validator.app, ["docs", "fetch-authorities"])
+
+        assert result.exit_code == 1
+        assert mock_fetch.call_count == 2
+        assert str(_TEST_PATH_2) in result.output
+
+    def test_non_cache_exception_is_collected_loop_continues_and_exits_one(
+        self, cli_runner: CliRunner, mocker: MockerFixture
+    ) -> None:
+        """A non-NoCacheError exception from fetch_or_cached is a collected failure.
+
+        Tests: fetch-authorities exception handling for arbitrary Exception subtypes
+        How: Patch iter_authority_urls to yield two URLs; patch fetch_or_cached so
+             the first URL raises OSError("disk full") (not a NoCacheError) and the
+             second returns a valid FRESH CacheResult.  Invoke the command and check:
+             - exit_code == 1 (at least one failure)
+             - the failing URL appears in output (error message identifies the source)
+             - the error text "disk full" appears in output
+             - fetch_or_cached was called twice (loop did not abort after the exception)
+             - the second URL's cached path appears in output (second URL succeeded)
+        Why: The fix extends the except clause from ``except NoCacheError`` to
+             ``except Exception`` so that I/O errors, timeout errors, and any other
+             unexpected failures are collected and reported rather than propagating
+             as an unhandled exception.  This regression test locks in that behavior
+             and guards against narrowing the clause back to NoCacheError only.
+        """
+        # Arrange
+        mocker.patch("skilllint.cli_docs.iter_authority_urls", return_value=iter([_TEST_URL, _TEST_URL_2]))
+        mock_fetch = mocker.patch("skilllint.cli_docs.fetch_or_cached")
+        mock_fetch.side_effect = [OSError("disk full"), _cache_result(CacheStatus.FRESH, path=_TEST_PATH_2)]
+
+        # Act
+        result = cli_runner.invoke(plugin_validator.app, ["docs", "fetch-authorities"])
+
+        # Assert — exit code signals partial failure
+        assert result.exit_code == 1
+        # The failing URL is identified in output
+        assert _TEST_URL in result.output
+        # The exception message is surfaced
+        assert "disk full" in result.output
+        # The loop continued: fetch_or_cached was called for both URLs
+        assert mock_fetch.call_count == 2
+        # The second URL's success is visible in output
+        assert str(_TEST_PATH_2) in result.output
+
+    def test_no_authority_urls_exits_zero_with_warning(self, cli_runner: CliRunner, mocker: MockerFixture) -> None:
+        """Empty rule registry (no authority URLs) exits 0 and emits a warning.
+
+        Tests: docs fetch-authorities early-return branch when iter_authority_urls
+               yields nothing
+        How: Patch iter_authority_urls at the cli_docs import boundary to return an
+             empty iterator; invoke the command; verify exit code and warning text
+        Why: The early-return branch (lines 131-133 in cli_docs.py) guards against
+             calling fetch_or_cached zero times and silently succeeding.  Without a
+             test this branch is invisible to coverage and a regression could go
+             undetected — e.g. an accidental ``raise SystemExit`` instead of a plain
+             ``return`` would break callers that expect a zero exit code.
+        """
+        # Arrange
+        mocker.patch("skilllint.cli_docs.iter_authority_urls", return_value=iter([]))
+
+        # Act
+        result = cli_runner.invoke(plugin_validator.app, ["docs", "fetch-authorities"])
+
+        # Assert
+        assert result.exit_code == 0
+        assert "no authority" in result.output.lower()
 
 
 # ---------------------------------------------------------------------------
