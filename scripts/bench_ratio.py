@@ -9,28 +9,38 @@ the compare ref is relative to the base ref.
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import pathlib
 import sys
+from collections.abc import Callable
 
-try:
-    from bench_utils import to_float
-except ModuleNotFoundError:
-    try:
-        from scripts.bench_utils import to_float
-    except ModuleNotFoundError:
+ToFloat = Callable[[object], float | None]
 
-        def _fallback_to_float(value: object) -> float | None:
-            if isinstance(value, bool):
-                return None
-            if isinstance(value, (int, float, str)):
-                try:
-                    return float(value)
-                except ValueError:
-                    return None
+
+def _fallback_to_float(value: object) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float, str)):
+        try:
+            return float(value)
+        except ValueError:
             return None
+    return None
 
-        to_float = _fallback_to_float
+
+def _resolve_to_float() -> ToFloat:
+    try:
+        module = importlib.import_module("bench_utils")
+    except ModuleNotFoundError:
+        try:
+            module = importlib.import_module("scripts.bench_utils")
+        except ModuleNotFoundError:
+            return _fallback_to_float
+    return module.to_float
+
+
+TO_FLOAT = _resolve_to_float()
 
 
 def extract_duration(data: list[dict[str, object]] | dict[str, object], label: str) -> float | None:
@@ -58,7 +68,7 @@ def extract_duration(data: list[dict[str, object]] | dict[str, object], label: s
         for entry in data:
             name = str(entry.get("name", ""))
             if name.endswith("_mean_ms"):
-                value = to_float(entry["value"])
+                value = TO_FLOAT(entry["value"])
                 return (value / 1000.0) if value is not None else None
         print(f"{label} data missing an entry with a name ending in '_mean_ms'", file=sys.stderr)
         return None
@@ -66,7 +76,7 @@ def extract_duration(data: list[dict[str, object]] | dict[str, object], label: s
     # Raw dict output from run_benchmark()
     for key in ("scan_mean_ms", "fix_mean_ms", "mean_ms"):
         if key in data:
-            value = to_float(data[key])
+            value = TO_FLOAT(data[key])
             return (value / 1000.0) if value is not None else None
 
     print(f"{label} data missing scan_mean_ms, fix_mean_ms, or mean_ms", file=sys.stderr)

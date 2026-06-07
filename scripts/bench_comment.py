@@ -20,29 +20,39 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import pathlib
 import sys
+from collections.abc import Callable
 from datetime import UTC, datetime
 
-try:
-    from bench_utils import to_float
-except ModuleNotFoundError:
-    try:
-        from scripts.bench_utils import to_float
-    except ModuleNotFoundError:
+ToFloat = Callable[[object], float | None]
 
-        def _fallback_to_float(value: object) -> float | None:
-            if isinstance(value, bool):
-                return None
-            if isinstance(value, (int, float, str)):
-                try:
-                    return float(value)
-                except ValueError:
-                    return None
+
+def _fallback_to_float(value: object) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float, str)):
+        try:
+            return float(value)
+        except ValueError:
             return None
+    return None
 
-        to_float = _fallback_to_float
+
+def _resolve_to_float() -> ToFloat:
+    try:
+        module = importlib.import_module("bench_utils")
+    except ModuleNotFoundError:
+        try:
+            module = importlib.import_module("scripts.bench_utils")
+        except ModuleNotFoundError:
+            return _fallback_to_float
+    return module.to_float
+
+
+TO_FLOAT = _resolve_to_float()
 
 
 # Metrics where smaller is better (timing metrics).
@@ -187,8 +197,8 @@ def render_scenario_table(
         cmp_entry = cmp_idx.get(name)
         base_entry = base_idx.get(name)
 
-        cmp_val = to_float(cmp_entry["value"]) if cmp_entry else None
-        base_val = to_float(base_entry["value"]) if base_entry else None
+        cmp_val = TO_FLOAT(cmp_entry["value"]) if cmp_entry else None
+        base_val = TO_FLOAT(base_entry["value"]) if base_entry else None
         unit = str(cmp_entry["unit"] if cmp_entry else (base_entry["unit"] if base_entry else ""))
 
         base_str = fmt_value(base_val, unit) if base_val is not None else "—"
