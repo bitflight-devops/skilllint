@@ -103,6 +103,22 @@ def fmt_value(value: float, unit: str) -> str:
     return f"{value:.1f} {unit}"
 
 
+def to_float(value: object) -> float | None:
+    """Convert an arbitrary JSON value to float when possible.
+
+    Returns:
+        Parsed float value, or ``None`` when conversion is not possible.
+    """
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int | float | str):
+        try:
+            return float(value)
+        except ValueError:
+            return None
+    return None
+
+
 def change_cell(name: str, base_val: float, cmp_val: float, threshold: float) -> str:
     """Build the markdown change cell for a single metric row.
 
@@ -167,8 +183,8 @@ def render_scenario_table(
         cmp_entry = cmp_idx.get(name)
         base_entry = base_idx.get(name)
 
-        cmp_val = float(cmp_entry["value"]) if cmp_entry else None  # type: ignore[arg-type]
-        base_val = float(base_entry["value"]) if base_entry else None  # type: ignore[arg-type]
+        cmp_val = to_float(cmp_entry["value"]) if cmp_entry else None
+        base_val = to_float(base_entry["value"]) if base_entry else None
         unit = str(cmp_entry["unit"] if cmp_entry else (base_entry["unit"] if base_entry else ""))
 
         base_str = fmt_value(base_val, unit) if base_val is not None else "—"

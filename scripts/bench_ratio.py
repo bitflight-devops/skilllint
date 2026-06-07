@@ -14,6 +14,22 @@ import pathlib
 import sys
 
 
+def to_float(value: object) -> float | None:
+    """Convert an arbitrary JSON value to float when possible.
+
+    Returns:
+        Parsed float value, or ``None`` when conversion is not possible.
+    """
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int | float | str):
+        try:
+            return float(value)
+        except ValueError:
+            return None
+    return None
+
+
 def extract_duration(data: list[dict[str, object]] | dict[str, object], label: str) -> float | None:
     """Extract duration in seconds from a benchmark result payload.
 
@@ -39,14 +55,16 @@ def extract_duration(data: list[dict[str, object]] | dict[str, object], label: s
         for entry in data:
             name = str(entry.get("name", ""))
             if name.endswith("_mean_ms"):
-                return float(entry["value"]) / 1000.0  # type: ignore[arg-type]
+                value = to_float(entry["value"])
+                return (value / 1000.0) if value is not None else None
         print(f"{label} data missing an entry with a name ending in '_mean_ms'", file=sys.stderr)
         return None
 
     # Raw dict output from run_benchmark()
     for key in ("scan_mean_ms", "fix_mean_ms", "mean_ms"):
         if key in data:
-            return float(data[key]) / 1000.0  # type: ignore[arg-type]
+            value = to_float(data[key])
+            return (value / 1000.0) if value is not None else None
 
     print(f"{label} data missing scan_mean_ms, fix_mean_ms, or mean_ms", file=sys.stderr)
     return None
