@@ -388,6 +388,17 @@ def clone_or_update_repo(platform: GitPlatform, *, dry_run: bool) -> GitDriftRes
 # ---------------------------------------------------------------------------
 
 
+def _fetch_http_page_text(client: httpx.Client, url: str) -> str:
+    """Fetch URL content and return response text.
+
+    Returns:
+        HTTP response body text for the requested URL.
+    """
+    response = client.get(url)
+    _ = response.raise_for_status()
+    return response.text
+
+
 def fetch_doc_site(platform: DocSitePlatform, *, dry_run: bool) -> HttpDriftResult | None:
     """Fetch markdown pages from a documentation website.
 
@@ -418,32 +429,30 @@ def fetch_doc_site(platform: DocSitePlatform, *, dry_run: bool) -> HttpDriftResu
     with httpx.Client(timeout=30.0, follow_redirects=True) as client:
         for page in platform.pages:
             console.print(f"  :globe_with_meridians: Fetching [cyan]{platform.name}[/cyan]/{page.filename}")
+            existing_content = read_text_or_none(dest / page.filename)
+            before_hash = sha256_hex(existing_content) if existing_content is not None else None
             try:
-                # Snapshot existing content before fetch
-                existing_content = read_text_or_none(dest / page.filename)
-                before_hash = sha256_hex(existing_content) if existing_content is not None else None
-
-                response = client.get(page.url)
-                _ = response.raise_for_status()
-                new_content = response.text
-                after_hash = sha256_hex(new_content)
-
-                # Write the new content
-                _ = (dest / page.filename).write_text(new_content, encoding="utf-8")
-
-                # Detect drift: only when there was a previous file and hashes differ
-                if before_hash is not None and before_hash != after_hash:
-                    changed_files.append(
-                        HttpFileDriftResult(
-                            filename=page.filename,
-                            before_hash=before_hash,
-                            after_hash=after_hash,
-                            before_content=existing_content or "",
-                            after_content=new_content,
-                        )
-                    )
+                new_content = _fetch_http_page_text(client, page.url)
             except httpx.HTTPError as exc:
                 err_console.print(f"    [yellow]:warning: Failed to fetch {page.url}: {exc}[/yellow]")
+                continue
+
+            after_hash = sha256_hex(new_content)
+
+            # Write the new content
+            _ = (dest / page.filename).write_text(new_content, encoding="utf-8")
+
+            # Detect drift: only when there was a previous file and hashes differ
+            if before_hash is not None and before_hash != after_hash:
+                changed_files.append(
+                    HttpFileDriftResult(
+                        filename=page.filename,
+                        before_hash=before_hash,
+                        after_hash=after_hash,
+                        before_content=existing_content or "",
+                        after_content=new_content,
+                    )
+                )
 
     if not changed_files:
         return None

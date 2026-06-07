@@ -1,4 +1,6 @@
 # prek - Pre-commit Re-engineered in Rust
+# Run `uv run prek run --all-files` first when remediating lint issues so
+# auto-fix hooks apply before deeper lint/type triage.
 # install via: `uv tool install prek`
 # prek is a Rust-based drop-in replacement for pre-commit created by https://github.com/j178/prek
 # Sources:
