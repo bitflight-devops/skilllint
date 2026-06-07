@@ -429,14 +429,14 @@ def fetch_doc_site(platform: DocSitePlatform, *, dry_run: bool) -> HttpDriftResu
     with httpx.Client(timeout=30.0, follow_redirects=True) as client:
         for page in platform.pages:
             console.print(f"  :globe_with_meridians: Fetching [cyan]{platform.name}[/cyan]/{page.filename}")
-            existing_content = read_text_or_none(dest / page.filename)
-            before_hash = sha256_hex(existing_content) if existing_content is not None else None
             try:
                 new_content = _fetch_http_page_text(client, page.url)
             except httpx.HTTPError as exc:
                 err_console.print(f"    [yellow]:warning: Failed to fetch {page.url}: {exc}[/yellow]")
                 continue
 
+            existing_content = read_text_or_none(dest / page.filename)
+            before_hash = sha256_hex(existing_content) if existing_content is not None else None
             after_hash = sha256_hex(new_content)
 
             # Write the new content
