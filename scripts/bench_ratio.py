@@ -30,14 +30,14 @@ def _fallback_to_float(value: object) -> float | None:
 
 
 def _resolve_to_float() -> ToFloat:
-    try:
-        module = importlib.import_module("bench_utils")
-    except ModuleNotFoundError:
+    for module_name in ("bench_utils", "scripts.bench_utils"):
         try:
-            module = importlib.import_module("scripts.bench_utils")
+            converter = getattr(importlib.import_module(module_name), "to_float", None)
+            if callable(converter):
+                return converter
         except ModuleNotFoundError:
-            return _fallback_to_float
-    return module.to_float
+            continue
+    return _fallback_to_float
 
 
 TO_FLOAT = _resolve_to_float()
