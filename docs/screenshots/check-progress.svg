@@ -74,9 +74,9 @@
             <circle cx="22" cy="0" r="7" fill="#febc2e"/>
             <circle cx="44" cy="0" r="7" fill="#28c840"/>
             </g>
-        
+
     <g transform="translate(9, 41)" clip-path="url(#terminal-3608465349-clip-terminal)">
-    
+
     <g class="terminal-3608465349-matrix">
     <text class="terminal-3608465349-r1" x="0" y="20" textLength="24.4" clip-path="url(#terminal-3608465349-line-0)">✅&#160;</text><text class="terminal-3608465349-r2" x="36.6" y="20" textLength="353.8" clip-path="url(#terminal-3608465349-line-0)">plugins/agentskills-skilllint</text><text class="terminal-3608465349-r1" x="390.4" y="20" textLength="109.8" clip-path="url(#terminal-3608465349-line-0)">&#160;-&#160;PASSED</text><text class="terminal-3608465349-r1" x="1342" y="20" textLength="12.2" clip-path="url(#terminal-3608465349-line-0)">
 </text><text class="terminal-3608465349-r1" x="0" y="44.4" textLength="24.4" clip-path="url(#terminal-3608465349-line-1)">✅&#160;</text><text class="terminal-3608465349-r2" x="36.6" y="44.4" textLength="671" clip-path="url(#terminal-3608465349-line-1)">plugins/agentskills-skilllint/skills/skilllint/SKILL.md</text><text class="terminal-3608465349-r1" x="707.6" y="44.4" textLength="109.8" clip-path="url(#terminal-3608465349-line-1)">&#160;-&#160;PASSED</text><text class="terminal-3608465349-r1" x="1342" y="44.4" textLength="12.2" clip-path="url(#terminal-3608465349-line-1)">
