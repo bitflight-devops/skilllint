@@ -13,7 +13,7 @@ def to_float(value: object) -> float | None:
     # semantic flags into numeric benchmark values.
     if isinstance(value, bool):
         return None
-    if isinstance(value, int | float | str):
+    if isinstance(value, (int, float, str)):
         try:
             return float(value)
         except ValueError:

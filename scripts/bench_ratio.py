@@ -13,7 +13,24 @@ import json
 import pathlib
 import sys
 
-from bench_utils import to_float
+try:
+    from bench_utils import to_float
+except ModuleNotFoundError:
+    try:
+        from scripts.bench_utils import to_float
+    except ModuleNotFoundError:
+
+        def _fallback_to_float(value: object) -> float | None:
+            if isinstance(value, bool):
+                return None
+            if isinstance(value, (int, float, str)):
+                try:
+                    return float(value)
+                except ValueError:
+                    return None
+            return None
+
+        to_float = _fallback_to_float
 
 
 def extract_duration(data: list[dict[str, object]] | dict[str, object], label: str) -> float | None:

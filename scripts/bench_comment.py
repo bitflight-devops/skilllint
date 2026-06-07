@@ -25,7 +25,25 @@ import pathlib
 import sys
 from datetime import UTC, datetime
 
-from bench_utils import to_float
+try:
+    from bench_utils import to_float
+except ModuleNotFoundError:
+    try:
+        from scripts.bench_utils import to_float
+    except ModuleNotFoundError:
+
+        def _fallback_to_float(value: object) -> float | None:
+            if isinstance(value, bool):
+                return None
+            if isinstance(value, (int, float, str)):
+                try:
+                    return float(value)
+                except ValueError:
+                    return None
+            return None
+
+        to_float = _fallback_to_float
+
 
 # Metrics where smaller is better (timing metrics).
 _SMALLER_IS_BETTER: frozenset[str] = frozenset({
