@@ -25,6 +25,8 @@ import pathlib
 import sys
 from datetime import UTC, datetime
 
+from bench_utils import to_float
+
 # Metrics where smaller is better (timing metrics).
 _SMALLER_IS_BETTER: frozenset[str] = frozenset({
     "scan_min_ms",
@@ -101,22 +103,6 @@ def fmt_value(value: float, unit: str) -> str:
         Formatted string like ``"430.1 ms"`` or ``"12.3 files/s"``.
     """
     return f"{value:.1f} {unit}"
-
-
-def to_float(value: object) -> float | None:
-    """Convert an arbitrary JSON value to float when possible.
-
-    Returns:
-        Parsed float value, or ``None`` when conversion is not possible.
-    """
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, int | float | str):
-        try:
-            return float(value)
-        except ValueError:
-            return None
-    return None
 
 
 def change_cell(name: str, base_val: float, cmp_val: float, threshold: float) -> str:

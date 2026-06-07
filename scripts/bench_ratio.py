@@ -13,21 +13,7 @@ import json
 import pathlib
 import sys
 
-
-def to_float(value: object) -> float | None:
-    """Convert an arbitrary JSON value to float when possible.
-
-    Returns:
-        Parsed float value, or ``None`` when conversion is not possible.
-    """
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, int | float | str):
-        try:
-            return float(value)
-        except ValueError:
-            return None
-    return None
+from bench_utils import to_float
 
 
 def extract_duration(data: list[dict[str, object]] | dict[str, object], label: str) -> float | None:
