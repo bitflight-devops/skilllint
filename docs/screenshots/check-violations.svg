@@ -185,9 +185,9 @@
             <circle cx="22" cy="0" r="7" fill="#febc2e"/>
             <circle cx="44" cy="0" r="7" fill="#28c840"/>
             </g>
-        
+
     <g transform="translate(9, 41)" clip-path="url(#terminal-345789410-clip-terminal)">
-    
+
     <g class="terminal-345789410-matrix">
     <text class="terminal-345789410-r1" x="1342" y="20" textLength="12.2" clip-path="url(#terminal-345789410-line-0)">
 </text><text class="terminal-345789410-r2" x="0" y="44.4" textLength="524.6" clip-path="url(#terminal-345789410-line-1)">/tmp/plugins/my-plugin/skills/broken-skill/</text><text class="terminal-345789410-r3" x="524.6" y="44.4" textLength="97.6" clip-path="url(#terminal-345789410-line-1)">SKILL.md</text><text class="terminal-345789410-r1" x="1342" y="44.4" textLength="12.2" clip-path="url(#terminal-345789410-line-1)">

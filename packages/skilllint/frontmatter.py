@@ -144,6 +144,17 @@ def update_field(path: str | pathlib.Path, key: str, value: FrontmatterValue) ->
     dumps_frontmatter(post, path)
 
 
+def _write_reformatted_frontmatter(temp_path: pathlib.Path, *, new_yaml_bytes: bytes, trailing_body: bytes) -> None:
+    """Write updated frontmatter and trailing body content to a temp file."""
+    with temp_path.open("wb") as temp_file:
+        temp_file.write(DELIMITER)
+        temp_file.write(new_yaml_bytes)
+        if not new_yaml_bytes.endswith(b"\n"):
+            temp_file.write(b"\n")
+        temp_file.write(DELIMITER)
+        temp_file.write(trailing_body)
+
+
 def process_markdown_file(file_path: str) -> None:
     """Process a single markdown file's frontmatter in-place.
 
@@ -187,18 +198,10 @@ def process_markdown_file(file_path: str) -> None:
             # 3. The "Zero-Copy Body" Write
             temp_path = path.with_suffix(path.suffix + ".tmp")
             try:
-                with temp_path.open("wb") as temp_file:
-                    # Write the new frontmatter
-                    temp_file.write(DELIMITER)
-                    temp_file.write(new_yaml_bytes)
-                    if not new_yaml_bytes.endswith(b"\n"):
-                        temp_file.write(b"\n")
-                    temp_file.write(DELIMITER)
-
-                    # Dump the rest of the file directly from the memory map
-                    # Python handles this as a highly optimized block transfer
-                    temp_file.write(mm[frontmatter_end_index:])
-                # 4. Atomic Replace (Safe across thousands of files)
+                _write_reformatted_frontmatter(
+                    temp_path, new_yaml_bytes=new_yaml_bytes, trailing_body=mm[frontmatter_end_index:]
+                )
+                # 4. Atomic replace (safe across thousands of files).
                 temp_path.replace(path)
             except BaseException:
                 temp_path.unlink(missing_ok=True)

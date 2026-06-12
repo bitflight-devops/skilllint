@@ -17,6 +17,27 @@ permissions:
   id-token: write
 
 jobs:
+  prek:
+    name: Prek hooks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.0.3
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.2.0
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run prek hooks on all files
+        run: uv run prek run --all-files
+
   format:
     name: Code Formatting
     runs-on: ubuntu-latest
@@ -170,7 +191,7 @@ jobs:
 
   release:
     name: Tag and Release
-    needs: [format, lint, typecheck-ty, test]
+    needs: [prek, format, lint, typecheck-ty, test]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:

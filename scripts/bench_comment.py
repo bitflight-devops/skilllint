@@ -25,6 +25,8 @@ import pathlib
 import sys
 from datetime import UTC, datetime
 
+from bench_utils import to_float
+
 # Metrics where smaller is better (timing metrics).
 _SMALLER_IS_BETTER: frozenset[str] = frozenset({
     "scan_min_ms",
@@ -167,8 +169,8 @@ def render_scenario_table(
         cmp_entry = cmp_idx.get(name)
         base_entry = base_idx.get(name)
 
-        cmp_val = float(cmp_entry["value"]) if cmp_entry else None  # type: ignore[arg-type]
-        base_val = float(base_entry["value"]) if base_entry else None  # type: ignore[arg-type]
+        cmp_val = to_float(cmp_entry["value"]) if cmp_entry else None
+        base_val = to_float(base_entry["value"]) if base_entry else None
         unit = str(cmp_entry["unit"] if cmp_entry else (base_entry["unit"] if base_entry else ""))
 
         base_str = fmt_value(base_val, unit) if base_val is not None else "—"

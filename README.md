@@ -170,6 +170,17 @@ repos:
       - id: skilllint
 ```
 
+### Contributor quality checks (local)
+
+Run this sequence before pushing:
+
+```bash
+# Auto-fix hooks first (whitespace, pypfmt, biome, ruff --fix, etc.)
+uv run prek run --all-files
+
+uv run pytest
+```
+
 ---
 
 ## Platform support

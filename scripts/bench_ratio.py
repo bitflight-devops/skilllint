@@ -13,6 +13,8 @@ import json
 import pathlib
 import sys
 
+from bench_utils import to_float
+
 
 def extract_duration(data: list[dict[str, object]] | dict[str, object], label: str) -> float | None:
     """Extract duration in seconds from a benchmark result payload.
@@ -39,14 +41,16 @@ def extract_duration(data: list[dict[str, object]] | dict[str, object], label: s
         for entry in data:
             name = str(entry.get("name", ""))
             if name.endswith("_mean_ms"):
-                return float(entry["value"]) / 1000.0  # type: ignore[arg-type]
+                value = to_float(entry["value"])
+                return (value / 1000.0) if value is not None else None
         print(f"{label} data missing an entry with a name ending in '_mean_ms'", file=sys.stderr)
         return None
 
     # Raw dict output from run_benchmark()
     for key in ("scan_mean_ms", "fix_mean_ms", "mean_ms"):
         if key in data:
-            return float(data[key]) / 1000.0  # type: ignore[arg-type]
+            value = to_float(data[key])
+            return (value / 1000.0) if value is not None else None
 
     print(f"{label} data missing scan_mean_ms, fix_mean_ms, or mean_ms", file=sys.stderr)
     return None

@@ -57,16 +57,19 @@ requires = ["hatch-vcs", "hatchling"]
 build-backend = "hatchling.build"
 
 [dependency-groups]
+# NOTE: pyproject-fmt (the `pypfmt` prek hook) is the source of truth for
+# dependency ordering in this file.
+# Keep entries formatter-driven to avoid review churn from manual reordering.
 dev = [
     "beautifulsoup4>=4.14.3",
     "hatch-vcs>=0.5.0",
     "hatchling>=1.29.0",
     "hypothesis>=6.151.10",
     "prek>=0.3.8",
-    "pytest>=9.0.2",
     "pytest-cov>=7.1.0",
     "pytest-mock>=3.15.1",
     "pytest-xdist>=3.8.0",
+    "pytest>=9.0.2",
     "rich>=14.3.3",
     "ruff>=0.15.8",
     "ty>=0.0.26",
