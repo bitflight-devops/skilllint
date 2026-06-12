@@ -557,11 +557,8 @@ def _collect_servers_from_frontmatter(file_path: pathlib.Path) -> set[str]:
         Set of MCP server names from the file's own ``mcpServers`` frontmatter
         key; empty set on parse failure or when the key is absent.
     """
-    try:
-        from skilllint.frontmatter_core import extract_frontmatter  # noqa: PLC0415
-        from skilllint.plugin_validator import safe_load_yaml_with_colon_fix  # noqa: PLC0415
-    except ImportError:
-        return set()
+    from skilllint.frontmatter_core import extract_frontmatter  # noqa: PLC0415
+    from skilllint.plugin_validator import safe_load_yaml_with_colon_fix  # noqa: PLC0415
 
     try:
         content = file_path.read_text(encoding="utf-8")

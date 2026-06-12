@@ -175,13 +175,9 @@ repos:
 Run this sequence before pushing:
 
 ```bash
-# 1) Auto-fix hooks first (whitespace, pypfmt, biome, ruff --fix, etc.)
+# Auto-fix hooks first (whitespace, pypfmt, biome, ruff --fix, etc.)
 uv run prek run --all-files
 
-# 2) Then run non-auto-fixing checks
-uv run ruff format --check
-uv run ruff check
-uv run ty check packages/
 uv run pytest
 ```
 
