@@ -133,6 +133,9 @@ jobs:
           if [ -f scripts/bench_comment.py ]; then
             cp scripts/bench_comment.py /tmp/bench_comment.py
           fi
+          if [ -f scripts/bench_utils.py ]; then
+            cp scripts/bench_utils.py /tmp/bench_utils.py
+          fi
 
       - name: Checkout base ref
         if: steps.base_ref_io.outputs.ref != ''
@@ -281,6 +284,9 @@ jobs:
           if [ -f scripts/bench_cpu.py ]; then
             cp scripts/bench_cpu.py /tmp/bench_cpu.py
           fi
+          if [ -f scripts/bench_utils.py ]; then
+            cp scripts/bench_utils.py /tmp/bench_utils.py
+          fi
 
       - name: Checkout base ref for CPU comparison
         if: steps.base_ref_cpu.outputs.ref != ''
@@ -428,6 +434,9 @@ jobs:
           fi
           if [ -f scripts/bench_ratio.py ]; then
             cp scripts/bench_ratio.py /tmp/bench_ratio_release.py
+          fi
+          if [ -f scripts/bench_utils.py ]; then
+            cp scripts/bench_utils.py /tmp/bench_utils.py
           fi
 
       - name: Checkout base ref for comparison

@@ -5525,29 +5525,28 @@ def main(
         def _validate_with_cache(p: Path, *, check: bool, fix: bool, verbose: bool) -> FileResults:
             return validate_single_path(p, check=check, fix=fix, verbose=verbose, per_run_cache=per_run_cache)
 
-        try:
-            run_validation_loop(
-                expanded_paths=expanded_paths,
-                check=check,
-                fix=fix,
-                verbose=verbose,
-                no_color=no_color,
-                show_progress=show_progress,
-                show_summary=show_summary,
-                platform_override=platform_override,
-                validate_single_path=_validate_with_cache,
-                validate_file=validate_file,
-                violations_to_result=violations_to_result,
-                adapters=ADAPTERS,
-                record_console=record_console,
-                include_gitignore=include_gitignore,
-            )
-        except (SystemExit, typer.Exit):
-            _maybe_export_recording(record_console, record)
-            raise
+        run_validation_loop(
+            expanded_paths=expanded_paths,
+            check=check,
+            fix=fix,
+            verbose=verbose,
+            no_color=no_color,
+            show_progress=show_progress,
+            show_summary=show_summary,
+            platform_override=platform_override,
+            validate_single_path=_validate_with_cache,
+            validate_file=validate_file,
+            violations_to_result=violations_to_result,
+            adapters=ADAPTERS,
+            record_console=record_console,
+            include_gitignore=include_gitignore,
+        )
 
     try:
         _run_validation_command()
+    except (SystemExit, typer.Exit):
+        _maybe_export_recording(record_console, record)
+        raise
     except KeyboardInterrupt:
         typer.echo("\nInterrupted by user", err=True)
         raise typer.Exit(130) from None
