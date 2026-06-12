@@ -5508,7 +5508,7 @@ def main(
 
     record_console = _make_recording_console(no_color=no_color) if record is not None else None
 
-    try:
+    def _run_validation_command() -> None:
         expanded_paths, is_batch = _resolve_filter_and_expand_paths(paths, filter_glob, filter_type)
 
         if tokens_only:
@@ -5546,6 +5546,8 @@ def main(
             _maybe_export_recording(record_console, record)
             raise
 
+    try:
+        _run_validation_command()
     except KeyboardInterrupt:
         typer.echo("\nInterrupted by user", err=True)
         raise typer.Exit(130) from None

@@ -20,10 +20,40 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import pathlib
 import sys
+from collections.abc import Callable
 from datetime import UTC, datetime
+
+ToFloat = Callable[[object], float | None]
+
+
+def _fallback_to_float(value: object) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float, str)):
+        try:
+            return float(value)
+        except ValueError:
+            return None
+    return None
+
+
+def _resolve_to_float() -> ToFloat:
+    for module_name in ("bench_utils", "scripts.bench_utils"):
+        try:
+            converter = getattr(importlib.import_module(module_name), "to_float", None)
+            if callable(converter):
+                return converter
+        except ModuleNotFoundError:
+            continue
+    return _fallback_to_float
+
+
+TO_FLOAT = _resolve_to_float()
+
 
 # Metrics where smaller is better (timing metrics).
 _SMALLER_IS_BETTER: frozenset[str] = frozenset({
@@ -167,8 +197,8 @@ def render_scenario_table(
         cmp_entry = cmp_idx.get(name)
         base_entry = base_idx.get(name)
 
-        cmp_val = float(cmp_entry["value"]) if cmp_entry else None  # type: ignore[arg-type]
-        base_val = float(base_entry["value"]) if base_entry else None  # type: ignore[arg-type]
+        cmp_val = TO_FLOAT(cmp_entry["value"]) if cmp_entry else None
+        base_val = TO_FLOAT(base_entry["value"]) if base_entry else None
         unit = str(cmp_entry["unit"] if cmp_entry else (base_entry["unit"] if base_entry else ""))
 
         base_str = fmt_value(base_val, unit) if base_val is not None else "—"

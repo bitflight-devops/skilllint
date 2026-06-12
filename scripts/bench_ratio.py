@@ -9,9 +9,38 @@ the compare ref is relative to the base ref.
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import pathlib
 import sys
+from collections.abc import Callable
+
+ToFloat = Callable[[object], float | None]
+
+
+def _fallback_to_float(value: object) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float, str)):
+        try:
+            return float(value)
+        except ValueError:
+            return None
+    return None
+
+
+def _resolve_to_float() -> ToFloat:
+    for module_name in ("bench_utils", "scripts.bench_utils"):
+        try:
+            converter = getattr(importlib.import_module(module_name), "to_float", None)
+            if callable(converter):
+                return converter
+        except ModuleNotFoundError:
+            continue
+    return _fallback_to_float
+
+
+TO_FLOAT = _resolve_to_float()
 
 
 def extract_duration(data: list[dict[str, object]] | dict[str, object], label: str) -> float | None:
@@ -39,14 +68,16 @@ def extract_duration(data: list[dict[str, object]] | dict[str, object], label: s
         for entry in data:
             name = str(entry.get("name", ""))
             if name.endswith("_mean_ms"):
-                return float(entry["value"]) / 1000.0  # type: ignore[arg-type]
+                value = TO_FLOAT(entry["value"])
+                return (value / 1000.0) if value is not None else None
         print(f"{label} data missing an entry with a name ending in '_mean_ms'", file=sys.stderr)
         return None
 
     # Raw dict output from run_benchmark()
     for key in ("scan_mean_ms", "fix_mean_ms", "mean_ms"):
         if key in data:
-            return float(data[key]) / 1000.0  # type: ignore[arg-type]
+            value = TO_FLOAT(data[key])
+            return (value / 1000.0) if value is not None else None
 
     print(f"{label} data missing scan_mean_ms, fix_mean_ms, or mean_ms", file=sys.stderr)
     return None
