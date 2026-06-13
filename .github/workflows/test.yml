@@ -210,6 +210,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           default_bump: false
           create_annotated_tag: true
+          custom_release_rules: 'refactor:patch,perf:patch'
 
       - name: Create a GitHub release
         if: steps.tag_version.outputs.new_tag

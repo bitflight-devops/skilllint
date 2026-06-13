@@ -186,3 +186,9 @@ MAX_SKILL_NAME_LENGTH = 64
 3. **If there's no source, there's no constraint** — don't invent a "reasonable" threshold. Either find the spec or remove the limit.
 
 **Why this matters:** Invented constraints are a leading indicator of hallucination. The model makes up something plausible-sounding but baseless. Catching these prevents subtle bugs and documents the actual requirements.
+
+## Diagnostic discipline
+
+**Compare the failing run to the most recent successful run before proposing any fix.** The observable delta between last success and first failure is the evidence; every claim beyond that delta is speculation.
+
+**Implement the smallest diff that addresses the observed failure.** If the fix is one line, it must be one line — not a restructure.
