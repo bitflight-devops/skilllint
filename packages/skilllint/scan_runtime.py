@@ -235,6 +235,41 @@ def _discover_provider_paths(directory: Path) -> list[Path]:
     return sorted(set(directory.glob("agents/**/*.md")))
 
 
+def _discover_bare_paths(directory: Path) -> list[Path]:
+    """Discover paths in a bare directory outside plugin/provider subtrees.
+
+    Returns:
+        Sorted validatable paths discovered outside nested plugin/provider roots.
+    """
+    discovered: set[Path] = set()
+    plugin_roots: set[Path] = set()
+    for plugin_json in directory.glob("**/.claude-plugin/plugin.json"):
+        plugin_root = plugin_json.parent.parent
+        plugin_roots.add(plugin_root)
+        discovered.update(_discover_plugin_paths(_parse_plugin_manifest(plugin_root)))
+
+    provider_roots: set[Path] = set()
+    for provider_name in KNOWN_PROVIDER_DIRS:
+        for provider_dir in directory.glob(f"**/{provider_name}"):
+            if not provider_dir.is_dir() or any(provider_dir.is_relative_to(root) for root in plugin_roots):
+                continue
+            provider_roots.add(provider_dir)
+            discovered.update(_discover_provider_paths(provider_dir))
+
+    covered_roots = plugin_roots | provider_roots
+    for pattern in DEFAULT_SCAN_PATTERNS:
+        for match in directory.glob(pattern):
+            if pattern.endswith("plugin.json"):
+                candidate = match.parent.parent
+            elif pattern.endswith("skills/*/SKILL.md"):
+                candidate = match.parent
+            else:
+                candidate = match
+            if not any(candidate.is_relative_to(root) for root in covered_roots):
+                discovered.add(candidate)
+    return sorted(discovered)
+
+
 # ---------------------------------------------------------------------------
 # Path discovery and filtering
 # ---------------------------------------------------------------------------
@@ -268,46 +303,7 @@ def _discover_validatable_paths(directory: Path) -> list[Path]:
     if _is_skill_folder(directory):
         return [directory]
 
-    # BARE context: find nested plugins and providers, then apply DEFAULT_SCAN_PATTERNS
-    discovered: set[Path] = set()
-    plugin_roots: set[Path] = set()
-
-    # Find nested plugin roots
-    for plugin_json in directory.glob("**/.claude-plugin/plugin.json"):
-        plugin_root = plugin_json.parent.parent
-        plugin_roots.add(plugin_root)
-        manifest = _parse_plugin_manifest(plugin_root)
-        discovered.update(_discover_plugin_paths(manifest))
-
-    # Find nested provider directories (skip those inside plugin trees)
-    provider_roots: set[Path] = set()
-    for provider_name in KNOWN_PROVIDER_DIRS:
-        for provider_dir in directory.glob(f"**/{provider_name}"):
-            if not provider_dir.is_dir():
-                continue
-            # Plugin takes precedence: skip providers inside plugin trees
-            if any(provider_dir.is_relative_to(pr) for pr in plugin_roots):
-                continue
-            provider_roots.add(provider_dir)
-            discovered.update(_discover_provider_paths(provider_dir))
-
-    # Files outside any plugin/provider subtree: use DEFAULT_SCAN_PATTERNS
-    covered_roots = plugin_roots | provider_roots
-
-    for pattern in DEFAULT_SCAN_PATTERNS:
-        for match in directory.glob(pattern):
-            # For plugin.json matches, add the plugin root (grandparent)
-            if pattern.endswith("plugin.json"):
-                candidate = match.parent.parent
-            elif pattern.endswith("skills/*/SKILL.md"):
-                candidate = match.parent
-            else:
-                candidate = match
-            # Only add if not already inside a discovered plugin/provider tree
-            if not any(candidate.is_relative_to(root) for root in covered_roots):
-                discovered.add(candidate)
-
-    return sorted(discovered)
+    return _discover_bare_paths(directory)
 
 
 def _resolve_filter_and_expand_paths(
