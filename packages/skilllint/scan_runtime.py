@@ -161,9 +161,11 @@ def _discover_plugin_paths(manifest: PluginManifest) -> list[Path]:
         # direct SKILL.md paths. Preserve direct files; folder declarations are
         # folder-backed targets so the validator bridge can resolve SKILL.md.
         if manifest.skills is not None:
+            skill_paths: dict[Path, Path] = {}
             for rel in manifest.skills:
                 resolved = root / rel
-                discovered.add(resolved)
+                skill_paths.setdefault(_ignore_path(resolved), resolved)
+            discovered.update(skill_paths.values())
         # Agents and commands entries should be direct file paths.
         for path_list in (manifest.agents, manifest.commands):
             if path_list is not None:
@@ -571,7 +573,7 @@ def run_validation_loop(
         if _should_skip(_ignore_path(path)):
             continue
         if platform_override is not None:
-            violations = validate_file(path, adapters, platform_override)
+            violations = validate_file(_ignore_path(path), adapters, platform_override)
             all_results[path] = [("platform", violations_to_result(violations))]
         else:
             file_results = validate_single_path(path, check=check, fix=fix, verbose=verbose)

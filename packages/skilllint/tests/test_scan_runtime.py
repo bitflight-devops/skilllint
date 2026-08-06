@@ -281,17 +281,53 @@ class TestResolveFilterAndExpandPaths:
         plugin_dir = tmp_path / "my-plugin"
         (plugin_dir / ".claude-plugin").mkdir(parents=True)
         (plugin_dir / "skills" / "folder").mkdir(parents=True)
+        (plugin_dir / "skills" / "folder" / "SKILL.md").write_text("---\ndescription: folder\n---\n# Folder\n")
         direct = plugin_dir / "skills" / "direct" / "SKILL.md"
         direct.parent.mkdir()
         direct.write_text("---\ndescription: direct\n---\n# Direct\n")
         (plugin_dir / ".claude-plugin" / "plugin.json").write_text(
-            '{"name": "my-plugin", "skills": ["skills/folder", "skills/direct/SKILL.md"]}'
+            '{"name": "my-plugin", "skills": ["skills/folder", "skills/folder/SKILL.md", "skills/direct/SKILL.md"]}'
         )
 
         discovered = _discover_validatable_paths(plugin_dir)
 
         assert plugin_dir / "skills" / "folder" in discovered
+        assert plugin_dir / "skills" / "folder/SKILL.md" not in discovered
         assert direct in discovered
+
+    def test_platform_validation_normalizes_skill_folder(self, tmp_path: Path) -> None:
+        import typer
+
+        from skilllint.plugin_validator import ValidationResult
+
+        skill_dir = tmp_path / "my-skill"
+        skill_dir.mkdir()
+        skill_file = skill_dir / "SKILL.md"
+        skill_file.write_text("---\ndescription: Test\n---\n# Test\n")
+        seen: list[Path] = []
+
+        def validate_file(path: Path, _adapters: dict, _platform: str | None) -> list[dict]:
+            seen.append(path)
+            return []
+
+        with pytest.raises(typer.Exit) as exc_info:
+            run_validation_loop(
+                expanded_paths=[skill_dir],
+                check=True,
+                fix=False,
+                verbose=False,
+                no_color=True,
+                show_progress=False,
+                show_summary=False,
+                platform_override="claude",
+                validate_single_path=lambda **_kwargs: pytest.fail("platform path used default validation"),
+                validate_file=validate_file,
+                violations_to_result=lambda _violations: ValidationResult(passed=True, errors=[], warnings=[], info=[]),
+                adapters={},
+            )
+
+        assert exc_info.value.exit_code == 0
+        assert seen == [skill_file]
 
     def test_gitignore_matching_uses_skill_file_for_folder_targets(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
