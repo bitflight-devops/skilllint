@@ -399,6 +399,60 @@ class TestPathArguments:
         # This test just verifies CLI doesn't crash on relative paths
         assert result.exit_code in {0, 1, 2}
 
+    def test_accepts_skill_folder_and_validates_its_skill_file(
+        self, cli_runner: CliRunner, sample_skill_dir: Path, no_color_env: None
+    ) -> None:
+        """A direct skill folder reaches the existing SKILL.md validators once."""
+        result = cli_runner.invoke(
+            plugin_validator.app, ["check", "--no-color", "--show-summary", str(sample_skill_dir)]
+        )
+
+        assert result.exit_code == 0, result.stdout
+        assert "Total files: 1" in result.stdout
+
+    def test_skill_folder_preserves_link_validation_without_nested_targets(
+        self, cli_runner: CliRunner, tmp_path: Path, no_color_env: None
+    ) -> None:
+        """Folder validation checks SKILL.md links, not nested files as targets."""
+        skill_dir = tmp_path / "linked-skill"
+        skill_dir.mkdir()
+        (skill_dir / "references").mkdir()
+        (skill_dir / "references" / "guide.md").write_text("# Guide\n")
+        (skill_dir / "SKILL.md").write_text(
+            "---\nname: linked-skill\ndescription: Use this skill when checking folder links\n---\n\n"
+            "See [the guide](./references/guide.md).\n"
+        )
+
+        result = cli_runner.invoke(plugin_validator.app, ["check", "--no-color", "--show-summary", str(skill_dir)])
+
+        assert result.exit_code == 0, result.stdout
+        assert "Total files: 1" in result.stdout
+
+    def test_plugin_contained_skill_folder_validates(
+        self, cli_runner: CliRunner, sample_plugin_dir: Path, no_color_env: None
+    ) -> None:
+        """Plugin-discovered skill folders use the same file validator bridge."""
+        result = cli_runner.invoke(plugin_validator.app, ["check", "--no-color", "--verbose", str(sample_plugin_dir)])
+
+        assert result.exit_code == 0, result.stdout
+        assert "SKILL.md" in result.stdout
+
+    def test_skill_folder_reports_missing_link_without_nested_targets(
+        self, cli_runner: CliRunner, tmp_path: Path, no_color_env: None
+    ) -> None:
+        """A missing skill link fails while the folder remains one target."""
+        skill_dir = tmp_path / "broken-skill"
+        skill_dir.mkdir()
+        (skill_dir / "SKILL.md").write_text(
+            "---\nname: broken-skill\ndescription: Test missing links\n---\n\n"
+            "See [the missing guide](./references/missing.md).\n"
+        )
+
+        result = cli_runner.invoke(plugin_validator.app, ["check", "--no-color", "--show-summary", str(skill_dir)])
+
+        assert result.exit_code == 1, result.stdout
+        assert "Total files: 1" in result.stdout
+
 
 class TestErrorMessages:
     """Test error message clarity and actionability."""

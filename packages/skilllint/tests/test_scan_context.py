@@ -702,7 +702,7 @@ class TestDiscoverPluginPaths:
         result = _discover_plugin_paths(manifest)
 
         # Assert
-        assert tmp_path / "skills" / "my-skill" / "SKILL.md" in result
+        assert tmp_path / "skills" / "my-skill" in result
 
     def test_convention_driven_excludes_skill_internal_agents(self, tmp_path: Path) -> None:
         """Core false-positive scenario: skills/*/agents/ must never be discovered.
@@ -842,7 +842,7 @@ class TestDiscoverPluginPaths:
         result = _discover_plugin_paths(manifest)
 
         # Assert
-        assert tmp_path / "skills" / "review" / "SKILL.md" in result
+        assert tmp_path / "skills" / "review" in result
 
     def test_manifest_driven_always_includes_plugin_root(self, tmp_path: Path) -> None:
         """Manifest mode always includes the plugin root directory.
@@ -880,7 +880,7 @@ class TestDiscoverPluginPaths:
         result = _discover_plugin_paths(manifest)
 
         # Assert — path present despite not existing on disk
-        assert tmp_path / "skills" / "ghost-skill" / "SKILL.md" in result
+        assert tmp_path / "skills" / "ghost-skill" in result
 
     def test_manifest_driven_includes_declared_agent_even_when_file_missing(self, tmp_path: Path) -> None:
         """Declared agent file is included even when it does not exist on disk.
@@ -957,7 +957,7 @@ class TestIntegrationContextAwareDiscovery:
 
         # Assert
         assert tmp_path / "agents" / "main.md" in result
-        assert tmp_path / "skills" / "my-skill" / "SKILL.md" in result
+        assert tmp_path / "skills" / "my-skill" in result
         assert tmp_path / "skills" / "my-skill" / "agents" / "helper.md" not in result
 
     def test_filter_type_agents_on_plugin_uses_root_only_glob(self, tmp_path: Path) -> None:
@@ -1188,13 +1188,13 @@ class TestBareDirectoryRegressionCompatibility:
         result = _discover_validatable_paths(tmp_path)
 
         # Assert — every file created must appear in the result
-        assert tmp_path / "skills" / "my-skill" / "SKILL.md" in result
+        assert tmp_path / "skills" / "my-skill" in result
         assert tmp_path / "agents" / "helper.md" in result
         assert tmp_path / "commands" / "run.md" in result
         assert tmp_path / "hooks" / "hooks.json" in result
         assert tmp_path / "CLAUDE.md" in result
         assert tmp_path / "subdir" / "agents" / "nested-agent.md" in result
-        assert tmp_path / "subdir" / "skills" / "other-skill" / "SKILL.md" in result
+        assert tmp_path / "subdir" / "skills" / "other-skill" in result
 
     def test_bare_directory_with_plugin_json_includes_plugin_root(self, tmp_path: Path) -> None:
         """Directory with .claude-plugin/plugin.json routes through PLUGIN context.

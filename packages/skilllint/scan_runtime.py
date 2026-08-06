@@ -158,17 +158,14 @@ def _discover_plugin_paths(manifest: PluginManifest) -> list[Path]:
     if manifest.is_manifest_driven:
         # Intentionally no existence check — missing declared paths are a lint error.
         # Skills entries may be directories (e.g. "./skills/my-skill/") or
-        # direct SKILL.md paths. Use the path name to distinguish: a path whose
-        # final component is "SKILL.md" is a direct file reference; anything else
-        # is treated as a skill directory and resolved to its SKILL.md child.
-        # This avoids an is_dir() check that would silently drop non-existent dirs.
+        # direct SKILL.md paths. Preserve direct files; folder declarations are
+        # folder-backed targets so the validator bridge can resolve SKILL.md.
         if manifest.skills is not None:
+            skill_paths: dict[Path, Path] = {}
             for rel in manifest.skills:
                 resolved = root / rel
-                if resolved.name == "SKILL.md":
-                    discovered.add(resolved)
-                else:
-                    discovered.add(resolved / "SKILL.md")
+                skill_paths.setdefault(_ignore_path(resolved), resolved)
+            discovered.update(skill_paths.values())
         # Agents and commands entries should be direct file paths.
         for path_list in (manifest.agents, manifest.commands):
             if path_list is not None:
@@ -176,7 +173,7 @@ def _discover_plugin_paths(manifest: PluginManifest) -> list[Path]:
     else:
         discovered.update(root.glob("agents/*.md"))
         discovered.update(root.glob("commands/*.md"))
-        discovered.update(root.glob("skills/*/SKILL.md"))
+        discovered.update(path.parent for path in root.glob("skills/*/SKILL.md"))
 
     discovered.add(root)
 
@@ -218,6 +215,11 @@ def detect_scan_context(directory: Path) -> ScanContext:
     return ScanContext.BARE
 
 
+def _is_skill_folder(path: Path) -> bool:
+    """Return whether *path* is a standalone folder-backed skill target."""
+    return path.is_dir() and (path / "SKILL.md").is_file()
+
+
 def _discover_provider_paths(directory: Path) -> list[Path]:
     """Discover validatable files in a provider directory.
 
@@ -233,6 +235,41 @@ def _discover_provider_paths(directory: Path) -> list[Path]:
         Sorted list of unique paths.
     """
     return sorted(set(directory.glob("agents/**/*.md")))
+
+
+def _discover_bare_paths(directory: Path) -> list[Path]:
+    """Discover paths in a bare directory outside plugin/provider subtrees.
+
+    Returns:
+        Sorted validatable paths discovered outside nested plugin/provider roots.
+    """
+    discovered: set[Path] = set()
+    plugin_roots: set[Path] = set()
+    for plugin_json in directory.glob("**/.claude-plugin/plugin.json"):
+        plugin_root = plugin_json.parent.parent
+        plugin_roots.add(plugin_root)
+        discovered.update(_discover_plugin_paths(_parse_plugin_manifest(plugin_root)))
+
+    provider_roots: set[Path] = set()
+    for provider_name in KNOWN_PROVIDER_DIRS:
+        for provider_dir in directory.glob(f"**/{provider_name}"):
+            if not provider_dir.is_dir() or any(provider_dir.is_relative_to(root) for root in plugin_roots):
+                continue
+            provider_roots.add(provider_dir)
+            discovered.update(_discover_provider_paths(provider_dir))
+
+    covered_roots = plugin_roots | provider_roots
+    for pattern in DEFAULT_SCAN_PATTERNS:
+        for match in directory.glob(pattern):
+            if pattern.endswith("plugin.json"):
+                candidate = match.parent.parent
+            elif pattern.endswith("skills/*/SKILL.md"):
+                candidate = match.parent
+            else:
+                candidate = match
+            if not any(candidate.is_relative_to(root) for root in covered_roots):
+                discovered.add(candidate)
+    return sorted(discovered)
 
 
 # ---------------------------------------------------------------------------
@@ -265,41 +302,10 @@ def _discover_validatable_paths(directory: Path) -> list[Path]:
     if context == ScanContext.PROVIDER:
         return _discover_provider_paths(directory)
 
-    # BARE context: find nested plugins and providers, then apply DEFAULT_SCAN_PATTERNS
-    discovered: set[Path] = set()
-    plugin_roots: set[Path] = set()
+    if _is_skill_folder(directory):
+        return [directory]
 
-    # Find nested plugin roots
-    for plugin_json in directory.glob("**/.claude-plugin/plugin.json"):
-        plugin_root = plugin_json.parent.parent
-        plugin_roots.add(plugin_root)
-        manifest = _parse_plugin_manifest(plugin_root)
-        discovered.update(_discover_plugin_paths(manifest))
-
-    # Find nested provider directories (skip those inside plugin trees)
-    provider_roots: set[Path] = set()
-    for provider_name in KNOWN_PROVIDER_DIRS:
-        for provider_dir in directory.glob(f"**/{provider_name}"):
-            if not provider_dir.is_dir():
-                continue
-            # Plugin takes precedence: skip providers inside plugin trees
-            if any(provider_dir.is_relative_to(pr) for pr in plugin_roots):
-                continue
-            provider_roots.add(provider_dir)
-            discovered.update(_discover_provider_paths(provider_dir))
-
-    # Files outside any plugin/provider subtree: use DEFAULT_SCAN_PATTERNS
-    covered_roots = plugin_roots | provider_roots
-
-    for pattern in DEFAULT_SCAN_PATTERNS:
-        for match in directory.glob(pattern):
-            # For plugin.json matches, add the plugin root (grandparent)
-            candidate = match.parent.parent if pattern.endswith("plugin.json") else match
-            # Only add if not already inside a discovered plugin/provider tree
-            if not any(candidate.is_relative_to(root) for root in covered_roots):
-                discovered.add(candidate)
-
-    return sorted(discovered)
+    return _discover_bare_paths(directory)
 
 
 def _resolve_filter_and_expand_paths(
@@ -339,6 +345,8 @@ def _resolve_filter_and_expand_paths(
             resolved_glob = filter_glob
         if resolved_glob is not None and path.is_dir():
             matched = sorted(path.glob(resolved_glob))
+            if filter_type == "skills":
+                matched = [match.parent for match in matched]
             expanded_paths.extend(matched)
             is_batch = True
         elif resolved_glob is None and path.is_dir():
@@ -496,6 +504,12 @@ ValidateFileFn = Callable[[Path, dict[str, object], str | None], list[dict]]
 ViolationsToResultFn = Callable[[list[dict]], Any]
 
 
+def _ignore_path(path: Path) -> Path:
+    """Return the concrete skill file for ignore matching when applicable."""
+    skill_file = path / "SKILL.md"
+    return skill_file if path.is_dir() and skill_file.is_file() else path
+
+
 def run_validation_loop(
     *,
     expanded_paths: list[Path],
@@ -544,7 +558,9 @@ def run_validation_loop(
     scan_base = _compute_scan_base(expanded_paths)
 
     ignored_set: frozenset[str] = (
-        _build_gitignore_set(expanded_paths, scan_base) if not include_gitignore else frozenset()
+        _build_gitignore_set([_ignore_path(path) for path in expanded_paths], scan_base)
+        if not include_gitignore
+        else frozenset()
     )
 
     def _should_skip(p: Path) -> bool:
@@ -554,10 +570,10 @@ def run_validation_loop(
 
     all_results: FileResults = {}
     for path in expanded_paths:
-        if _should_skip(path):
+        if _should_skip(_ignore_path(path)):
             continue
         if platform_override is not None:
-            violations = validate_file(path, adapters, platform_override)
+            violations = validate_file(_ignore_path(path), adapters, platform_override)
             all_results[path] = [("platform", violations_to_result(violations))]
         else:
             file_results = validate_single_path(path, check=check, fix=fix, verbose=verbose)

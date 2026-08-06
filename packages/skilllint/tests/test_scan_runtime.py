@@ -24,6 +24,7 @@ from skilllint.scan_runtime import (
     _compute_summary,
     _discover_validatable_paths,
     _resolve_filter_and_expand_paths,
+    run_validation_loop,
 )
 
 if TYPE_CHECKING:
@@ -49,8 +50,7 @@ class TestDiscoverValidatablePaths:
 
         discovered = _discover_validatable_paths(tmp_path)
 
-        skill_file = skill_dir / "SKILL.md"
-        assert skill_file in discovered, f"Expected {skill_file} in discovered paths: {discovered}"
+        assert discovered == [skill_dir], f"Expected folder-backed target: {discovered}"
 
     def test_discovers_agent_files(self, tmp_path: Path) -> None:
         """_discover_validatable_paths finds agent .md files.
@@ -129,6 +129,19 @@ class TestDiscoverValidatablePaths:
         discovered = _discover_validatable_paths(tmp_path)
         assert discovered == []
 
+    def test_direct_skill_folder_is_one_target(self, tmp_path: Path) -> None:
+        skill_dir = tmp_path / "my-skill"
+        skill_dir.mkdir()
+        (skill_dir / "SKILL.md").write_text("---\ndescription: Test\n---\n# Test\n")
+        (skill_dir / "references").mkdir()
+        (skill_dir / "references" / "rule-catalog.md").write_text("# Rules\n")
+        (skill_dir / "agents").mkdir()
+        (skill_dir / "agents" / "nested.md").write_text("# Nested\n")
+        (skill_dir / "commands").mkdir()
+        (skill_dir / "commands" / "nested.md").write_text("# Nested\n")
+
+        assert _discover_validatable_paths(skill_dir) == [skill_dir]
+
 
 class TestResolveFilterAndExpandPaths:
     """Tests for _resolve_filter_and_expand_paths seam."""
@@ -147,8 +160,7 @@ class TestResolveFilterAndExpandPaths:
 
         expanded, is_batch = _resolve_filter_and_expand_paths([tmp_path], None, None)
 
-        skill_file = skill_dir / "SKILL.md"
-        assert skill_file in expanded, f"Expected {skill_file} in expanded: {expanded}"
+        assert expanded == [skill_dir], f"Expected folder-backed target: {expanded}"
         assert is_batch is True, "Expected is_batch=True for directory expansion"
 
     def test_passes_through_files(self, tmp_path: Path) -> None:
@@ -185,9 +197,8 @@ class TestResolveFilterAndExpandPaths:
 
         expanded, is_batch = _resolve_filter_and_expand_paths([tmp_path], None, "skills")
 
-        skill_file = skill_dir / "SKILL.md"
         agent_file = agents_dir / "agent.md"
-        assert skill_file in expanded, f"Expected {skill_file} in expanded"
+        assert skill_dir in expanded, f"Expected {skill_dir} in expanded"
         assert agent_file not in expanded, f"Did not expect {agent_file} when filtering for skills"
         assert is_batch is True
 
@@ -252,6 +263,109 @@ class TestResolveFilterAndExpandPaths:
 
         # Plugin dir should be in expanded (as-is, not expanded)
         assert plugin_dir in expanded, f"Expected {plugin_dir} in expanded: {expanded}"
+
+    def test_plugin_discovers_skill_folders_and_root(self, tmp_path: Path) -> None:
+        plugin_dir = tmp_path / "my-plugin"
+        (plugin_dir / ".claude-plugin").mkdir(parents=True)
+        (plugin_dir / ".claude-plugin" / "plugin.json").write_text('{"name": "my-plugin"}')
+        for name in ("alpha", "beta"):
+            skill_dir = plugin_dir / "skills" / name
+            skill_dir.mkdir(parents=True)
+            (skill_dir / "SKILL.md").write_text(f"---\ndescription: {name}\n---\n# {name}\n")
+
+        discovered = _discover_validatable_paths(plugin_dir)
+
+        assert discovered == sorted([plugin_dir, plugin_dir / "skills" / "alpha", plugin_dir / "skills" / "beta"])
+
+    def test_manifest_preserves_direct_skill_file_and_folder_entry(self, tmp_path: Path) -> None:
+        plugin_dir = tmp_path / "my-plugin"
+        (plugin_dir / ".claude-plugin").mkdir(parents=True)
+        (plugin_dir / "skills" / "folder").mkdir(parents=True)
+        (plugin_dir / "skills" / "folder" / "SKILL.md").write_text("---\ndescription: folder\n---\n# Folder\n")
+        direct = plugin_dir / "skills" / "direct" / "SKILL.md"
+        direct.parent.mkdir()
+        direct.write_text("---\ndescription: direct\n---\n# Direct\n")
+        (plugin_dir / ".claude-plugin" / "plugin.json").write_text(
+            '{"name": "my-plugin", "skills": ["skills/folder", "skills/folder/SKILL.md", "skills/direct/SKILL.md"]}'
+        )
+
+        discovered = _discover_validatable_paths(plugin_dir)
+
+        assert plugin_dir / "skills" / "folder" in discovered
+        assert plugin_dir / "skills" / "folder/SKILL.md" not in discovered
+        assert direct in discovered
+
+    def test_platform_validation_normalizes_skill_folder(self, tmp_path: Path) -> None:
+        import typer
+
+        from skilllint.plugin_validator import ValidationResult
+
+        skill_dir = tmp_path / "my-skill"
+        skill_dir.mkdir()
+        skill_file = skill_dir / "SKILL.md"
+        skill_file.write_text("---\ndescription: Test\n---\n# Test\n")
+        seen: list[Path] = []
+
+        def validate_file(path: Path, _adapters: dict, _platform: str | None) -> list[dict]:
+            seen.append(path)
+            return []
+
+        with pytest.raises(typer.Exit) as exc_info:
+            run_validation_loop(
+                expanded_paths=[skill_dir],
+                check=True,
+                fix=False,
+                verbose=False,
+                no_color=True,
+                show_progress=False,
+                show_summary=False,
+                platform_override="claude",
+                validate_single_path=lambda **_kwargs: pytest.fail("platform path used default validation"),
+                validate_file=validate_file,
+                violations_to_result=lambda _violations: ValidationResult(passed=True, errors=[], warnings=[], info=[]),
+                adapters={},
+            )
+
+        assert exc_info.value.exit_code == 0
+        assert seen == [skill_file]
+
+    def test_gitignore_matching_uses_skill_file_for_folder_targets(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Gitignore evaluation uses the concrete SKILL.md for folder targets."""
+        import typer
+
+        skill_dir = tmp_path / "my-skill"
+        skill_dir.mkdir()
+        skill_file = skill_dir / "SKILL.md"
+        skill_file.write_text("---\ndescription: Test\n---\n# Test\n")
+        seen: list[Path] = []
+
+        def build_gitignore_set(paths: list[Path], _scan_base: Path | None) -> frozenset[str]:
+            seen.extend(paths)
+            return frozenset(str(path.resolve()) for path in paths)
+
+        monkeypatch.setattr("skilllint.scan_runtime._load_ignore_patterns", list)
+        monkeypatch.setattr("skilllint.scan_runtime._build_gitignore_set", build_gitignore_set)
+
+        with pytest.raises(typer.Exit) as exc_info:
+            run_validation_loop(
+                expanded_paths=[skill_dir],
+                check=True,
+                fix=False,
+                verbose=False,
+                no_color=True,
+                show_progress=False,
+                show_summary=False,
+                platform_override=None,
+                validate_single_path=lambda **_kwargs: pytest.fail("ignored skill was validated"),
+                validate_file=lambda *_args: pytest.fail("ignored skill was validated"),
+                violations_to_result=lambda violations: violations,
+                adapters={},
+            )
+
+        assert exc_info.value.exit_code == 0
+        assert seen == [skill_file]
 
 
 class TestComputeSummary:

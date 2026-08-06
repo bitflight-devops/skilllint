@@ -5096,6 +5096,16 @@ def _collect_validator_results(
     return results
 
 
+def _normalize_skill_folder(path: Path) -> Path:
+    """Map a skill folder entrypoint to its direct ``SKILL.md`` file.
+
+    Returns:
+        The direct skill file for a skill folder, otherwise the original path.
+    """
+    skill_file = path / "SKILL.md"
+    return skill_file if path.is_dir() and skill_file.is_file() else path
+
+
 def validate_single_path(
     path: Path,
     *,
@@ -5126,6 +5136,8 @@ def validate_single_path(
     if not path.exists():
         typer.echo(f"Error: Path does not exist: {path}", err=True)
         raise typer.Exit(2) from None
+
+    path = _normalize_skill_folder(path)
 
     validators = _get_validators_for_path(path)
     if not validators:
@@ -5194,12 +5206,13 @@ def _handle_tokens_only(paths: list[Path], *, batch: bool = False) -> None:
         if not path.exists():
             typer.echo(f"Error: Path does not exist: {path}", err=True)
             raise typer.Exit(2) from None
+        normalized_path = _normalize_skill_folder(path)
         # Always count body-only so output matches ComplexityValidator thresholds
-        token_count = counter.count_file_tokens(path, body_only=True)
+        token_count = counter.count_file_tokens(normalized_path, body_only=True)
         if token_count is None:
-            typer.echo(f"Error: Could not count tokens for: {path}", err=True)
+            typer.echo(f"Error: Could not count tokens for: {normalized_path}", err=True)
             raise typer.Exit(2) from None
-        entries.append((token_count, path))
+        entries.append((token_count, normalized_path))
 
     if batch:
         for count, path in entries:
@@ -5510,6 +5523,8 @@ def main(
 
     def _run_validation_command() -> None:
         expanded_paths, is_batch = _resolve_filter_and_expand_paths(paths, filter_glob, filter_type)
+        if platform_override is not None:
+            expanded_paths = [_normalize_skill_folder(path) for path in expanded_paths]
 
         if tokens_only:
             _handle_tokens_only(expanded_paths, batch=is_batch)
