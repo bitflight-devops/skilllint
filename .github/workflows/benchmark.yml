@@ -376,7 +376,7 @@ jobs:
             --pages-url "https://bitflight-devops.github.io/agentskills-linter/"
 
       - name: Post comment to PR
-        uses: marocchino/sticky-pull-request-comment@v3.0.4
+        uses: marocchino/sticky-pull-request-comment@v3.0.5
         with:
           header: benchmark-results
           path: /tmp/bench_comment.md
