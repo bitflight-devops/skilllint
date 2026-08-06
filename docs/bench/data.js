@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1781371347198,
+  "lastUpdate": 1785989775992,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -498,6 +498,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 57.582,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "7d244c8f20939f38f376a3689946b4e370d9904a",
+          "message": "feat(scan): support skill-folder scanning (#95)\n\n* fix: discover folder-backed skills in scan runtime\n\n* feat(scan): validate skill folders\n\n* test(scan): align folder target expectations\n\n* fix: address PR 95 review findings\n\n* fix: normalize ignored skill folder paths\n\n* fix(scan-runtime): normalize skill targets",
+          "timestamp": "2026-08-06T04:13:20Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/7d244c8f20939f38f376a3689946b4e370d9904a"
+        },
+        "date": 1785989775225,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 11967.049,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 12828.896,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 14444.04,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 78.027,
             "unit": "files/s"
           }
         ]
