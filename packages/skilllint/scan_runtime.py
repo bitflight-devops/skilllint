@@ -556,7 +556,9 @@ def run_validation_loop(
     scan_base = _compute_scan_base(expanded_paths)
 
     ignored_set: frozenset[str] = (
-        _build_gitignore_set(expanded_paths, scan_base) if not include_gitignore else frozenset()
+        _build_gitignore_set([_ignore_path(path) for path in expanded_paths], scan_base)
+        if not include_gitignore
+        else frozenset()
     )
 
     def _should_skip(p: Path) -> bool:

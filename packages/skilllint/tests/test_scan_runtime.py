@@ -24,6 +24,7 @@ from skilllint.scan_runtime import (
     _compute_summary,
     _discover_validatable_paths,
     _resolve_filter_and_expand_paths,
+    run_validation_loop,
 )
 
 if TYPE_CHECKING:
@@ -291,6 +292,44 @@ class TestResolveFilterAndExpandPaths:
 
         assert plugin_dir / "skills" / "folder" in discovered
         assert direct in discovered
+
+    def test_gitignore_matching_uses_skill_file_for_folder_targets(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Gitignore evaluation uses the concrete SKILL.md for folder targets."""
+        import typer
+
+        skill_dir = tmp_path / "my-skill"
+        skill_dir.mkdir()
+        skill_file = skill_dir / "SKILL.md"
+        skill_file.write_text("---\ndescription: Test\n---\n# Test\n")
+        seen: list[Path] = []
+
+        def build_gitignore_set(paths: list[Path], _scan_base: Path | None) -> frozenset[str]:
+            seen.extend(paths)
+            return frozenset(str(path.resolve()) for path in paths)
+
+        monkeypatch.setattr("skilllint.scan_runtime._load_ignore_patterns", list)
+        monkeypatch.setattr("skilllint.scan_runtime._build_gitignore_set", build_gitignore_set)
+
+        with pytest.raises(typer.Exit) as exc_info:
+            run_validation_loop(
+                expanded_paths=[skill_dir],
+                check=True,
+                fix=False,
+                verbose=False,
+                no_color=True,
+                show_progress=False,
+                show_summary=False,
+                platform_override=None,
+                validate_single_path=lambda **_kwargs: pytest.fail("ignored skill was validated"),
+                validate_file=lambda *_args: pytest.fail("ignored skill was validated"),
+                violations_to_result=lambda violations: violations,
+                adapters={},
+            )
+
+        assert exc_info.value.exit_code == 0
+        assert seen == [skill_file]
 
 
 class TestComputeSummary:
