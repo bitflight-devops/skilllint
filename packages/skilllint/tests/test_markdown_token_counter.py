@@ -380,12 +380,18 @@ class TestTokensOnlyCLIFlag:
     ) -> None:
         """A skill-folder entrypoint counts only its direct SKILL.md body."""
         skill_file = sample_skill_dir / "SKILL.md"
+        references = sample_skill_dir / "references"
+        references.mkdir()
+        (references / "guide.md").write_text("# Nested guide\n\nThis must not be counted as a target.\n")
         folder = cli_runner.invoke(plugin_validator.app, ["check", "--tokens-only", str(sample_skill_dir)])
         direct = cli_runner.invoke(plugin_validator.app, ["check", "--tokens-only", str(skill_file)])
 
         assert folder.exit_code == 0, folder.stdout
         assert direct.exit_code == 0, direct.stdout
-        assert folder.stdout.strip().split("\t", 1)[0] == direct.stdout.strip()
+        expected = plugin_validator.MarkdownTokenCounter().count_file_tokens(skill_file, body_only=True)
+        assert expected is not None
+        assert folder.stdout.strip() == f"{expected}\t{skill_file}"
+        assert direct.stdout.strip() == str(expected)
 
 
 class TestCLIMarkdownValidation:

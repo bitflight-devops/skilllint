@@ -5523,6 +5523,8 @@ def main(
 
     def _run_validation_command() -> None:
         expanded_paths, is_batch = _resolve_filter_and_expand_paths(paths, filter_glob, filter_type)
+        if platform_override is not None:
+            expanded_paths = [_normalize_skill_folder(path) for path in expanded_paths]
 
         if tokens_only:
             _handle_tokens_only(expanded_paths, batch=is_batch)

@@ -502,6 +502,12 @@ ValidateFileFn = Callable[[Path, dict[str, object], str | None], list[dict]]
 ViolationsToResultFn = Callable[[list[dict]], Any]
 
 
+def _ignore_path(path: Path) -> Path:
+    """Return the concrete skill file for ignore matching when applicable."""
+    skill_file = path / "SKILL.md"
+    return skill_file if path.is_dir() and skill_file.is_file() else path
+
+
 def run_validation_loop(
     *,
     expanded_paths: list[Path],
@@ -560,7 +566,7 @@ def run_validation_loop(
 
     all_results: FileResults = {}
     for path in expanded_paths:
-        if _should_skip(path):
+        if _should_skip(_ignore_path(path)):
             continue
         if platform_override is not None:
             violations = validate_file(path, adapters, platform_override)
