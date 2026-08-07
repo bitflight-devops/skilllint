@@ -642,6 +642,19 @@ def _should_skip_claude_validate() -> bool:
 # Type alias: maps relative path prefix → set of suppressed error codes.
 IgnoreConfig: TypeAlias = dict[str, list[str]]
 
+
+@dataclass(frozen=True, slots=True)
+class ValidationPolicy:
+    """Per-config lint policy; invalid entries are deliberately ignored."""
+
+    thresholds: dict[str, int]
+    severity: dict[str, str]
+    ignore: IgnoreConfig
+
+
+DEFAULT_THRESHOLDS: dict[str, int] = {"SK006": TOKEN_WARNING_THRESHOLD, "SK007": TOKEN_ERROR_THRESHOLD}
+_KNOWN_POLICY_RULES = frozenset({"SK006", "SK007", "AS005"})
+
 _SKILLLINT_CONFIG_FILENAME = ".skilllint.json"
 
 
@@ -663,10 +676,44 @@ def _load_ignore_dict(config_path: Path) -> IgnoreConfig:
         raw = msgspec.json.decode(config_path.read_bytes())
     except (OSError, msgspec.DecodeError):
         return {}
+    if not isinstance(raw, dict):
+        return {}
     ignore = raw.get("ignore", {})
     if not isinstance(ignore, dict):
         return {}
     return {str(k): [str(c) for c in v] for k, v in ignore.items() if isinstance(v, list)}
+
+
+def _load_policy(config_path: Path) -> ValidationPolicy:
+    """Load thresholds and severity from the existing JSON config.
+
+    Returns:
+        A policy containing defaults for invalid or missing entries.
+    """
+    defaults = dict(DEFAULT_THRESHOLDS)
+    if not config_path.is_file():
+        return ValidationPolicy(defaults, {}, {})
+    try:
+        raw = msgspec.json.decode(config_path.read_bytes())
+    except (OSError, msgspec.DecodeError):
+        return ValidationPolicy(defaults, {}, {})
+    if not isinstance(raw, dict):
+        return ValidationPolicy(defaults, {}, {})
+    thresholds = dict(defaults)
+    values = raw.get("thresholds", {})
+    if isinstance(values, dict):
+        for raw_code, value in values.items():
+            code = str(raw_code)
+            if code in _KNOWN_POLICY_RULES and isinstance(value, int) and not isinstance(value, bool) and value > 0:
+                thresholds[code] = value
+    severity: dict[str, str] = {}
+    values = raw.get("severity", {})
+    if isinstance(values, dict):
+        for raw_code, value in values.items():
+            code = str(raw_code)
+            if code in _KNOWN_POLICY_RULES and value in {"warning", "info"}:
+                severity[code] = value
+    return ValidationPolicy(thresholds, severity, _load_ignore_dict(config_path))
 
 
 def _load_ignore_config(plugin_root: Path) -> IgnoreConfig:
@@ -756,6 +803,40 @@ def _resolve_ignore_config(
         if dir_key not in cache:
             cache[dir_key] = result
 
+    return result
+
+
+def _resolve_policy(path: Path, cache: dict[str, tuple[ValidationPolicy, Path | None]]) -> tuple[ValidationPolicy, Path | None]:
+    """Resolve first-match policy using the existing discovery and cache.
+
+    Returns:
+        The policy and its config root, or defaults and ``None``.
+    """
+    start_dir = path.parent.resolve()
+    key = str(start_dir)
+    if key in cache:
+        return cache[key]
+    walked: list[Path] = []
+    current = start_dir
+    policy = ValidationPolicy(dict(DEFAULT_THRESHOLDS), {}, {})
+    root: Path | None = None
+    while True:
+        walked.append(current)
+        plugin_cfg = current / ".claude-plugin" / "plugin.json"
+        skilllint_cfg = current / _SKILLLINT_CONFIG_FILENAME
+        if plugin_cfg.exists():
+            policy, root = _load_policy(current / ".claude-plugin" / "validator.json"), current
+            break
+        if skilllint_cfg.exists():
+            policy, root = _load_policy(skilllint_cfg), current
+            break
+        parent = current.parent
+        if parent == current:
+            break
+        current = parent
+    result = (policy, root)
+    for directory in walked:
+        cache.setdefault(str(directory), result)
     return result
 
 
@@ -2197,11 +2278,12 @@ class AsSeriesValidator:
     ``validate_single_path`` code path so they fire without ``--platform``.
     """
 
-    def validate(self, path: Path) -> ValidationResult:
+    def validate(self, path: Path, policy: ValidationPolicy | None = None) -> ValidationResult:
         """Run AS-series checks on a skill or agent file.
 
         Args:
             path: Path to a SKILL.md or agent .md file.
+            policy: Optional resolved per-plugin policy.
 
         Returns:
             ValidationResult grouping AS-series issues by severity.
@@ -2209,7 +2291,14 @@ class AsSeriesValidator:
         from skilllint.rules.as_series import run_as_series  # noqa: PLC0415
 
         frontmatter_data, body_lines, _yaml_err, _colon_fields = parse_skill_md(path)
-        violations = run_as_series(path, frontmatter_data, body_lines)
+        thresholds = policy.thresholds if policy is not None else DEFAULT_THRESHOLDS
+        violations = run_as_series(
+            path,
+            frontmatter_data,
+            body_lines,
+            warning_threshold=thresholds.get("SK006", TOKEN_WARNING_THRESHOLD),
+            error_threshold=thresholds.get("SK007", TOKEN_ERROR_THRESHOLD),
+        )
 
         # AS002 checks that `name` matches the skill's own directory name
         # (e.g. skills/my-skill/SKILL.md). Agent files are stored directly in
@@ -3123,11 +3212,12 @@ class ComplexityValidator:
     Architecture lines 1115-1168, Task T6 lines 685-797
     """
 
-    def validate(self, path: Path) -> ValidationResult:
+    def validate(self, path: Path, policy: ValidationPolicy | None = None) -> ValidationResult:
         """Validate skill complexity using token counting.
 
         Args:
             path: Path to SKILL.md file
+            policy: Optional resolved per-plugin policy.
 
         Returns:
             ValidationResult with warnings/errors based on token thresholds
@@ -3175,26 +3265,29 @@ class ComplexityValidator:
         # Count tokens using tiktoken
         body_tokens = count_tokens(body)
 
-        # Check against thresholds
-        if body_tokens > TOKEN_ERROR_THRESHOLD:
+        # Check against the resolved policy, retaining quality defaults.
+        thresholds = policy.thresholds if policy is not None else DEFAULT_THRESHOLDS
+        warning_threshold = thresholds.get("SK006", TOKEN_WARNING_THRESHOLD)
+        error_threshold = thresholds.get("SK007", TOKEN_ERROR_THRESHOLD)
+        if body_tokens > error_threshold:
             # CRITICAL: Must split skill
             errors.append(
                 ValidationIssue(
                     field="complexity",
                     severity="error",
-                    message=f"Skill body exceeds token limit ({body_tokens} tokens > {TOKEN_ERROR_THRESHOLD} threshold)",
+                    message=f"Skill body exceeds token limit ({body_tokens} tokens > {error_threshold} threshold)",
                     code=SK007,
                     docs_url=generate_docs_url(SK007),
                     suggestion="Run /plugin-creator:refactor-skill to split into multiple smaller skills",
                 )
             )
-        elif body_tokens > TOKEN_WARNING_THRESHOLD:
+        elif body_tokens > warning_threshold:
             # WARNING: Larger than Anthropic's official skills
             warnings.append(
                 ValidationIssue(
                     field="complexity",
                     severity="warning",
-                    message=f"Skill body is large ({body_tokens} tokens > {TOKEN_WARNING_THRESHOLD} threshold)",
+                    message=f"Skill body is large ({body_tokens} tokens > {warning_threshold} threshold)",
                     code=SK006,
                     docs_url=generate_docs_url(SK006),
                     suggestion="This skill is larger than Anthropic's official skills. Review whether content can be moved to references/ or if the skill covers multiple domains that could be separated",
@@ -5072,7 +5165,8 @@ def _get_validators_for_path(path: Path) -> list[Validator]:
 
 
 def _collect_validator_results(
-    validators: list[Validator], path: Path, *, config_root: Path | None, ignore_config: IgnoreConfig
+    validators: list[Validator], path: Path, *, config_root: Path | None, ignore_config: IgnoreConfig,
+    policy: ValidationPolicy | None = None,
 ) -> list[tuple[str, ValidationResult]]:
     """Run each validator and collect results, applying ignore filtering.
 
@@ -5083,16 +5177,37 @@ def _collect_validator_results(
             or .skilllint.json parent). Used as the base for relative-path
             prefix matching. Pass ``None`` to skip filtering.
         ignore_config: Resolved ignore configuration.
+        policy: Optional resolved token/severity policy.
 
     Returns:
         List of (validator_class_name, result) tuples.
     """
     results: list[tuple[str, ValidationResult]] = []
     for validator in validators:
-        result = validator.validate(path)
+        name = type(validator).__name__
+        if policy is not None and isinstance(validator, (ComplexityValidator, AsSeriesValidator)):
+            result = validator.validate(path, policy)
+        else:
+            result = validator.validate(path)
+        if policy is not None and policy.severity:
+            def remap(issue: ValidationIssue) -> ValidationIssue:
+                configured = policy.severity.get(str(issue.code))
+                severity: Literal["error", "warning", "info"] = issue.severity
+                if configured == "warning":
+                    severity = "warning"
+                elif configured == "info":
+                    severity = "info"
+                return ValidationIssue(field=issue.field, severity=severity, message=issue.message, code=issue.code, line=issue.line, docs_url=issue.docs_url, suggestion=issue.suggestion)
+            issues = [remap(i) for i in [*result.errors, *result.warnings, *result.info]]
+            result = ValidationResult(
+                passed=not any(i.severity == "error" for i in issues),
+                errors=[i for i in issues if i.severity == "error"],
+                warnings=[i for i in issues if i.severity == "warning"],
+                info=[i for i in issues if i.severity == "info"],
+            )
         if config_root is not None:
             result = _filter_result_by_ignore(result, path, config_root, ignore_config)
-        results.append((type(validator).__name__, result))
+        results.append((name, result))
     return results
 
 
@@ -5154,9 +5269,11 @@ def validate_single_path(
 
     cache: dict[str, tuple[IgnoreConfig, Path | None]] = per_run_cache if per_run_cache is not None else {}
     ignore_config, config_root = _resolve_ignore_config(path, cache)
+    policy, _policy_root = _resolve_policy(path, {})
+    policy = ValidationPolicy(policy.thresholds, policy.severity, ignore_config)
 
     validator_results = _collect_validator_results(
-        validators, path, config_root=config_root, ignore_config=ignore_config
+        validators, path, config_root=config_root, ignore_config=ignore_config, policy=policy
     )
 
     # Note: --fix still runs even for suppressed issues (ignore = suppress reporting, not fixing)
@@ -5177,7 +5294,7 @@ def validate_single_path(
             # Re-validate after fixes
             if fixes_applied:
                 validator_results = _collect_validator_results(
-                    validators, path, config_root=config_root, ignore_config=ignore_config
+                    validators, path, config_root=config_root, ignore_config=ignore_config, policy=policy
                 )
 
     return {path: validator_results}

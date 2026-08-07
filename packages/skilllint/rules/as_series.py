@@ -353,7 +353,11 @@ def _has_unquoted_colon(text: str) -> bool:
     category="skill",
     authority={"origin": "agentskills.io", "reference": "/specification#skill-complexity"},
 )
-def _check_as005(body_lines: list[str]) -> dict | None:
+def _check_as005(
+    body_lines: list[str],
+    warning_threshold: int = TOKEN_WARNING_THRESHOLD,
+    error_threshold: int = TOKEN_ERROR_THRESHOLD,
+) -> dict | None:
     """AS005 — SKILL.md body exceeds token threshold.
 
     Counts tokens in the body text (frontmatter excluded) using tiktoken
@@ -362,6 +366,8 @@ def _check_as005(body_lines: list[str]) -> dict | None:
 
     Args:
         body_lines: List of content lines from the SKILL.md body.
+        warning_threshold: Body token warning threshold.
+        error_threshold: Body token error threshold.
 
     Returns:
         Violation dict if threshold exceeded, None otherwise.
@@ -377,18 +383,16 @@ def _check_as005(body_lines: list[str]) -> dict | None:
     body_text = "\n".join(body_lines)
     token_count = count_tokens(body_text)
 
-    if token_count > TOKEN_ERROR_THRESHOLD:
+    if token_count > error_threshold:
         return _make_violation(
-            "AS005",
-            "error",
-            f"SKILL.md body is {token_count} tokens — exceeds {TOKEN_ERROR_THRESHOLD} token limit; skill must be split into sub-skills",
+            "AS005", "error",
+            f"SKILL.md body is {token_count} tokens — exceeds {error_threshold} token limit; skill must be split into sub-skills",
         )
 
-    if token_count > TOKEN_WARNING_THRESHOLD:
+    if token_count > warning_threshold:
         return _make_violation(
-            "AS005",
-            "warning",
-            f"SKILL.md body is {token_count} tokens — exceeds {TOKEN_WARNING_THRESHOLD} token threshold; consider splitting into sub-skills",
+            "AS005", "warning",
+            f"SKILL.md body is {token_count} tokens — exceeds {warning_threshold} token threshold; consider splitting into sub-skills",
         )
 
     return None
@@ -997,7 +1001,14 @@ def check_skill_md(path: pathlib.Path) -> list[dict]:
 
 # Alias for plan 02-02 spec compatibility (run_as_series is the plan name,
 # check_skill_md is what the tests actually import).
-def run_as_series(path: pathlib.Path, frontmatter: dict, body_lines: list[str]) -> list[dict]:
+def run_as_series(
+    path: pathlib.Path,
+    frontmatter: dict,
+    body_lines: list[str],
+    *,
+    warning_threshold: int = TOKEN_WARNING_THRESHOLD,
+    error_threshold: int = TOKEN_ERROR_THRESHOLD,
+) -> list[dict]:
     """Run AS-series rules given pre-parsed frontmatter and body lines.
 
     This is a lower-level entry point for callers that have already parsed
@@ -1032,7 +1043,7 @@ def run_as_series(path: pathlib.Path, frontmatter: dict, body_lines: list[str]) 
     if v:
         violations.append(v)
 
-    v = _check_as005(body_lines)
+    v = _check_as005(body_lines, warning_threshold, error_threshold)
     if v:
         violations.append(v)
 
