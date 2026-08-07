@@ -1,4 +1,5 @@
 """Focused coverage for Issue #5's bounded JSON policy contract."""
+
 from __future__ import annotations
 
 import json

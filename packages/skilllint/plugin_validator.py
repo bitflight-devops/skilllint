@@ -806,7 +806,9 @@ def _resolve_ignore_config(
     return result
 
 
-def _resolve_policy(path: Path, cache: dict[str, tuple[ValidationPolicy, Path | None]]) -> tuple[ValidationPolicy, Path | None]:
+def _resolve_policy(
+    path: Path, cache: dict[str, tuple[ValidationPolicy, Path | None]]
+) -> tuple[ValidationPolicy, Path | None]:
     """Resolve first-match policy using the existing discovery and cache.
 
     Returns:
@@ -5165,7 +5167,11 @@ def _get_validators_for_path(path: Path) -> list[Validator]:
 
 
 def _collect_validator_results(
-    validators: list[Validator], path: Path, *, config_root: Path | None, ignore_config: IgnoreConfig,
+    validators: list[Validator],
+    path: Path,
+    *,
+    config_root: Path | None,
+    ignore_config: IgnoreConfig,
     policy: ValidationPolicy | None = None,
 ) -> list[tuple[str, ValidationResult]]:
     """Run each validator and collect results, applying ignore filtering.
@@ -5190,6 +5196,7 @@ def _collect_validator_results(
         else:
             result = validator.validate(path)
         if policy is not None and policy.severity:
+
             def remap(issue: ValidationIssue) -> ValidationIssue:
                 configured = policy.severity.get(str(issue.code))
                 severity: Literal["error", "warning", "info"] = issue.severity
@@ -5197,7 +5204,16 @@ def _collect_validator_results(
                     severity = "warning"
                 elif configured == "info":
                     severity = "info"
-                return ValidationIssue(field=issue.field, severity=severity, message=issue.message, code=issue.code, line=issue.line, docs_url=issue.docs_url, suggestion=issue.suggestion)
+                return ValidationIssue(
+                    field=issue.field,
+                    severity=severity,
+                    message=issue.message,
+                    code=issue.code,
+                    line=issue.line,
+                    docs_url=issue.docs_url,
+                    suggestion=issue.suggestion,
+                )
+
             issues = [remap(i) for i in [*result.errors, *result.warnings, *result.info]]
             result = ValidationResult(
                 passed=not any(i.severity == "error" for i in issues),

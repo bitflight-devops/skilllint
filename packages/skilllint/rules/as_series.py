@@ -385,13 +385,15 @@ def _check_as005(
 
     if token_count > error_threshold:
         return _make_violation(
-            "AS005", "error",
+            "AS005",
+            "error",
             f"SKILL.md body is {token_count} tokens — exceeds {error_threshold} token limit; skill must be split into sub-skills",
         )
 
     if token_count > warning_threshold:
         return _make_violation(
-            "AS005", "warning",
+            "AS005",
+            "warning",
             f"SKILL.md body is {token_count} tokens — exceeds {warning_threshold} token threshold; consider splitting into sub-skills",
         )
 
