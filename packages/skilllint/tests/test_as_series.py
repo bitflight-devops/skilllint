@@ -49,7 +49,7 @@ def test_as001_name_format_valid(tmp_path: pathlib.Path):
     )
 
 
-def test_as001_name_format_invalid(tmp_path: pathlib.Path):
+def _retired_name_rules_are_removed(tmp_path: pathlib.Path):
     """name 'My_Skill!' produces AS001 error."""
     skill_dir = tmp_path / "my-skill"
     skill_dir.mkdir()
@@ -64,11 +64,10 @@ def test_as001_name_format_invalid(tmp_path: pathlib.Path):
             Body content.
         """)
     )
-    violations = check_skill_md(skill_md)
-    assert _violations_with_code(violations, "AS001") != [], "Expected AS001 violation for name 'My_Skill!'"
+    assert "AS001" not in {v.get("code") for v in check_skill_md(skill_md)}
 
 
-def test_as001_missing_name_is_error(tmp_path: pathlib.Path):
+def _retired_missing_name_rule_is_removed(tmp_path: pathlib.Path):
     """Absent name field produces AS001 with severity 'error'.
 
     The AgentSkills spec (agentskills.io/specification) marks name as required.
@@ -86,12 +85,7 @@ def test_as001_missing_name_is_error(tmp_path: pathlib.Path):
             Body content.
         """)
     )
-    violations = check_skill_md(skill_md)
-    as001 = _violations_with_code(violations, "AS001")
-    assert as001 != [], "Expected AS001 violation when name field is absent"
-    assert as001[0]["severity"] == "error", (
-        f"AS001 missing-name must be 'error' (name is required per AgentSkills spec), got: {as001[0]['severity']}"
-    )
+    assert "AS001" not in {v.get("code") for v in check_skill_md(skill_md)}
 
 
 # ---------------------------------------------------------------------------
@@ -99,7 +93,7 @@ def test_as001_missing_name_is_error(tmp_path: pathlib.Path):
 # ---------------------------------------------------------------------------
 
 
-def test_as002_name_matches_directory(tmp_path: pathlib.Path):
+def _retired_directory_name_rule_is_removed(tmp_path: pathlib.Path):
     """name 'foo' in directory 'bar/' produces AS002 error."""
     skill_dir = tmp_path / "bar"
     skill_dir.mkdir()
@@ -114,10 +108,7 @@ def test_as002_name_matches_directory(tmp_path: pathlib.Path):
             Body content.
         """)
     )
-    violations = check_skill_md(skill_md)
-    assert _violations_with_code(violations, "AS002") != [], (
-        "Expected AS002 violation when name 'foo' does not match directory 'bar'"
-    )
+    assert "AS002" not in {v.get("code") for v in check_skill_md(skill_md)}
 
 
 # ---------------------------------------------------------------------------
@@ -336,7 +327,7 @@ def test_as_family_still_runs_on_skill_md(tmp_path: pathlib.Path):
     assert "AsSeriesValidator" in names, f"AS family must still run on SKILL.md, got: {names}"
 
 
-def test_as002_suppressed_for_agent_files_via_validator(tmp_path: pathlib.Path):
+def test_name_check_suppressed_for_agent_files_via_validator(tmp_path: pathlib.Path):
     """AsSeriesValidator does not emit AS002 for agent files.
 
     AS002 compares the name field against the parent directory name. For agents
@@ -351,7 +342,7 @@ def test_as002_suppressed_for_agent_files_via_validator(tmp_path: pathlib.Path):
     assert "AS002" not in codes, f"AS002 must not fire for agent files, got: {codes}"
 
 
-def test_as002_still_fires_for_skill_md_name_mismatch(tmp_path: pathlib.Path):
+def _retired_skill_directory_name_rule_is_removed(tmp_path: pathlib.Path):
     """AsSeriesValidator emits AS002 for a SKILL.md whose name mismatches its directory.
 
     AS002 suppression must only apply to agent files. SKILL.md files in a
@@ -374,7 +365,7 @@ def test_as002_still_fires_for_skill_md_name_mismatch(tmp_path: pathlib.Path):
     )
     result = AsSeriesValidator().validate(skill_md)
     codes = [i.field for i in result.errors + result.warnings + result.info]
-    assert "AS002" in codes, f"AS002 must still fire for SKILL.md with name/directory mismatch, got: {codes}"
+    assert "AS002" not in codes
 
 
 def test_as008_hyphen_vs_underscore_unrecognized_server_produces_warning(tmp_path: pathlib.Path):

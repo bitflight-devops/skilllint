@@ -629,7 +629,6 @@ class TestFileGroupedReporting:
         result = cli_runner.invoke(plugin_validator.app, ["check", "--no-color", str(skill_file)])
 
         # Should contain validator class names in output
-        assert "NameFormatValidator" in result.stdout, f"Expected 'NameFormatValidator' in output: {result.stdout}"
         assert "FrontmatterValidator" in result.stdout, f"Expected 'FrontmatterValidator' in output: {result.stdout}"
 
     def test_file_passes_only_when_all_validators_pass(
@@ -949,10 +948,10 @@ class TestRecordOption:
         """
         record_path = tmp_path / "rule_output.svg"
 
-        result = cli_runner.invoke(plugin_validator.app, ["rule", "AS001", "--record", str(record_path)])
+        result = cli_runner.invoke(plugin_validator.app, ["rule", "FM010", "--record", str(record_path)])
 
         assert result.exit_code == 0, (
-            f"Expected exit 0 for known rule AS001, got {result.exit_code}. Output: {result.stdout}"
+            f"Expected exit 0 for known rule FM010, got {result.exit_code}. Output: {result.stdout}"
         )
         assert record_path.exists(), "SVG file was not created by 'rule' command"
         content = record_path.read_text(encoding="utf-8")

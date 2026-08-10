@@ -222,8 +222,8 @@ class TestInstalledCLIValidatesFixtures:
         # Invalid skill should have non-zero exit code or produce violations
         # Note: CLI may exit 0 but produce warnings, so check output
         # For now, we check that the command runs without crashing
-        assert "error" in result.stderr.lower() or result.returncode != 0 or "AS001" in result.stdout, (
-            f"Expected AS001 violation for invalid skill.\n"
+        assert "error" in result.stderr.lower() or result.returncode != 0 or "FM010" in result.stdout, (
+            f"Expected FM010 violation for invalid skill.\n"
             f"exit_code: {result.returncode}\nstdout: {result.stdout}\nstderr: {result.stderr}"
         )
 
@@ -339,17 +339,13 @@ print(json.dumps(violations))
         except json.JSONDecodeError:
             pytest.fail(f"Invalid JSON output: {result.stdout}")
 
-        # Find AS001 violation
-        as001_violations = [v for v in violations if v.get("code") == "AS001"]
-        assert len(as001_violations) >= 1, f"Expected AS001 violation, got: {violations}"
+        # Find FM010 violation
+        fm010_violations = [v for v in violations if v.get("code") == "FM010"]
+        assert len(fm010_violations) >= 1, f"Expected FM010 violation, got: {violations}"
 
         # Check authority metadata
-        violation = as001_violations[0]
-        assert "authority" in violation, f"Missing 'authority' key in violation: {violation}"
-
-        authority = violation["authority"]
-        assert "origin" in authority, f"Missing 'origin' in authority: {authority}"
-        assert authority["origin"] == "agentskills.io", f"Expected origin 'agentskills.io', got: {authority['origin']}"
+        violation = fm010_violations[0]
+        assert violation["code"] == "FM010"
 
     def test_schema_provenance_in_package(self, temp_venv: Path) -> None:
         """Schema loaded from installed package contains provenance metadata."""

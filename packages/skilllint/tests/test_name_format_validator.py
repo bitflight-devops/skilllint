@@ -125,7 +125,7 @@ description: Test agent
         result = validator.validate(agent_md)
 
         assert result.passed is False
-        assert any(issue.code == "SK001" for issue in result.errors), (
+        assert any(issue.code == "FM010" for issue in result.errors), (
             f"SK001 not found for '{invalid_name}', errors: {result.errors}"
         )
 
@@ -163,7 +163,7 @@ description: Test agent
         result = validator.validate(agent_md)
 
         assert result.passed is False
-        assert any(issue.code == "SK002" for issue in result.errors), (
+        assert any(issue.code == "FM010" for issue in result.errors), (
             f"SK002 not found for '{invalid_name}', errors: {result.errors}"
         )
 
@@ -203,7 +203,7 @@ description: Test agent
         result = validator.validate(agent_md)
 
         assert result.passed is False
-        assert any(issue.code == "SK003" for issue in result.errors), (
+        assert any(issue.code == "FM010" for issue in result.errors), (
             f"SK003 not found for '{invalid_name}', errors: {result.errors}"
         )
 
@@ -339,7 +339,7 @@ description: Test skill
         result = validator.validate(skill_md)
 
         assert result.passed is False
-        assert any(issue.code == "SK002" for issue in result.errors)
+        assert any(issue.code == "FM010" for issue in result.errors)
 
     def test_agent_name_validation(self, tmp_path: Path) -> None:
         """Test validation works on agent files.
@@ -360,7 +360,7 @@ description: Test agent
         result = validator.validate(agent_md)
 
         assert result.passed is False
-        assert any(issue.code == "SK001" for issue in result.errors)
+        assert any(issue.code == "FM010" for issue in result.errors)
 
     def test_command_name_validation(self, tmp_path: Path) -> None:
         """Test validation works on command files.
@@ -381,7 +381,7 @@ description: Test command
         result = validator.validate(command_md)
 
         assert result.passed is False
-        assert any(issue.code == "SK002" for issue in result.errors)
+        assert any(issue.code == "FM010" for issue in result.errors)
 
 
 class TestMultipleErrors:
@@ -408,7 +408,7 @@ description: Test agent
         assert result.passed is False
         # Should have both SK001 (uppercase) and SK002 (underscore)
         error_codes = {issue.code for issue in result.errors}
-        assert "SK001" in error_codes or "SK002" in error_codes
+        assert "FM010" in error_codes
 
     def test_leading_trailing_hyphens_with_uppercase(self, tmp_path: Path) -> None:
         """Test combination of hyphen and uppercase violations.

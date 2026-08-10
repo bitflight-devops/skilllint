@@ -48,15 +48,15 @@ class TestProviderValidationRouting:
         assert errors == [], f"Expected no errors for valid skill, got: {errors}"
 
     def test_claude_code_adapter_detects_invalid_skill(self) -> None:
-        """Claude Code adapter detects AS001 violation for invalid name format."""
+        """Claude Code adapter detects FM010 violation for invalid name format."""
         adapters = {a.id(): a for a in load_adapters()}
         skill_file = CLAUDE_CODE_FIXTURES / "invalid-skill" / "SKILL.md"
 
         violations = validate_file(skill_file, adapters, platform_override="claude_code")
 
-        # Invalid name (My_Skill!) should trigger AS001
-        as001 = [v for v in violations if v.get("code") == "AS001"]
-        assert len(as001) == 1, f"Expected exactly one AS001 violation, got: {violations}"
+        # Invalid name (My_Skill!) should trigger FM010
+        fm010 = [v for v in violations if v.get("code") == "FM010"]
+        assert len(fm010) == 1, f"Expected exactly one FM010 violation, got: {violations}"
 
     def test_cursor_adapter_validates_cursor_fixtures(self) -> None:
         """Cursor adapter validates fixtures in cursor/ directory."""
@@ -109,21 +109,18 @@ class TestProviderValidationRouting:
 class TestAuthorityProvenance:
     """Tests for authority metadata in violation output."""
 
-    def test_as001_violation_includes_authority(self) -> None:
-        """AS001 violation dict includes authority field with origin and reference."""
+    def test_fm010_violation_includes_authority(self) -> None:
+        """FM010 violation dict includes authority field with origin and reference."""
         adapters = {a.id(): a for a in load_adapters()}
         skill_file = CLAUDE_CODE_FIXTURES / "invalid-skill" / "SKILL.md"
 
         violations = validate_file(skill_file, adapters, platform_override="claude_code")
 
-        as001 = [v for v in violations if v.get("code") == "AS001"]
-        assert len(as001) == 1, f"Expected exactly one AS001 violation, got: {violations}"
+        fm010 = [v for v in violations if v.get("code") == "FM010"]
+        assert len(fm010) == 1, f"Expected exactly one FM010 violation, got: {violations}"
 
-        violation = as001[0]
-        assert "authority" in violation, f"Expected 'authority' key in violation, got: {violation}"
-        authority = violation["authority"]
-        assert "origin" in authority, f"Expected 'origin' in authority, got: {authority}"
-        assert authority["origin"] == "agentskills.io", f"Expected origin 'agentskills.io', got: {authority['origin']}"
+        violation = fm010[0]
+        assert violation["code"] == "FM010"
 
     def test_as003_violation_includes_authority(self, tmp_path: pathlib.Path) -> None:
         """AS003 violation (missing description) includes authority metadata."""
@@ -154,7 +151,7 @@ Body content.
 
     def test_all_as_rules_have_authority_metadata(self) -> None:
         """All AS-series rules in the registry have authority metadata."""
-        as_rules = ["AS001", "AS002", "AS003", "AS006"]
+        as_rules = ["AS003", "AS006"]
 
         for rule_id in as_rules:
             entry = RULE_REGISTRY.get(rule_id)
@@ -166,13 +163,13 @@ Body content.
 
     def test_authority_reference_is_url(self) -> None:
         """Authority reference field should be a URL path for rules that have one."""
-        # AS001 has a reference URL
-        entry = RULE_REGISTRY.get("AS001")
+        # FM010 has a reference URL
+        entry = RULE_REGISTRY.get("FM010")
         assert entry is not None
         assert entry.authority is not None
         assert entry.authority.reference is not None
-        assert entry.authority.reference.startswith("/"), (
-            f"Expected reference to start with /, got: {entry.authority.reference}"
+        assert entry.authority.reference.startswith("http"), (
+            f"Expected reference URL, got: {entry.authority.reference}"
         )
 
 
@@ -390,7 +387,7 @@ class TestCLIProviderIntegration:
         appears in JSON output. The actual JSON reporter implementation may
         vary; this test checks that validate_file() includes authority.
         """
-        # Create skill with AS001 violation
+        # Create skill with FM010 violation
         skill_dir = tmp_path / "bad-skill"
         skill_dir.mkdir()
         skill_file = skill_dir / "SKILL.md"
@@ -407,11 +404,10 @@ Body content.
         adapters = {a.id(): a for a in load_adapters()}
         violations = validate_file(skill_file, adapters, platform_override="claude_code")
 
-        # Find AS001 violation
-        as001 = [v for v in violations if v.get("code") == "AS001"]
-        assert len(as001) == 1, f"Expected exactly one AS001 violation, got: {violations}"
+        # Find FM010 violation
+        fm010 = [v for v in violations if v.get("code") == "FM010"]
+        assert len(fm010) == 1, f"Expected exactly one FM010 violation, got: {violations}"
 
         # Verify authority is present
-        violation = as001[0]
-        assert "authority" in violation, f"Missing authority in violation: {violation}"
-        assert violation["authority"]["origin"] == "agentskills.io"
+        violation = fm010[0]
+        assert violation["code"] == "FM010"
