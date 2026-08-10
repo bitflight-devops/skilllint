@@ -1,10 +1,10 @@
 """AS-series rule validation for agentskills.io SKILL.md files.
 
-Rules AS003, AS006-AS009 fire on SKILL.md files only, regardless of which
-platform adapter is active. They enforce the AgentSkills specification, a
-cross-harness baseline that defines SKILL.md and does not describe agent
-files. A check on agent frontmatter belongs to a series that governs agent
-files, cited to the harness documentation that defines them — not here.
+Rules AS006-AS009 fire on SKILL.md files only, regardless of which platform
+adapter is active. They enforce the AgentSkills specification, a cross-harness
+baseline that defines SKILL.md and does not describe agent files. A check on
+agent frontmatter belongs to a series that governs agent files, cited to the
+harness documentation that defines them — not here.
 
 Entry point: check_skill_md(path: Path) -> list[dict]
 
@@ -12,7 +12,6 @@ Each violation dict has the shape:
     {"code": str, "severity": str, "message": str}
 
 Severities:
-    "error"   — AS003
     "warning" — AS008, AS009
     "info"    — AS006
 """
@@ -35,8 +34,6 @@ _logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 AS_RULES: dict[str, str] = {
-
-    "AS003": "description field must be present and non-empty",
     "AS006": "No eval_queries.json found — add evaluation queries for quality assurance",
     "AS008": "MCP tool name may have incorrect casing — case is sensitive in the tools field",
     "AS009": "Nested skill will not be auto-discovered — skills must be direct children of the skills/ directory",
@@ -97,7 +94,7 @@ def _violation(
     """Build a violation dict.
 
     Args:
-        code: Rule code (e.g., "AS003").
+        code: Rule code (e.g., "AS006").
         severity: Severity level ("error", "warning", "info").
         message: Human-readable message.
         fix: Optional auto-fix instruction.
@@ -118,7 +115,7 @@ def _get_rule_authority(code: str) -> dict | None:
     """Get authority metadata for a rule from the registry.
 
     Args:
-        code: Rule ID (e.g., "AS003")
+        code: Rule ID (e.g., "AS006")
 
     Returns:
         Authority dict with 'origin' and optional 'reference', or None if not found.
@@ -139,7 +136,7 @@ def _make_violation(code: str, severity: str, message: str, fix: str | None = No
     looks up and includes authority metadata from the rule registry.
 
     Args:
-        code: Rule ID (e.g., "AS003")
+        code: Rule ID (e.g., "AS006")
         severity: One of "error", "warning", "info"
         message: Human-readable violation message
         fix: Optional auto-fix suggestion
@@ -153,35 +150,6 @@ def _make_violation(code: str, severity: str, message: str, fix: str | None = No
 # ---------------------------------------------------------------------------
 # Individual rule checks
 # ---------------------------------------------------------------------------
-
-
-@skilllint_rule(
-    "AS003",
-    severity="error",
-    category="skill",
-    authority={"origin": "agentskills.io", "reference": "/specification#skill-description"},
-)
-def _check_as003(description: str | None) -> dict | None:
-    """AS003 — Missing or empty description field.
-
-    Every SKILL.md must have a ``description`` field in its frontmatter.
-    The description helps AI agents understand when to use this skill
-    and provides context for users.
-
-    Args:
-        description: The description from frontmatter, or None if missing.
-
-    Returns:
-        Violation dict if invalid, None otherwise.
-
-    Fix:
-        Add a ``description`` field to the frontmatter with a brief
-        explanation of what this skill does.
-    """
-    if description is None or not description.strip():
-        return _make_violation("AS003", "error", "description field must be present and non-empty")
-
-    return None
 
 
 def _extract_tools_list(path: pathlib.Path, field: str = "allowed-tools") -> list[str]:
@@ -693,7 +661,7 @@ def _check_as009(path: pathlib.Path) -> dict | None:
 
 
 def check_skill_md(path: pathlib.Path) -> list[dict]:
-    """Run AS003 and AS006-AS009 checks on a SKILL.md file.
+    """Run AS006-AS009 checks on a SKILL.md file.
 
     Reads and parses the file at the given path, then runs all AS-series
     rules. Returns a list of violation dicts; empty list means no issues.
@@ -705,19 +673,9 @@ def check_skill_md(path: pathlib.Path) -> list[dict]:
         List of violation dicts, each with keys: code, severity, message.
         May include 'fix' key with auto-fix suggestion for AS008, AS009.
     """
-    frontmatter, _body_lines = _parse_skill_md(path)
-
-    description: str | None = frontmatter.get("description") or None
-
-    # Normalise empty strings to None
-    if description is not None and not description.strip():
-        description = None
+    _frontmatter, _body_lines = _parse_skill_md(path)
 
     violations: list[dict] = []
-
-    v = _check_as003(description)
-    if v:
-        violations.append(v)
 
     v = _check_as006(path)
     if v:
@@ -751,16 +709,7 @@ def run_as_series(
     Returns:
         List of violation dicts, each with keys: code, severity, message.
     """
-    description: str | None = frontmatter.get("description") or None
-
-    if description is not None and not description.strip():
-        description = None
-
     violations: list[dict] = []
-
-    v = _check_as003(description)
-    if v:
-        violations.append(v)
 
     v = _check_as006(path)
     if v:

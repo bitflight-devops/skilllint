@@ -122,8 +122,8 @@ class TestAuthorityProvenance:
         violation = fm010[0]
         assert violation["code"] == "FM010"
 
-    def test_as003_violation_includes_authority(self, tmp_path: pathlib.Path) -> None:
-        """AS003 violation (missing description) includes authority metadata."""
+    def test_fm001_violation_is_emitted_once(self, tmp_path: pathlib.Path) -> None:
+        """FM001 is the sole missing-description finding."""
         adapters = {a.id(): a for a in load_adapters()}
 
         # Create skill with missing description
@@ -141,17 +141,14 @@ Body content.
 
         violations = validate_file(skill_file, adapters, platform_override="claude_code")
 
-        as003 = [v for v in violations if v.get("code") == "AS003"]
-        assert len(as003) == 1, f"Expected exactly one AS003 violation, got: {violations}"
+        fm001 = [v for v in violations if v.get("code") == "FM001"]
+        assert len(fm001) == 1, f"Expected exactly one FM001 violation, got: {violations}"
 
-        violation = as003[0]
-        assert "authority" in violation, f"Expected 'authority' key in violation, got: {violation}"
-        authority = violation["authority"]
-        assert authority["origin"] == "agentskills.io"
+        assert "AS003" not in {v.get("code") for v in violations}
 
     def test_all_as_rules_have_authority_metadata(self) -> None:
         """All AS-series rules in the registry have authority metadata."""
-        as_rules = ["AS003", "AS006"]
+        as_rules = ["AS006"]
 
         for rule_id in as_rules:
             entry = RULE_REGISTRY.get(rule_id)

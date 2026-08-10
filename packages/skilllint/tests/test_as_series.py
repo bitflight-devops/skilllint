@@ -112,29 +112,6 @@ def _retired_directory_name_rule_is_removed(tmp_path: pathlib.Path):
 
 
 # ---------------------------------------------------------------------------
-# AS003: description must be present and non-empty
-# ---------------------------------------------------------------------------
-
-
-def test_as003_description_present(tmp_path: pathlib.Path):
-    """Missing description field produces AS003 error."""
-    skill_dir = tmp_path / "my-skill"
-    skill_dir.mkdir()
-    skill_md = skill_dir / "SKILL.md"
-    skill_md.write_text(
-        textwrap.dedent("""\
-            ---
-            name: my-skill
-            ---
-
-            Body content.
-        """)
-    )
-    violations = check_skill_md(skill_md)
-    assert _violations_with_code(violations, "AS003") != [], "Expected AS003 violation when description is missing"
-
-
-# ---------------------------------------------------------------------------
 # AS006: eval_queries.json absence info notice
 # ---------------------------------------------------------------------------
 

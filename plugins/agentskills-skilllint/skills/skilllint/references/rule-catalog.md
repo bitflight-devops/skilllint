@@ -50,7 +50,7 @@ Use `skilllint check --filter <ID> --verbose <path>` to see detailed output for 
 | Rule | Severity | Auto-fix | Description |
 |------|----------|----------|-------------|
 
-| AS003 | error | no | `description` field is missing or empty |
+| FM001 | warning/error | no | Required frontmatter field (`name` or `description`) is missing |
 
 | AS006 | info | no | No evaluation queries file found (optional but recommended) |
 

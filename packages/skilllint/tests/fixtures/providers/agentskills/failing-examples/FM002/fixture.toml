@@ -7,8 +7,6 @@ description = "Invalid YAML syntax in frontmatter"
 name = "unclosed-brace"
 kind = "failing"
 expected_count = 1
-# AS001/AS003 are structural consequences of FM002: when YAML is syntactically
-# invalid the parser cannot extract any fields, so name/description appear
-# missing even though they are present in the source.  These are collateral
-# violations caused by the FM002 trigger, not independent fixture defects.
-allowed_collateral = ["AS001", "AS003"]
+# AS001 is a structural consequence of FM002: when YAML is syntactically invalid
+# the parser cannot extract fields, so the name appears missing in source.
+allowed_collateral = ["AS001"]

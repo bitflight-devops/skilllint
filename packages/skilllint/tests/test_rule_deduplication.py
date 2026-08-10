@@ -52,7 +52,6 @@ def test_valid_name_in_wrong_directory_has_only_directory_finding(tmp_path: Path
     assert name_codes == {"FM010"}
 
 
-@pytest.mark.xfail(reason="Fails until AS003 is removed as a duplicate", strict=False)
 def test_missing_description_has_only_fm001_finding(tmp_path: Path, adapters: dict) -> None:
     """A missing description is reported only by FM001."""
     skill_dir = tmp_path / "missing-description"
@@ -60,7 +59,7 @@ def test_missing_description_has_only_fm001_finding(tmp_path: Path, adapters: di
     skill_md = skill_dir / "SKILL.md"
     skill_md.write_text("---\nname: missing-description\n---\n\nBody.\n")
 
-    description_codes = set(_codes(skill_md, adapters)) & {"AS003", "FM001", "SK004", "SK005"}
+    description_codes = set(_codes(skill_md, adapters)) & {"FM001", "SK004", "SK005"}
     assert description_codes == {"FM001"}
 
 
