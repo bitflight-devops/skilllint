@@ -36,8 +36,7 @@ _logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 AS_RULES: dict[str, str] = {
-    "AS001": "Skill name must be lowercase alphanumeric with hyphens only, 1-64 chars, no consecutive hyphens",
-    "AS002": "Skill name must match the parent directory name",
+
     "AS003": "description field must be present and non-empty",
     "AS006": "No eval_queries.json found — add evaluation queries for quality assurance",
     "AS008": "MCP tool name may have incorrect casing — case is sensitive in the tools field",
@@ -162,12 +161,6 @@ def _make_violation(code: str, severity: str, message: str, fix: str | None = No
 # ---------------------------------------------------------------------------
 
 
-@skilllint_rule(
-    "AS001",
-    severity="error",
-    category="skill",
-    authority={"origin": "agentskills.io", "reference": "/specification#skill-naming"},
-)
 def _check_as001(name: str | None) -> dict | None:
     """AS001 — Invalid skill name format.
 
@@ -215,12 +208,6 @@ def _check_as001(name: str | None) -> dict | None:
     return None
 
 
-@skilllint_rule(
-    "AS002",
-    severity="error",
-    category="skill",
-    authority={"origin": "agentskills.io", "reference": "/specification#skill-directory-structure"},
-)
 def _check_as002(name: str | None, path: pathlib.Path) -> dict | None:
     """AS002 — Skill name does not match directory name.
 
@@ -812,14 +799,6 @@ def check_skill_md(path: pathlib.Path) -> list[dict]:
 
     violations: list[dict] = []
 
-    v = _check_as001(name)
-    if v:
-        violations.append(v)
-
-    v = _check_as002(name, path)
-    if v:
-        violations.append(v)
-
     v = _check_as003(description)
     if v:
         violations.append(v)
@@ -865,14 +844,6 @@ def run_as_series(
         description = None
 
     violations: list[dict] = []
-
-    v = _check_as001(name)
-    if v:
-        violations.append(v)
-
-    v = _check_as002(name, path)
-    if v:
-        violations.append(v)
 
     v = _check_as003(description)
     if v:

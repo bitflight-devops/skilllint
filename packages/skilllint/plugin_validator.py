@@ -98,7 +98,7 @@ from skilllint.rules.pr_series import (
     find_actual_capabilities,
     parse_registered_paths,
 )
-from skilllint.rules.sk_series import check_sk001, check_sk002, check_sk003, check_sk004, check_sk005
+from skilllint.rules.sk_series import check_sk004, check_sk005
 from skilllint.rules.sl_series import check_sl001, iter_symlinks
 from skilllint.rules.tc_series import check_tc001
 from skilllint.scan_runtime import ScanContext
@@ -332,9 +332,7 @@ class ErrorCode(StrEnum):
     FM010 = "FM010"  # Name pattern invalid (not lowercase-hyphens)
 
     # Skill (SK001-SK008)
-    SK001 = "SK001"  # Name contains uppercase characters
-    SK002 = "SK002"  # Name contains underscores (use hyphens)
-    SK003 = "SK003"  # Name has leading/trailing/consecutive hyphens
+
     SK004 = "SK004"  # Description too short (minimum 20 characters)
     SK005 = "SK005"  # Description missing trigger phrases
     SK006 = "SK006"  # Token count exceeds TOKEN_WARNING_THRESHOLD
@@ -409,10 +407,7 @@ FM001, FM002, FM003, FM004, FM005, FM006, FM007, FM009, FM010 = (
     ErrorCode.FM009,
     ErrorCode.FM010,
 )
-SK001, SK002, SK003, SK004, SK005, SK006, SK007, SK008, SK009 = (
-    ErrorCode.SK001,
-    ErrorCode.SK002,
-    ErrorCode.SK003,
+SK004, SK005, SK006, SK007, SK008, SK009 = (
     ErrorCode.SK004,
     ErrorCode.SK005,
     ErrorCode.SK006,
@@ -1336,8 +1331,11 @@ def _check_skill_name_and_directory(
     if file_type != FileType.SKILL or path.name != "SKILL.md":
         return
 
-    skill_name_in_fm = data.get("name")
     skill_dir_name = path.parent.name
+
+    if data.get("name") and not any(issue.code == FM010 for issue in errors + warnings):
+        for issue in check_fm010(data, path, file_type.value):
+            (errors if issue.severity == "error" else warnings).append(issue)
 
     if path.parent.parent.name == "skills":
         dir_name_issues = _validate_skill_directory_name(skill_dir_name)
@@ -1352,14 +1350,6 @@ def _check_skill_name_and_directory(
                     suggestion=issue_suggestion,
                 )
             )
-
-    if skill_name_in_fm:
-        for issue in check_fm010(data, path, file_type.value):
-            if issue.severity == "error":
-                errors.append(issue)
-            else:
-                warnings.append(issue)
-
 
 # ============================================================================
 # PROGRESSIVE DISCLOSURE VALIDATOR
@@ -1698,12 +1688,6 @@ class AsSeriesValidator:
             error_threshold=thresholds.get("SK007", TOKEN_ERROR_THRESHOLD),
         )
 
-        # AS002 checks that `name` matches the skill's own directory name
-        # (e.g. skills/my-skill/SKILL.md). Agent files are stored directly in
-        # agents/, so their parent is always "agents" — AS002 is not meaningful
-        # for them and would produce false positives on every agent file.
-        if path.name != "SKILL.md":
-            violations = [v for v in violations if v.get("code") != "AS002"]
         issues = [
             ValidationIssue(
                 field=v.get("code", "unknown"),
@@ -2321,20 +2305,8 @@ class NameFormatValidator:
                     name = data.get("name")
                     if name is None or not isinstance(name, str):
                         result = ValidationResult(passed=True, errors=errors, warnings=warnings, info=info)
-                    elif not name:
-                        errors.append(
-                            ValidationIssue(
-                                field="name",
-                                severity="error",
-                                message="Name field is empty",
-                                code=SK003,
-                                docs_url=generate_docs_url(SK003),
-                                suggestion=f"Provide a non-empty name using lowercase letters, numbers, and hyphens. Schema: {SKILL_FRONTMATTER_SCHEMA_URL}",
-                            )
-                        )
-                        result = ValidationResult(passed=False, errors=errors, warnings=warnings, info=info)
                     else:
-                        self._check_name_format(name, errors)
+                        errors.extend(check_fm010(data, path, "skill"))
                         result = ValidationResult(passed=len(errors) == 0, errors=errors, warnings=warnings, info=info)
 
         return (
@@ -2344,34 +2316,14 @@ class NameFormatValidator:
     def _check_name_format(self, name: str, errors: list[ValidationIssue]) -> None:
         """Append format errors for a non-empty name string.
 
-        Delegates to sk_series check_sk001/check_sk002/check_sk003 — the series
-        module is the single source of truth for SK-series rule logic.
+        Retained only as a compatibility helper for callers of the fix path.
 
-        SK003 (generic pattern) only fires when SK001 and SK002 find nothing — the
-        same guard that the original _check_name_format used (``and not errors``).
 
         Args:
             name: The name value to check (must be non-empty str).
             errors: Mutable list to append ValidationIssue objects to.
         """
-        from pathlib import Path as _Path  # ruff: ignore[import-outside-top-level]
-
-        frontmatter: dict[str, object] = {"name": name}
-        sentinel = _Path()
-        # Coerce through _coerce_validation_issues so that ValidationIssue
-        # instances built inside sk_series (under a possibly distinct module
-        # load path, e.g. ``python -m skilllint.plugin_validator``) are
-        # rebuilt as this module's canonical class. Without this, Pydantic
-        # rejects them with model_type errors when ValidationResult is built.
-        sk001_issues = _coerce_validation_issues(check_sk001(frontmatter, sentinel, "skill"))
-        sk002_issues = _coerce_validation_issues(check_sk002(frontmatter, sentinel, "skill"))
-        errors.extend(sk001_issues)
-        errors.extend(sk002_issues)
-        # SK003 covers structural hyphen issues and the fallback pattern error.
-        # The fallback only fires when no other specific issues were found — mirror
-        # the original guard of ``and not errors`` in the old inline implementation.
-        if not sk001_issues and not sk002_issues:
-            errors.extend(_coerce_validation_issues(check_sk003(frontmatter, sentinel, "skill")))
+        errors.extend(check_fm010({"name": name}, Path(), "skill"))
 
     def can_fix(self) -> bool:
         """Check if validator supports auto-fixing.
@@ -3686,7 +3638,7 @@ def _get_validators_for_path(path: Path) -> list[Validator]:
         if fm_req == _FrontmatterRequirement.REQUIRED or _file_has_frontmatter(path):
             validators.append(FrontmatterValidator())
         if fm_req == _FrontmatterRequirement.REQUIRED or _file_has_frontmatter(path):
-            validators.extend([NameFormatValidator(), DescriptionValidator(file_type=file_type)])
+            validators.append(DescriptionValidator(file_type=file_type))
         validators.append(NamespaceReferenceValidator())
         # AS-series rules enforce the AgentSkills specification, which governs
         # SKILL.md and nothing else. Agent files are a harness extension the

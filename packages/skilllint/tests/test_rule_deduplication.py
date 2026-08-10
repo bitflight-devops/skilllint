@@ -25,7 +25,6 @@ def _codes(path: Path, adapters: dict) -> list[str]:
     ]
 
 
-@pytest.mark.xfail(reason="Fails until duplicate name owners are consolidated", strict=False)
 def test_invalid_skill_name_has_one_fm010_finding(tmp_path: Path, adapters: dict) -> None:
     """Malformed skill names have FM010 as their sole syntax finding."""
     skill_dir = tmp_path / "bad-name"
@@ -40,7 +39,6 @@ def test_invalid_skill_name_has_one_fm010_finding(tmp_path: Path, adapters: dict
     assert _codes(skill_md, adapters).count("FM010") == 1
 
 
-@pytest.mark.xfail(reason="Fails until directory/name ownership is separated", strict=False)
 def test_valid_name_in_wrong_directory_has_only_directory_finding(tmp_path: Path, adapters: dict) -> None:
     """A valid name in a mismatched directory has no syntax duplicate."""
     skill_dir = tmp_path / "wrong-directory"
@@ -51,7 +49,7 @@ def test_valid_name_in_wrong_directory_has_only_directory_finding(tmp_path: Path
     )
 
     name_codes = set(_codes(skill_md, adapters)) & {"AS001", "AS002", "FM010", "SK001", "SK002", "SK003"}
-    assert name_codes == {"AS002"}
+    assert name_codes == {"FM010"}
 
 
 @pytest.mark.xfail(reason="Fails until AS003 is removed as a duplicate", strict=False)

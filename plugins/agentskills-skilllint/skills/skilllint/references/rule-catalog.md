@@ -18,7 +18,7 @@ Validate YAML frontmatter in SKILL.md, agent .md, and command .md files.
 | FM006 | error | no | `description` exceeds 1024 characters |
 | FM007 | error | **yes** | `tools`, `allowed-tools`, or `disallowedTools` is a YAML array instead of a comma-separated string |
 | FM009 | error | **yes** | Unquoted colon in `description` or other string field causes YAML parse failure |
-| FM010 | error | **yes** | `name` field does not match the directory name (same as AS002; FM010 is the frontmatter-level check) |
+| FM010 | error | **yes** | Skill `name` syntax, length, pattern, and directory equality |
 
 **Common FM fix:** Run `skilllint check --fix <path>` — FM004, FM007, FM009, FM010 are all auto-fixable.
 
@@ -30,9 +30,7 @@ Validate skill name, description quality, and token budget.
 
 | Rule | Severity | Auto-fix | Description |
 |------|----------|----------|-------------|
-| SK001 | error | **yes** | Skill name is not lowercase kebab-case |
-| SK002 | error | **yes** | Skill name contains underscores (use hyphens) |
-| SK003 | error | **yes** | Skill name has leading/trailing/consecutive hyphens, or name field is empty |
+
 | SK004 | warning | no | Skill description is very short (< 20 chars); may not trigger auto-invocation |
 | SK005 | warning | no | Skill description lacks trigger phrases ("Use when...", keywords); Claude may not auto-invoke |
 | SK006 | warning | no | Skill body is large (over `TOKEN_WARNING_THRESHOLD` tokens); consider splitting |
@@ -51,8 +49,7 @@ Use `skilllint check --filter <ID> --verbose <path>` to see detailed output for 
 
 | Rule | Severity | Auto-fix | Description |
 |------|----------|----------|-------------|
-| AS001 | error | no | Invalid skill name format — must be lowercase alphanumeric with hyphens, 1–64 chars, no consecutive hyphens, start/end with letter or digit |
-| AS002 | error | **yes** | Skill `name` field does not match the parent directory name |
+
 | AS003 | error | no | `description` field is missing or empty |
 
 | AS006 | info | no | No evaluation queries file found (optional but recommended) |
@@ -194,10 +191,7 @@ Run `skilllint check --fix <path>` to automatically fix:
 - **FM004** — multiline block scalar in description
 - **FM007** — tools / allowed-tools / disallowedTools as YAML array
 - **FM009** — unquoted colon in string field
-- **FM010 / AS002** — name/directory mismatch
-- **SK001** — skill name contains uppercase characters (lowercased)
-- **SK002** — skill name contains underscores (replaced with hyphens)
-- **SK003** — skill name has leading/trailing/consecutive hyphens (normalized)
+- **FM010** — skill name syntax and name/directory mismatch
 - **SL001** — symlink outside plugin directory
 
 All other rules (including SK006/SK007 token size, PD, LK, HK series) require manual fixes.
