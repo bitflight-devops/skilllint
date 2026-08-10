@@ -331,7 +331,7 @@ class ErrorCode(StrEnum):
     FM009 = "FM009"  # Unquoted description with colons
     FM010 = "FM010"  # Name pattern invalid (not lowercase-hyphens)
 
-    # Skill (SK001-SK008)
+    # Skill (SK004-SK009)
 
     SK004 = "SK004"  # Description too short (minimum 20 characters)
     SK005 = "SK005"  # Description missing trigger phrases

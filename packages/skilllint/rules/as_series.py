@@ -1,10 +1,10 @@
 """AS-series rule validation for agentskills.io SKILL.md files.
 
-Rules AS001-AS009 fire on SKILL.md files only, regardless of which platform
-adapter is active. They enforce the AgentSkills specification, a cross-harness
-baseline that defines SKILL.md and does not describe agent files. A check on
-agent frontmatter belongs to a series that governs agent files, cited to the
-harness documentation that defines them — not here.
+Rules AS003, AS006-AS009 fire on SKILL.md files only, regardless of which
+platform adapter is active. They enforce the AgentSkills specification, a
+cross-harness baseline that defines SKILL.md and does not describe agent
+files. A check on agent frontmatter belongs to a series that governs agent
+files, cited to the harness documentation that defines them — not here.
 
 Entry point: check_skill_md(path: Path) -> list[dict]
 
@@ -12,7 +12,7 @@ Each violation dict has the shape:
     {"code": str, "severity": str, "message": str}
 
 Severities:
-    "error"   — AS001, AS002, AS003
+    "error"   — AS003
     "warning" — AS008, AS009
     "info"    — AS006
 """
@@ -20,7 +20,6 @@ Severities:
 from __future__ import annotations
 
 import logging
-import re
 from typing import TYPE_CHECKING
 
 from skilllint.rule_registry import RULE_REGISTRY, skilllint_rule
@@ -46,11 +45,6 @@ AS_RULES: dict[str, str] = {
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
-
-_MAX_NAME_LENGTH = 64
-
-_NAME_RE = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")
-_CONSECUTIVE_HYPHENS_RE = re.compile(r"--")
 
 
 def _parse_skill_md(path: pathlib.Path) -> tuple[dict, list[str]]:
@@ -103,7 +97,7 @@ def _violation(
     """Build a violation dict.
 
     Args:
-        code: Rule code (e.g., "AS001").
+        code: Rule code (e.g., "AS003").
         severity: Severity level ("error", "warning", "info").
         message: Human-readable message.
         fix: Optional auto-fix instruction.
@@ -124,7 +118,7 @@ def _get_rule_authority(code: str) -> dict | None:
     """Get authority metadata for a rule from the registry.
 
     Args:
-        code: Rule ID (e.g., "AS001")
+        code: Rule ID (e.g., "AS003")
 
     Returns:
         Authority dict with 'origin' and optional 'reference', or None if not found.
@@ -145,7 +139,7 @@ def _make_violation(code: str, severity: str, message: str, fix: str | None = No
     looks up and includes authority metadata from the rule registry.
 
     Args:
-        code: Rule ID (e.g., "AS001")
+        code: Rule ID (e.g., "AS003")
         severity: One of "error", "warning", "info"
         message: Human-readable violation message
         fix: Optional auto-fix suggestion
@@ -159,81 +153,6 @@ def _make_violation(code: str, severity: str, message: str, fix: str | None = No
 # ---------------------------------------------------------------------------
 # Individual rule checks
 # ---------------------------------------------------------------------------
-
-
-def _check_as001(name: str | None) -> dict | None:
-    """AS001 — Invalid skill name format.
-
-    Skill names must be lowercase alphanumeric with hyphens only, between
-    1-64 characters, with no consecutive hyphens. The name must start and
-    end with a letter or digit.
-
-    Args:
-        name: The skill name from frontmatter, or None if missing.
-
-    Returns:
-        Violation dict if invalid, None otherwise.
-
-    Fix:
-        Rename the skill to use lowercase letters, digits, and hyphens only.
-        For example, change ``My_Skill`` to ``my-skill``.
-
-    Examples:
-        Valid: ``my-skill``, ``skill-123``, ``a``
-        Invalid: ``MySkill``, ``my_skill``, ``skill--name``, ``-skill``
-    """
-    if name is None:
-        # agentskills.io requires `name` on a SKILL.md, and FM001 stays silent
-        # there (skills.md treats it as optional, falling back to the directory
-        # name), so this is the only signal for a skill missing its name.
-        # It used to double-report alongside FM001 on agent files; that is now
-        # impossible because the AS family is wired to SKILL.md only.
-        return _make_violation("AS001", "error", "name field is missing")
-
-    if len(name) == 0 or len(name) > _MAX_NAME_LENGTH:
-        return _make_violation(
-            "AS001", "error", f"name '{name}' must be 1-{_MAX_NAME_LENGTH} characters long (got {len(name)})"
-        )
-
-    if _CONSECUTIVE_HYPHENS_RE.search(name):
-        return _make_violation("AS001", "error", f"name '{name}' must not contain consecutive hyphens")
-
-    if not _NAME_RE.match(name):
-        return _make_violation(
-            "AS001",
-            "error",
-            f"name '{name}' must match ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ (lowercase letters, digits, and hyphens only)",
-        )
-
-    return None
-
-
-def _check_as002(name: str | None, path: pathlib.Path) -> dict | None:
-    """AS002 — Skill name does not match directory name.
-
-    The skill's ``name`` field in frontmatter must match the parent
-    directory name. This ensures consistency and makes skills easier
-    to locate.
-
-    Args:
-        name: The skill name from frontmatter, or None if missing.
-        path: Path to the SKILL.md file being validated.
-
-    Returns:
-        Violation dict if invalid, None otherwise.
-
-    Fix:
-        Either rename the directory to match the ``name`` field, or update
-        the ``name`` field to match the directory name.
-    """
-    if name is None:
-        return None  # AS001 already covers missing name
-
-    dir_name = path.parent.name
-    if name != dir_name:
-        return _make_violation("AS002", "error", f"name '{name}' does not match parent directory name '{dir_name}'")
-
-    return None
 
 
 @skilllint_rule(
@@ -774,7 +693,7 @@ def _check_as009(path: pathlib.Path) -> dict | None:
 
 
 def check_skill_md(path: pathlib.Path) -> list[dict]:
-    """Run AS001-AS008 checks on a SKILL.md file.
+    """Run AS003 and AS006-AS009 checks on a SKILL.md file.
 
     Reads and parses the file at the given path, then runs all AS-series
     rules. Returns a list of violation dicts; empty list means no issues.
@@ -788,12 +707,9 @@ def check_skill_md(path: pathlib.Path) -> list[dict]:
     """
     frontmatter, _body_lines = _parse_skill_md(path)
 
-    name: str | None = frontmatter.get("name") or None
     description: str | None = frontmatter.get("description") or None
 
     # Normalise empty strings to None
-    if name is not None and not name.strip():
-        name = None
     if description is not None and not description.strip():
         description = None
 
@@ -835,11 +751,8 @@ def run_as_series(
     Returns:
         List of violation dicts, each with keys: code, severity, message.
     """
-    name: str | None = frontmatter.get("name") or None
     description: str | None = frontmatter.get("description") or None
 
-    if name is not None and not name.strip():
-        name = None
     if description is not None and not description.strip():
         description = None
 
