@@ -152,3 +152,44 @@ def test_policy_cache_reuses_ancestor_across_siblings(tmp_path: Path) -> None:
     # The only cached ancestor (the shared "skills" dir + config root) is reused,
     # so no config re-read and no second diagnostic emission on stderr.
     assert "AS005 is not a configurable threshold" not in buf.getvalue()
+
+
+def test_non_object_thresholds_section_is_reported(tmp_path: Path) -> None:
+    # Codex re-review #1 (4a33171): a mistyped section like "thresholds": []
+    # must produce a diagnostic, not silently default.
+    cfg = tmp_path / ".skilllint.json"
+    cfg.write_text(json.dumps({"thresholds": []}))
+    policy, diagnostics = _load_policy(cfg)
+    assert policy.thresholds == DEFAULT_THRESHOLDS
+    assert any("thresholds is not an object" in d for d in diagnostics)
+
+
+def test_non_object_severity_section_is_reported(tmp_path: Path) -> None:
+    cfg = tmp_path / ".skilllint.json"
+    cfg.write_text(json.dumps({"severity": "info"}))
+    policy, diagnostics = _load_policy(cfg)
+    assert policy.severity == {}
+    assert any("severity is not an object" in d for d in diagnostics)
+
+
+def test_platform_path_reuses_policy_cache_across_files(tmp_path: Path) -> None:
+    # Codex re-review #2 (4a33171): --platform scans must reuse the per-run
+    # cache so a 1000-file scan doesn't re-read config / re-emit per file.
+    import contextlib
+    import io
+
+    from skilllint.plugin_validator import validate_file
+
+    (tmp_path / ".skilllint.json").write_text(json.dumps({"thresholds": {"AS005": 1000}}))
+    a = tmp_path / "skills" / "a" / "SKILL.md"
+    b = tmp_path / "skills" / "b" / "SKILL.md"
+    a.parent.mkdir(parents=True)
+    b.parent.mkdir(parents=True, exist_ok=True)
+    for f in (a, b):
+        f.write_text("---\nname: x\ndescription: y\n---\nbody")
+    cache: dict[str, tuple[ValidationPolicy, Path | None]] = {}
+    validate_file(a, {}, policy_cache=cache)
+    buf = io.StringIO()
+    with contextlib.redirect_stderr(buf):
+        validate_file(b, {}, policy_cache=cache)
+    assert "AS005 is not a configurable threshold" not in buf.getvalue()

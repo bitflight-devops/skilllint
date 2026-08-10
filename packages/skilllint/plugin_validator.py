@@ -710,6 +710,8 @@ def _parse_thresholds(raw: object, config_path: Path, diagnostics: list[str]) ->
                 )
             else:
                 thresholds[code] = value
+    else:
+        diagnostics.append(f"{config_path}: thresholds is not an object; using defaults")
     # Warning must stay below error, or the warning band is unreachable
     # (test_limits.py asserts warning < error as the built-in invariant).
     if thresholds["SK006"] >= thresholds["SK007"]:
@@ -745,6 +747,8 @@ def _parse_severity(raw: object, config_path: Path, diagnostics: list[str]) -> d
                 )
             else:
                 severity[code] = value
+    else:
+        diagnostics.append(f"{config_path}: severity is not an object; using defaults")
     return severity
 
 
@@ -5551,7 +5555,12 @@ def run_platform_checks(path: Path, adapter: PlatformAdapter) -> list[dict]:
     return list(adapter.validate(path))
 
 
-def validate_file(path: Path, adapters: dict, platform_override: str | None = None) -> list[dict]:
+def validate_file(
+    path: Path,
+    adapters: dict,
+    platform_override: str | None = None,
+    policy_cache: dict[str, tuple[ValidationPolicy, Path | None]] | None = None,
+) -> list[dict]:
     """Dispatch validation for a single file using the adapter registry.
 
     AS-series fires ONCE per file (before per-adapter loop) — structural dedup.
@@ -5562,6 +5571,9 @@ def validate_file(path: Path, adapters: dict, platform_override: str | None = No
         platform_override: If set, restrict to this adapter ID. The selected
             adapter's constraint_scopes() will be used to filter rules by
             provider relevance (shared vs provider_specific).
+        policy_cache: Optional mutable per-run policy cache. Sharing it across
+            a scan prevents re-reading config and re-emitting diagnostics once
+            per file.
 
     Returns:
         List of violation dicts with keys: code, severity, message.
@@ -5596,8 +5608,9 @@ def validate_file(path: Path, adapters: dict, platform_override: str | None = No
             })
         # Resolve per-plugin policy so --platform validation honors the same
         # configured thresholds AND severity as the default path (PR #97 review:
-        # the two paths must not lint the same skill differently).
-        policy, _policy_root = _resolve_policy(path, {})
+        # the two paths must not lint the same skill differently). Reuse a shared
+        # per-run cache so a 1000-file platform scan reads each config once.
+        policy, _policy_root = _resolve_policy(path, policy_cache if policy_cache is not None else {})
         violations.extend(
             run_as_series(
                 path,
@@ -5805,7 +5818,7 @@ def main(
             show_summary=show_summary,
             platform_override=platform_override,
             validate_single_path=_validate_with_cache,
-            validate_file=validate_file,
+            validate_file=lambda p, a, o: validate_file(p, a, o, policy_cache=per_run_policy_cache),
             violations_to_result=violations_to_result,
             adapters=ADAPTERS,
             record_console=record_console,
