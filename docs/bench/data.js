@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1785989775992,
+  "lastUpdate": 1786325425737,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -540,6 +540,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 78.027,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie McGregor Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "Jamie McGregor Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "id": "fbc35365697cff850d1f9350326e234fc9360c2c",
+          "message": "style: apply Ruff formatting to policy changes",
+          "timestamp": "2026-08-07T09:34:41Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/fbc35365697cff850d1f9350326e234fc9360c2c"
+        },
+        "date": 1786325425139,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 16339.478,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 17209.772,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 18791.224,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 58.165,
             "unit": "files/s"
           }
         ]
