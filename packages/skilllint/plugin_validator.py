@@ -669,13 +669,11 @@ class ValidationPolicy:
 
 
 DEFAULT_THRESHOLDS: dict[str, int] = {"SK006": TOKEN_WARNING_THRESHOLD, "SK007": TOKEN_ERROR_THRESHOLD}
-# Threshold keys must map to an implemented warning/error band. AS005 measures
-# the same SKILL.md body token count as SK006/SK007 but has no threshold plumbing
-# of its own, so it is not a configurable threshold key (PR #97 review).
+# Threshold keys must map to an implemented warning/error band.
 _THRESHOLD_POLICY_RULES = frozenset({"SK006", "SK007"})
-# Severity may be reconfigured for the token-band rules including AS005, which
-# shares the band and can legitimately be downgraded per-plugin.
-_SEVERITY_POLICY_RULES = frozenset({"SK006", "SK007", "AS005"})
+# Severity may be reconfigured for the token-band rules. AS005 shared this band
+# and was listed here until it was retired into SK006/SK007.
+_SEVERITY_POLICY_RULES = frozenset({"SK006", "SK007"})
 _VALID_SEVERITIES = frozenset({"warning", "info"})
 
 _SKILLLINT_CONFIG_FILENAME = ".skilllint.json"

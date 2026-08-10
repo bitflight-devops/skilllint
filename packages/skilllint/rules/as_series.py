@@ -13,7 +13,7 @@ Each violation dict has the shape:
 
 Severities:
     "error"   — AS001, AS002, AS003
-    "warning" — AS005, AS008, AS009
+    "warning" — AS008, AS009
     "info"    — AS006
 """
 
@@ -24,7 +24,7 @@ import re
 from typing import TYPE_CHECKING
 
 from skilllint.rule_registry import RULE_REGISTRY, skilllint_rule
-from skilllint.token_counter import TOKEN_ERROR_THRESHOLD, TOKEN_WARNING_THRESHOLD, count_tokens
+from skilllint.token_counter import TOKEN_ERROR_THRESHOLD, TOKEN_WARNING_THRESHOLD
 
 if TYPE_CHECKING:
     import pathlib
@@ -39,7 +39,6 @@ AS_RULES: dict[str, str] = {
     "AS001": "Skill name must be lowercase alphanumeric with hyphens only, 1-64 chars, no consecutive hyphens",
     "AS002": "Skill name must match the parent directory name",
     "AS003": "description field must be present and non-empty",
-    "AS005": f"SKILL.md body token count exceeds {TOKEN_WARNING_THRESHOLD} tokens — consider splitting into sub-skills",
     "AS006": "No eval_queries.json found — add evaluation queries for quality assurance",
     "AS008": "MCP tool name may have incorrect casing — case is sensitive in the tools field",
     "AS009": "Nested skill will not be auto-discovered — skills must be direct children of the skills/ directory",
@@ -275,59 +274,6 @@ def _check_as003(description: str | None) -> dict | None:
     """
     if description is None or not description.strip():
         return _make_violation("AS003", "error", "description field must be present and non-empty")
-
-    return None
-
-
-@skilllint_rule(
-    "AS005",
-    severity="warning",
-    category="skill",
-    authority={"origin": "agentskills.io", "reference": "/specification#skill-complexity"},
-)
-def _check_as005(
-    body_lines: list[str],
-    warning_threshold: int = TOKEN_WARNING_THRESHOLD,
-    error_threshold: int = TOKEN_ERROR_THRESHOLD,
-) -> dict | None:
-    """AS005 — SKILL.md body exceeds token threshold.
-
-    Counts tokens in the body text (frontmatter excluded) using tiktoken
-    cl100k_base encoding. Large skills can degrade AI agent performance
-    and increase API costs.
-
-    Args:
-        body_lines: List of content lines from the SKILL.md body.
-        warning_threshold: Body token warning threshold.
-        error_threshold: Body token error threshold.
-
-    Returns:
-        Violation dict if threshold exceeded, None otherwise.
-
-    Thresholds:
-        - Warning at 4400 tokens — consider splitting
-        - Error at 8800 tokens — must split
-
-    Fix:
-        Split the skill into smaller sub-skills or move detailed content
-        to reference files in a ``references/`` directory.
-    """
-    body_text = "\n".join(body_lines)
-    token_count = count_tokens(body_text)
-
-    if token_count > error_threshold:
-        return _make_violation(
-            "AS005",
-            "error",
-            f"SKILL.md body is {token_count} tokens — exceeds {error_threshold} token limit; skill must be split into sub-skills",
-        )
-
-    if token_count > warning_threshold:
-        return _make_violation(
-            "AS005",
-            "warning",
-            f"SKILL.md body is {token_count} tokens — exceeds {warning_threshold} token threshold; consider splitting into sub-skills",
-        )
 
     return None
 
@@ -853,7 +799,7 @@ def check_skill_md(path: pathlib.Path) -> list[dict]:
         List of violation dicts, each with keys: code, severity, message.
         May include 'fix' key with auto-fix suggestion for AS008, AS009.
     """
-    frontmatter, body_lines = _parse_skill_md(path)
+    frontmatter, _body_lines = _parse_skill_md(path)
 
     name: str | None = frontmatter.get("name") or None
     description: str | None = frontmatter.get("description") or None
@@ -875,10 +821,6 @@ def check_skill_md(path: pathlib.Path) -> list[dict]:
         violations.append(v)
 
     v = _check_as003(description)
-    if v:
-        violations.append(v)
-
-    v = _check_as005(body_lines)
     if v:
         violations.append(v)
 
@@ -933,10 +875,6 @@ def run_as_series(
         violations.append(v)
 
     v = _check_as003(description)
-    if v:
-        violations.append(v)
-
-    v = _check_as005(body_lines, warning_threshold, error_threshold)
     if v:
         violations.append(v)
 

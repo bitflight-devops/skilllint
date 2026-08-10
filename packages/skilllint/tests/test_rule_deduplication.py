@@ -66,7 +66,6 @@ def test_missing_description_has_only_fm001_finding(tmp_path: Path, adapters: di
     assert description_codes == {"FM001"}
 
 
-@pytest.mark.xfail(reason="Fails until AS005 is removed as a duplicate", strict=False)
 @pytest.mark.parametrize("threshold", [TOKEN_WARNING_THRESHOLD + 100, TOKEN_ERROR_THRESHOLD + 100])
 def test_over_threshold_body_has_one_complexity_finding(
     tmp_path: Path, adapters: dict, threshold: int
@@ -80,7 +79,7 @@ def test_over_threshold_body_has_one_complexity_finding(
         + ("word " * threshold)
     )
 
-    complexity_codes = set(_codes(skill_md, adapters)) & {"AS005", "SK006", "SK007"}
+    complexity_codes = set(_codes(skill_md, adapters)) & {"SK006", "SK007"}
     assert len(complexity_codes) == 1
     assert complexity_codes <= {"SK006", "SK007"}
 

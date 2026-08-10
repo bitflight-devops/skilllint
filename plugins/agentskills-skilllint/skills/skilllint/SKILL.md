@@ -11,7 +11,7 @@ Arguments received: `$ARGUMENTS`
 ## Argument Routing
 
 - **No arguments** → Run full workflow guide below
-- **Rule ID** (e.g. `AS001`, `AS005`, `FM004`) → Run `skilllint rule <ID>` for AS rules; for others look up in [rule-catalog.md](./references/rule-catalog.md)
+- **Rule ID** (e.g. `AS001`, `FM004`, `SK006`) → Run `skilllint rule <ID>` for AS rules; for others look up in [rule-catalog.md](./references/rule-catalog.md)
 - **A path** (e.g. `./plugins/my-plugin`) → Run `skilllint check <path>` and interpret the output
 
 ---
@@ -94,7 +94,7 @@ Example:
 ```
 skills/my-skill/SKILL.md:3  error  Description uses YAML multiline block scalar (>-); use a single-line string  [FM004]
 skills/my-skill/SKILL.md:5  error  allowed-tools must be a comma-separated string, not a YAML array  [FM007]
-skills/my-skill/SKILL.md:1  warning  SKILL.md body exceeds token threshold  [AS005]
+skills/my-skill/SKILL.md:1  warning  SKILL.md body exceeds token threshold  [SK006]
 ```
 
 Severity levels:
@@ -107,7 +107,6 @@ Severity levels:
 ```bash
 # For AS001–AS006 (the rule documentation system)
 skilllint rule AS001
-skilllint rule AS005
 
 # List all documented rules
 skilllint rules
@@ -138,7 +137,7 @@ skilllint check --fix ./plugins/my-plugin
 
 **Auto-fixable rules:** FM004, FM007, FM009, FM010/AS002, SK001, SK002, SK003, SL001
 
-**Not auto-fixable:** AS005 (token size — requires manual refactoring), PD series, AS006, LK series, most PL/HK rules.
+**Not auto-fixable:** SK006/SK007 (token size — requires manual refactoring), PD series, AS006, LK series, most PL/HK rules.
 
 ---
 
@@ -179,7 +178,7 @@ description: Validate files: plugins, skills, and agents
 description: 'Validate files: plugins, skills, and agents'
 ```
 
-### AS005 — Skill exceeds token limit
+### SK006 / SK007 — Skill exceeds token limit
 
 Move large reference content to a `references/` subdirectory and link to it:
 ```markdown
@@ -222,7 +221,7 @@ skilllint --version
 ## Workflow: Scan → Identify → Explain → Fix
 
 1. **Scan**: `skilllint check --show-summary --show-progress <path>`
-2. **Identify** rule IDs in the output (e.g. `[FM004]`, `[AS005]`, `[AS002]`)
+2. **Identify** rule IDs in the output (e.g. `[FM004]`, `[SK006]`, `[AS002]`)
 3. **Explain**: `skilllint rule <ID>` for AS rules; [rule-catalog.md](./references/rule-catalog.md) for others
 4. **Fix auto-fixable**: `skilllint check --fix <path>`
 5. **Fix manual issues**: Apply the patterns above based on rule ID
@@ -249,7 +248,7 @@ skilllint rules --platform agentskills
 skilllint check --tokens-only ./plugins/my-plugin/skills/my-skill/SKILL.md
 ```
 
-AS005 fires when body token count exceeds `TOKEN_WARNING_THRESHOLD` (warning) or `TOKEN_ERROR_THRESHOLD` (error) — frontmatter excluded. Run `skilllint rules` to see current values.
+SK006 (warning) and SK007 (error) fire when body token count exceeds `TOKEN_WARNING_THRESHOLD` or `TOKEN_ERROR_THRESHOLD` respectively — frontmatter excluded. Run `skilllint rules` to see current values.
 
 ---
 

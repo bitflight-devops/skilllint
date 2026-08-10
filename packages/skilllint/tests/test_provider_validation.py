@@ -154,7 +154,7 @@ Body content.
 
     def test_all_as_rules_have_authority_metadata(self) -> None:
         """All AS-series rules in the registry have authority metadata."""
-        as_rules = ["AS001", "AS002", "AS003", "AS005", "AS006"]
+        as_rules = ["AS001", "AS002", "AS003", "AS006"]
 
         for rule_id in as_rules:
             entry = RULE_REGISTRY.get(rule_id)

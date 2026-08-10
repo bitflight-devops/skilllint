@@ -144,53 +144,6 @@ def test_as003_description_present(tmp_path: pathlib.Path):
 
 
 # ---------------------------------------------------------------------------
-# AS005: SKILL.md body token count warning (> TOKEN_WARNING_THRESHOLD tokens)
-# ---------------------------------------------------------------------------
-
-
-def test_as005_body_token_count_warning(tmp_path: pathlib.Path):
-    """SKILL.md body exceeding TOKEN_WARNING_THRESHOLD tokens produces AS005 warning."""
-    import tiktoken
-
-    from skilllint.token_counter import TOKEN_WARNING_THRESHOLD
-
-    skill_dir = tmp_path / "my-skill"
-    skill_dir.mkdir()
-    skill_md = skill_dir / "SKILL.md"
-
-    # Build body text that exceeds TOKEN_WARNING_THRESHOLD tokens.
-    # "word " is 2 tokens (word + space) in cl100k_base; repeat enough times
-    # to comfortably exceed the threshold.
-    enc = tiktoken.get_encoding("cl100k_base")
-    unit = "The quick brown fox jumps over the lazy dog. "
-    unit_tokens = len(enc.encode(unit))
-    repeats = (TOKEN_WARNING_THRESHOLD // unit_tokens) + 50
-    body_text = unit * repeats
-
-    assert len(enc.encode(body_text)) > TOKEN_WARNING_THRESHOLD, (
-        "Test setup: body must exceed TOKEN_WARNING_THRESHOLD tokens"
-    )
-
-    skill_md.write_text(
-        textwrap.dedent("""\
-            ---
-            name: my-skill
-            description: A skill with a very long body that exceeds the token warning threshold.
-            ---
-
-        """)
-        + body_text
-        + "\n"
-    )
-    violations = check_skill_md(skill_md)
-    as005 = _violations_with_code(violations, "AS005")
-    assert as005 != [], "Expected AS005 violation when body exceeds TOKEN_WARNING_THRESHOLD tokens"
-    assert as005[0].get("severity") in ("warning", "warn", "error"), (
-        f"Expected AS005 severity to be warning or error, got: {as005[0].get('severity')}"
-    )
-
-
-# ---------------------------------------------------------------------------
 # AS006: eval_queries.json absence info notice
 # ---------------------------------------------------------------------------
 
