@@ -213,41 +213,25 @@ def _check_permission_mode(
 def _ingest_agent_frontmatter_for_pa001(
     fm_text: str, agent_md: Path, plugin_dir: Path, errors: list, warnings: list
 ) -> PluginAgentPa001Snapshot | None:
-    """Parse agent frontmatter YAML via the boundary ingestor; record FM002/AS004 issues.
+    """Parse agent frontmatter YAML via the boundary ingestor; record FM002 issues.
 
     Args:
         fm_text: Raw YAML frontmatter text (no ``---`` delimiters).
         agent_md: Path to the agent markdown file.
         plugin_dir: Plugin root directory for relative path display.
         errors: Mutable error list — FM002 appended on unrecoverable failure.
-        warnings: Mutable warning list — AS004 appended on colon auto-fix.
+        warnings: Mutable warning list for non-parser issues.
 
     Returns:
         Snapshot for PA001 checks, or None on YAML failure or non-mapping document root.
     """
     from skilllint.plugin_validator import (  # noqa: PLC0415 — deferred to break circular import
         FM002,
-        ErrorCode,
         ValidationIssue,
         generate_docs_url,
     )
 
     outcome = ingest_plugin_agent_frontmatter_for_pa001(fm_text)
-
-    if outcome.colon_fields_fixed:
-        rel = str(agent_md.relative_to(plugin_dir))
-        warnings.append(
-            ValidationIssue(
-                field="description",
-                severity="warning",
-                message=(
-                    f"{rel}: Description contains unquoted colons that break YAML — quote the following fields: "
-                    f"{', '.join(outcome.colon_fields_fixed)}"
-                ),
-                code=ErrorCode.AS004,
-                docs_url=generate_docs_url(ErrorCode.AS004),
-            )
-        )
 
     if outcome.yaml_error is not None:
         rel = str(agent_md.relative_to(plugin_dir))

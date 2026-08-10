@@ -11,7 +11,7 @@ Exit code baseline (S04):
 
 Severity classification (S04):
 - Error: FM003 (missing frontmatter), FM005 (type mismatch)
-- Warning: FM004 (multiline YAML), FM007 (YAML array tools), AS004 (unquoted colons)
+- Warning: FM004 (multiline YAML), FM007 (YAML array tools)
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ EXPECTED_EXIT_CODES = {"claude-plugins-official": 1, "skills": 1, "claude-code-p
 
 # Rule codes by severity (S04 classification)
 ERROR_RULE_CODES = {"FM003", "FM005"}
-WARNING_RULE_CODES = {"FM004", "FM007", "AS004"}
+WARNING_RULE_CODES = {"FM004", "FM007"}
 
 
 def _run_skilllint_check(repo_path: Path) -> tuple[int, str, str]:
@@ -73,7 +73,7 @@ def _run_skilllint_check(repo_path: Path) -> tuple[int, str, str]:
 
 
 def _extract_rule_codes(output: str) -> set[str]:
-    """Extract rule codes (FM003, AS004, etc.) from linter output.
+    """Extract rule codes (FM003, FM004, etc.) from linter output.
 
     Strips ANSI escape codes before parsing.
 
@@ -86,7 +86,7 @@ def _extract_rule_codes(output: str) -> set[str]:
     # Strip ANSI escape codes first
     clean_output = _ANSI_ESCAPE.sub("", output)
 
-    # Pattern matches rule codes like FM003, FM005, AS004, SK006, etc.
+    # Pattern matches rule codes like FM003, FM005, SK006, etc.
     # Codes appear as [FM003] in output, we extract just the code
     pattern = r"\[([A-Z]{2,3}\d{3})\]"
     return set(re.findall(pattern, clean_output))
@@ -114,7 +114,7 @@ class TestClaudePluginsOfficial:
         not EXTERNAL_REPOS["claude-plugins-official"].is_dir(), reason="claude-plugins-official repo not present"
     )
     def test_warning_rules_present_in_output(self) -> None:
-        """Warning-level rules (FM004, FM007, AS004) appear in output."""
+        """Warning-level rules (FM004, FM007) appear in output."""
         repo_path = EXTERNAL_REPOS["claude-plugins-official"]
         _exit_code, stdout, stderr = _run_skilllint_check(repo_path)
 

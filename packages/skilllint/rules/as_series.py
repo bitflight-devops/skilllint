@@ -13,7 +13,7 @@ Each violation dict has the shape:
 
 Severities:
     "error"   — AS001, AS002, AS003
-    "warning" — AS004, AS005, AS008, AS009
+    "warning" — AS005, AS008, AS009
     "info"    — AS006
 """
 
@@ -39,7 +39,6 @@ AS_RULES: dict[str, str] = {
     "AS001": "Skill name must be lowercase alphanumeric with hyphens only, 1-64 chars, no consecutive hyphens",
     "AS002": "Skill name must match the parent directory name",
     "AS003": "description field must be present and non-empty",
-    "AS004": "description contains unquoted colons that break YAML — quote the string to fix",
     "AS005": f"SKILL.md body token count exceeds {TOKEN_WARNING_THRESHOLD} tokens — consider splitting into sub-skills",
     "AS006": "No eval_queries.json found — add evaluation queries for quality assurance",
     "AS008": "MCP tool name may have incorrect casing — case is sensitive in the tools field",
@@ -56,28 +55,25 @@ _NAME_RE = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")
 _CONSECUTIVE_HYPHENS_RE = re.compile(r"--")
 
 
-def _parse_skill_md(path: pathlib.Path) -> tuple[dict, list[str], str | None]:
+def _parse_skill_md(path: pathlib.Path) -> tuple[dict, list[str]]:
     """Parse a SKILL.md file into frontmatter dict and body lines.
 
     Frontmatter is delimited by leading '---' lines. Everything after
     the closing '---' is the body.
 
     Returns:
-        (frontmatter, body_lines, raw_description_line) where frontmatter is a dict of parsed
-        YAML fields, body_lines is a list of non-empty content lines
-        after the frontmatter block, and raw_description_line is the raw
-        "description:" line from frontmatter (if present) for validation.
+        (frontmatter, body_lines) where frontmatter is a dict of parsed YAML
+        fields and body_lines is the content after the frontmatter block.
     """
     text = path.read_text(encoding="utf-8")
     lines = text.splitlines()
 
     frontmatter: dict = {}
     body_lines: list[str] = []
-    raw_description_line: str | None = None
 
     if not lines or lines[0].strip() != "---":
         # No frontmatter — treat entire file as body
-        return {}, lines, None
+        return {}, lines
 
     # Find closing '---'
     close_idx = None
@@ -88,7 +84,7 @@ def _parse_skill_md(path: pathlib.Path) -> tuple[dict, list[str], str | None]:
 
     if close_idx is None:
         # Unclosed frontmatter — parse what we can, no body
-        return {}, [], None
+        return {}, []
 
     # Parse frontmatter lines as simple key: value YAML
     for line in lines[1:close_idx]:
@@ -98,13 +94,9 @@ def _parse_skill_md(path: pathlib.Path) -> tuple[dict, list[str], str | None]:
             value_stripped = value.strip()
             frontmatter[key_stripped] = value_stripped
 
-            # Track raw description line for AS004 validation
-            if key_stripped == "description":
-                raw_description_line = line
-
     body_lines = lines[close_idx + 1 :]
 
-    return frontmatter, body_lines, raw_description_line
+    return frontmatter, body_lines
 
 
 def _violation(
@@ -285,73 +277,6 @@ def _check_as003(description: str | None) -> dict | None:
         return _make_violation("AS003", "error", "description field must be present and non-empty")
 
     return None
-
-
-@skilllint_rule(
-    "AS004",
-    severity="warning",
-    category="skill",
-    authority={"origin": "agentskills.io", "reference": "/specification#yaml-frontmatter"},
-)
-def _check_as004(description: str | None, raw_line: str | None = None) -> dict | None:
-    """AS004 — Description contains unquoted colons that will break YAML.
-
-    The ``description`` field must be valid YAML. If it contains unquoted
-    colons (e.g., "Examples: Context:"), YAML parsing will fail because
-    the colon is interpreted as a key-value separator.
-
-    Args:
-        description: The parsed description from frontmatter, or None if missing.
-        raw_line: The raw frontmatter line before parsing (optional, for validation).
-
-    Returns:
-        Violation dict if invalid, None otherwise.
-
-    Fix:
-        Quote the description string in the frontmatter. For example, change:
-            description: Use this: for examples
-        To:
-            description: "Use this: for examples"
-    """
-    if description is None:
-        return None  # AS003 already covers missing description
-
-    # Check if the raw line (if provided) has unquoted colons that would break YAML
-    # An unquoted colon is ":" followed by a space, not inside quotes
-    if raw_line is not None and raw_line.startswith("description:"):
-        value_part = raw_line[len("description:") :].strip()
-        # Check for unquoted colons (colon followed by space, not in quotes)
-        if _has_unquoted_colon(value_part):
-            return _make_violation(
-                "AS004",
-                "warning",
-                "description contains unquoted colon that will break YAML parsing",
-                fix=f'Wrap description in quotes: description: "{value_part}"',
-            )
-
-    return None
-
-
-def _has_unquoted_colon(text: str) -> bool:
-    """Check if text contains an unquoted colon followed by space.
-
-    This detects YAML-breaking patterns like "Examples: Context: Test"
-    which would cause 'mapping values are not allowed here' error.
-
-    Returns:
-        True when an unquoted colon-space pattern is present, False otherwise.
-    """
-    if not text:
-        return False
-
-    # Already quoted - safe
-    if (text.startswith('"') and text.endswith('"')) or (text.startswith("'") and text.endswith("'")):
-        return False
-
-    # Simple check: look for ":" followed by space/alphanumeric
-    # that indicates YAML value separator
-    colon_pattern = re.compile(r":\s+[a-zA-Z<]")
-    return bool(colon_pattern.search(text))
 
 
 @skilllint_rule(
@@ -926,9 +851,9 @@ def check_skill_md(path: pathlib.Path) -> list[dict]:
 
     Returns:
         List of violation dicts, each with keys: code, severity, message.
-        May include 'fix' key with auto-fix suggestion for AS004, AS008, AS009.
+        May include 'fix' key with auto-fix suggestion for AS008, AS009.
     """
-    frontmatter, body_lines, raw_description_line = _parse_skill_md(path)
+    frontmatter, body_lines = _parse_skill_md(path)
 
     name: str | None = frontmatter.get("name") or None
     description: str | None = frontmatter.get("description") or None
@@ -950,10 +875,6 @@ def check_skill_md(path: pathlib.Path) -> list[dict]:
         violations.append(v)
 
     v = _check_as003(description)
-    if v:
-        violations.append(v)
-
-    v = _check_as004(description, raw_description_line)
     if v:
         violations.append(v)
 
@@ -1012,10 +933,6 @@ def run_as_series(
         violations.append(v)
 
     v = _check_as003(description)
-    if v:
-        violations.append(v)
-
-    v = _check_as004(description)
     if v:
         violations.append(v)
 

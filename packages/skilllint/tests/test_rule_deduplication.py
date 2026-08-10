@@ -85,16 +85,16 @@ def test_over_threshold_body_has_one_complexity_finding(
     assert complexity_codes <= {"SK006", "SK007"}
 
 
-@pytest.mark.xfail(reason="Fails until AS004 is removed from parser paths", strict=False)
 def test_parser_failure_has_only_fm002_finding(tmp_path: Path, adapters: dict) -> None:
-    """Malformed YAML is owned by FM002, never the retired AS004 heuristic."""
+    """Malformed YAML is owned by FM002."""
     skill_dir = tmp_path / "parser-failure"
     skill_dir.mkdir()
     skill_md = skill_dir / "SKILL.md"
     skill_md.write_text("---\ndescription: [unclosed bracket\n---\n\nBody.\n")
 
-    parser_codes = set(_codes(skill_md, adapters)) & {"AS004", "FM002"}
-    assert parser_codes == {"FM002"}
+    parser_codes = set(_codes(skill_md, adapters))
+    assert "AS004" not in parser_codes
+    assert "FM002" in parser_codes
     assert _codes(skill_md, adapters).count("FM002") == 1
 
 

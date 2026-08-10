@@ -375,9 +375,6 @@ class ErrorCode(StrEnum):
     # Symlink (SL001)
     SL001 = "SL001"  # Symlink target has trailing whitespace/newlines
 
-    # AgentSkills cross-platform (AS004)
-    AS004 = "AS004"  # Unquoted colons in description (auto-fixable style warning)
-
     # Token Count (TC001)
     TC001 = "TC001"  # Token count info (total, frontmatter, body)
 
@@ -497,7 +494,7 @@ VALIDATOR_OWNERSHIP: dict[str, ValidatorOwnership] = {
 # Downgraded to warning (runtime-accepted patterns):
 #   FM004 — multiline YAML (|, >, |-, >-) accepted by Claude Code runtime
 #   FM007 — tools field as YAML array accepted by Claude Code runtime
-#   AS004 — unquoted colons in description valid in proper YAML context
+
 # Evidence: Official repos (claude-plugins-official, skills, claude-code-plugins)
 #   contain these patterns and Claude Code runtime accepts them.
 
@@ -1884,20 +1881,7 @@ def _validate_frontmatter_yaml(
         Tuple of parsed mapping or None, and a terminal ValidationResult when
         validation must stop.
     """
-    data, yaml_err, colon_fields, _used_text = safe_load_yaml_with_colon_fix(frontmatter_text)
-    if colon_fields:
-        # AS004: Unquoted colons break YAML parsing, but auto-fixable.
-        # Emit warning and continue with fixed YAML (runtime accepts quoted values).
-        warnings.append(
-            ValidationIssue(
-                field="description",
-                severity="warning",
-                message="Frontmatter contains unquoted colons that break YAML parsing",
-                code=ErrorCode.AS004,
-                docs_url=generate_docs_url(ErrorCode.AS004),
-                suggestion=f"Quote the following field values: {', '.join(colon_fields)}",
-            )
-        )
+    data, yaml_err, _colon_fields, _used_text = safe_load_yaml_with_colon_fix(frontmatter_text)
 
     if yaml_err is not None:
         result = _validation_result_with_error(
@@ -2051,8 +2035,7 @@ class FrontmatterValidator:
             # SK004 (description length) is emitted exclusively by DescriptionValidator,
             # which calls check_sk004 directly. Emitting it here as well produced
             # duplicate warnings for over-length descriptions.
-            # AS004 check removed — AS-series rules in as_series.py handle
-            # unquoted colon detection; emitting here would cause duplicates.
+            # AS-series rules do not duplicate parser-owned findings.
         except ValidationError as e:
             for err in e.errors():
                 issue = _pydantic_error_to_validation_issue(err)
@@ -4083,14 +4066,8 @@ def validate_file(
     # checked even when no platform adapter claims the file. They do not extend
     # to agent files: the AgentSkills specification defines SKILL.md only.
     if is_skill_md(path):
-        frontmatter_data, body_lines, yaml_err, colon_fields = parse_skill_md(path)
-        if colon_fields:
-            violations.append({
-                "code": "AS004",
-                "severity": "warning",
-                "message": f"Description contains unquoted colons that break YAML — quote the following fields: {', '.join(colon_fields)}",
-            })
-        if yaml_err is not None:
+        frontmatter_data, body_lines, yaml_err, _colon_fields = parse_skill_md(path)
+        if yaml_err is not None and not matching:
             violations.append({
                 "code": str(FM002),
                 "severity": "error",
