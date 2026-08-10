@@ -1,4 +1,14 @@
-"""Focused coverage for Issue #5's bounded JSON policy contract."""
+"""Focused coverage for Issue #5's bounded JSON policy contract.
+
+Threshold literals in these tests are chosen to exercise specific branches, not
+to model real skills:
+  - ``0`` and negative values exercise the positive-integer guard.
+  - Distinct positive values (e.g. 12, 34, 99) exercise first-match precedence
+    and cache stability; the exact numbers are arbitrary and unrelated to the
+    real DEFAULT_THRESHOLDS (SK006=4400, SK007=8800).
+  - ``1`` exercises unknown-rule filtering.
+  - Reversed/equal pairs (9000 vs default SK007=8800) exercise the ordering guard.
+"""
 
 from __future__ import annotations
 
@@ -8,12 +18,14 @@ from pathlib import Path
 from skilllint.plugin_validator import DEFAULT_THRESHOLDS, ValidationPolicy, _load_policy, _resolve_policy
 
 
-def test_policy_defaults_and_invalid_values_fail_open(tmp_path: Path) -> None:
+def test_policy_defaults_and_invalid_values_report_and_default(tmp_path: Path) -> None:
     cfg = tmp_path / ".skilllint.json"
     cfg.write_text(json.dumps({"thresholds": {"SK006": 0, "SK007": "bad"}, "severity": {"SK007": "error"}}))
-    policy = _load_policy(cfg)
+    policy, diagnostics = _load_policy(cfg)
     assert policy.thresholds == DEFAULT_THRESHOLDS
     assert policy.severity == {}
+    # Every rejected entry is surfaced, not silently swallowed.
+    assert len(diagnostics) == 3  # SK006=0, SK007="bad", severity SK007="error"
 
 
 def test_policy_first_match_and_cache(tmp_path: Path) -> None:
@@ -31,36 +43,88 @@ def test_policy_first_match_and_cache(tmp_path: Path) -> None:
 
 
 def test_policy_plugin_precedes_project_without_merge(tmp_path: Path) -> None:
+    # Project sets SK006=12; plugin sets a full valid pair. Precedence (no merge)
+    # is proven by the project's SK006=12 NOT leaking into the plugin-resolved
+    # policy — SK006 must be the plugin's value, not the project's.
     (tmp_path / ".skilllint.json").write_text(json.dumps({"thresholds": {"SK006": 12}}))
     root = tmp_path / "plugin"
     (root / ".claude-plugin").mkdir(parents=True)
     (root / ".claude-plugin" / "plugin.json").write_text("{}")
-    (root / ".claude-plugin" / "validator.json").write_text(json.dumps({"thresholds": {"SK007": 34}}))
+    (root / ".claude-plugin" / "validator.json").write_text(json.dumps({"thresholds": {"SK006": 34, "SK007": 56}}))
     skill = root / "SKILL.md"
     skill.write_text("body")
     policy, config_root = _resolve_policy(skill, {})
-    assert policy.thresholds["SK006"] == DEFAULT_THRESHOLDS["SK006"]
-    assert policy.thresholds["SK007"] == 34
+    assert policy.thresholds["SK006"] == 34  # plugin value, not project's 12 (no merge)
+    assert policy.thresholds["SK007"] == 56
     assert config_root == root
 
 
 def test_policy_ignore_retains_existing_shape(tmp_path: Path) -> None:
     cfg = tmp_path / ".skilllint.json"
     cfg.write_text(json.dumps({"ignore": {"skills/demo": ["SK006"], "bad": "skip"}}))
-    assert _load_policy(cfg).ignore == {"skills/demo": ["SK006"]}
+    policy, _diagnostics = _load_policy(cfg)
+    assert policy.ignore == {"skills/demo": ["SK006"]}
 
 
 def test_unknown_policy_rules_are_ignored(tmp_path: Path) -> None:
     cfg = tmp_path / ".skilllint.json"
     cfg.write_text(json.dumps({"thresholds": {"NOPE": 1}, "severity": {"NOPE": "info"}}))
-    policy = _load_policy(cfg)
+    policy, diagnostics = _load_policy(cfg)
     assert "NOPE" not in policy.thresholds
     assert "NOPE" not in policy.severity
+    assert len(diagnostics) == 2
 
 
-def test_malformed_policy_fails_open(tmp_path: Path) -> None:
+def test_malformed_policy_reports_and_defaults(tmp_path: Path) -> None:
     cfg = tmp_path / ".skilllint.json"
     cfg.write_text("not json")
-    policy = _load_policy(cfg)
+    policy, diagnostics = _load_policy(cfg)
     assert policy.thresholds == DEFAULT_THRESHOLDS
     assert policy.ignore == {}
+    assert len(diagnostics) == 1
+
+
+def test_as005_is_not_a_configurable_threshold(tmp_path: Path) -> None:
+    # AS005 shares the SK006/SK007 token band and has no threshold plumbing of
+    # its own, so an AS005 threshold key is rejected (PR #97 review finding #1).
+    cfg = tmp_path / ".skilllint.json"
+    cfg.write_text(json.dumps({"thresholds": {"AS005": 1000}}))
+    policy, diagnostics = _load_policy(cfg)
+    assert "AS005" not in policy.thresholds
+    assert policy.thresholds == DEFAULT_THRESHOLDS
+    assert len(diagnostics) == 1
+
+
+def test_as005_severity_is_configurable(tmp_path: Path) -> None:
+    cfg = tmp_path / ".skilllint.json"
+    cfg.write_text(json.dumps({"severity": {"AS005": "info"}}))
+    policy, diagnostics = _load_policy(cfg)
+    assert policy.severity == {"AS005": "info"}
+    assert diagnostics == []
+
+
+def test_inverted_thresholds_reset_to_defaults(tmp_path: Path) -> None:
+    # SK006 >= SK007 makes the warning band unreachable; reset both (finding #2).
+    cfg = tmp_path / ".skilllint.json"
+    cfg.write_text(json.dumps({"thresholds": {"SK006": 9000}}))  # >= default SK007 (8800)
+    policy, diagnostics = _load_policy(cfg)
+    assert policy.thresholds == DEFAULT_THRESHOLDS
+    assert any("must be below SK007" in d for d in diagnostics)
+
+
+def test_equal_thresholds_reset_to_defaults(tmp_path: Path) -> None:
+    cfg = tmp_path / ".skilllint.json"
+    cfg.write_text(json.dumps({"thresholds": {"SK006": 5000, "SK007": 5000}}))
+    policy, diagnostics = _load_policy(cfg)
+    assert policy.thresholds == DEFAULT_THRESHOLDS
+    assert any("must be below SK007" in d for d in diagnostics)
+
+
+def test_composite_severity_value_does_not_crash(tmp_path: Path) -> None:
+    # A list/dict severity value must be rejected, not raise TypeError on the
+    # set membership check (finding #3 — trust-boundary crash).
+    cfg = tmp_path / ".skilllint.json"
+    cfg.write_text(json.dumps({"severity": {"SK006": [], "SK007": {"nested": 1}}}))
+    policy, diagnostics = _load_policy(cfg)
+    assert policy.severity == {}
+    assert len(diagnostics) == 2
