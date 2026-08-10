@@ -128,3 +128,27 @@ def test_composite_severity_value_does_not_crash(tmp_path: Path) -> None:
     policy, diagnostics = _load_policy(cfg)
     assert policy.severity == {}
     assert len(diagnostics) == 2
+
+
+def test_policy_cache_reuses_ancestor_across_siblings(tmp_path: Path) -> None:
+    # Codex re-review #1: a sibling skill must reuse an already-cached ancestor
+    # instead of re-walking, re-reading config, and re-emitting diagnostics.
+    # Config is deliberately invalid so diagnostics are observable.
+    import contextlib
+    import io
+
+    (tmp_path / ".skilllint.json").write_text(json.dumps({"thresholds": {"AS005": 1000}}))
+    a = tmp_path / "skills" / "a" / "SKILL.md"
+    b = tmp_path / "skills" / "b" / "SKILL.md"
+    b.parent.mkdir(parents=True, exist_ok=False)
+    a.parent.mkdir(parents=True, exist_ok=True)
+    a.write_text("body")
+    b.write_text("body")
+    cache: dict[str, tuple[ValidationPolicy, Path | None]] = {}
+    _resolve_policy(a, cache)
+    buf = io.StringIO()
+    with contextlib.redirect_stderr(buf):
+        _resolve_policy(b, cache)  # second sibling — must NOT re-emit
+    # The only cached ancestor (the shared "skills" dir + config root) is reused,
+    # so no config re-read and no second diagnostic emission on stderr.
+    assert "AS005 is not a configurable threshold" not in buf.getvalue()

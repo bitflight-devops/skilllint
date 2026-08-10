@@ -888,6 +888,12 @@ def _resolve_policy(
     root: Path | None = None
     diagnostics: list[str] = []
     while True:
+        ancestor_key = str(current)
+        # A sibling file already cached this ancestor: reuse it instead of
+        # re-walking and re-emitting diagnostics once per sibling skill.
+        if ancestor_key in cache:
+            policy, root = cache[ancestor_key]
+            break
         walked.append(current)
         plugin_cfg = current / ".claude-plugin" / "plugin.json"
         skilllint_cfg = current / _SKILLLINT_CONFIG_FILENAME
@@ -5589,8 +5595,8 @@ def validate_file(path: Path, adapters: dict, platform_override: str | None = No
                 "message": f"Invalid YAML frontmatter: {yaml_err}",
             })
         # Resolve per-plugin policy so --platform validation honors the same
-        # configured thresholds as the default path (PR #97 review: the two
-        # paths must not lint the same skill differently).
+        # configured thresholds AND severity as the default path (PR #97 review:
+        # the two paths must not lint the same skill differently).
         policy, _policy_root = _resolve_policy(path, {})
         violations.extend(
             run_as_series(
@@ -5601,6 +5607,17 @@ def validate_file(path: Path, adapters: dict, platform_override: str | None = No
                 error_threshold=policy.thresholds.get("SK007", TOKEN_ERROR_THRESHOLD),
             )
         )
+        if policy.severity:
+            # Apply configured severity downgrades to the AS-series dict
+            # violations so --platform matches the default-path remap.
+            remapped: list[dict[str, object]] = []
+            for violation in violations:
+                configured = policy.severity.get(str(violation.get("code")))
+                if configured in {"warning", "info"}:
+                    remapped.append({**violation, "severity": configured})
+                else:
+                    remapped.append(violation)
+            violations = remapped
 
     if not matching:
         return violations
