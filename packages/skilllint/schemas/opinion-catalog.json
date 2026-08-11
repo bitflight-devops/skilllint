@@ -45,9 +45,7 @@
       "description": "Wildcard patterns in tools field will not resolve — list each tool by its exact registered name",
       "rationale": "No schema or vendor document defines wildcard validation for the tools field. This is a safety recommendation to prevent tools that silently fail to match.",
       "constraint": "Reject tool entries containing wildcard characters (e.g., mcp__Ref__*)",
-      "references": [
-        "packages/skilllint/rules/as_series.py: check_as007 function"
-      ]
+      "references": ["packages/skilllint/rules/as_series.py: check_as007 function"]
     },
     "FM004": {
       "rule_code": "FM004",
