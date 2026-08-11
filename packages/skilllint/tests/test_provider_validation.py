@@ -165,9 +165,7 @@ Body content.
         assert entry is not None
         assert entry.authority is not None
         assert entry.authority.reference is not None
-        assert entry.authority.reference.startswith("http"), (
-            f"Expected reference URL, got: {entry.authority.reference}"
-        )
+        assert entry.authority.reference.startswith("http"), f"Expected reference URL, got: {entry.authority.reference}"
 
 
 # ---------------------------------------------------------------------------

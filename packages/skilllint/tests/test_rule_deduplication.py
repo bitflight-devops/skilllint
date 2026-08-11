@@ -19,10 +19,7 @@ def adapters() -> dict:
 
 def _codes(path: Path, adapters: dict) -> list[str]:
     """Return emitted rule codes in validator order."""
-    return [
-        violation["code"]
-        for violation in validate_file(path, adapters, platform_override="claude_code")
-    ]
+    return [violation["code"] for violation in validate_file(path, adapters, platform_override="claude_code")]
 
 
 def test_invalid_skill_name_has_one_fm010_finding(tmp_path: Path, adapters: dict) -> None:
@@ -30,9 +27,7 @@ def test_invalid_skill_name_has_one_fm010_finding(tmp_path: Path, adapters: dict
     skill_dir = tmp_path / "bad-name"
     skill_dir.mkdir()
     skill_md = skill_dir / "SKILL.md"
-    skill_md.write_text(
-        "---\nname: Bad_Name!\ndescription: Use this skill when testing names\n---\n\nBody.\n"
-    )
+    skill_md.write_text("---\nname: Bad_Name!\ndescription: Use this skill when testing names\n---\n\nBody.\n")
 
     name_codes = set(_codes(skill_md, adapters)) & {"AS001", "FM010", "SK001", "SK002", "SK003"}
     assert name_codes == {"FM010"}
@@ -44,9 +39,7 @@ def test_valid_name_in_wrong_directory_has_only_directory_finding(tmp_path: Path
     skill_dir = tmp_path / "wrong-directory"
     skill_dir.mkdir()
     skill_md = skill_dir / "SKILL.md"
-    skill_md.write_text(
-        "---\nname: right-name\ndescription: Use this skill when testing directories\n---\n\nBody.\n"
-    )
+    skill_md.write_text("---\nname: right-name\ndescription: Use this skill when testing directories\n---\n\nBody.\n")
 
     name_codes = set(_codes(skill_md, adapters)) & {"AS001", "AS002", "FM010", "SK001", "SK002", "SK003"}
     assert name_codes == {"FM010"}
@@ -64,16 +57,13 @@ def test_missing_description_has_only_fm001_finding(tmp_path: Path, adapters: di
 
 
 @pytest.mark.parametrize("threshold", [TOKEN_WARNING_THRESHOLD + 100, TOKEN_ERROR_THRESHOLD + 100])
-def test_over_threshold_body_has_one_complexity_finding(
-    tmp_path: Path, adapters: dict, threshold: int
-) -> None:
+def test_over_threshold_body_has_one_complexity_finding(tmp_path: Path, adapters: dict, threshold: int) -> None:
     """An oversized body has one SK006/SK007 finding and no AS005."""
     skill_dir = tmp_path / "large-body"
     skill_dir.mkdir()
     skill_md = skill_dir / "SKILL.md"
     skill_md.write_text(
-        "---\nname: large-body\ndescription: Use this skill when testing body limits\n---\n\n"
-        + ("word " * threshold)
+        "---\nname: large-body\ndescription: Use this skill when testing body limits\n---\n\n" + ("word " * threshold)
     )
 
     complexity_codes = set(_codes(skill_md, adapters)) & {"SK006", "SK007"}

@@ -367,11 +367,4 @@ def check_sk009(frontmatter: dict[str, object], path: Path, file_type: str) -> l
     return []
 
 
-__all__ = [
-    "check_sk004",
-    "check_sk005",
-    "check_sk006",
-    "check_sk007",
-    "check_sk008",
-    "check_sk009",
-]
+__all__ = ["check_sk004", "check_sk005", "check_sk006", "check_sk007", "check_sk008", "check_sk009"]
