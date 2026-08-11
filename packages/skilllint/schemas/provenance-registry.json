@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Rule Provenance Registry — maps lint rule claims to upstream authority sources",
+  "version": "1",
+  "claims": {
+    "AS001.max_name_length": {
+      "rule_code": "AS001",
+      "claim_name": "max_name_length",
+      "description": "Maximum character length for the skill name field (64 characters)",
+      "claim_type": "scalar",
+      "authority": {
+        "vendor_file": "packages/skilllint/schemas/agentskills_io/v1.json",
+        "anchor_selector": null,
+        "authority_url": "https://agentskills.io/specification"
+      },
+      "extraction": {
+        "prompt_template": "Extract the maxLength value for the 'name' property from the JSON schema. Return an integer. {{section}}",
+        "output_schema": {
+          "type": "integer"
+        },
+        "post_processing": null
+      },
+      "assertion_location": {
+        "file": "packages/skilllint/rules/fm_series.py",
+        "symbol": "_MAX_NAME_LENGTH",
+        "source_type": "python_constant"
+      },
+      "x-audited": {
+        "date": "2026-03-14",
+        "source": "packages/skilllint/schemas/agentskills_io/v1.json"
+      }
+    },
+    "HK002.valid_event_types": {
+      "rule_code": "HK002",
+      "claim_name": "valid_event_types",
+      "description": "Recognized hook event type names in Claude Code hooks.json configuration",
+      "claim_type": "enum_set",
+      "authority": {
+        "vendor_file": ".claude/vendor/claude_code/plugins/plugin-dev/skills/hook-development/SKILL.md",
+        "anchor_selector": "#hook-configuration-formats",
+        "authority_url": "https://docs.claude.com/en/docs/claude-code/hooks"
+      },
+      "extraction": {
+        "prompt_template": "Extract all recognized hook event type names from this vendor documentation. Return a JSON array of event name strings. {{section}}",
+        "output_schema": {
+          "type": "array"
+        },
+        "post_processing": "sort, unique"
+      },
+      "assertion_location": {
+        "file": "packages/skilllint/plugin_validator.py",
+        "symbol": "HookValidator.VALID_EVENT_TYPES",
+        "source_type": "python_constant"
+      },
+      "x-audited": {
+        "date": "2026-03-23",
+        "source": ".claude/vendor/claude_code/plugins/plugin-dev/skills/hook-development/SKILL.md"
+      }
+    },
+    "HK003.valid_hook_types": {
+      "rule_code": "HK003",
+      "claim_name": "valid_hook_types",
+      "description": "Recognized hook type values (command, prompt) in Claude Code hooks configuration",
+      "claim_type": "enum_set",
+      "authority": {
+        "vendor_file": ".claude/vendor/claude_code/plugins/plugin-dev/skills/hook-development/SKILL.md",
+        "anchor_selector": "#hook-types",
+        "authority_url": "https://docs.claude.com/en/docs/claude-code/hooks"
+      },
+      "extraction": {
+        "prompt_template": "Extract all recognized hook 'type' values from this vendor documentation. Return a JSON array of type strings. {{section}}",
+        "output_schema": {
+          "type": "array"
+        },
+        "post_processing": "lowercase, sort, unique"
+      },
+      "assertion_location": {
+        "file": "packages/skilllint/plugin_validator.py",
+        "symbol": "HookValidator.VALID_HOOK_TYPES",
+        "source_type": "python_constant"
+      },
+      "x-audited": {
+        "date": "2026-03-23",
+        "source": ".claude/vendor/claude_code/plugins/plugin-dev/skills/hook-development/SKILL.md"
+      }
+    },
+    "FM007.tool_field_names": {
+      "rule_code": "FM007",
+      "claim_name": "tool_field_names",
+      "description": "Valid field names for tool allow/deny lists in frontmatter (allowed-tools, tools)",
+      "claim_type": "field_set",
+      "authority": {
+        "vendor_file": "packages/skilllint/schemas/agentskills_io/v1.json",
+        "anchor_selector": null,
+        "authority_url": "https://agentskills.io/specification"
+      },
+      "extraction": {
+        "prompt_template": "Extract all property names from the JSON schema that relate to tool allow/deny lists (e.g., allowed-tools, tools). Return a JSON array of field name strings. {{section}}",
+        "output_schema": {
+          "type": "array"
+        },
+        "post_processing": "sort, unique"
+      },
+      "assertion_location": {
+        "file": "packages/skilllint/rules/fm_series.py",
+        "symbol": "check_fm007 field_name loop (line 417: 'tools', 'allowed-tools', 'disallowedTools')",
+        "source_type": "python_constant"
+      },
+      "x-audited": {
+        "date": "2026-03-14",
+        "source": "packages/skilllint/schemas/agentskills_io/v1.json"
+      }
+    }
+  }
+}

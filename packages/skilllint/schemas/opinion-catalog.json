@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Lint-opinion rules with no upstream authority source",
+  "version": "1",
+  "opinions": {
+    "SK006": {
+      "rule_code": "SK006",
+      "description": "Skill body exceeds token warning threshold (4400 tokens)",
+      "rationale": "The 4400-token warning threshold is an empirical observation about context-window pressure, not a vendor-specified limit. No upstream spec or schema defines a maximum skill body token count.",
+      "constraint": "TOKEN_WARNING_THRESHOLD = 4400 (tokens, approximate)",
+      "references": [
+        "packages/skilllint/token_counter.py line 41: TOKEN_WARNING_THRESHOLD: int = 4400"
+      ]
+    },
+    "SK007": {
+      "rule_code": "SK007",
+      "description": "Skill body exceeds token error threshold (8800 tokens) — must split",
+      "rationale": "The 8800-token error threshold is an empirical observation about when skill bodies become unwieldy, not a vendor-specified limit. No upstream spec or schema defines a maximum skill body token count.",
+      "constraint": "TOKEN_ERROR_THRESHOLD = 8800 (tokens, approximate)",
+      "references": [
+        "packages/skilllint/token_counter.py line 44: TOKEN_ERROR_THRESHOLD: int = 8800"
+      ]
+    },
+    "SK004": {
+      "rule_code": "SK004",
+      "description": "Skill description too short (minimum 20 characters)",
+      "rationale": "The 20-character minimum description length is a quality heuristic, not a spec requirement. The agentskills.io schema sets minLength=1 for description; the 20-char threshold is a lint opinion for description quality.",
+      "constraint": "_MIN_DESCRIPTION_LENGTH = 20 (characters)",
+      "references": [
+        "packages/skilllint/rules/sk_series.py line 72: _MIN_DESCRIPTION_LENGTH = 20",
+        "packages/skilllint/schemas/agentskills_io/v1.json: description minLength = 1 (spec minimum)"
+      ]
+    },
+    "SK005": {
+      "rule_code": "SK005",
+      "description": "Skill description must contain at least one trigger phrase (e.g., 'use when', 'use this', 'trigger', 'activate')",
+      "rationale": "Trigger phrases enable the model to decide when to auto-load a skill. No vendor schema or spec defines a required set of trigger phrases. The specific phrase list is a lint opinion.",
+      "constraint": "Description must contain at least one of: 'use when', 'use this', 'use on', 'used when', 'used by', 'when ', 'trigger', 'activate', 'load this', 'load when', 'invoke'",
+      "references": [
+        "packages/skilllint/rules/sk_series.py lines 154-165: _REQUIRED_TRIGGER_PHRASES"
+      ]
+    },
+    "AS007": {
+      "rule_code": "AS007",
+      "description": "Wildcard patterns in tools field will not resolve — list each tool by its exact registered name",
+      "rationale": "No schema or vendor document defines wildcard validation for the tools field. This is a safety recommendation to prevent tools that silently fail to match.",
+      "constraint": "Reject tool entries containing wildcard characters (e.g., mcp__Ref__*)",
+      "references": [
+        "packages/skilllint/rules/as_series.py: check_as007 function"
+      ]
+    },
+    "FM004": {
+      "rule_code": "FM004",
+      "description": "Multiline YAML syntax (block scalars |, >, |-, >-) in description field should be avoided",
+      "rationale": "No vendor schema restricts multiline syntax in the description field. Claude Code runtime accepts it. This is a style preference for readability and portability.",
+      "constraint": "Description field should use a single-line string, not a YAML block scalar or folded scalar",
+      "references": [
+        "packages/skilllint/rules/fm_series.py: _FM004_DESCRIPTION_BLOCK_SCALAR regex and check_fm004 function"
+      ]
+    },
+    "AS001.regex_pattern": {
+      "rule_code": "AS001",
+      "description": "Skill name must match regex ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ — lowercase alphanumeric with hyphens, no leading/trailing hyphens",
+      "rationale": "The agentskills.io schema enforces maxLength=64 but does not specify a regex pattern for the name field. The lowercase-alphanumeric-with-hyphens pattern and the consecutive-hyphen prohibition have no vendor source; they are lint opinions based on convention.",
+      "constraint": "Name must match ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ and must not contain consecutive hyphens (--)",
+      "references": [
+        "packages/skilllint/rules/fm_series.py line 42: _NAME_RE = re.compile(r'^[a-z0-9]([a-z0-9-]*[a-z0-9])?$')",
+        "packages/skilllint/rules/fm_series.py line 43: _CONSECUTIVE_HYPHENS_RE = re.compile(r'--')"
+      ]
+    }
+  }
+}
