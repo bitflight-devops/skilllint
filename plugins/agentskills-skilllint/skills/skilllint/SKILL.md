@@ -11,7 +11,7 @@ Arguments received: `$ARGUMENTS`
 ## Argument Routing
 
 - **No arguments** → Run full workflow guide below
-- **Rule ID** (e.g. `AS001`, `FM004`, `SK006`) → Run `skilllint rule <ID>` for AS rules; for others look up in [rule-catalog.md](./references/rule-catalog.md)
+- **Rule ID** (e.g. `FM010`, `FM004`, `SK006`) → Run `skilllint rule <ID>` for AS rules; for others look up in [rule-catalog.md](./references/rule-catalog.md)
 - **A path** (e.g. `./plugins/my-plugin`) → Run `skilllint check <path>` and interpret the output
 
 ---
@@ -105,8 +105,8 @@ Severity levels:
 **To look up any rule ID:**
 
 ```bash
-# For AS001–AS006 (the rule documentation system)
-skilllint rule AS001
+# For AS006 (the rule documentation system)
+skilllint rule AS006
 
 # List all documented rules
 skilllint rules
@@ -135,7 +135,7 @@ skilllint check --fix ./plugins/my-plugin
 
 > **Note:** `--check` and `--fix` are mutually exclusive. Passing both flags at the same time is an error.
 
-**Auto-fixable rules:** FM004, FM007, FM009, FM010/AS002, SK001, SK002, SK003, SL001
+**Auto-fixable rules:** FM004, FM007, FM009, FM010, SL001
 
 **Not auto-fixable:** SK006/SK007 (token size — requires manual refactoring), PD series, AS006, LK series, most PL/HK rules.
 
@@ -186,7 +186,7 @@ For the full rule catalog, see [rule-catalog.md](./references/rule-catalog.md)
 ```
 Token thresholds are defined by `TOKEN_WARNING_THRESHOLD` (warning) and `TOKEN_ERROR_THRESHOLD` (error) in the skilllint source. Run `skilllint rules` to see current threshold values. Body text only — frontmatter is excluded from the count.
 
-### AS002 / FM010 — Name/directory mismatch
+### FM010 — Name/directory mismatch
 
 The `name:` frontmatter field must match the directory name:
 ```
@@ -221,7 +221,7 @@ skilllint --version
 ## Workflow: Scan → Identify → Explain → Fix
 
 1. **Scan**: `skilllint check --show-summary --show-progress <path>`
-2. **Identify** rule IDs in the output (e.g. `[FM004]`, `[SK006]`, `[AS002]`)
+2. **Identify** rule IDs in the output (e.g. `[FM004]`, `[SK006]`, `[FM010]`)
 3. **Explain**: `skilllint rule <ID>` for AS rules; [rule-catalog.md](./references/rule-catalog.md) for others
 4. **Fix auto-fixable**: `skilllint check --fix <path>`
 5. **Fix manual issues**: Apply the patterns above based on rule ID

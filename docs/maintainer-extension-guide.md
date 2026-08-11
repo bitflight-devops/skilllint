@@ -247,13 +247,13 @@ The `@skilllint_rule` decorator registers a function in the global rule registry
 
 ```python
 @skilllint_rule(
-    "AS001",
+    "FM010",
     severity="error",
     category="skill",
     authority={"origin": "agentskills.io", "reference": "/specification#skill-naming"},
 )
-def _check_as001(name: str | None) -> dict | None:
-    """AS001 — Invalid skill name format.
+def _check_fm010(name: str | None) -> dict | None:
+    """FM010 — Invalid skill name format.
 
     Skill names must be lowercase alphanumeric with hyphens only.
     """
@@ -299,7 +299,7 @@ Reference the S04 severity classification:
 Run tests filtered by rule code:
 
 ```bash
-uv run pytest packages/skilllint/tests/ -k as001 -v
+uv run pytest packages/skilllint/tests/ -k fm010 -v
 uv run pytest packages/skilllint/tests/ -k <rule_code> -v
 ```
 
@@ -355,12 +355,12 @@ Pass the `authority` kwarg to `@skilllint_rule`:
 
 ```python
 @skilllint_rule(
-    "AS001",
+    "FM010",
     severity="error",
     category="skill",
     authority={"origin": "agentskills.io", "reference": "/specification#skill-naming"},
 )
-def _check_as001(name: str | None) -> dict | None: ...
+def _check_fm010(name: str | None) -> dict | None: ...
 ```
 
 The decorator converts this to a `RuleAuthority` dataclass (defined in `packages/skilllint/rule_registry.py`):

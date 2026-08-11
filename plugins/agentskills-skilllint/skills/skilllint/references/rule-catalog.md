@@ -54,7 +54,7 @@ Use `skilllint check --filter <ID> --verbose <path>` to see detailed output for 
 
 | AS006 | info | no | No evaluation queries file found (optional but recommended) |
 
-**Full detail:** Use `skilllint check --filter <ID> --verbose <path>` (e.g. `skilllint check --filter AS001 --verbose <path>`) to see detailed output for any AS rule.
+**Full detail:** Use `skilllint check --filter <ID> --verbose <path>` (e.g. `skilllint check --filter AS006 --verbose <path>`) to see detailed output for any AS rule.
 
 ---
 
