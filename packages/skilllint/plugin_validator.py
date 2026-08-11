@@ -64,7 +64,7 @@ from skilllint.record_export import (
 )
 from skilllint.rule_registry import rule_reference
 from skilllint.rules.as_series import run_as_series
-from skilllint.rules.fm_series import check_fm004, check_fm007, check_fm008, check_fm010
+from skilllint.rules.fm_series import check_fm004, check_fm007, check_fm010
 from skilllint.rules.sk_series import check_sk001, check_sk002, check_sk003, check_sk004, check_sk005
 from skilllint.scan_runtime import ScanContext
 from skilllint.token_counter import TOKEN_ERROR_THRESHOLD, TOKEN_WARNING_THRESHOLD, count_tokens
@@ -273,7 +273,9 @@ def _normalize_skill_name(name: str) -> str:
     return s.strip("-")
 
 
-# Trigger phrase requirements (Architecture line 357)
+# Trigger phrase requirements — duplicated from sk_series._REQUIRED_TRIGGER_PHRASES.
+# Dead code: DescriptionValidator._check_description_quality delegates to check_sk005.
+# Kept only for import compatibility; consumers should import from sk_series instead.
 REQUIRED_TRIGGER_PHRASES = [
     "use when",
     "use this",
@@ -289,7 +291,7 @@ REQUIRED_TRIGGER_PHRASES = [
 ]
 
 # ============================================================================
-# ERROR CODE CONSTANTS (Architecture lines 836-887)
+# ERROR CODE CONSTANTS
 # ============================================================================
 
 
@@ -429,7 +431,7 @@ PR001, PR002, PR003, PR004, PR005 = (
 PA001 = ErrorCode.PA001
 
 # ============================================================================
-# VALIDATOR OWNERSHIP (Architecture lines 352a-352j)
+# VALIDATOR OWNERSHIP
 # ============================================================================
 
 
@@ -905,12 +907,12 @@ def _filter_result_by_ignore(
 
 
 # ============================================================================
-# DATA MODELS (Architecture lines 136-480)
+# DATA MODELS
 # ============================================================================
 
 
 class FileType(StrEnum):
-    """Type of capability file (Architecture lines 369-392)."""
+    """Type of capability file."""
 
     SKILL = "skill"
     AGENT = "agent"
@@ -994,7 +996,7 @@ class FileType(StrEnum):
 
 
 class ValidationIssue(BaseModel):
-    """A single validation issue (Architecture lines 152-160, 395-423)."""
+    """A single validation issue."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -1021,7 +1023,7 @@ class ValidationIssue(BaseModel):
 
 
 class ValidationResult(BaseModel):
-    """Result from a validation check (Architecture lines 143-149)."""
+    """Result from a validation check."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -1039,7 +1041,7 @@ FileResults = dict[Path, list[tuple[str, ValidationResult]]]
 
 @dataclass(frozen=True)
 class ComplexityMetrics:
-    """Token-based complexity metrics (Architecture lines 431-479)."""
+    """Token-based complexity metrics."""
 
     total_tokens: int
     frontmatter_tokens: int
@@ -1074,7 +1076,7 @@ class ComplexityMetrics:
 
 
 # ============================================================================
-# VALIDATOR PROTOCOL (Architecture lines 162-176)
+# VALIDATOR PROTOCOL
 # ============================================================================
 
 
@@ -1270,8 +1272,6 @@ class ProgressiveDisclosureValidator:
     Checks for references/, examples/, and scripts/ directories that help
     organize additional content for on-demand exploration. Missing directories
     are reported as INFO (not errors) since they're optional organizational aids.
-
-    Architecture lines 1170-1186, Task T7 lines 815-876
     """
 
     # Directory names to check for progressive disclosure
@@ -1377,11 +1377,9 @@ class InternalLinkValidator:
     """Validates internal markdown links in SKILL.md files.
 
     Checks that relative links point to existing files (LK001).
-
-    Architecture lines 1188-1256, Task T8 lines 897-982
     """
 
-    # Regex pattern for extracting markdown links (Architecture line 1219)
+    # Regex pattern for extracting markdown links.
     LINK_PATTERN: ClassVar[str] = r"\[([^\]]+)\]\(([^)]+)\)"
 
     # Regex pattern for fenced code blocks (``` or ~~~, with optional language specifier).
@@ -2328,7 +2326,7 @@ class SymlinkTargetValidator:
 
 
 class AsSeriesValidator:
-    """Runs AS001-AS009 rules on SKILL.md files.
+    """Runs AS-series rules on SKILL.md files.
 
     AS-series rules enforce the AgentSkills specification, which is a
     cross-harness baseline for skills. It defines ``SKILL.md`` and does not
@@ -2722,7 +2720,6 @@ class FrontmatterValidator:
 
         warnings.extend(check_fm004(data, path, file_type.value, frontmatter_yaml=frontmatter_text))
         _check_list_valued_tool_fields(data, errors, warnings)
-        warnings.extend(check_fm008(data, path, file_type.value))
         _check_skill_name_and_directory(data, path, file_type, errors, warnings)
 
         hooks_value = data.get("hooks")
@@ -2952,8 +2949,6 @@ class NameFormatValidator:
     - Hyphens only (no underscores)
     - No leading/trailing hyphens
     - No consecutive hyphens
-
-    Architecture lines 1074-1090, Task T4 lines 518-593
     """
 
     def validate(self, path: Path) -> ValidationResult:
@@ -3156,8 +3151,6 @@ class DescriptionValidator:
 
     Both checks produce warnings, not errors, since description quality is subjective.
     Commands have different frontmatter schemas and do not require trigger phrases.
-
-    Architecture lines 1092-1113, Task T5 lines 602-672
     """
 
     def __init__(self, file_type: FileType = FileType.SKILL) -> None:
@@ -3270,8 +3263,6 @@ class ComplexityValidator:
     Measures skill complexity by counting tokens in body content (excluding
     frontmatter) using tiktoken. Provides more accurate complexity measurement
     than line counting since it reflects actual Claude processing cost.
-
-    Architecture lines 1115-1168, Task T6 lines 685-797
     """
 
     def validate(self, path: Path, policy: ValidationPolicy | None = None) -> ValidationResult:
@@ -4088,8 +4079,6 @@ class PluginStructureValidator:
     Integrates with external `claude plugin validate` CLI command for
     plugin.json validation. Gracefully handles cases where claude CLI
     is not available by skipping validation.
-
-    Architecture lines 1258-1286, Task T9 lines 1034-1124
     """
 
     def validate(self, path: Path) -> ValidationResult:
@@ -4984,7 +4973,7 @@ class HookValidator:
 
 
 # ============================================================================
-# INTEGRATION LAYER (Architecture lines 274-332, Task T12 lines 1374-1452)
+# INTEGRATION LAYER
 # ============================================================================
 
 
@@ -5093,7 +5082,7 @@ def get_staged_files() -> list[Path]:
 
 
 # ============================================================================
-# REPORTER PROTOCOL (Architecture lines 206-272)
+# REPORTER PROTOCOL
 # ============================================================================
 
 
@@ -5179,7 +5168,7 @@ def _file_has_frontmatter(path: Path) -> bool:
 
 
 # ============================================================================
-# CLI LAYER (Architecture lines 87-129)
+# CLI LAYER
 # ============================================================================
 
 
@@ -5987,7 +5976,7 @@ def rule_cmd(
     """Show documentation for a validation rule.
 
     Args:
-        rule_id: Rule identifier (e.g., "SK001", "FM002", "AS001")
+        rule_id: Rule identifier (e.g., "FM002", "SK004")
         record: Optional path to write terminal output as SVG or HTML.
     """
     console = _make_rule_console(record=record is not None)

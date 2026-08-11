@@ -243,7 +243,7 @@ def check_sk003(frontmatter: dict[str, object], path: Path, file_type: str) -> l
         return issues
 
     # Source: agentskills.io spec / _spec_constants.MAX_NAME_LENGTH = 64.
-    # FM010 and AS001 enforce the same 64-char ceiling; SK003 must too.
+    # FM010 enforces the same 64-char ceiling; SK003 must too.
     if len(name_val) > MAX_NAME_LENGTH:
         issues.append(
             ValidationIssue(
@@ -313,8 +313,8 @@ def check_sk003(frontmatter: dict[str, object], path: Path, file_type: str) -> l
 # ---------------------------------------------------------------------------
 
 # Minimum length for description field.
-# Source: Architecture lines 349-350 — minimum 20 characters for SK004 quality
-# threshold. (Distinct from _spec_constants.MIN_DESCRIPTION_LENGTH = 1, which is
+# Source: Lint opinion — no upstream spec mandates a 20-char minimum.
+# (Distinct from _spec_constants.MIN_DESCRIPTION_LENGTH = 1, which is
 # the agentskills.io absolute minimum used by FM-series existence checks.)
 _MIN_DESCRIPTION_LENGTH = 20
 
@@ -335,7 +335,7 @@ def check_sk004(frontmatter: dict[str, object], path: Path, file_type: str) -> l
     longer than the recommended 1024 characters may be truncated or reduce
     context efficiency.
 
-    **Source:** Architecture lines 349-350 — minimum 20 characters.
+    **Source:** Lint opinion (no upstream spec).
 
     **Source:** `frontmatter_core.RECOMMENDED_DESCRIPTION_LENGTH` = 1024.
 
@@ -395,9 +395,9 @@ def check_sk004(frontmatter: dict[str, object], path: Path, file_type: str) -> l
 # SK005 — Description missing trigger phrases
 # ---------------------------------------------------------------------------
 
-# Trigger phrases that must appear in a skill's description.
-# Source: Architecture line 357 — trigger phrases enable Claude Code to decide
-# when to auto-load a skill from context.
+# Trigger phrases for skill auto-loading.
+# Source: Lint opinion — no vendor spec lists required trigger phrases.
+# Quality heuristic for skill discoverability.
 _REQUIRED_TRIGGER_PHRASES = [
     "use when",
     "use this",
@@ -431,7 +431,7 @@ def check_sk005(frontmatter: dict[str, object], path: Path, file_type: str) -> l
     `use when`, `use this`, `use on`, `used when`, `used by`, `when`,
     `trigger`, `activate`, `load this`, `load when`, `invoke`.
 
-    **Source:** Architecture line 357 — trigger phrase requirements.
+    **Source:** Lint opinion (no upstream spec).
 
     **Fix:** Add a trigger phrase to the description:
 
