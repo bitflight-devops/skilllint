@@ -147,14 +147,14 @@ jobs:
     permissions:
       pull-requests: write
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Download coverage artifacts
         uses: actions/download-artifact@v8.0.1
         with:
           name: coverage-xml
           path: coverage-reports
-
-      - name: Checkout code
-        uses: actions/checkout@v4
 
       - name: Comment PR with coverage
         uses: actions/github-script@v9.0.0
