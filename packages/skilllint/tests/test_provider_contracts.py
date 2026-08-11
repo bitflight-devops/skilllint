@@ -95,15 +95,10 @@ class TestRuleAuthority:
     def test_rule_entry_authority_structured(self) -> None:
         """RuleEntry should accept and expose structured authority."""
 
-        # Create a test function
-        def test_validator(frontmatter: dict) -> list:
-            return []
-
         # Create a RuleEntry with authority
         authority = RuleAuthority(origin="test-origin", reference="https://example.com/rules/TE001")
         entry = RuleEntry(
             id="TE001",
-            fn=test_validator,
             severity="error",
             category="test",
             platforms=["agentskills"],
@@ -118,14 +113,9 @@ class TestRuleAuthority:
     def test_rule_entry_authority_optional(self) -> None:
         """RuleEntry.authority should be optional (default None)."""
 
-        # Create a test function
-        def test_validator(frontmatter: dict) -> list:
-            return []
-
         # Create a RuleEntry without authority
         entry = RuleEntry(
             id="TE002",
-            fn=test_validator,
             severity="warning",
             category="test",
             platforms=["agentskills"],

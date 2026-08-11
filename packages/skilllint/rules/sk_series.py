@@ -50,18 +50,6 @@ _NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 _DIR_CONVENTION_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 
 
-def _docs_url(code: str) -> str:
-    """Return the documentation URL for an SK rule code.
-
-    Args:
-        code: Rule code string (e.g., "SK001").
-
-    Returns:
-        Full URL with anchor for the error code documentation.
-    """
-    return rule_reference(code)
-
-
 # ---------------------------------------------------------------------------
 # SK001 — Name contains uppercase characters
 # ---------------------------------------------------------------------------
@@ -114,7 +102,7 @@ def check_sk001(frontmatter: dict[str, object], path: Path, file_type: str) -> l
                 severity="error",
                 message="Name contains uppercase characters",
                 code="SK001",
-                docs_url=_docs_url("SK001"),
+                docs_url=rule_reference("SK001"),
                 suggestion=f"Use lowercase only (e.g., '{name_val.lower()}' not '{name_val}')",
             )
         ]
@@ -173,7 +161,7 @@ def check_sk002(frontmatter: dict[str, object], path: Path, file_type: str) -> l
                 severity="error",
                 message="Name contains underscores (use hyphens instead)",
                 code="SK002",
-                docs_url=_docs_url("SK002"),
+                docs_url=rule_reference("SK002"),
                 suggestion=f"Replace underscores with hyphens: '{name_val.replace('_', '-')}'",
             )
         ]
@@ -236,7 +224,7 @@ def check_sk003(frontmatter: dict[str, object], path: Path, file_type: str) -> l
                 severity="error",
                 message="Name field is empty",
                 code="SK003",
-                docs_url=_docs_url("SK003"),
+                docs_url=rule_reference("SK003"),
                 suggestion="Provide a non-empty name using lowercase letters, numbers, and hyphens",
             )
         )
@@ -251,7 +239,7 @@ def check_sk003(frontmatter: dict[str, object], path: Path, file_type: str) -> l
                 severity="error",
                 message=f"Name exceeds maximum length of {MAX_NAME_LENGTH} characters (got {len(name_val)})",
                 code="SK003",
-                docs_url=_docs_url("SK003"),
+                docs_url=rule_reference("SK003"),
                 suggestion=f"Shorten the name to {MAX_NAME_LENGTH} characters or less",
             )
         )
@@ -264,7 +252,7 @@ def check_sk003(frontmatter: dict[str, object], path: Path, file_type: str) -> l
                 severity="error",
                 message="Name has leading hyphen",
                 code="SK003",
-                docs_url=_docs_url("SK003"),
+                docs_url=rule_reference("SK003"),
                 suggestion=f"Remove leading hyphen: '{name_val.lstrip('-')}'",
             )
         )
@@ -276,7 +264,7 @@ def check_sk003(frontmatter: dict[str, object], path: Path, file_type: str) -> l
                 severity="error",
                 message="Name has trailing hyphen",
                 code="SK003",
-                docs_url=_docs_url("SK003"),
+                docs_url=rule_reference("SK003"),
                 suggestion=f"Remove trailing hyphen: '{name_val.rstrip('-')}'",
             )
         )
@@ -288,7 +276,7 @@ def check_sk003(frontmatter: dict[str, object], path: Path, file_type: str) -> l
                 severity="error",
                 message="Name has consecutive hyphens",
                 code="SK003",
-                docs_url=_docs_url("SK003"),
+                docs_url=rule_reference("SK003"),
                 suggestion="Use single hyphens only (e.g., 'test-skill' not 'test--skill')",
             )
         )
@@ -300,7 +288,7 @@ def check_sk003(frontmatter: dict[str, object], path: Path, file_type: str) -> l
                 severity="error",
                 message="Name format invalid",
                 code="SK003",
-                docs_url=_docs_url("SK003"),
+                docs_url=rule_reference("SK003"),
                 suggestion="Use lowercase letters, numbers, and hyphens only (e.g., 'my-skill-name')",
             )
         )
@@ -372,7 +360,7 @@ def check_sk004(frontmatter: dict[str, object], path: Path, file_type: str) -> l
                 severity="warning",
                 message=f"Description too short (minimum {_MIN_DESCRIPTION_LENGTH} characters, got {desc_len})",
                 code="SK004",
-                docs_url=_docs_url("SK004"),
+                docs_url=rule_reference("SK004"),
                 suggestion="Run /plugin-creator:write-frontmatter-description to generate an optimized description",
             )
         )
@@ -383,7 +371,7 @@ def check_sk004(frontmatter: dict[str, object], path: Path, file_type: str) -> l
                 severity="warning",
                 message=f"Exceeds recommended length of {RECOMMENDED_DESCRIPTION_LENGTH} characters (got {desc_len})",
                 code="SK004",
-                docs_url=_docs_url("SK004"),
+                docs_url=rule_reference("SK004"),
                 suggestion=f"Front-load critical information in first {RECOMMENDED_DESCRIPTION_LENGTH} characters. Run /plugin-creator:write-frontmatter-description to generate an optimized description",
             )
         )
@@ -470,7 +458,7 @@ def check_sk005(frontmatter: dict[str, object], path: Path, file_type: str) -> l
             severity="warning",
             message="Description missing trigger phrases",
             code="SK005",
-            docs_url=_docs_url("SK005"),
+            docs_url=rule_reference("SK005"),
             suggestion=f"Required trigger phrases: {', '.join(_REQUIRED_TRIGGER_PHRASES)}. Run /plugin-creator:write-frontmatter-description to generate a compliant description",
         )
     ]

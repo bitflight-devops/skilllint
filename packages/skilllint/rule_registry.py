@@ -25,10 +25,10 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterator
-from typing import TYPE_CHECKING, Annotated, Any, Literal
+from typing import TYPE_CHECKING, Annotated, Literal
 from urllib.parse import urljoin
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -67,10 +67,7 @@ class RuleAuthority(BaseModel):
 class RuleEntry(BaseModel):
     """Registry entry for a single validation rule."""
 
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
     id: Annotated[str, Field(pattern=r"^[A-Z]{2}\d{3}$")]
-    fn: Any  # Callable — not validatable by Pydantic, stored as Any
     severity: Literal["error", "warning", "info"]
     category: str  # "frontmatter", "skill", "plugin", "hook", etc.
     platforms: list[str]  # ["agentskills"] = all platforms, or specific like ["claude-code"]
@@ -129,7 +126,6 @@ def skilllint_rule(
     def decorator(fn: Callable) -> Callable:
         entry = RuleEntry(
             id=rule_id.upper(),
-            fn=fn,
             severity=severity,
             category=category,
             platforms=platforms,

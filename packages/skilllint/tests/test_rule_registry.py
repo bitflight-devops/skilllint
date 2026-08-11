@@ -13,7 +13,6 @@ def _entry(rule_id: str, reference: str | None, origin: str = "example.test") ->
     authority = None if reference is None else RuleAuthority(origin=origin, reference=reference)
     return RuleEntry(
         id=rule_id,
-        fn=lambda: None,
         severity="info",
         category="test",
         platforms=["agentskills"],

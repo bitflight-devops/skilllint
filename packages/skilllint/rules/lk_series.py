@@ -35,29 +35,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from skilllint.rule_registry import rule_reference, skilllint_rule
+from skilllint.rule_registry import skilllint_rule
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     from skilllint.plugin_validator import ValidationIssue
-
-# ---------------------------------------------------------------------------
-# Spec sources
-# ---------------------------------------------------------------------------
-
-
-def _docs_url(code: str) -> str:
-    """Return the documentation URL for an LK rule code.
-
-    Args:
-        code: Rule code string (e.g., "LK001").
-
-    Returns:
-        Full URL with anchor for the error code documentation.
-    """
-    return rule_reference(code)
-
 
 # ---------------------------------------------------------------------------
 # LK001 — Broken internal link (file does not exist)

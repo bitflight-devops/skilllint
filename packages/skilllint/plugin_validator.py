@@ -1205,7 +1205,7 @@ class Validator(Protocol):
 # ============================================================================
 
 
-def generate_docs_url(error_code: ErrorCode) -> str:
+def generate_docs_url(error_code: ErrorCode | str) -> str:
     """Generate documentation URL for error code.
 
     Args:
