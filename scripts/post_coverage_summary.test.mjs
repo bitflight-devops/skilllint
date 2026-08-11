@@ -1,11 +1,11 @@
 // scripts/post_coverage_summary.test.mjs
 // Run: node --test scripts/post_coverage_summary.test.mjs
 
-import { describe, it } from 'node:test';
 import { strict as assert } from 'node:assert';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { describe, it } from 'node:test';
 
 import postCoverageSummary from './post_coverage_summary.mjs';
 
