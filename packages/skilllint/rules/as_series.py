@@ -39,7 +39,7 @@ AS_RULES: dict[str, str] = {
     "AS004": "description contains unquoted colons that break YAML — quote the string to fix",
     "AS005": f"SKILL.md body token count exceeds {TOKEN_WARNING_THRESHOLD} tokens — consider splitting into sub-skills",
     "AS006": "No eval_queries.json found — add evaluation queries for quality assurance",
-    "AS007": "Wildcard pattern in tools field will not resolve — list each tool by its exact registered name",
+    "AS007": "Unscoped wildcard in tools field resolves to nothing — use mcp__<server>__* or exact tool names",
     "AS008": "MCP tool name may have incorrect casing — case is sensitive in the tools field",
     "AS009": "Nested skill will not be auto-discovered — skills must be direct children of the skills/ directory",
 }
@@ -52,6 +52,17 @@ _MAX_NAME_LENGTH = 64
 
 _NAME_RE = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")
 _CONSECUTIVE_HYPHENS_RE = re.compile(r"--")
+
+# A server-scoped MCP group grant, e.g. "mcp__Ref__*" or
+# "mcp__plugin_dh_backlog__*". Claude Code resolves this to every tool the
+# named server exposes; it is a supported form, not a broken one.
+# Source: .claude/vendor/claude_code/CHANGELOG.md — "Added wildcard syntax
+#   `mcp__server__*` for MCP tool permissions to allow or deny all tools from
+#   a server"
+# Source: .claude/vendor/claude_code/plugins/plugin-dev/skills/mcp-integration/
+#   references/tool-usage.md — documents `allowed-tools:
+#   ["mcp__plugin_asana_asana__*"]` as supported ("use sparingly")
+_MCP_SERVER_GRANT_RE = re.compile(r"^mcp__.+__\*$")
 
 
 def _parse_skill_md(path: pathlib.Path) -> tuple[dict, list[str], str | None]:
@@ -175,7 +186,7 @@ def _make_violation(code: str, severity: str, message: str, fix: str | None = No
     category="skill",
     authority={"origin": "agentskills.io", "reference": "/specification#skill-naming"},
 )
-def _check_as001(name: str | None) -> dict | None:
+def _check_as001(name: str | None, path: pathlib.Path) -> dict | None:
     """AS001 — Invalid skill name format.
 
     Skill names must be lowercase alphanumeric with hyphens only, between
@@ -184,6 +195,9 @@ def _check_as001(name: str | None) -> dict | None:
 
     Args:
         name: The skill name from frontmatter, or None if missing.
+        path: Path to the file being validated, used to tell a SKILL.md
+            (where agentskills.io requires ``name``) from an agent file
+            (where FM001 already reports the missing field).
 
     Returns:
         Violation dict if invalid, None otherwise.
@@ -197,7 +211,13 @@ def _check_as001(name: str | None) -> dict | None:
         Invalid: ``MySkill``, ``my_skill``, ``skill--name``, ``-skill``
     """
     if name is None:
-        return _make_violation("AS001", "error", "name field is missing")
+        # agentskills.io requires `name` on a SKILL.md, and FM001 stays silent
+        # there (skills.md treats it as optional, falling back to the directory
+        # name). On agent files FM001 already errors, so reporting here only
+        # produced a duplicate finding for the same missing field.
+        if path.name == "SKILL.md":
+            return _make_violation("AS001", "error", "name field is missing")
+        return None
 
     if len(name) == 0 or len(name) > _MAX_NAME_LENGTH:
         return _make_violation(
@@ -659,11 +679,15 @@ def _discover_mcp_servers(file_path: pathlib.Path) -> set[str]:
     authority={"origin": "agentskills.io", "reference": "/specification#tools-field"},
 )
 def _check_as007(tools: list[str]) -> list[dict]:
-    """AS007 — Wildcard pattern in tools field will not resolve.
+    """AS007 — Unscoped wildcard in tools field resolves to nothing.
 
-    Wildcard patterns such as ``mcp__Ref__*`` in the ``tools:`` frontmatter
-    field are silently ignored at runtime. The agent receives no MCP tools
-    when wildcards are used.
+    A *server-scoped* MCP grant such as ``mcp__Ref__*`` is supported and is
+    NOT reported: Claude Code resolves it to every tool that server exposes,
+    identically to the bare ``mcp__Ref`` form. Both forms are left alone.
+
+    An *unscoped* wildcard — bare ``*``, or ``mcp__*`` naming no server — has
+    no documented meaning in this field. It is not expanded, so the entry
+    contributes no tools.
 
     Args:
         tools: List of tool name strings from the tools: frontmatter field.
@@ -677,19 +701,21 @@ def _check_as007(tools: list[str]) -> list[dict]:
         ``mcp__Ref__ref_read_url`` and ``mcp__Ref__ref_search_documentation``.
 
     Examples:
-        Invalid: ``mcp__Ref__*``, ``mcp__*``, ``*``
-        Valid: ``mcp__Ref__ref_read_url``, ``Bash``, ``Read``
+        Invalid: ``mcp__*``, ``*``
+        Valid: ``mcp__Ref__*``, ``mcp__Ref``, ``mcp__Ref__ref_read_url``, ``Read``
     """
     violations: list[dict] = [
         _make_violation(
             "AS007",
             "error",
-            f"Wildcard pattern '{tool_name}' in tools field will not resolve. "
-            "List each tool by its exact registered name.",
-            fix=f"Replace '{tool_name}' with the explicit tool names (e.g., 'mcp__Ref__ref_read_url').",
+            f"Unscoped wildcard '{tool_name}' in tools field names no server, so it resolves to no tools.",
+            fix=(
+                f"Replace '{tool_name}' with a server-scoped grant (e.g. 'mcp__Ref__*') "
+                "or the exact tool names (e.g. 'mcp__Ref__ref_read_url')."
+            ),
         )
         for tool_name in tools
-        if "*" in tool_name
+        if "*" in tool_name and not _MCP_SERVER_GRANT_RE.match(tool_name)
     ]
     return violations
 
@@ -966,7 +992,7 @@ def check_skill_md(path: pathlib.Path) -> list[dict]:
 
     violations: list[dict] = []
 
-    v = _check_as001(name)
+    v = _check_as001(name, path)
     if v:
         violations.append(v)
 
@@ -1029,7 +1055,7 @@ def run_as_series(
 
     violations: list[dict] = []
 
-    v = _check_as001(name)
+    v = _check_as001(name, path)
     if v:
         violations.append(v)
 

@@ -29,7 +29,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from skilllint.rule_registry import skilllint_rule
+from skilllint.rule_registry import rule_reference, skilllint_rule
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -39,8 +39,6 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 # Spec sources
 # ---------------------------------------------------------------------------
-
-_PD_DOCS_BASE = "https://github.com/jamie-bitflight/claude_skills/blob/main/plugins/plugin-creator/docs/ERROR_CODES.md"
 
 
 def _docs_url(code: str) -> str:
@@ -52,7 +50,7 @@ def _docs_url(code: str) -> str:
     Returns:
         Full URL with anchor for the error code documentation.
     """
-    return f"{_PD_DOCS_BASE}#{code.lower()}"
+    return rule_reference(code)
 
 
 # ---------------------------------------------------------------------------
@@ -65,7 +63,7 @@ def _docs_url(code: str) -> str:
     severity="info",
     category="progressive-disclosure",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills", "reference": _PD_DOCS_BASE},
+    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
 )
 def check_pd001(frontmatter: dict[str, object], path: Path, file_type: str) -> list[ValidationIssue]:
     """## PD001 — No references/ directory found
@@ -114,7 +112,7 @@ def check_pd001(frontmatter: dict[str, object], path: Path, file_type: str) -> l
     severity="info",
     category="progressive-disclosure",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills", "reference": _PD_DOCS_BASE},
+    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
 )
 def check_pd002(frontmatter: dict[str, object], path: Path, file_type: str) -> list[ValidationIssue]:
     """## PD002 — No examples/ directory found
@@ -163,7 +161,7 @@ def check_pd002(frontmatter: dict[str, object], path: Path, file_type: str) -> l
     severity="info",
     category="progressive-disclosure",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills", "reference": _PD_DOCS_BASE},
+    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
 )
 def check_pd003(frontmatter: dict[str, object], path: Path, file_type: str) -> list[ValidationIssue]:
     """## PD003 — No scripts/ directory found

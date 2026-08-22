@@ -33,7 +33,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from skilllint.rule_registry import skilllint_rule
+from skilllint.rule_registry import rule_reference, skilllint_rule
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -43,8 +43,6 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 # Spec sources
 # ---------------------------------------------------------------------------
-
-_PR_DOCS_BASE = "https://github.com/jamie-bitflight/claude_skills/blob/main/plugins/plugin-creator/docs/ERROR_CODES.md"
 
 
 def _docs_url(code: str) -> str:
@@ -56,7 +54,7 @@ def _docs_url(code: str) -> str:
     Returns:
         Full URL with anchor for the error code documentation.
     """
-    return f"{_PR_DOCS_BASE}#{code.lower()}"
+    return rule_reference(code)
 
 
 # ---------------------------------------------------------------------------
@@ -69,7 +67,7 @@ def _docs_url(code: str) -> str:
     severity="warning",
     category="plugin-registration",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills", "reference": _PR_DOCS_BASE},
+    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
 )
 def check_pr001(frontmatter: dict[str, object], path: Path, file_type: str) -> list[ValidationIssue]:
     """## PR001 — Capability exists but not explicitly registered
@@ -123,7 +121,7 @@ def check_pr001(frontmatter: dict[str, object], path: Path, file_type: str) -> l
     severity="error",
     category="plugin-registration",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills", "reference": _PR_DOCS_BASE},
+    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
 )
 def check_pr002(frontmatter: dict[str, object], path: Path, file_type: str) -> list[ValidationIssue]:
     """## PR002 — Registered capability path does not exist
@@ -171,7 +169,7 @@ def check_pr002(frontmatter: dict[str, object], path: Path, file_type: str) -> l
     severity="info",
     category="plugin-registration",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills", "reference": _PR_DOCS_BASE},
+    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
 )
 def check_pr003(frontmatter: dict[str, object], path: Path, file_type: str) -> list[ValidationIssue]:
     """## PR003 — Plugin metadata fields not populated
@@ -220,7 +218,7 @@ def check_pr003(frontmatter: dict[str, object], path: Path, file_type: str) -> l
     severity="warning",
     category="plugin-registration",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills", "reference": _PR_DOCS_BASE},
+    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
 )
 def check_pr004(frontmatter: dict[str, object], path: Path, file_type: str) -> list[ValidationIssue]:
     """## PR004 — Plugin metadata repository URL mismatches git remote URL
@@ -267,7 +265,7 @@ def check_pr004(frontmatter: dict[str, object], path: Path, file_type: str) -> l
     severity="error",
     category="plugin-registration",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills", "reference": _PR_DOCS_BASE},
+    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
 )
 def check_pr005(frontmatter: dict[str, object], path: Path, file_type: str) -> list[ValidationIssue]:
     """## PR005 — Registered command path is a skill directory

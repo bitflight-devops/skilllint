@@ -292,32 +292,53 @@ def _make_skill_with_tools(tmp_path: pathlib.Path, tools_block: str) -> pathlib.
     return skill_md
 
 
-def test_as007_wildcard_in_tools_list_produces_error(tmp_path: pathlib.Path):
-    """tools: list containing a wildcard entry produces AS007 error."""
-    skill_md = _make_skill_with_tools(tmp_path, "tools:\n  - mcp__Ref__ref_read_url\n  - mcp__Ref__*")
+def test_as007_unscoped_wildcard_in_tools_list_produces_error(tmp_path: pathlib.Path):
+    """tools: list containing an unscoped wildcard produces AS007 error."""
+    skill_md = _make_skill_with_tools(tmp_path, "tools:\n  - mcp__Ref__ref_read_url\n  - mcp__*")
     violations = check_skill_md(skill_md)
     as007 = _violations_with_code(violations, "AS007")
-    assert as007 != [], "Expected AS007 violation for wildcard 'mcp__Ref__*'"
+    assert as007 != [], "Expected AS007 violation for unscoped wildcard 'mcp__*'"
     assert as007[0]["severity"] == "error"
-    assert "mcp__Ref__*" in as007[0]["message"]
+    assert "mcp__*" in as007[0]["message"]
     assert "fix" in as007[0]
+
+
+def test_as007_server_scoped_grant_passes(tmp_path: pathlib.Path):
+    """A server-scoped MCP grant is a supported form and must not fire AS007.
+
+    Claude Code resolves ``mcp__<server>__*`` to every tool that server
+    exposes, identically to the bare ``mcp__<server>`` form. Both are left
+    alone; flagging one while passing the other pushed authors between two
+    spellings with the same outcome.
+    """
+    for entry in ("mcp__Ref__*", "mcp__Ref", "mcp__plugin_dh_backlog__*"):
+        case_dir = tmp_path / entry.replace("*", "star")
+        case_dir.mkdir()
+        skill_md = _make_skill_with_tools(case_dir, f"tools:\n  - {entry}\n  - Read")
+        violations = check_skill_md(skill_md)
+        assert _violations_with_code(violations, "AS007") == [], (
+            f"AS007 must not fire for server-scoped grant {entry!r}"
+        )
 
 
 def test_as007_wildcard_inline_tools_produces_error(tmp_path: pathlib.Path):
     """Inline comma-separated tools: containing a wildcard produces AS007 error."""
-    skill_md = _make_skill_with_tools(tmp_path, "tools: mcp__Ref__ref_read_url, mcp__Ref__*")
+    skill_md = _make_skill_with_tools(tmp_path, "tools: mcp__Ref__ref_read_url, mcp__*")
     violations = check_skill_md(skill_md)
     as007 = _violations_with_code(violations, "AS007")
-    assert as007 != [], "Expected AS007 violation for inline wildcard 'mcp__Ref__*'"
+    assert as007 != [], "Expected AS007 violation for inline unscoped wildcard 'mcp__*'"
     assert as007[0]["severity"] == "error"
 
 
 def test_as007_multiple_wildcards_produce_one_violation_each(tmp_path: pathlib.Path):
-    """Each wildcard tool entry produces its own AS007 violation."""
-    skill_md = _make_skill_with_tools(tmp_path, "tools:\n  - mcp__Ref__*\n  - mcp__*\n  - Read")
+    """Each unscoped wildcard entry produces its own AS007 violation.
+
+    ``mcp__Ref__*`` is a server-scoped grant and is deliberately not counted.
+    """
+    skill_md = _make_skill_with_tools(tmp_path, 'tools:\n  - mcp__Ref__*\n  - mcp__*\n  - "*"\n  - Read')
     violations = check_skill_md(skill_md)
     as007 = _violations_with_code(violations, "AS007")
-    assert len(as007) == 2, f"Expected 2 AS007 violations for 2 wildcards, got: {len(as007)}"
+    assert len(as007) == 2, f"Expected 2 AS007 violations for 2 unscoped wildcards, got: {len(as007)}"
 
 
 def test_as007_explicit_tool_names_pass(tmp_path: pathlib.Path):
@@ -446,7 +467,7 @@ def test_as007_fires_on_agent_file_with_wildcard_via_validator(tmp_path: pathlib
     """
     from skilllint.plugin_validator import AsSeriesValidator
 
-    agent_md = _make_agent_md(tmp_path, "tools: mcp__Ref__*, Read, Bash")
+    agent_md = _make_agent_md(tmp_path, "tools: mcp__*, Read, Bash")
     result = AsSeriesValidator().validate(agent_md)
     codes = [i.field for i in result.errors + result.warnings + result.info]
     assert "AS007" in codes, f"Expected AS007 in AsSeriesValidator output for wildcard tool, got: {codes}"

@@ -62,6 +62,7 @@ from skilllint.record_export import (
     export_recording as _export_recording,
     make_recording_console as _make_recording_console,
 )
+from skilllint.rule_registry import rule_reference
 from skilllint.rules.as_series import run_as_series
 from skilllint.rules.fm_series import check_fm004, check_fm007, check_fm008, check_fm010
 from skilllint.rules.sk_series import check_sk001, check_sk002, check_sk003, check_sk004, check_sk005
@@ -234,11 +235,6 @@ def safe_load_yaml_with_colon_fix(fm_text: str) -> tuple[dict | None, str | None
         parsed = dict(data) if isinstance(data, dict) else None
         return parsed, None, [], fm_text
 
-
-# Error code base URL for documentation links
-ERROR_CODE_BASE_URL = (
-    "https://github.com/jamie-bitflight/claude_skills/blob/main/plugins/plugin-creator/docs/ERROR_CODES.md"
-)
 
 # Official plugin.json schema (plugin manifest)
 PLUGIN_MANIFEST_SCHEMA_URL = "https://code.claude.com/docs/en/plugins-reference.md#plugin-manifest-schema"
@@ -1134,9 +1130,9 @@ def generate_docs_url(error_code: ErrorCode) -> str:
         error_code: Error code (ErrorCode enum or string like "FM001", "SK006").
 
     Returns:
-        Full URL to error code documentation with anchor
+        The ``skilllint rule <CODE>`` invocation that renders the rule docs.
     """
-    return f"{ERROR_CODE_BASE_URL}#{str(error_code).lower()}"
+    return rule_reference(str(error_code))
 
 
 # extract_frontmatter imported from frontmatter_core

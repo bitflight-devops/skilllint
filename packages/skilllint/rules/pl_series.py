@@ -36,7 +36,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from skilllint.rule_registry import skilllint_rule
+from skilllint.rule_registry import rule_reference, skilllint_rule
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -46,8 +46,6 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 # Spec sources
 # ---------------------------------------------------------------------------
-
-_PL_DOCS_BASE = "https://github.com/jamie-bitflight/claude_skills/blob/main/plugins/plugin-creator/docs/ERROR_CODES.md"
 
 
 def _docs_url(code: str) -> str:
@@ -59,7 +57,7 @@ def _docs_url(code: str) -> str:
     Returns:
         Full URL with anchor for the error code documentation.
     """
-    return f"{_PL_DOCS_BASE}#{code.lower()}"
+    return rule_reference(code)
 
 
 # ---------------------------------------------------------------------------
@@ -72,7 +70,7 @@ def _docs_url(code: str) -> str:
     severity="error",
     category="plugin",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills", "reference": _PL_DOCS_BASE},
+    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
 )
 def check_pl001(frontmatter: dict[str, object], path: Path, file_type: str) -> list[ValidationIssue]:
     r"""## PL001 — Missing plugin.json file
@@ -124,7 +122,7 @@ def check_pl001(frontmatter: dict[str, object], path: Path, file_type: str) -> l
     severity="error",
     category="plugin",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills", "reference": _PL_DOCS_BASE},
+    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
 )
 def check_pl002(frontmatter: dict[str, object], path: Path, file_type: str) -> list[ValidationIssue]:
     """## PL002 — Invalid JSON syntax in plugin.json or marketplace.json
@@ -173,7 +171,7 @@ def check_pl002(frontmatter: dict[str, object], path: Path, file_type: str) -> l
     severity="error",
     category="plugin",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills", "reference": _PL_DOCS_BASE},
+    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
 )
 def check_pl003(frontmatter: dict[str, object], path: Path, file_type: str) -> list[ValidationIssue]:
     """## PL003 — Missing required field 'name' in plugin.json
@@ -220,7 +218,7 @@ def check_pl003(frontmatter: dict[str, object], path: Path, file_type: str) -> l
     severity="error",
     category="plugin",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills", "reference": _PL_DOCS_BASE},
+    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
 )
 def check_pl004(frontmatter: dict[str, object], path: Path, file_type: str) -> list[ValidationIssue]:
     r"""## PL004 — Component path does not start with './'
@@ -268,7 +266,7 @@ def check_pl004(frontmatter: dict[str, object], path: Path, file_type: str) -> l
     severity="error",
     category="plugin",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills", "reference": _PL_DOCS_BASE},
+    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
 )
 def check_pl005(frontmatter: dict[str, object], path: Path, file_type: str) -> list[ValidationIssue]:
     """## PL005 — Referenced component file does not exist
@@ -318,7 +316,7 @@ def check_pl005(frontmatter: dict[str, object], path: Path, file_type: str) -> l
     severity="error",
     category="plugin",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills", "reference": _PL_DOCS_BASE},
+    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
 )
 def check_pl006(frontmatter: dict[str, object], path: Path, file_type: str) -> list[ValidationIssue]:
     """## PL006 — marketplace.json has invalid top-level keys
