@@ -307,10 +307,11 @@ def test_as007_unscoped_wildcard_in_tools_list_produces_error(tmp_path: pathlib.
 def test_as007_wildcard_server_segment_is_not_a_group_grant(tmp_path: pathlib.Path):
     """A wildcard in the server segment names no server, so it is not exempt.
 
-    `mcp__*__*` and `mcp__foo*__*` look like server-scoped grants but identify
-    no concrete server, so nothing resolves and the subagent cannot launch.
+    `mcp__*__*` and `mcp__foo*__*` identify no concrete server.
+    `mcp__Ref__tool__*` names a real server but puts the wildcard inside a tool
+    name, so it is not the documented `mcp__<server>__*` group grant either.
     """
-    for entry in ("mcp__*__*", "mcp__foo*__*"):
+    for entry in ("mcp__*__*", "mcp__foo*__*", "mcp__Ref__tool__*"):
         case_dir = tmp_path / entry.replace("*", "star")
         case_dir.mkdir()
         skill_md = _make_skill_with_tools(case_dir, f"tools:\n  - {entry}")

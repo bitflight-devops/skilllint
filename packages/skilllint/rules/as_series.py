@@ -65,9 +65,12 @@ _CONSECUTIVE_HYPHENS_RE = re.compile(r"--")
 # Source: .claude/vendor/claude_code/plugins/plugin-dev/skills/mcp-integration/
 #   references/tool-usage.md — documents `allowed-tools:
 #   ["mcp__plugin_asana_asana__*"]` as supported ("use sparingly")
-# The server segment must name a concrete server: `mcp__*__*` and
-# `mcp__foo*__*` name none, so they are not group grants.
-_MCP_SERVER_GRANT_RE = re.compile(r"^mcp__[^*]+__\*$")
+# The server segment must name a concrete server and nothing more. `mcp__*__*`
+# and `mcp__foo*__*` name none; `mcp__Ref__tool__*` puts the wildcard inside a
+# tool name rather than forming the documented `mcp__<server>__*` group grant.
+# Server names may contain single underscores (`plugin_dh_backlog`) but the
+# `__` separator terminates the segment, so the capture must not span one.
+_MCP_SERVER_GRANT_RE = re.compile(r"^mcp__[^*_]+(?:_[^*_]+)*__\*$")
 
 # Source: code.claude.com/docs/en/sub-agents.md — `tools` field: "If no entry
 #   in the list resolves to a tool, the subagent usually fails to launch with
@@ -723,12 +726,18 @@ def _check_as007(tools: list[str]) -> list[dict]:
 
     # Fatal only when nothing in the list can resolve; otherwise the entry is
     # dropped and the surviving entries still grant the subagent its tools.
+    # Fatality is only provable in one direction. When every entry is an
+    # unscoped wildcard, nothing can resolve and the subagent cannot launch.
+    # Otherwise a sibling *may* resolve — skilllint cannot confirm it does,
+    # since it has no registry of live tool names, so the message must not
+    # claim the grant survives. `tools: [NoSuchTool, "*"]` is the case that
+    # would make such a claim false.
     fatal = len(unscoped) == len(tools)
     severity = "error" if fatal else "warning"
     consequence = (
         "so no entry in the tools field resolves and the subagent fails to launch"
         if fatal
-        else "so it contributes no tools; the remaining entries still resolve"
+        else "so it contributes no tools; if no other entry resolves either, the subagent fails to launch"
     )
     return [
         _make_violation(
