@@ -304,6 +304,21 @@ def test_as007_unscoped_wildcard_in_tools_list_produces_error(tmp_path: pathlib.
     assert "fix" in as007[0]
 
 
+def test_as007_wildcard_server_segment_is_not_a_group_grant(tmp_path: pathlib.Path):
+    """A wildcard in the server segment names no server, so it is not exempt.
+
+    `mcp__*__*` and `mcp__foo*__*` look like server-scoped grants but identify
+    no concrete server, so nothing resolves and the subagent cannot launch.
+    """
+    for entry in ("mcp__*__*", "mcp__foo*__*"):
+        case_dir = tmp_path / entry.replace("*", "star")
+        case_dir.mkdir()
+        skill_md = _make_skill_with_tools(case_dir, f"tools:\n  - {entry}")
+        as007 = _violations_with_code(check_skill_md(skill_md), "AS007")
+        assert as007 != [], f"AS007 must fire for {entry!r}: it names no server"
+        assert as007[0]["severity"] == "error", f"{entry!r} is the only entry, so nothing resolves"
+
+
 def test_as007_entirely_unresolvable_list_is_error(tmp_path: pathlib.Path):
     """When every entry is an unscoped wildcard, the subagent cannot launch.
 

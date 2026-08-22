@@ -65,7 +65,9 @@ _CONSECUTIVE_HYPHENS_RE = re.compile(r"--")
 # Source: .claude/vendor/claude_code/plugins/plugin-dev/skills/mcp-integration/
 #   references/tool-usage.md — documents `allowed-tools:
 #   ["mcp__plugin_asana_asana__*"]` as supported ("use sparingly")
-_MCP_SERVER_GRANT_RE = re.compile(r"^mcp__.+__\*$")
+# The server segment must name a concrete server: `mcp__*__*` and
+# `mcp__foo*__*` name none, so they are not group grants.
+_MCP_SERVER_GRANT_RE = re.compile(r"^mcp__[^*]+__\*$")
 
 # Source: code.claude.com/docs/en/sub-agents.md — `tools` field: "If no entry
 #   in the list resolves to a tool, the subagent usually fails to launch with
