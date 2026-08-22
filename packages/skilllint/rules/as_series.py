@@ -64,6 +64,13 @@ _CONSECUTIVE_HYPHENS_RE = re.compile(r"--")
 #   ["mcp__plugin_asana_asana__*"]` as supported ("use sparingly")
 _MCP_SERVER_GRANT_RE = re.compile(r"^mcp__.+__\*$")
 
+# Source: code.claude.com/docs/en/sub-agents.md — `tools` field: "If no entry
+#   in the list resolves to a tool, the subagent usually fails to launch with
+#   an error naming the entries."
+# A single unresolvable entry is dropped and the rest of the grant survives;
+# only an entirely unresolvable list is fatal. Severity follows that split.
+_SUBAGENTS_TOOLS_URL = "https://code.claude.com/docs/en/sub-agents.md#supported-frontmatter-fields"
+
 
 def _parse_skill_md(path: pathlib.Path) -> tuple[dict, list[str], str | None]:
     """Parse a SKILL.md file into frontmatter dict and body lines.
@@ -674,9 +681,14 @@ def _discover_mcp_servers(file_path: pathlib.Path) -> set[str]:
 
 @skilllint_rule(
     "AS007",
-    severity="error",
+    severity="warning",
     category="skill",
-    authority={"origin": "agentskills.io", "reference": "/specification#tools-field"},
+    # The agentskills.io specification defines no `tools` field at all — only a
+    # space-separated `allowed-tools`, whose own example is `Bash(git:*)
+    # Bash(jq:*) Read`. It says nothing about wildcards, MCP naming, or what
+    # happens to an entry matching nothing, so it cannot be the authority here.
+    # `tools:` is Claude Code subagent frontmatter; cite the doc that defines it.
+    authority={"origin": "code.claude.com", "reference": _SUBAGENTS_TOOLS_URL},
 )
 def _check_as007(tools: list[str]) -> list[dict]:
     """AS007 — Unscoped wildcard in tools field resolves to nothing.
@@ -704,20 +716,31 @@ def _check_as007(tools: list[str]) -> list[dict]:
         Invalid: ``mcp__*``, ``*``
         Valid: ``mcp__Ref__*``, ``mcp__Ref``, ``mcp__Ref__ref_read_url``, ``Read``
     """
-    violations: list[dict] = [
+    unscoped = [t for t in tools if "*" in t and not _MCP_SERVER_GRANT_RE.match(t)]
+    if not unscoped:
+        return []
+
+    # Fatal only when nothing in the list can resolve; otherwise the entry is
+    # dropped and the surviving entries still grant the subagent its tools.
+    fatal = len(unscoped) == len(tools)
+    severity = "error" if fatal else "warning"
+    consequence = (
+        "so no entry in the tools field resolves and the subagent fails to launch"
+        if fatal
+        else "so it contributes no tools; the remaining entries still resolve"
+    )
+    return [
         _make_violation(
             "AS007",
-            "error",
-            f"Unscoped wildcard '{tool_name}' in tools field names no server, so it resolves to no tools.",
+            severity,
+            f"Unscoped wildcard '{tool_name}' in tools field names no server, {consequence}.",
             fix=(
                 f"Replace '{tool_name}' with a server-scoped grant (e.g. 'mcp__Ref__*') "
                 "or the exact tool names (e.g. 'mcp__Ref__ref_read_url')."
             ),
         )
-        for tool_name in tools
-        if "*" in tool_name and not _MCP_SERVER_GRANT_RE.match(tool_name)
+        for tool_name in unscoped
     ]
-    return violations
 
 
 @skilllint_rule(

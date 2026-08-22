@@ -298,9 +298,24 @@ def test_as007_unscoped_wildcard_in_tools_list_produces_error(tmp_path: pathlib.
     violations = check_skill_md(skill_md)
     as007 = _violations_with_code(violations, "AS007")
     assert as007 != [], "Expected AS007 violation for unscoped wildcard 'mcp__*'"
-    assert as007[0]["severity"] == "error"
+    # A sibling entry still resolves, so the subagent launches: warning, not error.
+    assert as007[0]["severity"] == "warning"
     assert "mcp__*" in as007[0]["message"]
     assert "fix" in as007[0]
+
+
+def test_as007_entirely_unresolvable_list_is_error(tmp_path: pathlib.Path):
+    """When every entry is an unscoped wildcard, the subagent cannot launch.
+
+    Source: code.claude.com/docs/en/sub-agents.md — "If no entry in the list
+    resolves to a tool, the subagent usually fails to launch with an error
+    naming the entries."
+    """
+    skill_md = _make_skill_with_tools(tmp_path, 'tools:\n  - mcp__*\n  - "*"')
+    violations = check_skill_md(skill_md)
+    as007 = _violations_with_code(violations, "AS007")
+    assert len(as007) == 2, f"Expected one AS007 per unscoped entry, got {len(as007)}"
+    assert all(v["severity"] == "error" for v in as007), "A wholly unresolvable tools list must be an error"
 
 
 def test_as007_server_scoped_grant_passes(tmp_path: pathlib.Path):
@@ -327,7 +342,7 @@ def test_as007_wildcard_inline_tools_produces_error(tmp_path: pathlib.Path):
     violations = check_skill_md(skill_md)
     as007 = _violations_with_code(violations, "AS007")
     assert as007 != [], "Expected AS007 violation for inline unscoped wildcard 'mcp__*'"
-    assert as007[0]["severity"] == "error"
+    assert as007[0]["severity"] == "warning"
 
 
 def test_as007_multiple_wildcards_produce_one_violation_each(tmp_path: pathlib.Path):
@@ -471,7 +486,8 @@ def test_as007_fires_on_agent_file_with_wildcard_via_validator(tmp_path: pathlib
     result = AsSeriesValidator().validate(agent_md)
     codes = [i.field for i in result.errors + result.warnings + result.info]
     assert "AS007" in codes, f"Expected AS007 in AsSeriesValidator output for wildcard tool, got: {codes}"
-    assert not result.passed, "AsSeriesValidator must not pass when a wildcard tool is present"
+    # Read and Bash still resolve, so the subagent launches: reported, not fatal.
+    assert [i.severity for i in result.warnings if i.field == "AS007"] == ["warning"]
 
 
 def test_as002_suppressed_for_agent_files_via_validator(tmp_path: pathlib.Path):
