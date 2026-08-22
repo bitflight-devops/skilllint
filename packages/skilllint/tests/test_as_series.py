@@ -473,21 +473,32 @@ def _make_agent_md(tmp_path: pathlib.Path, tools_yaml: str) -> pathlib.Path:
     return agent_md
 
 
-def test_as007_fires_on_agent_file_with_wildcard_via_validator(tmp_path: pathlib.Path):
-    """AsSeriesValidator surfaces AS007 for wildcard tools on an agent .md file.
+def test_as_family_does_not_run_on_agent_files(tmp_path: pathlib.Path):
+    """No AS-series rule may fire on an agent file.
 
-    This verifies the wiring in _get_validators_for_path: agent files must
-    have AsSeriesValidator in their validator list so AS007 fires without
-    requiring --platform.
+    The AgentSkills specification is a cross-harness baseline that defines
+    SKILL.md and does not describe agent files at all. An AS rule evaluating
+    agent frontmatter is a category error regardless of what it checks, so the
+    boundary lives in the family wiring rather than in each rule's own guard.
+
+    This asserts the routing in _get_validators_for_path, not a rule in
+    isolation — calling AsSeriesValidator directly would bypass the boundary
+    and pass even when the wiring is wrong.
     """
-    from skilllint.plugin_validator import AsSeriesValidator
+    from skilllint.plugin_validator import _get_validators_for_path
 
     agent_md = _make_agent_md(tmp_path, "tools: mcp__*, Read, Bash")
-    result = AsSeriesValidator().validate(agent_md)
-    codes = [i.field for i in result.errors + result.warnings + result.info]
-    assert "AS007" in codes, f"Expected AS007 in AsSeriesValidator output for wildcard tool, got: {codes}"
-    # Read and Bash still resolve, so the subagent launches: reported, not fatal.
-    assert [i.severity for i in result.warnings if i.field == "AS007"] == ["warning"]
+    names = [type(v).__name__ for v in _get_validators_for_path(agent_md)]
+    assert "AsSeriesValidator" not in names, f"AS family must not be wired to agent files, got: {names}"
+
+
+def test_as_family_still_runs_on_skill_md(tmp_path: pathlib.Path):
+    """The boundary must not cost SKILL.md its AS coverage."""
+    from skilllint.plugin_validator import _get_validators_for_path
+
+    skill_md = _make_skill_with_tools(tmp_path, "tools:\n  - Read")
+    names = [type(v).__name__ for v in _get_validators_for_path(skill_md)]
+    assert "AsSeriesValidator" in names, f"AS family must still run on SKILL.md, got: {names}"
 
 
 def test_as002_suppressed_for_agent_files_via_validator(tmp_path: pathlib.Path):

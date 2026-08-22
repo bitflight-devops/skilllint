@@ -1,7 +1,10 @@
 """AS-series rule validation for agentskills.io SKILL.md files.
 
-Rules AS001-AS009 fire on any SKILL.md file regardless of which platform
-adapter is active. They enforce cross-platform quality standards.
+Rules AS001-AS009 fire on SKILL.md files only, regardless of which platform
+adapter is active. They enforce the AgentSkills specification, a cross-harness
+baseline that defines SKILL.md and does not describe agent files. A check on
+agent frontmatter belongs to a series that governs agent files, cited to the
+harness documentation that defines them — not here.
 
 Entry point: check_skill_md(path: Path) -> list[dict]
 
@@ -193,7 +196,7 @@ def _make_violation(code: str, severity: str, message: str, fix: str | None = No
     category="skill",
     authority={"origin": "agentskills.io", "reference": "/specification#skill-naming"},
 )
-def _check_as001(name: str | None, path: pathlib.Path) -> dict | None:
+def _check_as001(name: str | None) -> dict | None:
     """AS001 — Invalid skill name format.
 
     Skill names must be lowercase alphanumeric with hyphens only, between
@@ -202,9 +205,6 @@ def _check_as001(name: str | None, path: pathlib.Path) -> dict | None:
 
     Args:
         name: The skill name from frontmatter, or None if missing.
-        path: Path to the file being validated, used to tell a SKILL.md
-            (where agentskills.io requires ``name``) from an agent file
-            (where FM001 already reports the missing field).
 
     Returns:
         Violation dict if invalid, None otherwise.
@@ -220,11 +220,10 @@ def _check_as001(name: str | None, path: pathlib.Path) -> dict | None:
     if name is None:
         # agentskills.io requires `name` on a SKILL.md, and FM001 stays silent
         # there (skills.md treats it as optional, falling back to the directory
-        # name). On agent files FM001 already errors, so reporting here only
-        # produced a duplicate finding for the same missing field.
-        if path.name == "SKILL.md":
-            return _make_violation("AS001", "error", "name field is missing")
-        return None
+        # name), so this is the only signal for a skill missing its name.
+        # It used to double-report alongside FM001 on agent files; that is now
+        # impossible because the AS family is wired to SKILL.md only.
+        return _make_violation("AS001", "error", "name field is missing")
 
     if len(name) == 0 or len(name) > _MAX_NAME_LENGTH:
         return _make_violation(
@@ -1015,7 +1014,7 @@ def check_skill_md(path: pathlib.Path) -> list[dict]:
 
     violations: list[dict] = []
 
-    v = _check_as001(name, path)
+    v = _check_as001(name)
     if v:
         violations.append(v)
 
@@ -1078,7 +1077,7 @@ def run_as_series(
 
     violations: list[dict] = []
 
-    v = _check_as001(name, path)
+    v = _check_as001(name)
     if v:
         violations.append(v)
 
