@@ -12,7 +12,7 @@ Each violation dict has the shape:
     {"code": str, "severity": str, "message": str}
 
 Severities:
-    "error"   — AS001, AS002, AS003, AS007
+    "error"   — AS001, AS002, AS003
     "warning" — AS004, AS005, AS008, AS009
     "info"    — AS006
 """
@@ -42,7 +42,6 @@ AS_RULES: dict[str, str] = {
     "AS004": "description contains unquoted colons that break YAML — quote the string to fix",
     "AS005": f"SKILL.md body token count exceeds {TOKEN_WARNING_THRESHOLD} tokens — consider splitting into sub-skills",
     "AS006": "No eval_queries.json found — add evaluation queries for quality assurance",
-    "AS007": "Unscoped wildcard in tools field resolves to nothing — use mcp__<server>__* or exact tool names",
     "AS008": "MCP tool name may have incorrect casing — case is sensitive in the tools field",
     "AS009": "Nested skill will not be auto-discovered — skills must be direct children of the skills/ directory",
 }
@@ -55,29 +54,6 @@ _MAX_NAME_LENGTH = 64
 
 _NAME_RE = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")
 _CONSECUTIVE_HYPHENS_RE = re.compile(r"--")
-
-# A server-scoped MCP group grant, e.g. "mcp__Ref__*" or
-# "mcp__plugin_dh_backlog__*". Claude Code resolves this to every tool the
-# named server exposes; it is a supported form, not a broken one.
-# Source: .claude/vendor/claude_code/CHANGELOG.md — "Added wildcard syntax
-#   `mcp__server__*` for MCP tool permissions to allow or deny all tools from
-#   a server"
-# Source: .claude/vendor/claude_code/plugins/plugin-dev/skills/mcp-integration/
-#   references/tool-usage.md — documents `allowed-tools:
-#   ["mcp__plugin_asana_asana__*"]` as supported ("use sparingly")
-# The server segment must name a concrete server and nothing more. `mcp__*__*`
-# and `mcp__foo*__*` name none; `mcp__Ref__tool__*` puts the wildcard inside a
-# tool name rather than forming the documented `mcp__<server>__*` group grant.
-# Server names may contain single underscores (`plugin_dh_backlog`) but the
-# `__` separator terminates the segment, so the capture must not span one.
-_MCP_SERVER_GRANT_RE = re.compile(r"^mcp__[^*_]+(?:_[^*_]+)*__\*$")
-
-# Source: code.claude.com/docs/en/sub-agents.md — `tools` field: "If no entry
-#   in the list resolves to a tool, the subagent usually fails to launch with
-#   an error naming the entries."
-# A single unresolvable entry is dropped and the rest of the grant survives;
-# only an entirely unresolvable list is fatal. Severity follows that split.
-_SUBAGENTS_TOOLS_URL = "https://code.claude.com/docs/en/sub-agents.md#supported-frontmatter-fields"
 
 
 def _parse_skill_md(path: pathlib.Path) -> tuple[dict, list[str], str | None]:
@@ -431,18 +407,28 @@ def _check_as005(
     return None
 
 
-def _extract_tools_list(path: pathlib.Path) -> list[str]:
-    """Extract tool names from the tools: frontmatter field.
+def _extract_tools_list(path: pathlib.Path, field: str = "allowed-tools") -> list[str]:
+    """Extract tool names from a tool-declaring frontmatter field.
 
-    Handles both YAML list form and inline comma-separated string form.
-    Uses proper YAML parsing (not the simple key/value parser used by
-    _parse_skill_md) so that multi-line list values are read correctly.
+    Handles the YAML list form and the inline string form. Uses proper YAML
+    parsing (not the simple key/value parser used by _parse_skill_md) so that
+    multi-line list values are read correctly.
+
+    The inline form is split on **both** whitespace and commas. The AgentSkills
+    specification describes ``allowed-tools`` as a space-separated string
+    (agentskills.io/specification.md, fetched 2026-08-22), but marks the field
+    Experimental and notes support varies between implementations, and nothing
+    establishes that another separator is an error. Parsing liberally is what
+    lets a rule *see* the entries either way; whether a given separator is
+    worth reporting is a separate question this function does not answer.
 
     Args:
         path: Path to the SKILL.md file.
+        field: Frontmatter key to read. Defaults to ``allowed-tools``, the
+            field the AgentSkills specification defines for skills.
 
     Returns:
-        List of tool name strings. Empty list if tools field is absent or
+        List of tool name strings. Empty list if the field is absent or
         the file cannot be parsed.
     """
     # Deferred import to break circular dependency; plugin_validator imports
@@ -463,12 +449,12 @@ def _extract_tools_list(path: pathlib.Path) -> list[str]:
     if not isinstance(parsed, dict):
         return []
 
-    tools_value = parsed.get("tools")
+    tools_value = parsed.get(field)
     if isinstance(tools_value, list):
         return [str(t) for t in tools_value if t is not None]
     if isinstance(tools_value, str):
-        # Inline comma-separated: "mcp__Ref__foo, mcp__Bar__baz"
-        return [t.strip() for t in tools_value.split(",") if t.strip()]
+        # Inline form, either separator: "Read Grep" or "Read, Grep".
+        return [t for t in tools_value.replace(",", " ").split() if t]
     return []
 
 
@@ -681,76 +667,6 @@ def _discover_mcp_servers(file_path: pathlib.Path) -> set[str]:
         Set of MCP server name strings (exact case as declared in config).
     """
     return _collect_servers_from_ancestry(file_path) | _collect_servers_from_frontmatter(file_path)
-
-
-@skilllint_rule(
-    "AS007",
-    severity="warning",
-    category="skill",
-    # The agentskills.io specification defines no `tools` field at all — only a
-    # space-separated `allowed-tools`, whose own example is `Bash(git:*)
-    # Bash(jq:*) Read`. It says nothing about wildcards, MCP naming, or what
-    # happens to an entry matching nothing, so it cannot be the authority here.
-    # `tools:` is Claude Code subagent frontmatter; cite the doc that defines it.
-    authority={"origin": "code.claude.com", "reference": _SUBAGENTS_TOOLS_URL},
-)
-def _check_as007(tools: list[str]) -> list[dict]:
-    """AS007 — Unscoped wildcard in tools field resolves to nothing.
-
-    A *server-scoped* MCP grant such as ``mcp__Ref__*`` is supported and is
-    NOT reported: Claude Code resolves it to every tool that server exposes,
-    identically to the bare ``mcp__Ref`` form. Both forms are left alone.
-
-    An *unscoped* wildcard — bare ``*``, or ``mcp__*`` naming no server — has
-    no documented meaning in this field. It is not expanded, so the entry
-    contributes no tools.
-
-    Args:
-        tools: List of tool name strings from the tools: frontmatter field.
-
-    Returns:
-        List of violation dicts — one per wildcard tool entry.
-
-    Fix:
-        Replace each wildcard with the exact registered tool names.
-        For example, replace ``mcp__Ref__*`` with the explicit tool names
-        ``mcp__Ref__ref_read_url`` and ``mcp__Ref__ref_search_documentation``.
-
-    Examples:
-        Invalid: ``mcp__*``, ``*``
-        Valid: ``mcp__Ref__*``, ``mcp__Ref``, ``mcp__Ref__ref_read_url``, ``Read``
-    """
-    unscoped = [t for t in tools if "*" in t and not _MCP_SERVER_GRANT_RE.match(t)]
-    if not unscoped:
-        return []
-
-    # Fatal only when nothing in the list can resolve; otherwise the entry is
-    # dropped and the surviving entries still grant the subagent its tools.
-    # Fatality is only provable in one direction. When every entry is an
-    # unscoped wildcard, nothing can resolve and the subagent cannot launch.
-    # Otherwise a sibling *may* resolve — skilllint cannot confirm it does,
-    # since it has no registry of live tool names, so the message must not
-    # claim the grant survives. `tools: [NoSuchTool, "*"]` is the case that
-    # would make such a claim false.
-    fatal = len(unscoped) == len(tools)
-    severity = "error" if fatal else "warning"
-    consequence = (
-        "so no entry in the tools field resolves and the subagent fails to launch"
-        if fatal
-        else "so it contributes no tools; if no other entry resolves either, the subagent fails to launch"
-    )
-    return [
-        _make_violation(
-            "AS007",
-            severity,
-            f"Unscoped wildcard '{tool_name}' in tools field names no server, {consequence}.",
-            fix=(
-                f"Replace '{tool_name}' with a server-scoped grant (e.g. 'mcp__Ref__*') "
-                "or the exact tool names (e.g. 'mcp__Ref__ref_read_url')."
-            ),
-        )
-        for tool_name in unscoped
-    ]
 
 
 @skilllint_rule(
@@ -1010,7 +926,7 @@ def check_skill_md(path: pathlib.Path) -> list[dict]:
 
     Returns:
         List of violation dicts, each with keys: code, severity, message.
-        May include 'fix' key with auto-fix suggestion for AS004, AS007, AS008, AS009.
+        May include 'fix' key with auto-fix suggestion for AS004, AS008, AS009.
     """
     frontmatter, body_lines, raw_description_line = _parse_skill_md(path)
 
@@ -1050,7 +966,6 @@ def check_skill_md(path: pathlib.Path) -> list[dict]:
         violations.append(v)
 
     tools = _extract_tools_list(path)
-    violations.extend(_check_as007(tools))
     violations.extend(_check_as008(tools, path))
 
     v = _check_as009(path)
@@ -1113,7 +1028,6 @@ def run_as_series(
         violations.append(v)
 
     tools = _extract_tools_list(path)
-    violations.extend(_check_as007(tools))
     violations.extend(_check_as008(tools, path))
 
     v = _check_as009(path)

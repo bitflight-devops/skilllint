@@ -221,7 +221,9 @@ These go in `opinion-catalog.json`, not in the provenance registry.
 }
 ```
 
-### AS007 -- wildcard tool detection
+### AS007 -- wildcard tool detection (REMOVED)
+
+Kept here as a worked example of what an empty `references` list predicts.
 
 ```json
 {
@@ -232,6 +234,20 @@ These go in `opinion-catalog.json`, not in the provenance registry.
   "references": []
 }
 ```
+
+AS007 was deleted in PR #108. Its declared authority was
+`agentskills.io /specification#tools-field` -- an anchor that does not exist,
+for a field that specification does not define. The spec covers `SKILL.md` and
+describes only `allowed-tools`, whose own example is itself a wildcard
+(`allowed-tools: Bash(git:*) Bash(jq:*) Read`). The rule's stated runtime
+consequence was also false: `mcp__<server>__*` is a documented group grant that
+resolves to every tool the named server exposes.
+
+`"references": []` was the signal, five months before anyone checked. A rule
+that cannot cite a source is asserting an opinion; this one asserted an opinion
+that turned out to contradict the runtime. That is the case for the provenance
+registry rather than an argument against recording opinions -- but an opinion
+must be labelled as one, not shipped as an error with a spec anchor attached.
 
 ### AS001.name_pattern (partial opinion)
 
