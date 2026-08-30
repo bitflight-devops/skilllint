@@ -96,6 +96,8 @@ global copy goes stale and shadows the source you're editing.
    gh api repos/{owner}/{repo}/pulls/<pr-number>/comments
    ```
 
+4. **Check that `gh` resolves the repository** — `gh repo view --json nameWithOwner`. Some hosts route the git remote through a local proxy (`127.0.0.1`), which `gh` cannot recognise as GitHub. Pass `--repo <owner>/<repo>` explicitly on those hosts. It is not needed where the command above returns the right answer.
+
 ## Benchmark workflow
 
 - Triggers on: PRs targeting `main`, or `workflow_dispatch` (once the file is on `main`)
