@@ -106,6 +106,18 @@ class TestProviderValidationRouting:
 # ---------------------------------------------------------------------------
 
 
+def _assert_authority(violation: dict) -> None:
+    """Assert a violation dict carries populated authority provenance.
+
+    Args:
+        violation: Violation dict emitted by validate_file().
+    """
+    assert "authority" in violation, f"Expected 'authority' key in violation, got: {violation}"
+    authority = violation["authority"]
+    assert authority.get("origin"), f"Expected non-empty 'origin' in authority, got: {authority}"
+    assert authority.get("reference"), f"Expected non-empty 'reference' in authority, got: {authority}"
+
+
 class TestAuthorityProvenance:
     """Tests for authority metadata in violation output."""
 
@@ -119,8 +131,7 @@ class TestAuthorityProvenance:
         fm010 = [v for v in violations if v.get("code") == "FM010"]
         assert len(fm010) == 1, f"Expected exactly one FM010 violation, got: {violations}"
 
-        violation = fm010[0]
-        assert violation["code"] == "FM010"
+        _assert_authority(fm010[0])
 
     def test_fm001_violation_is_emitted_once(self, tmp_path: pathlib.Path) -> None:
         """FM001 is the sole missing-description finding."""
@@ -403,6 +414,4 @@ Body content.
         fm010 = [v for v in violations if v.get("code") == "FM010"]
         assert len(fm010) == 1, f"Expected exactly one FM010 violation, got: {violations}"
 
-        # Verify authority is present
-        violation = fm010[0]
-        assert violation["code"] == "FM010"
+        _assert_authority(fm010[0])

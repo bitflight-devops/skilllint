@@ -66,9 +66,10 @@ def test_over_threshold_body_has_one_complexity_finding(tmp_path: Path, adapters
         "---\nname: large-body\ndescription: Use this skill when testing body limits\n---\n\n" + ("word " * threshold)
     )
 
-    complexity_codes = set(_codes(skill_md, adapters)) & {"SK006", "SK007"}
+    emitted = set(_codes(skill_md, adapters))
+    complexity_codes = emitted & {"SK006", "SK007"}
     assert len(complexity_codes) == 1
-    assert complexity_codes <= {"SK006", "SK007"}
+    assert "AS005" not in emitted, f"AS005 was retired into SK006/SK007, got: {sorted(emitted)}"
 
 
 def test_parser_failure_has_only_fm002_finding(tmp_path: Path, adapters: dict) -> None:
@@ -82,6 +83,10 @@ def test_parser_failure_has_only_fm002_finding(tmp_path: Path, adapters: dict) -
     assert "AS004" not in parser_codes
     assert "FM002" in parser_codes
     assert _codes(skill_md, adapters).count("FM002") == 1
+    # AS001 is expected here and is not a duplicate: unparseable YAML yields an
+    # empty frontmatter dict, so the skill genuinely declares no name. FM002
+    # reports the syntax error; AS001 reports the absent field.
+    assert "AS001" in parser_codes
 
 
 __all__ = []

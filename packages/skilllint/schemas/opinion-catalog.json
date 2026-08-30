@@ -40,13 +40,6 @@
         "packages/skilllint/rules/sk_series.py lines 154-165: _REQUIRED_TRIGGER_PHRASES"
       ]
     },
-    "AS007": {
-      "rule_code": "AS007",
-      "description": "Wildcard patterns in tools field will not resolve — list each tool by its exact registered name",
-      "rationale": "No schema or vendor document defines wildcard validation for the tools field. This is a safety recommendation to prevent tools that silently fail to match.",
-      "constraint": "Reject tool entries containing wildcard characters (e.g., mcp__Ref__*)",
-      "references": ["packages/skilllint/rules/as_series.py: check_as007 function"]
-    },
     "FM004": {
       "rule_code": "FM004",
       "description": "Multiline YAML syntax (block scalars |, >, |-, >-) in description field should be avoided",
@@ -56,14 +49,14 @@
         "packages/skilllint/rules/fm_series.py: _FM004_DESCRIPTION_BLOCK_SCALAR regex and check_fm004 function"
       ]
     },
-    "AS001.regex_pattern": {
-      "rule_code": "AS001",
+    "FM010.name_pattern": {
+      "rule_code": "FM010",
       "description": "Skill name must match regex ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ — lowercase alphanumeric with hyphens, no leading/trailing hyphens",
       "rationale": "The agentskills.io schema enforces maxLength=64 but does not specify a regex pattern for the name field. The lowercase-alphanumeric-with-hyphens pattern and the consecutive-hyphen prohibition have no vendor source; they are lint opinions based on convention.",
       "constraint": "Name must match ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ and must not contain consecutive hyphens (--)",
       "references": [
-        "packages/skilllint/rules/fm_series.py line 42: _NAME_RE = re.compile(r'^[a-z0-9]([a-z0-9-]*[a-z0-9])?$')",
-        "packages/skilllint/rules/fm_series.py line 43: _CONSECUTIVE_HYPHENS_RE = re.compile(r'--')"
+        "packages/skilllint/rules/fm_series.py: _NAME_RE = re.compile(r'^[a-z0-9]([a-z0-9-]*[a-z0-9])?$')",
+        "packages/skilllint/rules/fm_series.py: _CONSECUTIVE_HYPHENS_RE = re.compile(r'--')"
       ]
     }
   }

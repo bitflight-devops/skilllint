@@ -150,6 +150,26 @@ def get_rule(rule_id: str) -> RuleEntry | None:
     return RULE_REGISTRY.get(rule_id.upper())
 
 
+def rule_authority(code: str) -> dict[str, str] | None:
+    """Return a rule's authority metadata as a plain dict for violation output.
+
+    Args:
+        code: Rule identifier (e.g., "FM010", "as006"). Case-insensitive.
+
+    Returns:
+        ``{"origin": ..., "reference": ...}`` (reference omitted when the rule
+        declares none), or None when the rule is unknown or declares no
+        authority.
+    """
+    entry = RULE_REGISTRY.get(code.upper())
+    if entry is None or entry.authority is None:
+        return None
+    result = {"origin": entry.authority.origin}
+    if entry.authority.reference:
+        result["reference"] = entry.authority.reference
+    return result
+
+
 def list_rules(
     *, platform: str | None = None, category: str | None = None, severity: str | None = None
 ) -> list[RuleEntry]:
@@ -277,5 +297,6 @@ __all__ = [
     "get_rule",
     "iter_authority_urls",
     "list_rules",
+    "rule_authority",
     "skilllint_rule",
 ]

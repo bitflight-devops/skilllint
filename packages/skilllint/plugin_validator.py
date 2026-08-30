@@ -62,7 +62,7 @@ from skilllint.record_export import (
     export_recording as _export_recording,
     make_recording_console as _make_recording_console,
 )
-from skilllint.rule_registry import rule_reference
+from skilllint.rule_registry import rule_authority, rule_reference
 from skilllint.rules.as_series import run_as_series
 from skilllint.rules.fm_series import check_fm004, check_fm007, check_fm010
 from skilllint.rules.hk_series import (
@@ -1676,7 +1676,7 @@ class SymlinkTargetValidator:
 
 
 class AsSeriesValidator:
-    """Runs AS-series rules on SKILL.md files.
+    """Runs AS001 and AS006-AS009 rules on SKILL.md files.
 
     AS-series rules enforce the AgentSkills specification, which is a
     cross-harness baseline for skills. It defines ``SKILL.md`` and does not
@@ -3968,6 +3968,27 @@ def parse_skill_md(path: Path) -> tuple[dict, list[str], str | None, list[str]]:
     return frontmatter_dict, body_lines, yaml_err, colon_fields
 
 
+def _issue_to_violation(issue: ValidationIssue) -> dict:
+    """Convert a ValidationIssue to the violation dict shape used by adapters.
+
+    Attaches the rule's registry authority so that findings from the validator
+    pipeline carry the same provenance as AS-series violations, which build
+    theirs through ``rule_authority`` in ``rules/as_series.py``.
+
+    Args:
+        issue: Issue emitted by a validator.
+
+    Returns:
+        Violation dict with code, severity and message, plus authority when the
+        rule declares one.
+    """
+    violation = {"code": str(issue.code), "severity": str(issue.severity), "message": str(issue.message)}
+    authority = rule_authority(str(issue.code))
+    if authority is not None:
+        violation["authority"] = authority
+    return violation
+
+
 def run_platform_checks(
     path: Path, adapter: PlatformAdapter, *, policy_cache: dict[str, tuple[ValidationPolicy, Path | None]] | None = None
 ) -> list[dict]:
@@ -4011,10 +4032,7 @@ def run_platform_checks(
                 if name == "AsSeriesValidator":
                     continue
                 all_issues = [*vr_result.errors, *vr_result.warnings, *vr_result.info]
-                violations.extend(
-                    {"code": str(issue.code), "severity": str(issue.severity), "message": str(issue.message)}
-                    for issue in all_issues
-                )
+                violations.extend(_issue_to_violation(issue) for issue in all_issues)
         return violations
 
     # Cursor and Codex adapters implement validate() directly

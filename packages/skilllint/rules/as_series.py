@@ -22,7 +22,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from skilllint.rule_registry import RULE_REGISTRY, skilllint_rule
+from skilllint.rule_registry import rule_authority, skilllint_rule
 from skilllint.token_counter import TOKEN_ERROR_THRESHOLD, TOKEN_WARNING_THRESHOLD
 
 if TYPE_CHECKING:
@@ -113,24 +113,6 @@ def _violation(
     return result
 
 
-def _get_rule_authority(code: str) -> dict | None:
-    """Get authority metadata for a rule from the registry.
-
-    Args:
-        code: Rule ID (e.g., "AS006")
-
-    Returns:
-        Authority dict with 'origin' and optional 'reference', or None if not found.
-    """
-    entry = RULE_REGISTRY.get(code.upper())
-    if entry and entry.authority:
-        result = {"origin": entry.authority.origin}
-        if entry.authority.reference:
-            result["reference"] = entry.authority.reference
-        return result
-    return None
-
-
 def _make_violation(code: str, severity: str, message: str, fix: str | None = None) -> dict:
     """Create a violation dict with authority metadata from the rule registry.
 
@@ -146,7 +128,7 @@ def _make_violation(code: str, severity: str, message: str, fix: str | None = No
     Returns:
         Violation dict with code, severity, message, and optionally fix and authority.
     """
-    return _violation(code, severity, message, fix=fix, authority=_get_rule_authority(code))
+    return _violation(code, severity, message, fix=fix, authority=rule_authority(code))
 
 
 # ---------------------------------------------------------------------------

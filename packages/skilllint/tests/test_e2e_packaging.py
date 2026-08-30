@@ -30,7 +30,6 @@ pytestmark = pytest.mark.slow
 
 # Repository root (pyproject.toml is at repo root)
 REPO_ROOT = Path(__file__).parent.parent.parent.parent
-DIST_DIR = REPO_ROOT / "dist"
 
 # Provider schemas that should be in the wheel
 EXPECTED_PROVIDERS = ["claude_code", "codex", "cursor"]
@@ -42,34 +41,37 @@ EXPECTED_PROVIDERS = ["claude_code", "codex", "cursor"]
 
 
 @pytest.fixture(scope="module")
-def built_wheel() -> Generator[Path, None, None]:
+def built_wheel(tmp_path_factory: pytest.TempPathFactory) -> Path:
     """Build the wheel once per module and return the path.
 
-    Yields:
+    Builds into a fresh temporary directory rather than the repository ``dist/``.
+    Reusing whatever wheel happened to be in ``dist/`` made these tests assert
+    against a build from an earlier commit, so a packaging regression could pass
+    locally and only surface in CI.
+
+    Args:
+        tmp_path_factory: pytest factory for module-scoped temporary directories.
+
+    Returns:
         Path to the built wheel file.
     """
-    # Check if wheel already exists from a previous run in this session
-    if DIST_DIR.exists():
-        existing_wheels = list(DIST_DIR.glob("*.whl"))
-        if existing_wheels:
-            yield existing_wheels[0]
-            return
-
-    # Create dist directory
-    DIST_DIR.mkdir(parents=True, exist_ok=True)
-
-    # Build the wheel
-    result = subprocess.run(["uv", "build", "--wheel"], cwd=REPO_ROOT, capture_output=True, text=True, check=False)
+    out_dir = tmp_path_factory.mktemp("wheel")
+    result = subprocess.run(
+        ["uv", "build", "--wheel", "--out-dir", str(out_dir)],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
 
     if result.returncode != 0:
         pytest.fail(f"Failed to build wheel: {result.stderr}")
 
-    # Find the wheel file
-    wheels = list(DIST_DIR.glob("*.whl"))
+    wheels = list(out_dir.glob("*.whl"))
     if not wheels:
-        pytest.fail(f"No wheel found in {DIST_DIR}")
+        pytest.fail(f"No wheel found in {out_dir}")
 
-    yield wheels[0]
+    return wheels[0]
 
 
 @pytest.fixture
@@ -219,10 +221,9 @@ class TestInstalledCLIValidatesFixtures:
             check=False,
         )
 
-        # Invalid skill should have non-zero exit code or produce violations
-        # Note: CLI may exit 0 but produce warnings, so check output
-        # For now, we check that the command runs without crashing
-        assert "error" in result.stderr.lower() or result.returncode != 0 or "FM010" in result.stdout, (
+        # The fixture name is `My_Skill!`, so FM010 must appear by name. A
+        # nonzero exit or unrelated stderr text is not evidence of the finding.
+        assert "FM010" in result.stdout + result.stderr, (
             f"Expected FM010 violation for invalid skill.\n"
             f"exit_code: {result.returncode}\nstdout: {result.stdout}\nstderr: {result.stderr}"
         )
@@ -345,7 +346,10 @@ print(json.dumps(violations))
 
         # Check authority metadata
         violation = fm010_violations[0]
-        assert violation["code"] == "FM010"
+        assert "authority" in violation, f"Missing 'authority' key in violation: {violation}"
+        authority = violation["authority"]
+        assert authority.get("origin"), f"Missing 'origin' in authority: {authority}"
+        assert authority.get("reference"), f"Missing 'reference' in authority: {authority}"
 
     def test_schema_provenance_in_package(self, temp_venv: Path) -> None:
         """Schema loaded from installed package contains provenance metadata."""

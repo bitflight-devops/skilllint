@@ -30,7 +30,6 @@ Validate skill name, description quality, and token budget.
 
 | Rule | Severity | Auto-fix | Description |
 |------|----------|----------|-------------|
-
 | SK004 | warning | no | Skill description is very short (< 20 chars); may not trigger auto-invocation |
 | SK005 | warning | no | Skill description lacks trigger phrases ("Use when...", keywords); Claude may not auto-invoke |
 | SK006 | warning | no | Skill body is large (over `TOKEN_WARNING_THRESHOLD` tokens); consider splitting |
@@ -49,10 +48,15 @@ Use `skilllint check --filter <ID> --verbose <path>` to see detailed output for 
 
 | Rule | Severity | Auto-fix | Description |
 |------|----------|----------|-------------|
-
-| FM001 | warning/error | no | Required frontmatter field (`name` or `description`) is missing |
-
+| AS001 | error | no | `SKILL.md` declares no `name` field (required by the AgentSkills spec; `skills.md` treats it as optional, so no FM rule covers this) |
 | AS006 | info | no | No evaluation queries file found (optional but recommended) |
+| AS008 | warning | no | MCP tool name casing does not match the referenced server (case is significant) |
+| AS009 | warning | no | Nested skill will not be auto-discovered — skills must be direct children of `skills/` |
+
+**Retired:** AS002–AS005 folded into the FM series (`name` syntax and directory
+equality into FM010, `description` presence into FM001, unquoted colons into
+FM009, body token budget into SK006/SK007). AS007 was deleted outright — see
+`docs/registry-schema-examples.md`.
 
 **Full detail:** Use `skilllint check --filter <ID> --verbose <path>` (e.g. `skilllint check --filter AS006 --verbose <path>`) to see detailed output for any AS rule.
 

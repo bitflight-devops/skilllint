@@ -249,14 +249,12 @@ The `@skilllint_rule` decorator registers a function in the global rule registry
 @skilllint_rule(
     "FM010",
     severity="error",
-    category="skill",
-    authority={"origin": "agentskills.io", "reference": "/specification#skill-naming"},
+    category="frontmatter",
+    platforms=["agentskills"],
+    authority={"origin": "anthropic.com", "reference": _SKILLS_SPEC_URL},
 )
-def _check_fm010(name: str | None) -> dict | None:
-    """FM010 — Invalid skill name format.
-
-    Skill names must be lowercase alphanumeric with hyphens only.
-    """
+def check_fm010(frontmatter: dict, path: Path, file_type: str) -> list[ValidationIssue]:
+    """## FM010 — Name field does not match directory name or violates naming pattern"""
     # Validation logic...
 ```
 
@@ -357,11 +355,26 @@ Pass the `authority` kwarg to `@skilllint_rule`:
 @skilllint_rule(
     "FM010",
     severity="error",
-    category="skill",
-    authority={"origin": "agentskills.io", "reference": "/specification#skill-naming"},
+    category="frontmatter",
+    platforms=["agentskills"],
+    authority={"origin": "anthropic.com", "reference": _SKILLS_SPEC_URL},
 )
-def _check_fm010(name: str | None) -> dict | None: ...
+def check_fm010(frontmatter: dict, path: Path, file_type: str) -> list[ValidationIssue]: ...
 ```
+
+The `authority` kwarg is **rule-level**, and the runtime lookup keys on the rule
+code, so every finding a rule emits inherits the same origin. That is coarser
+than reality whenever one rule carries a mix of sourced and unsourced claims.
+
+FM010 is exactly such a rule. Its 64-character limit is schema-backed and is
+registered as the claim `FM010.max_name_length` in
+`packages/skilllint/schemas/provenance-registry.json`. Its regex and
+consecutive-hyphen checks have no schema source and are recorded as the opinion
+`FM010.name_pattern` in `packages/skilllint/schemas/opinion-catalog.json`.
+
+Do not read a rule-level `authority` as a claim-level one. When you add a rule
+whose claims differ in provenance, split them across those two catalogs and cite
+the claim key, not the rule code, in anything that reports provenance.
 
 The decorator converts this to a `RuleAuthority` dataclass (defined in `packages/skilllint/rule_registry.py`):
 

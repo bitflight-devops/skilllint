@@ -3,8 +3,8 @@
   "description": "Rule Provenance Registry — maps lint rule claims to upstream authority sources",
   "version": "1",
   "claims": {
-    "AS001.max_name_length": {
-      "rule_code": "AS001",
+    "FM010.max_name_length": {
+      "rule_code": "FM010",
       "claim_name": "max_name_length",
       "description": "Maximum character length for the skill name field (64 characters)",
       "claim_type": "scalar",
@@ -103,7 +103,7 @@
       },
       "assertion_location": {
         "file": "packages/skilllint/rules/fm_series.py",
-        "symbol": "check_fm007 field_name loop (line 417: 'tools', 'allowed-tools', 'disallowedTools')",
+        "symbol": "_TOOL_FIELD_NAMES",
         "source_type": "python_constant"
       },
       "x-audited": {

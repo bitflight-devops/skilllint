@@ -44,6 +44,12 @@ _CONSECUTIVE_HYPHENS_RE = re.compile(r"--")
 # Source: sub-agents.md — max 64 chars implied by same pattern constraint
 _MAX_NAME_LENGTH = 64
 
+# Frontmatter fields that declare a tool allow/deny list.
+# Source: skills.md — `allowed-tools`; sub-agents.md — `tools`, `disallowedTools`.
+# Named so that the provenance registry can load the field set as a symbol
+# rather than describe it in prose.
+_TOOL_FIELD_NAMES: tuple[str, ...] = ("tools", "allowed-tools", "disallowedTools")
+
 
 def _make_issue(
     *,
@@ -400,7 +406,7 @@ def check_fm007(frontmatter: dict, path: Path, file_type: str) -> list[Validatio
     <!-- examples: FM007 -->
     """
     issues: list[ValidationIssue] = []
-    for field_name in ("tools", "allowed-tools", "disallowedTools"):
+    for field_name in _TOOL_FIELD_NAMES:
         val = frontmatter.get(field_name)
         if isinstance(val, list):
             issues.append(
