@@ -253,7 +253,9 @@ _FM004_DESCRIPTION_BLOCK_SCALAR = re.compile(r"(?m)^description\s*:\s*(?:\|[-+]?
     severity="warning",
     category="frontmatter",
     platforms=["agentskills"],
-    authority={"origin": "anthropic.com", "reference": _SKILLS_SPEC_URL},
+    # No authority: opinion-catalog.json records FM004 as a style preference with
+    # no upstream source — the Claude Code runtime accepts block scalars — so
+    # violations must not carry a vendor origin.
 )
 def check_fm004(
     frontmatter: dict, path: Path, file_type: str, *, frontmatter_yaml: str | None = None
@@ -562,10 +564,13 @@ def check_fm010(frontmatter: dict, path: Path, file_type: str) -> list[Validatio
     if path.name == "SKILL.md" and not issues:
         dir_name = path.parent.name
         if name != dir_name:
+            # Error, not warning: the AgentSkills specification requires the match
+            # and the retired AS002 graded it an error. FM010 is now its only
+            # owner, so downgrading here would leave an invalid layout passing.
             issues.append(
                 _make_issue(
                     field="name",
-                    severity="warning",
+                    severity="error",
                     message=f"'name' field value '{name}' does not match directory name '{dir_name}'",
                     code="FM010",
                     suggestion=f"Set name: {dir_name} to match the directory name",

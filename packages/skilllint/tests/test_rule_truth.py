@@ -236,7 +236,11 @@ class TestSeverityRoutingIntegration:
 
         The file should pass validation because warnings don't block.
         """
-        skill_md = tmp_path / "SKILL.md"
+        # The directory must match the name field: FM010 grades a mismatch as an
+        # error, which would mask the FM004/FM007 severities under test.
+        skill_dir = tmp_path / "integration-test-skill"
+        skill_dir.mkdir()
+        skill_md = skill_dir / "SKILL.md"
         skill_md.write_text(
             dedent("""\
             ---
