@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788058082417,
+  "lastUpdate": 1788058454885,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -624,6 +624,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 61.002,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "dependabot[bot]",
+            "username": "dependabot[bot]",
+            "email": "49699333+dependabot[bot]@users.noreply.github.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "b30c12dff931361b49cd3a47f872e31a64ef7f4b",
+          "message": "build(deps): bump the python-runtime group across 1 directory with 4 updates (#110)\n\nBumps the python-runtime group with 4 updates in the / directory: [gitpython](https://github.com/gitpython-developers/GitPython), [marko](https://github.com/frostming/marko), [tiktoken](https://github.com/openai/tiktoken) and [typer](https://github.com/fastapi/typer).\n\n\nUpdates `gitpython` from 3.1.58 to 3.1.60\n- [Release notes](https://github.com/gitpython-developers/GitPython/releases)\n- [Changelog](https://github.com/gitpython-developers/GitPython/blob/main/CHANGES)\n- [Commits](https://github.com/gitpython-developers/GitPython/compare/3.1.58...3.1.60)\n\nUpdates `marko` from 2.2.3 to 2.2.4\n- [Release notes](https://github.com/frostming/marko/releases)\n- [Changelog](https://github.com/frostming/marko/blob/master/CHANGELOG.md)\n- [Commits](https://github.com/frostming/marko/compare/v2.2.3...v2.2.4)\n\nUpdates `tiktoken` from 0.13.0 to 0.14.0\n- [Release notes](https://github.com/openai/tiktoken/releases)\n- [Changelog](https://github.com/openai/tiktoken/blob/main/CHANGELOG.md)\n- [Commits](https://github.com/openai/tiktoken/compare/0.13.0...0.14.0)\n\nUpdates `typer` from 0.27.0 to 0.27.1\n- [Release notes](https://github.com/fastapi/typer/releases)\n- [Changelog](https://github.com/fastapi/typer/blob/master/docs/release-notes.md)\n- [Commits](https://github.com/fastapi/typer/compare/0.27.0...0.27.1)\n\n---\nupdated-dependencies:\n- dependency-name: gitpython\n  dependency-version: 3.1.59\n  dependency-type: direct:production\n  update-type: version-update:semver-patch\n  dependency-group: python-runtime\n- dependency-name: marko\n  dependency-version: 2.2.4\n  dependency-type: direct:production\n  update-type: version-update:semver-patch\n  dependency-group: python-runtime\n- dependency-name: tiktoken\n  dependency-version: 0.14.0\n  dependency-type: direct:production\n  update-type: version-update:semver-minor\n  dependency-group: python-runtime\n- dependency-name: typer\n  dependency-version: 0.27.1\n  dependency-type: direct:production\n  update-type: version-update:semver-patch\n  dependency-group: python-runtime\n...\n\nSigned-off-by: dependabot[bot] <support@github.com>\nCo-authored-by: dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>",
+          "timestamp": "2026-08-30T02:50:51Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/b30c12dff931361b49cd3a47f872e31a64ef7f4b"
+        },
+        "date": 1788058454095,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 15513.87,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 16156.07,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 17280.323,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 61.958,
             "unit": "files/s"
           }
         ]
