@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788062913041,
+  "lastUpdate": 1788063729487,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -876,6 +876,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 65.587,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "e393337a2fcbf163815b11ae0e195a2b54452373",
+          "message": "fix: address third Codex pass on PR #119 (#134)\n\nThree findings that landed after #119 was merged, so they come as a follow-up.\n\n`_thread_activity_key` missed edits. An edit to an existing inline comment\nchanges neither its `databaseId` nor the thread's `comments_total`, so `watch`\ncould report `timed_out: true` while revised feedback sat unread. The key now\ncarries each comment's body as well. Three kinds of change have to register and\nno single component catches all three: a reply adds an id, an edit changes only\nthe body, and a reply past the query's `comments(first: 100)` page changes only\nthe untruncated `comments_total`.\n\nA non-zero `gh` exit is no longer excused by the clock. The previous commit\nclassified a poll that failed at or past `deadline` as the window ending, but\napplied that to `CalledProcessError` too. Only a timeout can be explained by the\nshrinking budget; an authentication, rate-limit, API or GraphQL error cannot, and\nreporting `timed_out: true` from stale state after one would tell a caller the PR\nis clean when nothing was checked. The handlers are now separate.\n\nThe Hypothesis strategies in test_hooks_json_ingest.py carried `max_size=16` and\n`max_size=8` with no source, which is the repository's own \"No invented\nconstraints\" rule -- and they narrowed the coverage the property claims. Removed;\nHypothesis's own default sizing governs, and the docstring says why.\n\n\nClaude-Session: https://claude.ai/code/session_01QJeBLNA9ybmQvv5REMDkrc\n\nCo-authored-by: Claude Opus 5 <noreply@anthropic.com>",
+          "timestamp": "2026-08-30T04:19:05Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/e393337a2fcbf163815b11ae0e195a2b54452373"
+        },
+        "date": 1788063728696,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 14883.961,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 15466.314,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 16510.68,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 64.721,
             "unit": "files/s"
           }
         ]
