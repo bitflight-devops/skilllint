@@ -964,9 +964,11 @@ class TestNR002PathTraversal:
     plugin boundary even though a well-formed reference never contains
     those characters.
 
-    Source: https://agentskills.io/specification.md — plugin boundary is a
-    portability and security constraint; each plugin is a self-contained
-    unit and should only reference files within its own directory tree.
+    Source: https://code.claude.com/docs/en/plugins-reference.md#path-traversal-limitations
+    — Claude Code rejects a component path that resolves outside the plugin
+    root (e.g. ``../shared-utils``). The `/` and `\\` checks derive from the
+    same doc's plugin-init reference (#plugin-init): a plugin `<name>`
+    "cannot contain spaces or path separators".
     """
 
     def test_parent_traversal_in_name_emits_nr002(self, tmp_path: Path) -> None:

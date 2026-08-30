@@ -209,7 +209,7 @@ skilllint check --platform claude-code plugins/my-plugin
 | FM001–FM010 | Frontmatter | Required fields, valid values, schema compliance |
 | SK001–SK009 | Skill | Description quality, token limits, complexity, internal links |
 | AS001–AS009 | AgentSkills | SKILL.md conformance with the AgentSkills open standard (AS007 removed) |
-| LK001–LK002 | Links | Markdown link validity and broken reference detection |
+| LK001 | Links | Broken internal markdown link detection |
 | PD001–PD003 | Progressive disclosure | Directory structure for references/, examples/, scripts/ |
 | PL001–PL006 | Plugin | Structure, manifest correctness, marketplace layout, subprocess safety |
 | HK001–HK005 | Hook | Script existence, configuration validity |
@@ -477,7 +477,7 @@ Use a `.skilllint.json` file to suppress specific rule codes for a directory tre
 {
   "ignore": {
     "": ["AS008"],
-    "skills/legacy": ["LK002", "SK006"]
+    "skills/legacy": ["FM007", "SK006"]
   }
 }
 ```

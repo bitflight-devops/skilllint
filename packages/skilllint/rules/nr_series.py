@@ -41,6 +41,19 @@ if TYPE_CHECKING:
 # Spec sources
 # ---------------------------------------------------------------------------
 
+# NR002 authority: code.claude.com/docs/en/plugins-reference, "Path traversal
+# limitations" section. Verified via `skilllint docs fetch` — the cached page
+# states verbatim: "Claude Code doesn't let a plugin reference files outside
+# its own directory. It rejects a component path that resolves outside the
+# plugin root, such as `../shared-utils`...". The same page's "plugin init"
+# reference defines `<name>` as becoming "the skill namespace and the
+# directory name under `~/.claude/skills/`, so it cannot contain spaces or
+# path separators" — the basis for rejecting `/` and `\` in reference
+# components. (Previously this rule cited agentskills.io/specification.md,
+# which says nothing about traversal, boundaries, escaping, or symlinks —
+# verified via `grep -ci` returning 0 for those terms against the cached spec.)
+_NR002_PATH_TRAVERSAL_URL = "https://code.claude.com/docs/en/plugins-reference.md#path-traversal-limitations"
+
 
 def _docs_url(code: str) -> str:
     """Return the documentation URL for an NR rule code.
@@ -126,27 +139,36 @@ def check_nr001(frontmatter: dict[str, object], path: Path, file_type: str) -> l
     severity="error",
     category="namespace-reference",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
+    authority={"origin": "code.claude.com", "reference": _NR002_PATH_TRAVERSAL_URL},
 )
 def check_nr002(frontmatter: dict[str, object], path: Path, file_type: str) -> list[ValidationIssue]:
-    """## NR002 — Namespace reference points outside plugin directory
+    r"""## NR002 — Namespace reference points outside plugin directory
 
-    A resolved namespace reference target falls outside the expected plugin
-    directory boundary.  This can occur when path traversal sequences (e.g.
-    ``../``) or symlinks cause the resolved file path to escape the plugin
-    directory that owns the reference.
+    A namespace reference's plugin prefix or target name contains a
+    path-traversal sequence (``..``) or a path separator (``/`` or ``\\``),
+    which would cause the resolved file path to escape the plugin directory
+    that owns the reference.
 
-    Such references are considered invalid because the plugin boundary is a
-    security and portability constraint: each plugin is a self-contained unit
-    and should only reference files within its own directory tree.
+    **Source (`..` traversal):** ``code.claude.com/docs/en/plugins-reference``
+    — "Path traversal limitations": "Claude Code doesn't let a plugin
+    reference files outside its own directory. It rejects a component path
+    that resolves outside the plugin root, such as `../shared-utils`...".
+    See https://code.claude.com/docs/en/plugins-reference.md#path-traversal-limitations
 
-    **Source:** ``NamespaceReferenceValidator`` in ``plugin_validator.py``
-    — resolves reference paths and checks that the canonical path remains
-    within the plugin root.
+    **Source (`/` and `\\` separators):** the same doc's ``plugin init``
+    reference defines a plugin's ``<name>``: "Becomes the skill namespace
+    and the directory name under `~/.claude/skills/`, so it cannot contain
+    spaces or path separators." See
+    https://code.claude.com/docs/en/plugins-reference.md#plugin-init
 
-    **Fix:** Remove any path-traversal segments from reference names.
-    References must resolve to files that live inside the plugin directory
-    they belong to:
+    **Source (detection):**
+    ``NamespaceReferenceValidator._check_nr002_traversal`` in
+    ``plugin_validator.py`` — rejects namespace prefix/target components
+    containing ``..``, ``/``, or ``\\``.
+
+    **Fix:** Remove any path-traversal segments or path separators from
+    reference names.  References must resolve to files that live inside the
+    plugin directory they belong to:
 
     ```yaml
     # Problematic (traverses outside the plugin boundary)

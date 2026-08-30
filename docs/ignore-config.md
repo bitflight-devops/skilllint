@@ -12,7 +12,7 @@ Place `.skilllint.json` at any directory level. When validating a file, skilllin
 {
   "ignore": {
     "": ["AS008"],
-    "skills/legacy": ["LK002", "SK006"],
+    "skills/legacy": ["FM007", "SK006"],
     "agents/generated": ["FM004", "FM007", "FM009"]
   }
 }
@@ -45,11 +45,11 @@ Prefix matching is used: `"skills"` suppresses `skills/foo/SKILL.md`, `skills/ba
 
 Place this at the repo root. Every file skilllint scans under that root will have AS008 suppressed.
 
-**Example — suppress LK002 for one subdirectory:**
+**Example — suppress FM007 for one subdirectory:**
 
 ```
 my-repo/
-  .skilllint.json          ← suppress LK002 under .agents/skills/legacy/
+  .skilllint.json          ← suppress FM007 under .agents/skills/legacy/
   .agents/
     skills/
       legacy/
@@ -59,7 +59,7 @@ my-repo/
 ```json
 {
   "ignore": {
-    ".agents/skills/legacy": ["LK002"]
+    ".agents/skills/legacy": ["FM007"]
   }
 }
 ```
@@ -98,6 +98,6 @@ Only one config file is used per file — the nearest one found while walking up
 Run `skilllint rules` to list all available rule codes and their descriptions.
 
 ```bash
-skilllint rule LK002   # show detail for one rule
+skilllint rule FM007   # show detail for one rule
 skilllint rules        # list all rules
 ```

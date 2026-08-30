@@ -86,7 +86,7 @@ def _extract_rule_codes(output: str) -> set[str]:
     # Strip ANSI escape codes first
     clean_output = _ANSI_ESCAPE.sub("", output)
 
-    # Pattern matches rule codes like FM003, FM005, AS004, SK006, LK002, etc.
+    # Pattern matches rule codes like FM003, FM005, AS004, SK006, etc.
     # Codes appear as [FM003] in output, we extract just the code
     pattern = r"\[([A-Z]{2,3}\d{3})\]"
     return set(re.findall(pattern, clean_output))
@@ -146,7 +146,7 @@ class TestClaudePluginsOfficial:
         # (This is a tautology with the current sets, but documents the intent)
 
         # Check for any codes that are NOT in our known sets
-        (found_codes - ERROR_RULE_CODES - WARNING_RULE_CODES - {"SK004", "SK005", "SK006", "LK002", "FM010"})
+        (found_codes - ERROR_RULE_CODES - WARNING_RULE_CODES - {"SK004", "SK005", "SK006", "FM010"})
         # unknown_codes are allowed (other warning-level rules)
         # The key assertion is that only FM003/FM005 cause exit code 1
 

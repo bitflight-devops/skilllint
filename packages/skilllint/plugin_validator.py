@@ -318,9 +318,8 @@ class ErrorCode(StrEnum):
     SK008 = "SK008"  # Skill directory name violates naming convention
     SK009 = "SK009"  # Plugin uses manual skill selection (overrides auto-discovery)
 
-    # Link (LK001-LK002)
+    # Link (LK001)
     LK001 = "LK001"  # Broken internal link (file does not exist)
-    LK002 = "LK002"  # Link missing ./ prefix
 
     # Progressive Disclosure (PD001-PD003)
     PD001 = "PD001"  # No `references/` directory found
@@ -400,7 +399,7 @@ SK001, SK002, SK003, SK004, SK005, SK006, SK007, SK008, SK009 = (
     ErrorCode.SK008,
     ErrorCode.SK009,
 )
-LK001, LK002 = ErrorCode.LK001, ErrorCode.LK002
+LK001 = ErrorCode.LK001
 PD001, PD002, PD003 = ErrorCode.PD001, ErrorCode.PD002, ErrorCode.PD003
 PL001, PL002, PL003, PL004, PL005, PL006 = (
     ErrorCode.PL001,
@@ -1377,8 +1376,7 @@ class ProgressiveDisclosureValidator:
 class InternalLinkValidator:
     """Validates internal markdown links in SKILL.md files.
 
-    Checks that relative links point to existing files (LK001) and that
-    relative links use the ./ prefix convention (LK002).
+    Checks that relative links point to existing files (LK001).
 
     Architecture lines 1188-1256, Task T8 lines 897-982
     """
@@ -1392,6 +1390,21 @@ class InternalLinkValidator:
 
     # Regex pattern for inline code spans (single or multiple backticks)
     INLINE_CODE_PATTERN: ClassVar[str] = r"(`+)(?!`)(.+?)(?<!`)\1(?!`)"
+
+    # Regex pattern for any ${...} substitution-style token. Matches both
+    # Claude Code's documented ${CLAUDE_*} variables
+    # (code.claude.com/docs/en/skills.md#available-string-substitutions)
+    # and any other unrecognized ${...} token, so both can be routed through
+    # _STATICALLY_RESOLVABLE_CLAUDE_VARS and skipped when unresolvable.
+    CLAUDE_VAR_PATTERN: ClassVar[str] = r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}"
+
+    # Of the four documented variables, only these two have a target
+    # skilllint can determine statically from the plugin source tree.
+    # ${CLAUDE_PROJECT_DIR} and ${CLAUDE_PLUGIN_DATA} target install-time
+    # locations (the invoking project root; the plugin's persistent data
+    # directory) that do not exist in the plugin source, so skilllint has
+    # no basis for resolving or asserting them broken.
+    _STATICALLY_RESOLVABLE_CLAUDE_VARS: ClassVar[frozenset[str]] = frozenset({"CLAUDE_SKILL_DIR", "CLAUDE_PLUGIN_ROOT"})
 
     @staticmethod
     def _strip_code_blocks(content: str) -> str:
@@ -1467,9 +1480,16 @@ class InternalLinkValidator:
             # e.g., ./references/file.md#heading → ./references/file.md
             link_url_no_fragment = link_url.split("#")[0]
 
-            # Resolve link path relative to SKILL.md directory
+            # Resolve documented ${CLAUDE_*} substitution variables before
+            # the existence check. Returns None when the link must be
+            # skipped because a variable's target cannot be determined.
             skill_dir = path.parent
-            link_path = (skill_dir / link_url_no_fragment).resolve()
+            resolved_url = self._resolve_claude_variables(link_url_no_fragment, skill_dir)
+            if resolved_url is None:
+                continue
+
+            # Resolve link path relative to SKILL.md directory
+            link_path = (skill_dir / resolved_url).resolve()
 
             # Check if linked file exists (error)
             if not link_path.exists():
@@ -1481,20 +1501,6 @@ class InternalLinkValidator:
                         code=LK001,
                         docs_url=generate_docs_url(LK001),
                         suggestion=f"Create missing file or fix link path: {link_url}",
-                    )
-                )
-
-            # Warn if relative link is missing ./ prefix (LK002)
-            # Links starting with ../ are valid cross-directory references; skip them.
-            if not link_url_no_fragment.startswith(("./", "../")):
-                warnings.append(
-                    ValidationIssue(
-                        field="internal-links",
-                        severity="warning",
-                        message=f"Link missing ./ prefix: [{link_text}]({link_url})",
-                        code=LK002,
-                        docs_url=generate_docs_url(LK002),
-                        suggestion=f"Add ./ prefix: ./{link_url}",
                     )
                 )
 
@@ -1546,6 +1552,54 @@ class InternalLinkValidator:
 
         # Ignore absolute paths
         return bool(url.startswith("/"))
+
+    @classmethod
+    def _resolve_claude_variables(cls, url: str, skill_dir: Path) -> str | None:
+        """Substitute ${CLAUDE_*} variables skilllint can statically resolve.
+
+        Claude Code substitutes ``${CLAUDE_SKILL_DIR}``, ``${CLAUDE_PROJECT_DIR}``,
+        ``${CLAUDE_PLUGIN_ROOT}``, and ``${CLAUDE_PLUGIN_DATA}`` in skill markdown
+        content at runtime (code.claude.com/docs/en/skills.md
+        #available-string-substitutions). ``${CLAUDE_SKILL_DIR}`` always
+        resolves to the directory containing ``SKILL.md``. ``${CLAUDE_PLUGIN_ROOT}``
+        resolves via :func:`find_plugin_dir` when the link's SKILL.md lives
+        inside a plugin (same lookup ``HookValidator`` uses for
+        ``${CLAUDE_PLUGIN_ROOT}`` in hook commands).
+
+        ``${CLAUDE_PROJECT_DIR}`` and ``${CLAUDE_PLUGIN_DATA}`` target
+        install-time locations skilllint cannot determine from the plugin
+        source tree, and any other ``${...}`` token is not a documented
+        substitution variable at all. skilllint has no basis for asserting
+        either kind of target is broken, so the link is skipped rather than
+        reported.
+
+        Args:
+            url: The link URL (fragment already stripped) as written in the
+                markdown source.
+            skill_dir: Directory containing the ``SKILL.md`` file being
+                validated -- used both as the ``${CLAUDE_SKILL_DIR}`` target
+                and as the search start for ``${CLAUDE_PLUGIN_ROOT}``.
+
+        Returns:
+            The URL with resolvable variables substituted, or ``None`` if the
+            link should be skipped because a variable's target cannot be
+            determined.
+        """
+        tokens = set(re.findall(cls.CLAUDE_VAR_PATTERN, url))
+        if not tokens:
+            return url
+        if tokens - cls._STATICALLY_RESOLVABLE_CLAUDE_VARS:
+            return None
+
+        resolved = url
+        if "${CLAUDE_SKILL_DIR}" in resolved:
+            resolved = resolved.replace("${CLAUDE_SKILL_DIR}", str(skill_dir))
+        if "${CLAUDE_PLUGIN_ROOT}" in resolved:
+            plugin_root = find_plugin_dir(skill_dir)
+            if plugin_root is None:
+                return None
+            resolved = resolved.replace("${CLAUDE_PLUGIN_ROOT}", str(plugin_root))
+        return resolved
 
 
 # ============================================================================
@@ -1878,8 +1932,14 @@ class NamespaceReferenceValidator:
         contains such a sequence, the reference is treated as escaping the
         plugin boundary and NR002 is emitted.
 
-        Source: https://agentskills.io/specification.md — plugin boundary is
-        a portability and security constraint.
+        Source: https://code.claude.com/docs/en/plugins-reference.md#path-traversal-limitations
+        — "Claude Code doesn't let a plugin reference files outside its own
+        directory. It rejects a component path that resolves outside the
+        plugin root, such as `../shared-utils`...". The `/` and `\\`
+        separator check derives from the same doc's plugin-init reference
+        (#plugin-init): a plugin `<name>` "cannot contain spaces or path
+        separators" because it becomes the skill namespace and directory
+        name.
 
         Args:
             label: Human-readable reference label for the error message.
