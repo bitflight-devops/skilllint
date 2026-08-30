@@ -92,7 +92,7 @@ mutation($threadId: ID!) {
 """
 
 
-class _GitHubResponseModel(BaseModel):
+class GitHubResponseModel(BaseModel):
     """Base for every model that ingests a raw GitHub GraphQL response.
 
     `strict=True` so a producer-shape mismatch — GitHub or `gh` returning a string where the
@@ -105,11 +105,11 @@ class _GitHubResponseModel(BaseModel):
     model_config = ConfigDict(strict=True)
 
 
-class _Author(_GitHubResponseModel):
+class _Author(GitHubResponseModel):
     login: str
 
 
-class CommentNode(_GitHubResponseModel):
+class CommentNode(GitHubResponseModel):
     """A single review comment, in the shape GitHub's GraphQL API returns it.
 
     Field names mirror the GraphQL schema exactly (`databaseId`, not
@@ -127,31 +127,31 @@ class CommentNode(_GitHubResponseModel):
     author: _Author | None
 
 
-class _PageInfo(_GitHubResponseModel):
+class _PageInfo(GitHubResponseModel):
     hasNextPage: bool
 
 
-class _CommentsConnection(_GitHubResponseModel):
+class _CommentsConnection(GitHubResponseModel):
     totalCount: int
     pageInfo: _PageInfo
     nodes: list[CommentNode]
 
 
-class _ReviewThreadNode(_GitHubResponseModel):
+class _ReviewThreadNode(GitHubResponseModel):
     id: str
     isResolved: bool
     path: str
     comments: _CommentsConnection
 
 
-class _ReviewThreadsConnection(_GitHubResponseModel):
+class _ReviewThreadsConnection(GitHubResponseModel):
     """One page's `reviewThreads` connection, nested inside `_PullRequestThreadsPage`."""
 
     totalCount: int
     nodes: list[_ReviewThreadNode]
 
 
-class _PullRequestThreadsPage(_GitHubResponseModel):
+class _PullRequestThreadsPage(GitHubResponseModel):
     """One page of `_UNRESOLVED_THREADS_QUERY`, already unwrapped from `data.repository.pullRequest`.
 
     `_fetch_pages` pulls this dict straight out of each slurped page by subscripting the fixed
@@ -173,7 +173,7 @@ class _PullRequestThreadsPage(_GitHubResponseModel):
     reviewThreads: _ReviewThreadsConnection
 
 
-class ReviewNode(_GitHubResponseModel):
+class ReviewNode(GitHubResponseModel):
     """A top-level review submission, in the shape GitHub's GraphQL API returns it.
 
     Distinct from a review *comment* (`CommentNode`): this is the review object itself —
@@ -192,7 +192,7 @@ class ReviewNode(_GitHubResponseModel):
     body: str
 
 
-class _ReviewsConnection(_GitHubResponseModel):
+class _ReviewsConnection(GitHubResponseModel):
     """One page's `reviews` connection, already unwrapped — see `_PullRequestThreadsPage`."""
 
     totalCount: int
