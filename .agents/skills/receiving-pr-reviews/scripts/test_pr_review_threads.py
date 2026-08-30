@@ -24,11 +24,10 @@ import subprocess
 import time
 from typing import TYPE_CHECKING
 
-import pytest
-from typer.testing import CliRunner
-
 import pr_review_threads
+import pytest
 from pr_review_threads import FetchResult, app
+from typer.testing import CliRunner
 
 if TYPE_CHECKING:
     from pytest_mock import MockerFixture
@@ -455,9 +454,7 @@ def test_watch_fails_loudly_on_a_nonzero_gh_exit_at_the_deadline(mocker: MockerF
     """
     baseline = FetchResult(reviews_count=0, reviews_with_body=[], threads_count=0, unresolved=[], unresolved_count=0)
     mocker.patch.object(
-        pr_review_threads,
-        "_build_fetch_result",
-        side_effect=[baseline, subprocess.CalledProcessError(1, ["gh"])],
+        pr_review_threads, "_build_fetch_result", side_effect=[baseline, subprocess.CalledProcessError(1, ["gh"])]
     )
     mocker.patch.object(pr_review_threads.time, "sleep")
     # 0.0 (deadline=100). Iter 1: 0.0 (remaining=100 > the 10s interval) -> poll raises; the handler
@@ -498,7 +495,7 @@ def test_watch_baseline_is_not_deadline_bounded(mocker: MockerFixture) -> None:
 def test_gh_timeout_budget_without_a_deadline_uses_the_callers_bound() -> None:
     """No deadline means the caller's `--gh-timeout-seconds` applies unchanged, `None` included."""
     assert pr_review_threads._gh_timeout_budget(None, None) is None
-    assert pr_review_threads._gh_timeout_budget(None, 12.5) == 12.5
+    assert pr_review_threads._gh_timeout_budget(None, 12.5) == pytest.approx(12.5)
 
 
 def test_gh_timeout_budget_with_a_deadline_uses_the_time_left() -> None:
@@ -506,7 +503,7 @@ def test_gh_timeout_budget_with_a_deadline_uses_the_time_left() -> None:
     now = time.monotonic()
 
     assert pr_review_threads._gh_timeout_budget(now + 30, None) == pytest.approx(30, abs=1)
-    assert pr_review_threads._gh_timeout_budget(now - 30, None) == 0.0
+    assert pr_review_threads._gh_timeout_budget(now - 30, None) == pytest.approx(0.0)
 
 
 def test_watch_fails_loudly_when_only_final_poll_fails(mocker: MockerFixture) -> None:
