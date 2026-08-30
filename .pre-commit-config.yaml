@@ -119,13 +119,16 @@ repos:
 
       - id: ty
         name: ty check
-        # --extra-search-path: ty treats any file carrying PEP 723 inline script
-        # metadata (both receiving-pr-reviews scripts do, for `uv run --script`) as
-        # an isolated single-file script and ignores [tool.ty.environment].extra-paths
-        # from pyproject.toml for it entirely (verified against ty 0.0.75). The CLI
-        # flag is honored even in that mode, so it's the only way the hook resolves
-        # test_pr_review_threads.py's sibling `import pr_review_threads`.
-        entry: uv run -q ty check --extra-search-path .agents/skills/receiving-pr-reviews/scripts
+        # ty treats any file carrying PEP 723 inline script metadata (both
+        # receiving-pr-reviews scripts, for `uv run --script`) as an isolated
+        # single-file script and ignores [tool.ty.environment].extra-paths from
+        # pyproject.toml for it entirely (verified against ty 0.0.75). Rather than
+        # a caller-specific CLI flag here, the sibling-module search path for
+        # test_pr_review_threads.py's `import pr_review_threads` is declared in
+        # that script's own [tool.ty.environment] inline-metadata table, so it
+        # travels with the file for every caller (this hook, direct `ty check`,
+        # CI) instead of only this one.
+        entry: uv run -q ty check
         language: system
         types: [python]
         pass_filenames: true
