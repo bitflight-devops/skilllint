@@ -61,6 +61,16 @@ Before declaring success, confirm:
 
 # Project-specific: skilllint
 
+## Verifying a change
+
+```sh
+uv run prek run --all-files   # ruff, ruff-format, ty, actionlint, markdownlint, shellcheck, ...
+uv run pytest                 # not a prek hook
+```
+
+Run these, not the individual tools — the hook set is the gate, and a subset of
+it passing is not evidence.
+
 ## Changing dependencies
 
 `uv remove` then `uv add` — never hand-edit a version string.
