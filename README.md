@@ -206,7 +206,7 @@ skilllint check --platform claude-code plugins/my-plugin
 
 | Code | Category | Description |
 |---|---|---|
-| FM001–FM010 | Frontmatter | Required fields, valid values, schema compliance |
+| FM001–FM010 | Frontmatter | Required fields, valid values, schema compliance (FM008 removed) |
 | SK001–SK009 | Skill | Description quality, token limits, complexity, internal links |
 | AS001–AS009 | AgentSkills | SKILL.md conformance with the AgentSkills open standard (AS007 removed) |
 | LK001 | Links | Broken internal markdown link detection |
