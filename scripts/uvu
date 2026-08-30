@@ -4,6 +4,9 @@
 #
 #   scripts/uvu --group dev ruff ty
 set -eu
-[ $# -gt 0 ] || { echo "usage: $0 [uv-add-args] <package>..." >&2; exit 2; }
+[ $# -gt 0 ] || {
+    echo "usage: $0 [uv-add-args] <package>..." >&2
+    exit 2
+}
 uv remove "$@"
 uv add "$@"
