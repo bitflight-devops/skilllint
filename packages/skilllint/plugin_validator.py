@@ -38,7 +38,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from io import StringIO
 from pathlib import Path, PurePath
-from typing import TYPE_CHECKING, Annotated, ClassVar, Literal, NoReturn, Protocol, TypeAlias, cast
+from typing import TYPE_CHECKING, Annotated, Literal, NoReturn, Protocol, TypeAlias, cast
 
 # YAML/JSON at the edge: dict, list, or JSON-serializable scalars. More specific than Any.
 YamlValue: TypeAlias = dict[str, "YamlValue"] | list["YamlValue"] | str | int | float | bool | None
@@ -65,7 +65,42 @@ from skilllint.record_export import (
 from skilllint.rule_registry import rule_reference
 from skilllint.rules.as_series import run_as_series
 from skilllint.rules.fm_series import check_fm004, check_fm007, check_fm010
+from skilllint.rules.hk_series import (
+    check_hk002,
+    check_hk003,
+    check_hk004,
+    check_hk005,
+    find_hook_plugin_dir,
+    is_file_path_reference,
+    iter_command_scripts,
+    iter_hook_entries,
+    load_hooks_object,
+)
+from skilllint.rules.lk_series import check_lk001
+from skilllint.rules.nr_series import check_nr001, check_nr002
+from skilllint.rules.pd_series import check_pd001, check_pd002, check_pd003
+from skilllint.rules.pl_series import (
+    analyze_marketplace_root_keys,
+    check_pl001,
+    check_pl002,
+    check_pl003,
+    check_pl004,
+    check_pl005,
+    check_pl006,
+    claude_validation_failure_issue,
+)
+from skilllint.rules.pr_series import (
+    check_pr001,
+    check_pr002,
+    check_pr003,
+    check_pr004,
+    check_pr005,
+    find_actual_capabilities,
+    parse_registered_paths,
+)
 from skilllint.rules.sk_series import check_sk001, check_sk002, check_sk003, check_sk004, check_sk005
+from skilllint.rules.sl_series import check_sl001, iter_symlinks
+from skilllint.rules.tc_series import check_tc001
 from skilllint.scan_runtime import ScanContext
 from skilllint.token_counter import TOKEN_ERROR_THRESHOLD, TOKEN_WARNING_THRESHOLD, count_tokens
 from skilllint.version import __version__
@@ -81,7 +116,7 @@ from .frontmatter_core import (
 from .scan_runtime import _resolve_filter_and_expand_paths, run_validation_loop
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Sequence
+    from collections.abc import Iterable, Mapping, Sequence
 
     from pydantic_core import ErrorDetails
 
@@ -236,22 +271,9 @@ def safe_load_yaml_with_colon_fix(fm_text: str) -> tuple[dict | None, str | None
         return parsed, None, [], fm_text
 
 
-# Official plugin.json schema (plugin manifest)
-PLUGIN_MANIFEST_SCHEMA_URL = "https://code.claude.com/docs/en/plugins-reference.md#plugin-manifest-schema"
 SKILL_FRONTMATTER_SCHEMA_URL = "https://code.claude.com/docs/en/skills.md#frontmatter-reference"
-# Claude Code marketplace.json top-level keys (not plugin-manifest fields at root)
-MARKETPLACE_MANIFEST_SCHEMA_URL = "https://code.claude.com/docs/en/plugin-marketplaces.md#marketplace-schema"
-MARKETPLACE_JSON_ROOT_KEYS: frozenset[str] = frozenset({"name", "owner", "plugins", "metadata"})
-# Same field names as plugin.json metadata, but must live under `metadata` on marketplace.json
-MARKETPLACE_METADATA_RELOCATABLE_KEYS: frozenset[str] = frozenset({
-    "repository",
-    "homepage",
-    "license",
-    "author",
-    "keywords",
-    "description",
-    "version",
-})
+# PLUGIN_MANIFEST_SCHEMA_URL, MARKETPLACE_MANIFEST_SCHEMA_URL, MARKETPLACE_JSON_ROOT_KEYS and
+# MARKETPLACE_METADATA_RELOCATABLE_KEYS are rule data and live in rules/pl_series.py.
 
 # FILTER_TYPE_MAP and DEFAULT_SCAN_PATTERNS live in scan_runtime.py
 # and are re-imported at the top of this module.
@@ -1357,9 +1379,6 @@ class ProgressiveDisclosureValidator:
     are reported as INFO (not errors) since they're optional organizational aids.
     """
 
-    # Directory names to check for progressive disclosure
-    DISCLOSURE_DIRS: ClassVar[list[str]] = ["references", "examples", "scripts"]
-
     def validate(self, path: Path) -> ValidationResult:
         """Validate progressive disclosure structure in skill directory.
 
@@ -1369,42 +1388,10 @@ class ProgressiveDisclosureValidator:
         Returns:
             ValidationResult with info messages for missing directories
         """
-        errors: list[ValidationIssue] = []
-        warnings: list[ValidationIssue] = []
-        info: list[ValidationIssue] = []
-
-        # Only validate skill directories (must contain SKILL.md)
-        if path.is_file():
-            path = path.parent
-
-        skill_file = path / "SKILL.md"
-        if not skill_file.exists():
-            # Not a skill directory - skip validation
-            return ValidationResult(passed=True, errors=errors, warnings=warnings, info=info)
-
-        # Check each progressive disclosure directory
-        for dir_name in self.DISCLOSURE_DIRS:
-            dir_path = path / dir_name
-            if not dir_path.exists():
-                # Directory missing - report as INFO
-                code = self._get_error_code(dir_name)
-                info.append(
-                    ValidationIssue(
-                        field="progressive-disclosure",
-                        severity="info",
-                        message=f"No {dir_name}/ directory found (consider adding for documentation)",
-                        code=code,
-                        docs_url=generate_docs_url(code),
-                        suggestion=f"Create {dir_name}/ directory to organize additional content",
-                    )
-                )
-            else:
-                # No info message needed when directory exists
-                # (only report missing directories)
-                pass
+        info = check_pd001(path) + check_pd002(path) + check_pd003(path)
 
         # Always pass - info messages don't fail validation
-        return ValidationResult(passed=True, errors=errors, warnings=warnings, info=info)
+        return ValidationResult(passed=True, errors=[], warnings=[], info=info)
 
     def can_fix(self) -> bool:
         """Check if validator supports auto-fixing.
@@ -1431,25 +1418,6 @@ class ProgressiveDisclosureValidator:
             "Creating directories requires human decisions about content organization."
         )
 
-    def _get_error_code(self, dir_name: str) -> ErrorCode:
-        """Get error code for missing directory.
-
-        Args:
-            dir_name: Directory name (references, examples, scripts)
-
-        Returns:
-            Error code (PD001, PD002, PD003)
-        """
-        match dir_name:
-            case "references":
-                return PD001
-            case "examples":
-                return PD002
-            case "scripts":
-                return PD003
-            case _:
-                return PD001  # Default fallback
-
 
 # ============================================================================
 # INTERNAL LINK VALIDATOR
@@ -1460,52 +1428,12 @@ class InternalLinkValidator:
     """Validates internal markdown links in SKILL.md files.
 
     Checks that relative links point to existing files (LK001).
+
+    Detection lives in ``skilllint.rules.lk_series``; this class reads the file
+    and packages the rule results into a ``ValidationResult``.
+
+    Architecture lines 1188-1256, Task T8 lines 897-982
     """
-
-    # Regex pattern for extracting markdown links.
-    LINK_PATTERN: ClassVar[str] = r"\[([^\]]+)\]\(([^)]+)\)"
-
-    # Regex pattern for fenced code blocks (``` or ~~~, with optional language specifier).
-    # Uses backreference to match opening/closing fence of equal or greater length.
-    CODE_FENCE_PATTERN: ClassVar[str] = r"^(`{3,}|~{3,})[^\n]*\n.*?\n\1\s*$"
-
-    # Regex pattern for inline code spans (single or multiple backticks)
-    INLINE_CODE_PATTERN: ClassVar[str] = r"(`+)(?!`)(.+?)(?<!`)\1(?!`)"
-
-    # Regex pattern for any ${...} substitution-style token. Matches both
-    # Claude Code's documented ${CLAUDE_*} variables
-    # (code.claude.com/docs/en/skills.md#available-string-substitutions)
-    # and any other unrecognized ${...} token, so both can be routed through
-    # _STATICALLY_RESOLVABLE_CLAUDE_VARS and skipped when unresolvable.
-    CLAUDE_VAR_PATTERN: ClassVar[str] = r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}"
-
-    # Of the four documented variables, only these two have a target
-    # skilllint can determine statically from the plugin source tree.
-    # ${CLAUDE_PROJECT_DIR} and ${CLAUDE_PLUGIN_DATA} target install-time
-    # locations (the invoking project root; the plugin's persistent data
-    # directory) that do not exist in the plugin source, so skilllint has
-    # no basis for resolving or asserting them broken.
-    _STATICALLY_RESOLVABLE_CLAUDE_VARS: ClassVar[frozenset[str]] = frozenset({"CLAUDE_SKILL_DIR", "CLAUDE_PLUGIN_ROOT"})
-
-    @staticmethod
-    def _strip_code_blocks(content: str) -> str:
-        """Remove fenced code blocks and inline code spans from content.
-
-        Strips fenced code blocks delimited by ``` or ~~~ (with optional
-        language specifiers) and inline code spans wrapped in backticks.
-        This prevents code examples from being scanned for markdown links.
-
-        Args:
-            content: Raw markdown content
-
-        Returns:
-            Content with code blocks and inline code spans removed
-        """
-        # Strip fenced code blocks first (handles nested fences via greedy
-        # backreference matching: a 4-backtick fence won't close on 3 backticks)
-        stripped = re.sub(InternalLinkValidator.CODE_FENCE_PATTERN, "", content, flags=re.MULTILINE | re.DOTALL)
-        # Strip inline code spans
-        return re.sub(InternalLinkValidator.INLINE_CODE_PATTERN, "", stripped)
 
     def validate(self, path: Path) -> ValidationResult:
         """Validate internal markdown links in SKILL.md.
@@ -1540,50 +1468,7 @@ class InternalLinkValidator:
             )
             return ValidationResult(passed=False, errors=errors, warnings=warnings, info=info)
 
-        # Strip fenced code blocks and inline code spans before scanning for
-        # links.  Code examples often contain bracket-paren patterns (e.g.
-        # Python generics like Sequence[T]) that match the link regex.
-        scannable_content = self._strip_code_blocks(content)
-
-        # Extract all markdown links from non-code content
-        matches = re.finditer(self.LINK_PATTERN, scannable_content)
-
-        # Process each link
-        for match in matches:
-            link_text = match.group(1)
-            link_url = match.group(2)
-
-            # Filter to relative file links only
-            if self._should_ignore_link(link_url):
-                continue
-
-            # Strip anchor fragment before resolving path
-            # e.g., ./references/file.md#heading → ./references/file.md
-            link_url_no_fragment = link_url.split("#")[0]
-
-            # Resolve documented ${CLAUDE_*} substitution variables before
-            # the existence check. Returns None when the link must be
-            # skipped because a variable's target cannot be determined.
-            skill_dir = path.parent
-            resolved_url = self._resolve_claude_variables(link_url_no_fragment, skill_dir)
-            if resolved_url is None:
-                continue
-
-            # Resolve link path relative to SKILL.md directory
-            link_path = (skill_dir / resolved_url).resolve()
-
-            # Check if linked file exists (error)
-            if not link_path.exists():
-                errors.append(
-                    ValidationIssue(
-                        field="internal-links",
-                        severity="error",
-                        message=f"Broken link: [{link_text}]({link_url}) (file not found)",
-                        code=LK001,
-                        docs_url=generate_docs_url(LK001),
-                        suggestion=f"Create missing file or fix link path: {link_url}",
-                    )
-                )
+        errors.extend(check_lk001(content, path))
 
         # Pass if no errors (warnings don't fail validation)
         passed = len(errors) == 0
@@ -1614,74 +1499,6 @@ class InternalLinkValidator:
             "Broken links require creating missing files or correcting link paths manually."
         )
 
-    def _should_ignore_link(self, url: str) -> bool:
-        """Check if link should be ignored during validation.
-
-        Args:
-            url: Link URL to check
-
-        Returns:
-            True if link should be ignored (external, anchor, absolute)
-        """
-        # Ignore external links
-        if url.startswith(("http://", "https://", "ftp://")):
-            return True
-
-        # Ignore anchor links
-        if url.startswith("#"):
-            return True
-
-        # Ignore absolute paths
-        return bool(url.startswith("/"))
-
-    @classmethod
-    def _resolve_claude_variables(cls, url: str, skill_dir: Path) -> str | None:
-        """Substitute ${CLAUDE_*} variables skilllint can statically resolve.
-
-        Claude Code substitutes ``${CLAUDE_SKILL_DIR}``, ``${CLAUDE_PROJECT_DIR}``,
-        ``${CLAUDE_PLUGIN_ROOT}``, and ``${CLAUDE_PLUGIN_DATA}`` in skill markdown
-        content at runtime (code.claude.com/docs/en/skills.md
-        #available-string-substitutions). ``${CLAUDE_SKILL_DIR}`` always
-        resolves to the directory containing ``SKILL.md``. ``${CLAUDE_PLUGIN_ROOT}``
-        resolves via :func:`find_plugin_dir` when the link's SKILL.md lives
-        inside a plugin (same lookup ``HookValidator`` uses for
-        ``${CLAUDE_PLUGIN_ROOT}`` in hook commands).
-
-        ``${CLAUDE_PROJECT_DIR}`` and ``${CLAUDE_PLUGIN_DATA}`` target
-        install-time locations skilllint cannot determine from the plugin
-        source tree, and any other ``${...}`` token is not a documented
-        substitution variable at all. skilllint has no basis for asserting
-        either kind of target is broken, so the link is skipped rather than
-        reported.
-
-        Args:
-            url: The link URL (fragment already stripped) as written in the
-                markdown source.
-            skill_dir: Directory containing the ``SKILL.md`` file being
-                validated -- used both as the ``${CLAUDE_SKILL_DIR}`` target
-                and as the search start for ``${CLAUDE_PLUGIN_ROOT}``.
-
-        Returns:
-            The URL with resolvable variables substituted, or ``None`` if the
-            link should be skipped because a variable's target cannot be
-            determined.
-        """
-        tokens = set(re.findall(cls.CLAUDE_VAR_PATTERN, url))
-        if not tokens:
-            return url
-        if tokens - cls._STATICALLY_RESOLVABLE_CLAUDE_VARS:
-            return None
-
-        resolved = url
-        if "${CLAUDE_SKILL_DIR}" in resolved:
-            resolved = resolved.replace("${CLAUDE_SKILL_DIR}", str(skill_dir))
-        if "${CLAUDE_PLUGIN_ROOT}" in resolved:
-            plugin_root = find_plugin_dir(skill_dir)
-            if plugin_root is None:
-                return None
-            resolved = resolved.replace("${CLAUDE_PLUGIN_ROOT}", str(plugin_root))
-        return resolved
-
 
 # ============================================================================
 # NAMESPACE REFERENCE VALIDATOR
@@ -1701,53 +1518,10 @@ class NamespaceReferenceValidator:
     - ``Task(agent="plugin:agent-name")``
     - ``@plugin:agent-name`` (prose agent references)
     - ``/plugin:skill-name`` (slash command references)
+
+    Detection lives in ``skilllint.rules.nr_series``; this class reads the file
+    and packages the rule results into a ``ValidationResult``.
     """
-
-    # Regex patterns for extracting namespace-qualified references
-    SKILL_COMMAND_PATTERN: ClassVar[str] = r'Skill\(command:\s*"([^"]+):([^"]+)"'
-    SKILL_SKILL_PATTERN: ClassVar[str] = r'Skill\(skill="([^"]+):([^"]+)"'
-    TASK_AGENT_PATTERN: ClassVar[str] = r'Task\(agent[=:]\s*"([^"]+):([^"]+)"'
-    AT_AGENT_PATTERN: ClassVar[str] = r"@([a-z0-9-]+):([a-z0-9-]+)"
-    SLASH_COMMAND_PATTERN: ClassVar[str] = r"(?<!\w)/([a-z0-9-]+):([a-z0-9-]+)"
-
-    # Built-in agent types that should be skipped (not plugin agents)
-    BUILTIN_AGENTS: ClassVar[frozenset[str]] = frozenset({
-        "Explore",
-        "general-purpose",
-        "Plan",
-        "Bash",
-        "context-gathering",
-        "code-review",
-        "code-refactorer-agent",
-        "system-architect",
-        "comprehensive-researcher",
-        "technical-researcher",
-        "trace-protocol-investigator",
-        "doc-freshness-guardian",
-        "documentation-expert",
-        "test-architect",
-        "live-api-integration-tester",
-        "subagent-generator",
-        "github-project-manager",
-        "metadata-vault-manager",
-        "doc-drift-auditor",
-        "service-documentation",
-        "backlog-item-groomer",
-        "plugin-assessor",
-        "skill-refactorer-agent",
-        "contextual-ai-documentation-optimizer",
-        "plugin-docs-writer",
-        "logging",
-        "context-refinement",
-        "qa-devops-lead",
-        "embedded-dev-specialist",
-        "c-systems-programmer",
-        "statusline-setup",
-        "linting-root-cause-resolver",
-        "python-cli-architect",
-        "python-portable-script",
-        "python-code-reviewer",
-    })
 
     def validate(self, path: Path) -> ValidationResult:
         """Validate namespace-qualified references in a plugin file.
@@ -1762,14 +1536,10 @@ class NamespaceReferenceValidator:
         Returns:
             ValidationResult with errors for broken references
         """
-        errors: list[ValidationIssue] = []
-        warnings: list[ValidationIssue] = []
-        info: list[ValidationIssue] = []
-
         try:
             content = path.read_text(encoding="utf-8")
         except OSError as e:
-            errors.append(
+            errors = [
                 ValidationIssue(
                     field="(file)",
                     severity="error",
@@ -1777,145 +1547,11 @@ class NamespaceReferenceValidator:
                     code=NR001,
                     docs_url=generate_docs_url(NR001),
                 )
-            )
-            return ValidationResult(passed=False, errors=errors, warnings=warnings, info=info)
+            ]
+            return ValidationResult(passed=False, errors=errors, warnings=[], info=[])
 
-        # Only check the body (after frontmatter)
-        body = self._extract_body(content)
-        if not body:
-            return ValidationResult(passed=True, errors=errors, warnings=warnings, info=info)
-
-        # Find the plugins root directory
-        plugins_root = self._find_plugins_root(path)
-        if plugins_root is None:
-            # Not inside a plugins directory structure -- skip validation
-            return ValidationResult(passed=True, errors=errors, warnings=warnings, info=info)
-
-        # Collect all references: (pattern_label, plugin, name, ref_type)
-        references = self._extract_references(body)
-
-        # Build name→dir mapping once: reads plugin.json "name" from each plugin dir
-        # so that namespace resolution uses the declared name, not the directory name.
-        name_to_dir = self._build_plugin_name_map(plugins_root)
-
-        for label, plugin, name, ref_type in references:
-            issue = self._process_reference(
-                label=label,
-                plugin=plugin,
-                name=name,
-                ref_type=ref_type,
-                name_to_dir=name_to_dir,
-                plugins_root=plugins_root,
-            )
-            if issue is not None:
-                errors.append(issue)
-
-        passed = len(errors) == 0
-        return ValidationResult(passed=passed, errors=errors, warnings=warnings, info=info)
-
-    def _process_reference(
-        self, *, label: str, plugin: str, name: str, ref_type: str, name_to_dir: dict[str, Path], plugins_root: Path
-    ) -> ValidationIssue | None:
-        """Validate a single namespace reference and return an issue or None.
-
-        Applies the skip rules (template placeholders, built-in agents),
-        then checks NR002 (path traversal) before resolving against the
-        plugin directory (NR001).
-
-        Args:
-            label: Human-readable reference label for error messages.
-            plugin: Namespace prefix component.
-            name: Target name component.
-            ref_type: One of ``"skill"``, ``"agent"``, ``"command"``.
-            name_to_dir: Mapping from plugin declared name to directory.
-            plugins_root: Path to the ``plugins/`` root.
-
-        Returns:
-            A ValidationIssue to append to the error list, or None when
-            the reference is valid or intentionally skipped.
-        """
-        # Skip template placeholders containing { or }
-        if "{" in plugin or "}" in plugin or "{" in name or "}" in name:
-            return None
-
-        # Skip built-in agent names only for unqualified refs. When a plugin
-        # prefix is present, always run NR002 traversal + NR001 resolution.
-        if not plugin and name in self.BUILTIN_AGENTS:
-            return None
-
-        # NR002 — reject references that attempt to escape the plugin
-        # directory boundary via path-traversal sequences.
-        nr002_issue = self._check_nr002_traversal(label, plugin, name)
-        if nr002_issue is not None:
-            return nr002_issue
-
-        # Resolve the plugin directory via plugin.json name mapping
-        plugin_dir = name_to_dir.get(plugin)
-        if plugin_dir is None:
-            return ValidationIssue(
-                field="namespace-reference",
-                severity="error",
-                message=(
-                    f"Namespace reference target does not exist: {label} -- plugin directory '{plugin}' not found"
-                ),
-                code=NR001,
-                docs_url=generate_docs_url(NR001),
-                suggestion=(
-                    f"Expected plugin directory at: {plugins_root / plugin}. "
-                    f"Create the plugin or fix the namespace prefix."
-                ),
-            )
-
-        return self._resolve_ref_or_error(
-            label=label, plugin=plugin, name=name, ref_type=ref_type, plugin_dir=plugin_dir
-        )
-
-    def _resolve_ref_or_error(
-        self, *, label: str, plugin: str, name: str, ref_type: str, plugin_dir: Path
-    ) -> ValidationIssue | None:
-        """Resolve a reference against a plugin directory, returning NR001 if missing.
-
-        Args:
-            label: Reference label for error messages.
-            plugin: Namespace prefix.
-            name: Target name.
-            ref_type: ``"skill"``, ``"agent"``, or ``"command"``.
-            plugin_dir: Resolved plugin directory path.
-
-        Returns:
-            An NR001 ValidationIssue if the target cannot be resolved, or
-            None if the reference is valid (or the ref_type is unknown).
-        """
-        match ref_type:
-            case "skill":
-                found = self._resolve_skill_reference(plugin_dir, name)
-                expected = (
-                    f"plugins/{plugin}/skills/{name}/SKILL.md or plugins/{plugin}/skills/{{category}}/{name}/SKILL.md"
-                )
-            case "agent":
-                found = self._resolve_agent_reference(plugin_dir, name)
-                expected = f"plugins/{plugin}/agents/{name}.md"
-            case "command":
-                found = self._resolve_command_reference(plugin_dir, name)
-                expected = (
-                    f"plugins/{plugin}/skills/{name}/SKILL.md, "
-                    f"plugins/{plugin}/skills/{{category}}/{name}/SKILL.md, "
-                    f"or plugins/{plugin}/commands/{name}.md"
-                )
-            case _:
-                return None
-
-        if found:
-            return None
-
-        return ValidationIssue(
-            field="namespace-reference",
-            severity="error",
-            message=(f"Namespace reference target does not exist: {label}"),
-            code=NR001,
-            docs_url=generate_docs_url(NR001),
-            suggestion=f"Expected file at: {expected}",
-        )
+        errors = check_nr001(content, path) + check_nr002(content, path)
+        return ValidationResult(passed=not errors, errors=errors, warnings=[], info=[])
 
     def can_fix(self) -> bool:
         """Check if validator supports auto-fixing.
@@ -1942,320 +1578,6 @@ class NamespaceReferenceValidator:
             "Broken references require creating missing files or correcting "
             "the namespace prefix manually."
         )
-
-    def _extract_body(self, content: str) -> str:
-        """Extract file body content after YAML frontmatter.
-
-        Args:
-            content: Full file content
-
-        Returns:
-            Body text after the closing ``---`` delimiter, or the full content
-            if no frontmatter is present
-        """
-        if not content.startswith("---"):
-            return content
-
-        # Find closing delimiter
-        end_match = re.search(r"\n---\s*\n", content[3:])
-        if not end_match:
-            return content
-
-        # Return everything after the closing ---
-        return content[3 + end_match.end() :]
-
-    def _find_plugins_root(self, path: Path) -> Path | None:
-        """Find the repository-level ``plugins/`` directory from a file path.
-
-        Walks up from the file path looking for a directory named ``plugins``
-        that appears in the path's parents.
-
-        Args:
-            path: Path to a file inside a plugin
-
-        Returns:
-            Path to the ``plugins/`` directory, or None if not found
-        """
-        resolved = path.resolve()
-        parts = resolved.parts
-        for i in range(len(parts) - 1, -1, -1):
-            if parts[i] == "plugins":
-                candidate = Path(*parts[: i + 1])
-                if candidate.is_dir():
-                    return candidate
-        return None
-
-    @staticmethod
-    def _has_path_traversal(component: str) -> bool:
-        r"""Check if a namespace reference component contains path-traversal.
-
-        A well-formed namespace reference component is a plain identifier
-        (lowercase letters, digits, hyphens).  Any path separator or
-        parent-directory sequence indicates an attempt to escape the plugin
-        directory boundary and should emit NR002.
-
-        Args:
-            component: A plugin prefix or target name extracted from a
-                namespace reference.
-
-        Returns:
-            True if the component contains ``..``, ``/``, or ``\\``.
-        """
-        return ".." in component or "/" in component or "\\" in component
-
-    def _check_nr002_traversal(self, label: str, plugin: str, name: str) -> ValidationIssue | None:
-        r"""Return an NR002 ValidationIssue if a reference contains traversal.
-
-        The permissive ``Skill(...)`` / ``Task(...)`` regex patterns match
-        any quoted string (``[^"]+``), so the plugin and name components
-        can contain ``..``, ``/``, or ``\\`` even though those would never
-        appear in a well-formed namespace reference.  When either component
-        contains such a sequence, the reference is treated as escaping the
-        plugin boundary and NR002 is emitted.
-
-        Source: https://code.claude.com/docs/en/plugins-reference.md#path-traversal-limitations
-        — "Claude Code doesn't let a plugin reference files outside its own
-        directory. It rejects a component path that resolves outside the
-        plugin root, such as `../shared-utils`...". The `/` and `\\`
-        separator check derives from the same doc's plugin-init reference
-        (#plugin-init): a plugin `<name>` "cannot contain spaces or path
-        separators" because it becomes the skill namespace and directory
-        name.
-
-        Args:
-            label: Human-readable reference label for the error message.
-            plugin: The namespace prefix extracted from the reference.
-            name: The target name extracted from the reference.
-
-        Returns:
-            A ValidationIssue with code NR002, or None if the reference is
-            free of path-traversal sequences.
-        """
-        if not (self._has_path_traversal(plugin) or self._has_path_traversal(name)):
-            return None
-        return ValidationIssue(
-            field="namespace-reference",
-            severity="error",
-            message=(
-                f"Namespace reference points outside plugin directory: {label} -- contains path-traversal sequence"
-            ),
-            code=NR002,
-            docs_url=generate_docs_url(NR002),
-            suggestion=(
-                "Remove '..', '/', and '\\\\' from the reference. "
-                "Use 'other-plugin:skill-name' with a correct "
-                "namespace prefix instead of relative paths."
-            ),
-        )
-
-    @staticmethod
-    def _resolve_to_directory(path: Path) -> Path | None:
-        """Resolve path to directory, following symlinks and Git pointer files (Windows).
-
-        On Windows, Git may store symlinks as regular files whose content is the
-        target path. This allows validation to work cross-platform.
-
-        Args:
-            path: Path that may be a directory, symlink, or pointer file
-
-        Returns:
-            Resolved directory path, or None if resolution fails
-        """
-        result: Path | None = None
-        if path.is_dir():
-            result = path.resolve()
-        elif path.is_symlink():
-            resolved = path.resolve()
-            result = resolved if resolved.is_dir() else None
-        elif path.is_file():
-            try:
-                content = path.read_text(encoding="utf-8").strip()
-            except OSError:
-                pass
-            else:
-                if content and "\n" not in content:
-                    try:
-                        target = (path.parent / content).resolve()
-                        result = target if target.is_dir() else None
-                    except (OSError, RuntimeError):
-                        pass
-        return result
-
-    @staticmethod
-    def _build_plugin_name_map(plugins_root: Path) -> dict[str, Path]:
-        """Build a mapping from plugin declared name to plugin directory path.
-
-        Scans each subdirectory of ``plugins_root`` and reads the ``"name"``
-        field from ``.claude-plugin/plugin.json`` (falling back to the
-        directory name when the file is absent or unparseable).  This ensures
-        that namespace references are resolved against the plugin's declared
-        name rather than its on-disk directory name.
-
-        Args:
-            plugins_root: Path to the ``plugins/`` directory
-
-        Returns:
-            Mapping of ``{declared_name: plugin_dir_path}`` for every plugin
-            directory found under ``plugins_root``
-        """
-        name_to_dir: dict[str, Path] = {}
-        if not plugins_root.is_dir():
-            return name_to_dir
-
-        for entry in plugins_root.iterdir():
-            if not entry.is_dir():
-                continue
-            # Attempt to read the declared name from plugin.json
-            plugin_json = entry / ".claude-plugin" / "plugin.json"
-            declared_name: str | None = None
-            if plugin_json.is_file():
-                try:
-                    data = msgspec.json.decode(plugin_json.read_bytes())
-                    if isinstance(data, dict) and isinstance(data.get("name"), str):
-                        declared_name = data["name"]
-                except (OSError, msgspec.DecodeError):
-                    pass
-            # Fall back to directory name when plugin.json is absent/invalid
-            name_to_dir[declared_name or entry.name] = entry
-
-        return name_to_dir
-
-    def _resolve_skill_reference(self, plugin_dir: Path, name: str) -> bool:
-        """Check if a skill reference resolves to an existing file.
-
-        Checks direct path and nested (category) paths. Resolves symlinks and
-        Git pointer files (Windows) before existence checks.
-
-        Args:
-            plugin_dir: Path to the resolved plugin directory
-            name: Skill name
-
-        Returns:
-            True if the skill SKILL.md exists at any valid location
-        """
-        # Direct: {plugin_dir}/skills/{name}/SKILL.md
-        skill_dir = plugin_dir / "skills" / name
-        resolved_dir = self._resolve_to_directory(skill_dir)
-        if resolved_dir is not None and (resolved_dir / "SKILL.md").is_file():
-            return True
-
-        # Also check direct path (real symlinks resolve via resolve())
-        direct = plugin_dir / "skills" / name / "SKILL.md"
-        if direct.is_file():
-            return True
-
-        # Nested: {plugin_dir}/skills/*/{name}/SKILL.md
-        nested_pattern = plugin_dir / "skills"
-        if nested_pattern.is_dir():
-            for category_dir in nested_pattern.iterdir():
-                resolved_cat = self._resolve_to_directory(category_dir)
-                if resolved_cat is not None:
-                    nested = resolved_cat / name / "SKILL.md"
-                    if nested.is_file():
-                        return True
-                    # Pointer/symlink: category_dir may resolve to skill dir itself
-                    if category_dir.name == name and (resolved_cat / "SKILL.md").is_file():
-                        return True
-
-        return False
-
-    def _resolve_agent_reference(self, plugin_dir: Path, name: str) -> bool:
-        """Check if an agent reference resolves to an existing file.
-
-        Args:
-            plugin_dir: Path to the resolved plugin directory
-            name: Agent name
-
-        Returns:
-            True if the agent .md file exists
-        """
-        agent_path = plugin_dir / "agents" / f"{name}.md"
-        return agent_path.is_file()
-
-    def _resolve_command_reference(self, plugin_dir: Path, name: str) -> bool:
-        """Check if a command/slash-command reference resolves to an existing file.
-
-        Slash command references can resolve to skills or commands.
-
-        Args:
-            plugin_dir: Path to the resolved plugin directory
-            name: Command or skill name
-
-        Returns:
-            True if the target exists as a skill or command
-        """
-        # Check as skill first (most common)
-        if self._resolve_skill_reference(plugin_dir, name):
-            return True
-
-        # Check as command: {plugin_dir}/commands/{name}.md
-        command_path = plugin_dir / "commands" / f"{name}.md"
-        return command_path.is_file()
-
-    @staticmethod
-    def _strip_urls_and_code(body: str) -> str:
-        """Remove URLs, fenced code blocks, and inline code spans from body.
-
-        Strips content that may contain slash-colon patterns that are not
-        real namespace references (e.g. ``http://localhost:8080``).
-
-        Args:
-            body: Markdown body content
-
-        Returns:
-            Body with URLs, fenced code blocks, and inline code spans removed
-        """
-        # Strip fenced code blocks (``` or ~~~ delimited)
-        stripped = re.sub(r"^(`{3,}|~{3,})[^\n]*\n.*?\n\1\s*$", "", body, flags=re.MULTILINE | re.DOTALL)
-        # Strip inline code spans
-        stripped = re.sub(r"(`+)(?!`)(.+?)(?<!`)\1(?!`)", "", stripped)
-        # Strip URLs (http:// and https:// through end of URL)
-        return re.sub(r"https?://[^\s)\]>\"']+", "", stripped)
-
-    def _extract_references(self, body: str) -> list[tuple[str, str, str, str]]:
-        """Extract all namespace-qualified references from file body.
-
-        Args:
-            body: File body content (after frontmatter)
-
-        Returns:
-            List of (label, plugin, name, ref_type) tuples where ref_type is
-            one of 'skill', 'agent', or 'command'
-        """
-        references: list[tuple[str, str, str, str]] = []
-
-        # Skill(command: "plugin:name")
-        for match in re.finditer(self.SKILL_COMMAND_PATTERN, body):
-            plugin, name = match.group(1), match.group(2)
-            label = f'Skill(command: "{plugin}:{name}")'
-            references.append((label, plugin, name, "skill"))
-
-        # Skill(skill="plugin:name")
-        for match in re.finditer(self.SKILL_SKILL_PATTERN, body):
-            plugin, name = match.group(1), match.group(2)
-            label = f'Skill(skill="{plugin}:{name}")'
-            references.append((label, plugin, name, "skill"))
-
-        # Task(agent="plugin:name")
-        for match in re.finditer(self.TASK_AGENT_PATTERN, body):
-            plugin, name = match.group(1), match.group(2)
-            label = f'Task(agent="{plugin}:{name}")'
-            references.append((label, plugin, name, "agent"))
-
-        # @plugin:agent-name
-        for match in re.finditer(self.AT_AGENT_PATTERN, body):
-            plugin, name = match.group(1), match.group(2)
-            label = f"@{plugin}:{name}"
-            references.append((label, plugin, name, "agent"))
-
-        # /plugin:skill-name -- use stripped body to avoid URL false positives
-        stripped_body = self._strip_urls_and_code(body)
-        for match in re.finditer(self.SLASH_COMMAND_PATTERN, stripped_body):
-            plugin, name = match.group(1), match.group(2)
-            label = f"/{plugin}:{name}"
-            references.append((label, plugin, name, "command"))
-
-        return references
 
 
 # ============================================================================
@@ -2289,40 +1611,8 @@ class SymlinkTargetValidator:
         Returns:
             ValidationResult with errors for each dirty symlink found.
         """
-        errors: list[ValidationIssue] = []
-        warnings: list[ValidationIssue] = []
-        info: list[ValidationIssue] = []
-
-        for symlink_path in self._iter_symlinks(path):
-            try:
-                raw_target = str(Path(symlink_path).readlink())
-            except OSError:
-                continue
-
-            if raw_target != raw_target.rstrip():
-                clean_target = raw_target.rstrip()
-                errors.append(
-                    ValidationIssue(
-                        field=str(symlink_path),
-                        severity="error",
-                        message=(
-                            f"Symlink target has trailing whitespace: "
-                            f"{symlink_path!s} -> {raw_target!r} "
-                            f"(should be {clean_target!r})"
-                        ),
-                        code=SL001,
-                        docs_url=generate_docs_url(SL001),
-                        suggestion=(
-                            "Run with --fix to strip trailing whitespace and recreate the symlink, "
-                            'or run: python3 -c "'
-                            f"import os; p='{symlink_path}'; t=os.readlink(p).rstrip(); "
-                            'os.remove(p); os.symlink(t, p)"'
-                        ),
-                    )
-                )
-
-        passed = len(errors) == 0
-        return ValidationResult(passed=passed, errors=errors, warnings=warnings, info=info)
+        errors = check_sl001(path)
+        return ValidationResult(passed=not errors, errors=errors, warnings=[], info=[])
 
     def can_fix(self) -> bool:
         """Check if validator supports auto-fixing.
@@ -2347,7 +1637,7 @@ class SymlinkTargetValidator:
         """
         fixes: list[str] = []
 
-        for symlink_path in self._iter_symlinks(path):
+        for symlink_path in iter_symlinks(path):
             try:
                 raw_target = str(Path(symlink_path).readlink())
             except OSError:
@@ -2376,36 +1666,6 @@ class SymlinkTargetValidator:
                     Path(symlink_path).symlink_to(raw_target)
 
         return fixes
-
-    @staticmethod
-    def _iter_symlinks(path: Path) -> list[Path]:
-        """Yield all symlinks at or under *path*.
-
-        When *path* is itself a symlink, returns ``[path]``.
-        When *path* is a directory (real or symlink), returns all symlinks
-        found by ``os.walk`` (which does not follow symlinks by default).
-
-        Args:
-            path: Starting path to search for symlinks.
-
-        Returns:
-            List of symlink paths found.
-        """
-        symlinks: list[Path] = []
-
-        if path.is_symlink():
-            symlinks.append(path)
-            return symlinks
-
-        if path.is_dir():
-            for root, dirs, files in os.walk(path, followlinks=False):
-                root_path = Path(root)
-                for name in dirs + files:
-                    candidate = root_path / name
-                    if candidate.is_symlink():
-                        symlinks.append(candidate)
-
-        return symlinks
 
 
 class AsSeriesValidator:
@@ -3483,49 +2743,19 @@ class MarkdownTokenCounter:
         Returns:
             ValidationResult with token count info (always passes)
         """
-        errors: list[ValidationIssue] = []
-        warnings: list[ValidationIssue] = []
-        info: list[ValidationIssue] = []
-
-        # Read file
         try:
             content = path.read_text(encoding="utf-8")
         except OSError as e:
-            errors.append(
-                ValidationIssue(
-                    field="(file)",
-                    severity="error",
-                    message=f"Could not read file: {e}",
-                    code=FM002,
-                    docs_url=generate_docs_url(FM002),
-                )
+            error = ValidationIssue(
+                field="(file)",
+                severity="error",
+                message=f"Could not read file: {e}",
+                code=FM002,
+                docs_url=generate_docs_url(FM002),
             )
-            return ValidationResult(passed=False, errors=errors, warnings=warnings, info=info)
+            return ValidationResult(passed=False, errors=[error], warnings=[], info=[])
 
-        # Split frontmatter and body
-        frontmatter_text, _start_line, _end_line = extract_frontmatter(content)
-
-        if frontmatter_text is not None:
-            end_match = re.search(r"\n---\s*\n", content[3:])
-            body = content[end_match.end() + 3 :] if end_match else content
-        else:
-            body = content
-
-        # Count tokens
-        total_tokens = count_tokens(content)
-        body_tokens = count_tokens(body)
-        frontmatter_tokens = total_tokens - body_tokens
-
-        info.append(
-            ValidationIssue(
-                field="token-count",
-                severity="info",
-                message=(f"Total: {total_tokens} tokens (frontmatter: {frontmatter_tokens}, body: {body_tokens})"),
-                code=ErrorCode.TC001,
-            )
-        )
-
-        return ValidationResult(passed=True, errors=errors, warnings=warnings, info=info)
+        return ValidationResult(passed=True, errors=[], warnings=[], info=check_tc001(content))
 
     def count_file_tokens(self, path: Path, *, body_only: bool = False) -> int | None:
         """Count tokens in a file for programmatic use.
@@ -3704,73 +2934,6 @@ def _generate_plugin_metadata(plugin_dir: Path) -> dict[str, YamlValue]:
     return metadata
 
 
-def _find_actual_capabilities(plugin_dir: Path) -> tuple[set[Path], set[Path], set[Path]]:
-    """Find all actual capability files in a plugin directory.
-
-    Args:
-        plugin_dir: Path to the plugin directory.
-
-    Returns:
-        Tuple of (actual_skills, actual_agents, actual_commands) as sets of
-        paths relative to plugin_dir.
-    """
-    actual_skills: set[Path] = set()
-    actual_agents: set[Path] = set()
-    actual_commands: set[Path] = set()
-
-    skills_dir = plugin_dir / "skills"
-    if skills_dir.is_dir():
-        actual_skills = {
-            d.relative_to(plugin_dir) for d in skills_dir.glob("*/") if d.is_dir() and (d / "SKILL.md").exists()
-        }
-
-    agents_dir = plugin_dir / "agents"
-    if agents_dir.is_dir():
-        actual_agents = {
-            f.relative_to(plugin_dir) for f in agents_dir.glob("*.md") if f.name not in FRONTMATTER_EXEMPT_FILENAMES
-        }
-
-    commands_dir = plugin_dir / "commands"
-    if commands_dir.is_dir():
-        actual_commands = {
-            f.relative_to(plugin_dir) for f in commands_dir.glob("*.md") if f.name not in FRONTMATTER_EXEMPT_FILENAMES
-        }
-
-    return actual_skills, actual_agents, actual_commands
-
-
-def _parse_registered_paths(plugin_config: dict[str, YamlValue], plugin_dir: Path, field: str) -> set[Path]:
-    """Parse registered capability paths from a plugin.json field.
-
-    Args:
-        plugin_config: Loaded plugin.json content.
-        plugin_dir: Plugin directory path.
-        field: Field name (skills, agents, commands).
-
-    Returns:
-        Set of registered paths relative to plugin_dir.
-    """
-    registered: set[Path] = set()
-
-    if field not in plugin_config:
-        return registered
-
-    value = plugin_config[field]
-
-    if isinstance(value, str):
-        value_path = plugin_dir / value.lstrip("./")
-        if value_path.is_dir():
-            registered.update(
-                f.relative_to(plugin_dir) for f in value_path.glob("*.md") if f.name not in FRONTMATTER_EXEMPT_FILENAMES
-            )
-        else:
-            registered.add(Path(value.lstrip("./")))
-    elif isinstance(value, list):
-        registered.update(Path(item.lstrip("./")) for item in value if isinstance(item, str))
-
-    return registered
-
-
 def _sk009_message(unlisted: set[Path]) -> str:
     """Build the SK009 info message based on unlisted disk skills.
 
@@ -3795,8 +2958,12 @@ class PluginRegistrationValidator:
     Checks that all capability files are registered and all registered paths
     exist. Also validates plugin.json metadata against git-derived values.
 
+    PR001-PR005 detection lives in ``skilllint.rules.pr_series``; this class
+    packages those results, adds SK009, and owns the git-metadata lookup.
+
     Open/Closed: new capability types can be added by extending
-    _find_actual_capabilities() and adding entries in validate().
+    ``find_actual_capabilities()`` in ``rules/pr_series.py`` and adding entries
+    in validate().
     """
 
     def validate(self, path: Path) -> ValidationResult:
@@ -3835,113 +3002,15 @@ class PluginRegistrationValidator:
             )
             return ValidationResult(passed=False, errors=errors, warnings=warnings, info=info)
 
-        # Registration checks
-        actual_skills, actual_agents, actual_commands = _find_actual_capabilities(plugin_dir)
-        registered_skills = _parse_registered_paths(plugin_config, plugin_dir, "skills")
-        registered_agents = _parse_registered_paths(plugin_config, plugin_dir, "agents")
-        registered_commands = _parse_registered_paths(plugin_config, plugin_dir, "commands")
-
-        # When plugin.json has no ``skills`` field at all, the plugin relies
-        # entirely on Claude Code's auto-discovery of the ./skills/ directory.
-        # Standard-path skills (under ./skills/) are auto-discovered and need
-        # no explicit registration — suppress PR001 for them in this case.
-        # When an explicit ``skills`` array is present (even if empty), the
-        # plugin has opted into explicit registration and unregistered
-        # standard-path skills should still be flagged.
-        warnings.extend(
-            ValidationIssue(
-                field="plugin.json",
-                severity="warning",
-                message=f"Skill '{orphan}' exists but is not registered (relies on default discovery)",
-                code=PR001,
-                docs_url=generate_docs_url(PR001),
-                suggestion=f"Add './{orphan}' to the skills array in plugin.json",
-            )
-            for orphan in actual_skills - registered_skills
-            if "skills" in plugin_config or not str(orphan).startswith("skills/")
-        )
-
-        warnings.extend(
-            ValidationIssue(
-                field="plugin.json",
-                severity="warning",
-                message=f"Agent '{orphan}' exists but is not registered",
-                code=PR001,
-                docs_url=generate_docs_url(PR001),
-                suggestion=f"Add './{orphan}' to the agents array in plugin.json",
-            )
-            for orphan in actual_agents - registered_agents
-        )
-
-        warnings.extend(
-            ValidationIssue(
-                field="plugin.json",
-                severity="warning",
-                message=f"Command '{orphan}' exists but is not registered",
-                code=PR001,
-                docs_url=generate_docs_url(PR001),
-                suggestion=f"Add './{orphan}' to the commands array in plugin.json",
-            )
-            for orphan in actual_commands - registered_commands
-        )
-
-        errors.extend(
-            ValidationIssue(
-                field="plugin.json",
-                severity="error",
-                message=f"Registered skill '{ref}' does not exist",
-                code=PR002,
-                docs_url=generate_docs_url(PR002),
-                suggestion=f"Remove from plugin.json or create {ref}/SKILL.md",
-            )
-            for ref in registered_skills
-            if not (plugin_dir / ref / "SKILL.md").exists()
-        )
-
-        errors.extend(
-            ValidationIssue(
-                field="plugin.json",
-                severity="error",
-                message=f"Registered agent '{ref}' does not exist",
-                code=PR002,
-                docs_url=generate_docs_url(PR002),
-                suggestion=f"Remove from plugin.json or create {ref}",
-            )
-            for ref in registered_agents
-            if not (plugin_dir / ref).exists()
-        )
-
-        errors.extend(
-            ValidationIssue(
-                field="plugin.json",
-                severity="error",
-                message=f"Registered command '{ref}' does not exist",
-                code=PR002,
-                docs_url=generate_docs_url(PR002),
-                suggestion=f"Remove from plugin.json or create {ref}",
-            )
-            for ref in registered_commands
-            if not (plugin_dir / ref).exists()
-        )
-
-        errors.extend(
-            ValidationIssue(
-                field="plugin.json",
-                severity="error",
-                message=(
-                    f"Registered command '{ref}' is a skill directory (contains SKILL.md). "
-                    f"Skill directories must not be listed under 'commands'."
-                ),
-                code=PR005,
-                docs_url=generate_docs_url(PR005),
-                suggestion=f"Move '{ref}' from the 'commands' array to the 'skills' array in plugin.json",
-            )
-            for ref in registered_commands
-            if (plugin_dir / ref).is_dir() and (plugin_dir / ref / "SKILL.md").exists()
-        )
+        # Registration checks — detection lives in skilllint.rules.pr_series.
+        warnings.extend(check_pr001(plugin_config, plugin_dir))
+        errors.extend(check_pr002(plugin_config, plugin_dir))
+        errors.extend(check_pr005(plugin_config, plugin_dir))
 
         # SK009 — manual skill selection mode (informational)
         if "skills" in plugin_config:
+            actual_skills, _actual_agents, _actual_commands = find_actual_capabilities(plugin_dir)
+            registered_skills = parse_registered_paths(plugin_config, plugin_dir, "skills")
             info.append(
                 ValidationIssue(
                     field="plugin.json",
@@ -3957,43 +3026,10 @@ class PluginRegistrationValidator:
                 )
             )
 
-        # Metadata checks (informational)
+        # Metadata checks — detection lives in skilllint.rules.pr_series.
         git_metadata = _generate_plugin_metadata(plugin_dir)
-        if git_metadata:
-            missing = [k for k in ("repository", "homepage", "author") if k not in plugin_config and k in git_metadata]
-            if missing:
-                suggestion_json = msgspec.json.format(
-                    msgspec.json.encode({k: git_metadata[k] for k in missing}), indent=2
-                ).decode()
-                info.append(
-                    ValidationIssue(
-                        field="plugin.json",
-                        severity="info",
-                        message=f"Metadata could be populated from git: {', '.join(missing)}",
-                        code=PR003,
-                        docs_url=generate_docs_url(PR003),
-                        suggestion=f"Add to plugin.json:\n{suggestion_json}",
-                    )
-                )
-
-            if (
-                "repository" in plugin_config
-                and "repository" in git_metadata
-                and plugin_config["repository"] != git_metadata["repository"]
-            ):
-                warnings.append(
-                    ValidationIssue(
-                        field="plugin.json",
-                        severity="warning",
-                        message=(
-                            f"Repository URL mismatch: plugin.json has "
-                            f"'{plugin_config['repository']}', git has '{git_metadata['repository']}'"
-                        ),
-                        code=PR004,
-                        docs_url=generate_docs_url(PR004),
-                        suggestion=f"Update repository to: {git_metadata['repository']}",
-                    )
-                )
+        info.extend(check_pr003(plugin_config, git_metadata))
+        warnings.extend(check_pr004(plugin_config, git_metadata))
 
         return ValidationResult(passed=len(errors) == 0, errors=errors, warnings=warnings, info=info)
 
@@ -4030,93 +3066,6 @@ class PluginRegistrationValidator:
 # ============================================================================
 
 
-def _analyze_marketplace_root_keys(data: dict[str, YamlValue]) -> tuple[list[str], list[str]]:
-    """Classify misplaced top-level keys in marketplace.json.
-
-    Returns:
-        (relocatable, unknown) — keys to move under ``metadata``, and keys that are not
-        recognized at root and are not auto-relocated (require manual removal or rename).
-    """
-    misplaced = [k for k in data if k not in MARKETPLACE_JSON_ROOT_KEYS]
-    relocatable = sorted(k for k in misplaced if k in MARKETPLACE_METADATA_RELOCATABLE_KEYS)
-    unknown = sorted(k for k in misplaced if k not in MARKETPLACE_METADATA_RELOCATABLE_KEYS)
-    return relocatable, unknown
-
-
-def _validate_marketplace_json_layout(plugin_dir: Path) -> list[ValidationIssue]:
-    """Return validation issues when marketplace.json has disallowed top-level keys.
-
-    Claude's ``claude plugin validate`` rejects plugin-manifest fields (e.g. ``repository``,
-    ``homepage``, ``license``) at the marketplace root; they belong under ``metadata``.
-    """
-    mp_path = plugin_dir / ".claude-plugin" / "marketplace.json"
-    if not mp_path.exists():
-        return []
-    try:
-        raw = msgspec.json.decode(mp_path.read_bytes())
-    except msgspec.DecodeError as e:
-        return [
-            ValidationIssue(
-                field="marketplace.json",
-                severity="error",
-                message=f"Invalid JSON syntax in marketplace.json: {e}",
-                code=PL002,
-                docs_url=generate_docs_url(PL002),
-                suggestion=f"marketplace.json must be valid JSON. Schema: {MARKETPLACE_MANIFEST_SCHEMA_URL}",
-            )
-        ]
-    except OSError as e:
-        return [
-            ValidationIssue(
-                field="marketplace.json",
-                severity="error",
-                message=f"Cannot read marketplace.json: {e}",
-                code=PL002,
-                docs_url=generate_docs_url(PL002),
-            )
-        ]
-    if not isinstance(raw, dict):
-        return [
-            ValidationIssue(
-                field="marketplace.json",
-                severity="error",
-                message="marketplace.json must be a JSON object at the root",
-                code=PL006,
-                docs_url=generate_docs_url(PL006),
-                suggestion=f"See: {MARKETPLACE_MANIFEST_SCHEMA_URL}",
-            )
-        ]
-    relocatable, unknown = _analyze_marketplace_root_keys(raw)
-    if not relocatable and not unknown:
-        return []
-    parts: list[str] = []
-    if relocatable:
-        parts.append("move these fields under a `metadata` object: " + ", ".join(f"`{k}`" for k in relocatable))
-    if unknown:
-        parts.append("remove or rename unrecognized top-level keys: " + ", ".join(f"`{k}`" for k in unknown))
-    detail = "; ".join(parts)
-    suggestion = (
-        "Claude Code marketplace manifests only allow top-level `name`, `owner`, `plugins`, "
-        f"and optional `metadata`. {detail.capitalize()}. "
-        f"Reference: {MARKETPLACE_MANIFEST_SCHEMA_URL}"
-    )
-    if relocatable and not unknown:
-        suggestion += " Run `skilllint check --fix` on the plugin directory to move them automatically."
-    return [
-        ValidationIssue(
-            field="marketplace.json",
-            severity="error",
-            message=(
-                f"marketplace.json violates the Claude Code marketplace schema: {detail}. "
-                "Plugin-manifest fields must not appear beside `plugins` at the catalog root."
-            ),
-            code=PL006,
-            docs_url=generate_docs_url(PL006),
-            suggestion=suggestion,
-        )
-    ]
-
-
 def _fix_marketplace_json_metadata_keys(plugin_dir: Path) -> list[str]:
     """Move MARKETPLACE_METADATA_RELOCATABLE_KEYS from root into ``metadata``.
 
@@ -4129,7 +3078,7 @@ def _fix_marketplace_json_metadata_keys(plugin_dir: Path) -> list[str]:
     raw = msgspec.json.decode(mp_path.read_bytes())
     if not isinstance(raw, dict):
         raise NotImplementedError("marketplace.json root must be a JSON object.")
-    relocatable, unknown = _analyze_marketplace_root_keys(raw)
+    relocatable, unknown = analyze_marketplace_root_keys(raw)
     if unknown:
         raise NotImplementedError(
             "Cannot auto-fix marketplace.json: unrecognized top-level keys must be removed manually: "
@@ -4187,21 +3136,12 @@ class PluginStructureValidator:
         # Catches encoding/line-ending issues that may cause claude to fail inconsistently.
         plugin_json_path = plugin_dir / ".claude-plugin" / "plugin.json"
         if plugin_json_path.exists():
-            json_error = self._validate_plugin_json_syntax(plugin_json_path)
-            if json_error is not None:
-                errors.append(
-                    ValidationIssue(
-                        field="plugin.json",
-                        severity="error",
-                        message=json_error,
-                        code=PL002,
-                        docs_url=generate_docs_url(PL002),
-                        suggestion=f"plugin.json must be valid JSON. Schema: {PLUGIN_MANIFEST_SCHEMA_URL}",
-                    )
-                )
+            json_issues = check_pl002(plugin_json_path)
+            if json_issues:
+                errors.extend(json_issues)
                 return ValidationResult(passed=False, errors=errors, warnings=warnings, info=info)
 
-        mp_layout = _validate_marketplace_json_layout(plugin_dir)
+        mp_layout = check_pl006(plugin_dir)
         if mp_layout:
             errors.extend(mp_layout)
             return ValidationResult(passed=False, errors=errors, warnings=warnings, info=info)
@@ -4328,24 +3268,6 @@ class PluginStructureValidator:
         """
         return shutil.which("claude")
 
-    def _validate_plugin_json_syntax(self, plugin_json_path: Path) -> str | None:
-        """Validate plugin.json is parseable JSON. Catches syntax/encoding issues.
-
-        Args:
-            plugin_json_path: Path to plugin.json file.
-
-        Returns:
-            None if valid; otherwise human-readable error message string.
-        """
-        try:
-            msgspec.json.decode(Path(plugin_json_path).read_bytes())
-        except msgspec.DecodeError as e:
-            return f"Invalid JSON syntax in plugin.json: {e}"
-        except OSError as e:
-            return f"Cannot read plugin.json: {e}"
-        else:
-            return None
-
     def _is_claude_startup_failure(self, output: str) -> bool:
         """Return True if output indicates claude failed to start (env/runtime), not validation.
 
@@ -4391,121 +3313,17 @@ class PluginStructureValidator:
             )
             return
 
-        # Map claude CLI error patterns to error codes
-        error_patterns = {
-            PL001: r"missing.*plugin\.json|plugin\.json.*not found",
-            PL002: r"invalid.*json|json.*syntax|parse.*error",
-            PL003: r"missing.*required.*field.*name|name.*required",
-            PL004: r"path.*must.*start.*with.*\./|invalid.*path.*format",
-            PL005: r"file.*does not exist|referenced.*file.*not found|missing.*file",
-        }
-
-        # Check for each error pattern
-        for code, pattern in error_patterns.items():
-            if re.search(pattern, output, re.IGNORECASE):
-                errors.append(
-                    ValidationIssue(
-                        field="plugin.json",
-                        severity="error",
-                        message=self._get_error_message(code, output),
-                        code=code,
-                        docs_url=generate_docs_url(code),
-                        suggestion=self._get_error_suggestion(code),
-                    )
-                )
+        # Map claude CLI output to error codes — each rule owns its own pattern.
+        errors.extend(check_pl001(output))
+        errors.extend(check_pl002(claude_output=output))
+        errors.extend(check_pl003(output))
+        errors.extend(check_pl004(output))
+        errors.extend(check_pl005(output))
 
         # If no specific error pattern matched but validation failed, add generic error
         # Include actual CLI output for diagnosis (truncate to avoid huge messages)
         if not errors:
-            detail = (stdout.strip() + "\n" + stderr.strip())[:500] or "(no output)"
-            low = detail.lower()
-            if "marketplace" in low and "unrecognized keys" in low:
-                errors.append(
-                    ValidationIssue(
-                        field="marketplace.json",
-                        severity="error",
-                        message=(
-                            "marketplace.json: top-level keys rejected by `claude plugin validate` "
-                            "(Claude Code allows only `name`, `owner`, `plugins`, and `metadata` at the catalog root)"
-                        ),
-                        code=PL006,
-                        docs_url=generate_docs_url(PL006),
-                        suggestion=(
-                            "Plugin-manifest fields such as `repository`, `homepage`, and `license` belong under "
-                            f"`metadata`, not beside `plugins`. Reference: {MARKETPLACE_MANIFEST_SCHEMA_URL}. "
-                            f"Run `skilllint check --fix` to relocate known fields. CLI output: {detail}"
-                        ),
-                    )
-                )
-            else:
-                errors.append(
-                    ValidationIssue(
-                        field="plugin.json",
-                        severity="error",
-                        message="Plugin validation failed (see claude CLI output for details)",
-                        code=PL002,
-                        docs_url=generate_docs_url(PL002),
-                        suggestion=f"Run 'claude plugin validate <plugin-dir>'. CLI output: {detail}",
-                    )
-                )
-
-    def _get_error_message(self, code: str, output: str) -> str:
-        """Get human-readable error message for code.
-
-        Args:
-            code: Error code (PL001-PL006)
-            output: CLI output containing error details
-
-        Returns:
-            Human-readable error message
-        """
-        lines = output.split("\n")
-        for text_line in lines:
-            stripped_line = text_line.strip()
-            if (
-                stripped_line
-                and not stripped_line.startswith("#")
-                and any(kw in stripped_line.lower() for kw in ["error", "missing", "invalid", "required", "not found"])
-            ):
-                return stripped_line[:200]
-
-        fallbacks: dict[str, str] = {
-            "PL001": "Missing plugin.json file in .claude-plugin/ directory",
-            "PL002": "Invalid JSON syntax in plugin.json",
-            "PL003": "Missing required field 'name' in plugin.json",
-            "PL004": "Component path does not start with './'",
-            "PL005": "Referenced component file does not exist",
-            "PL006": "marketplace.json has invalid top-level keys (use metadata object)",
-        }
-        return fallbacks.get(str(code), "Plugin structure validation failed")
-
-    def _get_error_suggestion(self, code: str) -> str:  # ruff: ignore[too-many-return-statements]
-        """Get suggestion for fixing error.
-
-        Args:
-            code: Error code (PL001-PL006)
-
-        Returns:
-            Human-readable suggestion for fixing the error
-        """
-        match code:
-            case "PL001":
-                return "Create .claude-plugin/plugin.json with required fields"
-            case "PL002":
-                return "Validate JSON syntax: python3 -m json.tool .claude-plugin/plugin.json"
-            case "PL003":
-                return 'Add \'name\' field to plugin.json: {"name": "plugin-name"}'
-            case "PL004":
-                return "Ensure all component paths start with './' (e.g., './skills/skill-name/')"
-            case "PL005":
-                return "Verify all referenced files exist at specified paths"
-            case "PL006":
-                return (
-                    "Keep only name, owner, plugins, and metadata at the marketplace root; "
-                    f"see {MARKETPLACE_MANIFEST_SCHEMA_URL}"
-                )
-            case _:
-                return "Run 'claude plugin validate' for detailed error information"
+            errors.append(claude_validation_failure_issue(stdout, stderr))
 
 
 # ============================================================================
@@ -4519,37 +3337,21 @@ class HookValidator:
     Validates JSON structure, event types, and hook entries.
     Hook scripts themselves are language-agnostic (any executable) and validated
     by their respective language linters (oxlint, ruff, shellcheck, etc.).
+
+    Detection lives in ``skilllint.rules.hk_series``.  This class packages rule
+    output into a ValidationResult and owns the HK005 auto-fix, which mutates
+    the filesystem.
     """
-
-    VALID_EVENT_TYPES: ClassVar[frozenset[str]] = frozenset({
-        "SessionStart",
-        "UserPromptSubmit",
-        "PreToolUse",
-        "PermissionRequest",
-        "PostToolUse",
-        "PostToolUseFailure",
-        "Notification",
-        "SubagentStart",
-        "SubagentStop",
-        "Stop",
-        "StopFailure",
-        "TeammateIdle",
-        "TaskCompleted",
-        "InstructionsLoaded",
-        "ConfigChange",
-        "WorktreeCreate",
-        "WorktreeRemove",
-        "PreCompact",
-        "PostCompact",
-        "Elicitation",
-        "ElicitationResult",
-        "SessionEnd",
-    })
-
-    VALID_HOOK_TYPES: ClassVar[frozenset[str]] = frozenset({"command", "http", "prompt", "agent"})
 
     def validate(self, path: Path) -> ValidationResult:
         """Validate a hooks.json configuration file.
+
+        HK001 is terminal: an unreadable file, invalid JSON, or a missing /
+        non-object top-level ``hooks`` key leaves nothing for the remaining
+        rules to inspect.  Otherwise HK002/HK003 check the structure and
+        HK004/HK005 check the referenced scripts.  All issues share one list so
+        that missing-script warnings surface in the same result as structural
+        errors.
 
         Args:
             path: Path to hooks.json
@@ -4557,7 +3359,15 @@ class HookValidator:
         Returns:
             ValidationResult with errors/warnings for hook issues
         """
-        return self._validate_hook_config(path)
+        hooks_obj, errors = load_hooks_object(path)
+        if hooks_obj is None:
+            return ValidationResult(passed=False, errors=errors, warnings=[], info=[])
+
+        errors.extend(check_hk002(hooks_obj))
+        errors.extend(check_hk003(hooks_obj))
+        self.validate_hook_script_references_in_hooks_dict(hooks_obj, path.parent, errors)
+
+        return ValidationResult(passed=not errors, errors=errors, warnings=[], info=[])
 
     def can_fix(self) -> bool:
         """Check if validator supports auto-fixing.
@@ -4580,62 +3390,20 @@ class HookValidator:
         Returns:
             List of human-readable descriptions of fixes applied
         """
-        try:
-            content = path.read_text(encoding="utf-8")
-        except OSError:
+        hooks_dict, _ = load_hooks_object(path)
+        if hooks_dict is None:
             return []
 
-        try:
-            data = msgspec.json.decode(content)
-        except msgspec.DecodeError:
-            return []
-
-        if not isinstance(data, dict):
-            return []
-
-        hooks_dict = data.get("hooks")
-        if not isinstance(hooks_dict, dict):
-            return []
-
-        base_dir = path.parent
-        plugin_root = self._find_hook_plugin_dir(base_dir)
         fixes: list[str] = []
 
-        for command, resolved_path in self._iter_command_scripts(hooks_dict, base_dir, plugin_root):
+        for command, resolved_path in iter_command_scripts(iter_hook_entries(hooks_dict), path.parent):
+            if not resolved_path.exists():
+                continue
             fix_desc = self._fix_execute_bit(resolved_path, command)
             if fix_desc:
                 fixes.append(fix_desc)
 
         return fixes
-
-    def _iter_command_scripts(
-        self, hooks_dict: dict[str, object], base_dir: Path, plugin_root: Path
-    ) -> Iterator[tuple[str, Path]]:
-        for groups in hooks_dict.values():
-            if not isinstance(groups, list):
-                continue
-            for group in groups:
-                if not isinstance(group, dict):
-                    continue
-                group_dict = cast("dict[str, YamlValue]", group)
-                hook_entries = group_dict.get("hooks", [])
-                if not isinstance(hook_entries, list):
-                    continue
-                for entry in hook_entries:
-                    if not isinstance(entry, dict):
-                        continue
-                    if entry.get("type") != "command":
-                        continue
-                    command = entry.get("command", "")
-                    if not isinstance(command, str) or not self._is_file_path_reference(command):
-                        continue
-                    resolved_command = command.replace("${CLAUDE_PLUGIN_ROOT}", str(plugin_root))
-                    resolved_path = Path(resolved_command)
-                    if not resolved_path.is_absolute():
-                        resolved_path = (base_dir / resolved_command).resolve()
-                    if not resolved_path.exists():
-                        continue
-                    yield command, resolved_path
 
     def _fix_execute_bit(self, resolved_path: Path, command: str) -> str | None:
         git_exec = _git_file_has_execute_bit(resolved_path)
@@ -4663,261 +3431,9 @@ class HookValidator:
                 return f"Made hook script executable: {command}"
         return None
 
-    def _validate_hook_config(self, path: Path) -> ValidationResult:
-        """Validate hooks.json structure and contents.
-
-        Checks:
-        1. Valid JSON (HK001 if invalid)
-        2. Top-level has "hooks" key that is a dict (HK001 if not)
-        3. Each key in hooks is a valid event type (HK002 if not)
-        4. Each event type value is a list of hook groups (HK003)
-        5. Each hook group has "hooks" key with list of entries (HK003)
-        6. Each entry has valid "type" field (HK003)
-        7. "command" type requires "command" field (HK003)
-        8. "prompt" type requires "prompt" field (HK003)
-
-        Args:
-            path: Path to hooks.json file
-
-        Returns:
-            ValidationResult with errors for structural issues
-        """
-        errors: list[ValidationIssue] = []
-        warnings: list[ValidationIssue] = []
-        info: list[ValidationIssue] = []
-
-        # Read and parse JSON
-        try:
-            content = path.read_text(encoding="utf-8")
-        except OSError as e:
-            errors.append(
-                ValidationIssue(
-                    field="(file)",
-                    severity="error",
-                    message=f"Could not read file: {e}",
-                    code=HK001,
-                    docs_url=generate_docs_url(HK001),
-                )
-            )
-            return ValidationResult(passed=False, errors=errors, warnings=warnings, info=info)
-
-        try:
-            data = msgspec.json.decode(content)
-        except msgspec.DecodeError as e:
-            errors.append(
-                ValidationIssue(
-                    field="(json)",
-                    severity="error",
-                    message=f"Invalid JSON syntax: {e}",
-                    code=HK001,
-                    docs_url=generate_docs_url(HK001),
-                    suggestion="Fix JSON syntax errors in hooks.json",
-                )
-            )
-            return ValidationResult(passed=False, errors=errors, warnings=warnings, info=info)
-
-        # Check top-level structure
-        if not isinstance(data, dict) or "hooks" not in data:
-            errors.append(
-                ValidationIssue(
-                    field="hooks",
-                    severity="error",
-                    message="Missing required top-level 'hooks' key",
-                    code=HK001,
-                    docs_url=generate_docs_url(HK001),
-                    suggestion='hooks.json must have structure: {"hooks": {...}}',
-                )
-            )
-            return ValidationResult(passed=False, errors=errors, warnings=warnings, info=info)
-
-        hooks_obj = data["hooks"]
-        if not isinstance(hooks_obj, dict):
-            errors.append(
-                ValidationIssue(
-                    field="hooks",
-                    severity="error",
-                    message="'hooks' value must be an object",
-                    code=HK001,
-                    docs_url=generate_docs_url(HK001),
-                )
-            )
-            return ValidationResult(passed=False, errors=errors, warnings=warnings, info=info)
-
-        # Validate each event type
-        for event_type, hook_groups in hooks_obj.items():
-            if event_type not in self.VALID_EVENT_TYPES:
-                errors.append(
-                    ValidationIssue(
-                        field=f"hooks.{event_type}",
-                        severity="error",
-                        message=f"Invalid event type: '{event_type}'",
-                        code=HK002,
-                        docs_url=generate_docs_url(HK002),
-                        suggestion=f"Valid event types: {', '.join(sorted(self.VALID_EVENT_TYPES))}",
-                    )
-                )
-                continue
-
-            # Each event type value must be a list of hook groups
-            if not isinstance(hook_groups, list):
-                errors.append(
-                    ValidationIssue(
-                        field=f"hooks.{event_type}",
-                        severity="error",
-                        message=f"Event type '{event_type}' value must be an array of hook groups",
-                        code=HK003,
-                        docs_url=generate_docs_url(HK003),
-                    )
-                )
-                continue
-
-            # Validate each hook group
-            for group_idx, group in enumerate(hook_groups):
-                self._validate_hook_group(group, event_type, group_idx, errors)
-
-        # Validate that file-path command references actually exist and are executable.
-        # HK004/HK005 issues are appended directly to the combined errors list so that
-        # missing-script warnings surface in the same result as structural errors.
-        self.validate_hook_script_references_in_hooks_dict(hooks_obj, path.parent, errors)
-
-        passed = len(errors) == 0
-        return ValidationResult(passed=passed, errors=errors, warnings=warnings, info=info)
-
-    def _validate_hook_group(
-        self, group: object, event_type: str, group_idx: int, errors: list[ValidationIssue]
-    ) -> None:
-        """Validate a single hook group within an event type.
-
-        Args:
-            group: The hook group object to validate
-            event_type: Parent event type name
-            group_idx: Index of this group in the event type array
-            errors: List to append validation errors to
-        """
-        if not isinstance(group, dict):
-            errors.append(
-                ValidationIssue(
-                    field=f"hooks.{event_type}[{group_idx}]",
-                    severity="error",
-                    message="Hook group must be an object",
-                    code=HK003,
-                    docs_url=generate_docs_url(HK003),
-                )
-            )
-            return
-
-        group_dict = cast("dict[str, YamlValue]", group)
-
-        if "hooks" not in group_dict or not isinstance(group_dict["hooks"], list):
-            errors.append(
-                ValidationIssue(
-                    field=f"hooks.{event_type}[{group_idx}]",
-                    severity="error",
-                    message="Hook group must have 'hooks' array",
-                    code=HK003,
-                    docs_url=generate_docs_url(HK003),
-                    suggestion='Each hook group needs: {"hooks": [...]}',
-                )
-            )
-            return
-
-        for entry_idx, entry in enumerate(group_dict["hooks"]):
-            self._validate_hook_entry(entry, event_type, group_idx, entry_idx, errors)
-
-    def _validate_hook_entry(
-        self, entry: object, event_type: str, group_idx: int, entry_idx: int, errors: list[ValidationIssue]
-    ) -> None:
-        """Validate a single hook entry.
-
-        Args:
-            entry: The hook entry object to validate
-            event_type: Parent event type name
-            group_idx: Index of the parent group
-            entry_idx: Index of this entry in the hooks array
-            errors: List to append validation errors to
-        """
-        field_prefix = f"hooks.{event_type}[{group_idx}].hooks[{entry_idx}]"
-
-        if not isinstance(entry, dict):
-            errors.append(
-                ValidationIssue(
-                    field=field_prefix,
-                    severity="error",
-                    message="Hook entry must be an object",
-                    code=HK003,
-                    docs_url=generate_docs_url(HK003),
-                )
-            )
-            return
-
-        entry_dict = cast("dict[str, YamlValue]", entry)
-        hook_type = entry_dict.get("type")
-        if hook_type not in self.VALID_HOOK_TYPES:
-            errors.append(
-                ValidationIssue(
-                    field=f"{field_prefix}.type",
-                    severity="error",
-                    message=f"Invalid or missing hook type: '{hook_type}'",
-                    code=HK003,
-                    docs_url=generate_docs_url(HK003),
-                    suggestion=f"Hook type must be one of: {', '.join(sorted(self.VALID_HOOK_TYPES))}",
-                )
-            )
-            return
-
-        match hook_type:
-            case "command":
-                if "command" not in entry_dict:
-                    errors.append(
-                        ValidationIssue(
-                            field=f"{field_prefix}.command",
-                            severity="error",
-                            message="Hook type 'command' requires 'command' field",
-                            code=HK003,
-                            docs_url=generate_docs_url(HK003),
-                        )
-                    )
-            case "prompt":
-                if "prompt" not in entry_dict:
-                    errors.append(
-                        ValidationIssue(
-                            field=f"{field_prefix}.prompt",
-                            severity="error",
-                            message="Hook type 'prompt' requires 'prompt' field",
-                            code=HK003,
-                            docs_url=generate_docs_url(HK003),
-                        )
-                    )
-            case "http":
-                if "url" not in entry_dict:
-                    errors.append(
-                        ValidationIssue(
-                            field=f"{field_prefix}.url",
-                            severity="error",
-                            message="Hook type 'http' requires 'url' field",
-                            code=HK003,
-                            docs_url=generate_docs_url(HK003),
-                        )
-                    )
-            case "agent":
-                if "prompt" not in entry_dict:
-                    errors.append(
-                        ValidationIssue(
-                            field=f"{field_prefix}.prompt",
-                            severity="error",
-                            message="Hook type 'agent' requires 'prompt' field",
-                            code=HK003,
-                            docs_url=generate_docs_url(HK003),
-                        )
-                    )
-
     @staticmethod
     def _is_file_path_reference(command: str) -> bool:
         """Return True if *command* looks like a file path rather than a bare shell command.
-
-        File path references start with ``./``, ``../``, ``/`` (absolute), or
-        ``${CLAUDE_PLUGIN_ROOT}/``.  Bare shell commands (e.g. ``echo hello``,
-        ``python3 -m pytest``) do not match.
 
         Args:
             command: The ``command`` value from a hook entry.
@@ -4925,16 +3441,11 @@ class HookValidator:
         Returns:
             True if command is a file path reference, False otherwise.
         """
-        return bool(command) and (command.startswith(("./", "../", "/", "${CLAUDE_PLUGIN_ROOT}/")))
+        return is_file_path_reference(command)
 
     @staticmethod
     def _find_hook_plugin_dir(base_dir: Path) -> Path:
         """Find the hook plugin directory by checking .claude-plugin/ directory existence.
-
-        Unlike find_plugin_dir, this method checks for the presence of the
-        .claude-plugin/ directory rather than plugin.json. It also returns
-        base_dir as a fallback rather than None, because hook files may exist
-        in a plugin directory even when plugin.json is absent or malformed.
 
         Args:
             base_dir: Base directory to search from.
@@ -4942,117 +3453,37 @@ class HookValidator:
         Returns:
             Plugin directory path if .claude-plugin/ exists, otherwise base_dir.
         """
-        current = base_dir.resolve()
-        for parent in [current, *current.parents]:
-            if (parent / ".claude-plugin").is_dir():
-                return parent
-        return base_dir
+        return find_hook_plugin_dir(base_dir)
 
     def _validate_command_script_references(
-        self, hook_entries: list[dict[str, YamlValue]], base_dir: Path, errors: list[ValidationIssue]
+        self, hook_entries: Iterable[object], base_dir: Path, errors: list[ValidationIssue]
     ) -> None:
-        """Check that file-path ``command`` values in hook entries actually exist.
-
-        For each entry where ``type == "command"`` and the ``command`` value
-        looks like a file path reference (starts with ``./``, ``../``, ``/``,
-        or ``${CLAUDE_PLUGIN_ROOT}/``), resolve the path relative to *base_dir*
-        and verify:
-
-        - The file exists (HK004 error if not).
-        - The file is executable (HK005 warning if not).
-
-        Bare shell commands such as ``echo hello`` or ``python3 -m pytest`` are
-        intentionally skipped.
+        """Check that file-path ``command`` values in hook entries exist and are executable.
 
         Args:
             hook_entries: List of hook entry dicts to inspect.
             base_dir: Directory to use as the resolution base for relative paths.
             errors: List to append HK004 errors and HK005 warnings to.
         """
-        plugin_root = self._find_hook_plugin_dir(base_dir)
-
-        for entry in hook_entries:
-            if not isinstance(entry, dict):
-                continue
-            if entry.get("type") != "command":
-                continue
-
-            command = entry.get("command", "")
-            if not isinstance(command, str) or not self._is_file_path_reference(command):
-                continue
-
-            # Substitute ${CLAUDE_PLUGIN_ROOT} with the detected plugin root
-            resolved_command = command.replace("${CLAUDE_PLUGIN_ROOT}", str(plugin_root))
-
-            resolved_path = Path(resolved_command)
-            if not resolved_path.is_absolute():
-                resolved_path = (base_dir / resolved_command).resolve()
-
-            if not resolved_path.exists():
-                errors.append(
-                    ValidationIssue(
-                        field="command",
-                        severity="error",
-                        message=f"Hook script not found: {command}",
-                        code=HK004,
-                        docs_url=generate_docs_url(HK004),
-                        suggestion=f"Create the script at {resolved_path} or fix the path",
-                    )
-                )
-            else:
-                # Use Git's tracked mode when available for cross-platform consistency.
-                # On Windows, os.access(X_OK) is unreliable; Git check ensures plugins
-                # that pass on Windows will also pass on Linux.
-                git_exec = _git_file_has_execute_bit(resolved_path)
-                if git_exec is False:
-                    errors.append(
-                        ValidationIssue(
-                            field="command",
-                            severity="warning",
-                            message=f"Hook script is not executable in Git: {command}",
-                            code=HK005,
-                            docs_url=generate_docs_url(HK005),
-                            suggestion=f"Run: git update-index --chmod=+x {resolved_path}",
-                        )
-                    )
-                elif git_exec is None and not os.access(resolved_path, os.X_OK):
-                    # Fallback when not in Git: os.access works on Unix only
-                    errors.append(
-                        ValidationIssue(
-                            field="command",
-                            severity="warning",
-                            message=f"Hook script is not executable: {command}",
-                            code=HK005,
-                            docs_url=generate_docs_url(HK005),
-                            suggestion=f"Run: chmod +x {resolved_path}",
-                        )
-                    )
+        errors.extend(check_hk004(hook_entries, base_dir))
+        errors.extend(check_hk005(hook_entries, base_dir))
 
     def validate_hook_script_references_in_hooks_dict(
-        self, hooks_dict: dict[str, YamlValue], base_dir: Path, errors: list[ValidationIssue]
+        self, hooks_dict: Mapping[str, YamlValue], base_dir: Path, errors: list[ValidationIssue]
     ) -> None:
         """Validate command file-path references in a hooks configuration dict.
 
         Iterates over a hooks configuration dict (same structure as the root
-        ``"hooks"`` key in ``hooks.json``) and calls
-        :meth:`_validate_command_script_references` for every hook entry found.
+        ``"hooks"`` key in ``hooks.json``) and runs HK004/HK005 against every
+        hook entry found.
 
         Args:
             hooks_dict: Hooks configuration mapping event types to groups.
             base_dir: Directory used as base for resolving relative script paths.
             errors: List to append HK004 errors and HK005 warnings to.
         """
-        for groups in hooks_dict.values():
-            if not isinstance(groups, list):
-                continue
-            for group in groups:
-                if not isinstance(group, dict):
-                    continue
-                hooks_entries = group.get("hooks", [])
-                if isinstance(hooks_entries, list):
-                    for entry in hooks_entries:
-                        if isinstance(entry, dict):
-                            self._validate_command_script_references([entry], base_dir, errors)
+        for entry in iter_hook_entries(hooks_dict):
+            self._validate_command_script_references([entry], base_dir, errors)
 
 
 # ============================================================================
@@ -6142,4 +4573,11 @@ def rules_cmd(
 
 
 if __name__ == "__main__":
+    # `python -m skilllint.plugin_validator` executes this file as "__main__".
+    # Without this alias, the rules package's deferred
+    # `from skilllint.plugin_validator import ValidationIssue` would execute the
+    # file a *second* time under its real name, producing a distinct
+    # ValidationIssue class that ValidationResult then rejects. Registering this
+    # module under its real name keeps every issue on one class.
+    sys.modules.setdefault("skilllint.plugin_validator", sys.modules["__main__"])
     app()

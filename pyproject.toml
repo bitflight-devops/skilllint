@@ -111,7 +111,12 @@ python_classes = ["Test*"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
 pythonpath = [".", "packages/", "tests/"]
-testpaths = ["**/tests"]
+# Vendored skills from github.com/jamie-bitflight/claude_skills ship each script's tests beside
+# the script rather than in a tests/ directory, so the **/tests glob alone never collects them.
+# Collecting them in place keeps the vendored tree byte-identical to upstream (a re-sync stays a
+# plain copy) and lets pytest's own rootdir insertion resolve each test's sibling import, which
+# is the same resolution the PEP 723 standalone invocation relies on.
+testpaths = ["**/tests", ".agents/skills/*/scripts"]
 
 [tool.coverage.report]
 exclude_lines = [
@@ -140,11 +145,25 @@ extra-paths = [
 root = ["./"]
 
 [tool.ty.src]
-exclude = ["packages/skilllint/tests/fixtures/providers/*/failing-examples/*"]
+exclude = [
+    "packages/skilllint/tests/fixtures/providers/*/failing-examples/*",
+    # Skills vendored from github.com/jamie-bitflight/claude_skills and maintained
+    # there. Their tests import sibling modules that only resolve through runtime
+    # sys.path, so ty cannot resolve them here; type-checking vendored code would
+    # also churn on every upstream sync.
+    ".agents/skills/*",
+]
 include = [".github", "packages", "scripts", "tests"]
 
 [tool.ruff]
-exclude = ["packages/skilllint/tests/fixtures/providers/*/failing-examples/*"]
+exclude = [
+    "packages/skilllint/tests/fixtures/providers/*/failing-examples/*",
+    # Skills vendored from github.com/jamie-bitflight/claude_skills and maintained
+    # there. They ship tests beside the script rather than in a tests/ dir, so the
+    # **/tests/** per-file-ignores below miss them; linting vendored code here
+    # would also churn on every upstream sync.
+    ".agents/skills/*",
+]
 fix = true
 line-length = 120
 src = [".github", "packages", "scripts", "tests"]
