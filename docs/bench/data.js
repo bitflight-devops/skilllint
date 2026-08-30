@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788098360657,
+  "lastUpdate": 1788099942163,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -1128,6 +1128,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 109.315,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "4d76204b4e7dd1366ef8a15d71b14aaa641702ea",
+          "message": "refactor: drop the leading underscore from GitHubResponseModel (#160)\n\nThe class is the declared ingress boundary for every model built from raw\n`gh` output — the thing a reader needs to find to answer \"what is validated\nstrictly, and why\". Marking it module-private hid the one name that\ndocuments that contract.\n\nRename only; no behaviour change.\n\n\nClaude-Session: https://claude.ai/code/session_01QJeBLNA9ybmQvv5REMDkrc\n\nCo-authored-by: Claude Opus 5 <noreply@anthropic.com>",
+          "timestamp": "2026-08-30T14:23:10Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/4d76204b4e7dd1366ef8a15d71b14aaa641702ea"
+        },
+        "date": 1788099941243,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 8759.346,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 9230.547,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 9976.582,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 108.444,
             "unit": "files/s"
           }
         ]
