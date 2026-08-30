@@ -49,7 +49,7 @@ jobs:
         run: uv python install 3.12
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --locked
 
       - name: Extract benchmark fixtures
         run: |
@@ -147,7 +147,7 @@ jobs:
 
       - name: Reinstall dependencies for base ref
         if: steps.base_ref_io.outputs.ref != ''
-        run: uv sync
+        run: uv sync --locked
 
       - name: Drop OS page cache (base ref)
         if: steps.base_ref_io.outputs.ref != ''
@@ -228,7 +228,7 @@ jobs:
         run: uv python install 3.12
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --locked
 
       - name: Drop OS page cache (CPU benchmark)
         run: echo 3 | sudo tee /proc/sys/vm/drop_caches || true
@@ -298,7 +298,7 @@ jobs:
 
       - name: Reinstall dependencies for base ref
         if: steps.base_ref_cpu.outputs.ref != ''
-        run: uv sync
+        run: uv sync --locked
 
       - name: Drop OS page cache (base CPU benchmark)
         if: steps.base_ref_cpu.outputs.ref != ''
@@ -361,7 +361,7 @@ jobs:
 
       - run: uv python install 3.12
 
-      - run: uv sync
+      - run: uv sync --locked
 
       - name: Generate benchmark comment
         run: |
@@ -401,7 +401,7 @@ jobs:
         run: uv python install 3.12
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --locked
 
       - name: Extract benchmark fixture
         run: unzip tests/fixtures/benchmark-plugin-1000-skills.zip -d /tmp/bench-plugin

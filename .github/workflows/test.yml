@@ -33,10 +33,10 @@ jobs:
         run: uv python install 3.12
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --locked
 
       - name: Run prek hooks on all files
-        run: uv run prek run --all-files
+        run: uv run --locked prek run --all-files
 
   format:
     name: Code Formatting
@@ -54,10 +54,10 @@ jobs:
         run: uv python install 3.12
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --locked
 
       - name: Check code formatting
-        run: uv run ruff format --check
+        run: uv run --locked ruff format --check
 
   lint:
     name: Code Linting
@@ -75,10 +75,10 @@ jobs:
         run: uv python install 3.12
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --locked
 
       - name: Lint code
-        run: uv run ruff check --output-format=github
+        run: uv run --locked ruff check --output-format=github
         continue-on-error: false
 
   typecheck-ty:
@@ -97,10 +97,10 @@ jobs:
         run: uv python install 3.12
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --locked
 
       - name: Type check with ty
-        run: uv run ty check packages/ --output-format github
+        run: uv run --locked ty check packages/ --output-format github
 
   test:
     name: Tests (Python ${{ matrix.python-version }})
@@ -122,14 +122,14 @@ jobs:
         run: uv python install ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --locked
 
       - name: Run tests with coverage
         timeout-minutes: 10
-        run: uv run pytest --cov=packages/skilllint --cov-report=xml --cov-report=term
+        run: uv run --locked pytest --cov=packages/skilllint --cov-report=xml --cov-report=term
 
       - name: Assert rules completeness
-        run: uv run python scripts/assert_rules_completeness.py
+        run: uv run --locked python scripts/assert_rules_completeness.py
 
       - name: Upload coverage XML
         uses: actions/upload-artifact@v7.0.1
