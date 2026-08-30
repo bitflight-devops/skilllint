@@ -231,6 +231,36 @@ def test_as008_case_mismatch_with_discovered_server_produces_error(tmp_path: pat
     assert "fix" in as008[0]
 
 
+def test_as008_bare_server_grant_has_suffix_safe_correction(tmp_path: pathlib.Path) -> None:
+    """A bare server grant must not acquire a dangling ``__`` in its fix."""
+    _write_mcp_json(tmp_path, "Ref")
+    skill_md = _make_skill_with_tools(tmp_path, "allowed-tools: mcp__ref")
+
+    as008 = _violations_with_code(check_skill_md(skill_md), "AS008")
+
+    assert len(as008) == 1
+    assert "Did you mean 'mcp__Ref'?" in as008[0]["message"]
+    assert as008[0]["fix"] == "Replace 'mcp__ref' with 'mcp__Ref'."
+
+
+def test_as008_unscoped_wildcard_is_not_an_unknown_server(tmp_path: pathlib.Path) -> None:
+    """``mcp__*`` belongs to the agent wildcard rule, not MCP casing analysis."""
+    skill_md = _make_skill_with_tools(tmp_path, "allowed-tools: mcp__*")
+    assert _violations_with_code(check_skill_md(skill_md), "AS008") == []
+
+
+def test_as008_scoped_wildcard_still_checks_server_casing(tmp_path: pathlib.Path) -> None:
+    """Only the server segment is skipped; a wildcard suffix remains valid."""
+    _write_mcp_json(tmp_path, "Ref")
+    skill_md = _make_skill_with_tools(tmp_path, "allowed-tools: mcp__ref__*")
+
+    as008 = _violations_with_code(check_skill_md(skill_md), "AS008")
+
+    assert len(as008) == 1
+    assert "Did you mean 'mcp__Ref__*'?" in as008[0]["message"]
+    assert as008[0]["fix"] == "Replace 'mcp__ref__' with 'mcp__Ref__'."
+
+
 def test_as008_unknown_server_not_in_any_config_produces_warning(tmp_path: pathlib.Path):
     """MCP tool referencing a server absent from all config files produces AS008 warning."""
     # No .mcp.json written — server is entirely unknown

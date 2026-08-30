@@ -2,7 +2,7 @@
 
 ## 1. Problem Statement
 
-skilllint validates plugin files against rules (FM001-FM009, HK001-HK005, AS001-AS008, PA001). Many of these rules assert constraints derived from upstream vendor documentation -- event type enumerations, hook type sets, field constraints, naming rules. These constraints are currently hardcoded as Python literals disconnected from their upstream sources.
+When this design was drafted, skilllint validated plugin files with the FM, HK, AS, and PA families. That inventory is a historical design snapshot, not the current rule catalogue; run `skilllint rules` for the live set. Many rules assert constraints derived from upstream vendor documentation -- event type enumerations, hook type sets, field constraints, and naming rules. These constraints were hardcoded as Python literals disconnected from their upstream sources.
 
 This disconnection causes staleness. Concrete examples from the provenance audit:
 

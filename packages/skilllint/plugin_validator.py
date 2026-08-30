@@ -386,6 +386,11 @@ class ErrorCode(StrEnum):
     # Plugin Agent Frontmatter (PA001)
     PA001 = "PA001"  # Plugin agent: hooks/mcpServers/permissionMode unsupported per Anthropic (ignored at load)
 
+    # Agent frontmatter (AG001-AG003)
+    AG001 = "AG001"  # Agent tools entries all resolve to nothing
+    AG002 = "AG002"  # Agent MCP server reference is unknown or incorrectly cased
+    AG003 = "AG003"  # Agent skills value contains runtime-ignored entries
+
     # Cursor adapter (CU001-CU002)
     CU001 = "CU001"  # Required field missing from .mdc frontmatter
     CU002 = "CU002"  # Unknown field in .mdc frontmatter (additionalProperties is false)
@@ -443,6 +448,7 @@ PR001, PR002, PR003, PR004, PR005 = (
     ErrorCode.PR005,
 )
 PA001 = ErrorCode.PA001
+AG001, AG002, AG003 = ErrorCode.AG001, ErrorCode.AG002, ErrorCode.AG003
 
 # ============================================================================
 # VALIDATOR OWNERSHIP
@@ -1312,26 +1318,6 @@ def _check_list_valued_tool_fields(
     warnings.extend(check_fm007(data, sentinel_path, "skill"))
 
 
-def _is_pydantic_shape_error_for_field(error: ErrorDetails, field: str) -> bool:
-    """Return True when a Pydantic error's location is exactly ``(field,)``.
-
-    Used to suppress the generic Pydantic-derived issue for a top-level field
-    that a dedicated AG rule reports instead, with a specific authority
-    citation the generic path cannot supply. A per-item error (e.g.
-    ``("skills", 0)`` for a bad element inside an otherwise-valid list) does
-    not match and is left to the generic path, since no AG rule covers it.
-
-    Args:
-        error: Pydantic ErrorDetails from ValidationError.errors().
-        field: Top-level field name to match against the error's location.
-
-    Returns:
-        True if the error's ``loc`` is the single-element tuple ``(field,)``.
-    """
-    loc = error.get("loc", ())
-    return tuple(str(x) for x in (loc if isinstance(loc, (list, tuple)) else (loc,))) == (field,)
-
-
 def _check_agent_tools_and_skills_fields(
     data: dict[str, YamlValue], path: Path, errors: list[ValidationIssue], warnings: list[ValidationIssue]
 ) -> None:
@@ -2116,10 +2102,6 @@ class FrontmatterValidator:
             # AS-series rules do not duplicate parser-owned findings.
         except ValidationError as e:
             for err in e.errors():
-                if file_type == FileType.AGENT and _is_pydantic_shape_error_for_field(err, "skills"):
-                    # AG003 reports this with sub-agents.md authority instead of
-                    # the generic Pydantic-derived FM005 message.
-                    continue
                 issue = _pydantic_error_to_validation_issue(err)
                 if issue.severity == "warning":
                     warnings.append(issue)
@@ -2255,13 +2237,9 @@ class FrontmatterValidator:
         fixes = list(colon_fixes)
         if file_type == FileType.SKILL and file_path is not None:
             normalized_dict = fix_skill_name_field(normalized_dict, file_path, fixes)
-        # SkillFrontmatter.skills is still `str | None` with list->CSV coercion
-        # (frontmatter_core.py) -- restore the original value here so --fix does
-        # not silently rewrite a skill's `skills:` field shape. AgentFrontmatter
-        # .skills is now itself `list[str] | None` (issue #132): model_dump()
-        # already preserves the list shape for agent files, so this restoration
-        # is no longer needed there and is scoped to FileType.SKILL only.
-        if file_type == FileType.SKILL and "skills" in original_data:
+        # Both frontmatter models expose runtime-friendly views of `skills`,
+        # but --fix must preserve its parsed value and scalar/sequence/null shape.
+        if "skills" in original_data:
             normalized_dict["skills"] = original_data["skills"]
         tool_fields = {"tools", "disallowedTools", "allowed-tools"}
         for field_name in tool_fields:

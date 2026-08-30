@@ -7,16 +7,38 @@ names the same way regardless of which field or file type they inspect; only
 what they do with the result (violation shape, authority, message wording)
 differs, and that stays in each rule module.
 
-Entry point: discover_mcp_servers(file_path) -> set[str]
+Entry points:
+    discover_mcp_servers(file_path) -> set[str]
+    analyze_mcp_tool_reference(...) -> McpReferenceAnalysis | None
 """
 
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
     import pathlib
+
+
+@dataclass(frozen=True)
+class McpReferenceAnalysis:
+    """Pure classification of one MCP tool/server reference.
+
+    ``replacement_source`` and ``replacement_target`` are server prefixes for
+    qualified references and complete references for bare server grants. This
+    lets callers retain their own diagnostic wording without inventing a
+    dangling ``__`` for ``mcp__server``.
+    """
+
+    reference: str
+    server_name: str
+    status: Literal["exact", "case-mismatch", "unknown"]
+    canonical_server: str | None = None
+    corrected_reference: str | None = None
+    replacement_source: str | None = None
+    replacement_target: str | None = None
 
 
 def _read_json_file(path: pathlib.Path) -> dict[str, object] | None:
@@ -211,6 +233,70 @@ def resolve_plugin_namespaced_server(raw_segment: str, plugin_server_map: dict[s
     return raw_segment, ""
 
 
+def analyze_mcp_tool_reference(
+    reference: str, known_servers: set[str], plugin_server_map: dict[str, set[str]]
+) -> McpReferenceAnalysis | None:
+    """Classify a tool reference against discovered MCP server names.
+
+    Non-MCP names, empty/malformed server segments, unscoped wildcards, and
+    references to externally-installed plugin namespaces are outside the
+    casing rules' scope and return ``None``. All other MCP references are
+    classified as an exact match, case mismatch, or unknown server.
+
+    Args:
+        reference: Authored tool or bare server-grant name.
+        known_servers: Exact server names discovered from applicable config.
+        plugin_server_map: Plugin-name to MCP-server mapping used to remove a
+            locally resolvable ``plugin_{name}_`` namespace.
+
+    Returns:
+        Immutable analysis data, or ``None`` when casing rules should skip the
+        reference.
+    """
+    if not reference.startswith("mcp__"):
+        return None
+
+    parts = reference.split("__", 2)
+    raw_segment = parts[1]
+    suffix = parts[2] if len(parts) > 2 else None  # noqa: PLR2004
+    if not raw_segment or "*" in raw_segment:
+        return None
+
+    server_name, plugin_prefix = resolve_plugin_namespaced_server(raw_segment, plugin_server_map)
+    original_prefix = f"mcp__{plugin_prefix}{server_name}"
+    if server_name in known_servers:
+        return McpReferenceAnalysis(reference=reference, server_name=server_name, status="exact")
+
+    lower_to_canonical = {known.lower(): known for known in known_servers}
+    canonical_server = lower_to_canonical.get(server_name.lower())
+    if canonical_server is None:
+        if raw_segment.startswith("plugin_") and not plugin_prefix:
+            # The plugin is not installed in the local ancestry. Claude Code
+            # may resolve it externally, so there is no local casing claim.
+            return None
+        return McpReferenceAnalysis(reference=reference, server_name=server_name, status="unknown")
+
+    corrected_prefix = f"mcp__{plugin_prefix}{canonical_server}"
+    if suffix is None:
+        corrected_reference = corrected_prefix
+        replacement_source = original_prefix
+        replacement_target = corrected_prefix
+    else:
+        corrected_reference = f"{corrected_prefix}__{suffix}"
+        replacement_source = f"{original_prefix}__"
+        replacement_target = f"{corrected_prefix}__"
+
+    return McpReferenceAnalysis(
+        reference=reference,
+        server_name=server_name,
+        status="case-mismatch",
+        canonical_server=canonical_server,
+        corrected_reference=corrected_reference,
+        replacement_source=replacement_source,
+        replacement_target=replacement_target,
+    )
+
+
 def discover_mcp_servers(file_path: pathlib.Path) -> set[str]:
     """Collect known MCP server names from project and plugin context.
 
@@ -228,4 +314,10 @@ def discover_mcp_servers(file_path: pathlib.Path) -> set[str]:
     return _collect_servers_from_ancestry(file_path) | _collect_servers_from_frontmatter(file_path)
 
 
-__all__ = ["collect_plugin_names_from_ancestry", "discover_mcp_servers", "resolve_plugin_namespaced_server"]
+__all__ = [
+    "McpReferenceAnalysis",
+    "analyze_mcp_tool_reference",
+    "collect_plugin_names_from_ancestry",
+    "discover_mcp_servers",
+    "resolve_plugin_namespaced_server",
+]

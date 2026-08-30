@@ -1,0 +1,19 @@
+[fixture]
+rule_id = "AG003"
+tier = 1
+description = "Claude agent skills values that the Markdown file loader partially or wholly discards"
+
+[[variants]]
+name = "non-string-scalar"
+kind = "failing"
+expected_count = 1
+
+[[variants]]
+name = "mapping-value"
+kind = "failing"
+expected_count = 1
+
+[[variants]]
+name = "mixed-sequence"
+kind = "failing"
+expected_count = 1

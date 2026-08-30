@@ -1,6 +1,6 @@
 ---
 name: skilllint
-description: 'Guide for using the skilllint CLI to validate, lint, and fix Claude Code plugins, skills, agents, and commands. Use when encountering FM, SK, AS, LK, PD, PL, HK, NR, SL, TC, PR, PA, CU, CX rule violations, when asked to lint or validate a plugin, or when asked how to install or check the version of skilllint.'
+description: 'Guide for using the skilllint CLI to validate, lint, and fix Claude Code plugins, skills, agents, and commands. Use when encountering FM, SK, AS, AG, LK, PD, PL, HK, NR, SL, TC, PR, PA, CU, CX rule violations, when asked to lint or validate a plugin, or when asked how to install or check the version of skilllint.'
 argument-hint: '[rule-id | path]'
 ---
 
@@ -11,7 +11,7 @@ Arguments received: `$ARGUMENTS`
 ## Argument Routing
 
 - **No arguments** → Run full workflow guide below
-- **Rule ID** (e.g. `FM010`, `FM004`, `SK006`) → Run `skilllint rule <ID>` for AS rules; for others look up in [rule-catalog.md](./references/rule-catalog.md)
+- **Rule ID** (e.g. `FM010`, `AG003`, `SK006`) → Run `skilllint rule <ID>` and consult [rule-catalog.md](./references/rule-catalog.md) for the series overview
 - **A path** (e.g. `./plugins/my-plugin`) → Run `skilllint check <path>` and interpret the output
 
 ---
@@ -105,8 +105,8 @@ Severity levels:
 **To look up any rule ID:**
 
 ```bash
-# For AS006 (the rule documentation system)
-skilllint rule AS006
+# Show source, severity, platforms, examples, and remediation for one rule
+skilllint rule AG003
 
 # List all documented rules
 skilllint rules
@@ -116,7 +116,7 @@ skilllint rules --severity error
 skilllint rules --category skill
 ```
 
-For FM, SK, LK, PD, PL, HK, NR, SL, TC, PR, CU, CX rule IDs, use [rule-catalog.md](./references/rule-catalog.md) — these are emitted by `skilllint check --verbose` but not yet in the `rule` documentation system.
+Every registered rule is available through `skilllint rule <ID>`. Use [rule-catalog.md](./references/rule-catalog.md) for a compact overview of every series.
 
 ---
 
@@ -137,7 +137,7 @@ skilllint check --fix ./plugins/my-plugin
 
 **Auto-fixable rules:** FM004, FM007, FM009, FM010, SL001
 
-**Not auto-fixable:** SK006/SK007 (token size — requires manual refactoring), PD series, AS006, LK series, most PL/HK rules.
+**Not auto-fixable:** AG series, SK006/SK007 (token size — requires manual refactoring), PD series, AS006, LK series, most PL/HK rules.
 
 ---
 
@@ -222,7 +222,7 @@ skilllint --version
 
 1. **Scan**: `skilllint check --show-summary --show-progress <path>`
 2. **Identify** rule IDs in the output (e.g. `[FM004]`, `[SK006]`, `[FM010]`)
-3. **Explain**: `skilllint rule <ID>` for AS rules; [rule-catalog.md](./references/rule-catalog.md) for others
+3. **Explain**: Run `skilllint rule <ID>` and use [rule-catalog.md](./references/rule-catalog.md) for the series overview
 4. **Fix auto-fixable**: `skilllint check --fix <path>`
 5. **Fix manual issues**: Apply the patterns above based on rule ID
 6. **Verify**: `skilllint check --check <path>` — should exit 0 with no errors

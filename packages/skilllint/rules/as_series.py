@@ -25,9 +25,9 @@ from typing import TYPE_CHECKING
 from skilllint.frontmatter_core import normalize_tools_value
 from skilllint.rule_registry import rule_authority, skilllint_rule
 from skilllint.rules._mcp_tool_discovery import (
+    analyze_mcp_tool_reference,
     collect_plugin_names_from_ancestry,
     discover_mcp_servers,
-    resolve_plugin_namespaced_server,
 )
 from skilllint.token_counter import TOKEN_ERROR_THRESHOLD, TOKEN_WARNING_THRESHOLD
 
@@ -234,68 +234,49 @@ def _check_as008(tools: list[str], path: pathlib.Path) -> list[dict]:
       an external server that end users must configure.
 
     Args:
-        tools: List of tool name strings from the tools: frontmatter field.
-        path: Path to the SKILL.md or agent file being validated.
+        tools: List of tool name strings from the ``allowed-tools`` frontmatter field.
+        path: Path to the SKILL.md being validated.
 
     Returns:
         List of violation dicts — one per tool with a case mismatch or unknown server.
     """
     known_servers = discover_mcp_servers(path)
-    # Build case-folded lookup: lowercase_name -> canonical_name
-    lower_to_canonical: dict[str, str] = {s.lower(): s for s in known_servers}
     # Collect plugin-name -> server names map for plugin-namespaced tool resolution
     plugin_server_map = collect_plugin_names_from_ancestry(path)
 
     violations: list[dict] = []
     for tool_name in tools:
-        if not tool_name.startswith("mcp__"):
+        analysis = analyze_mcp_tool_reference(tool_name, known_servers, plugin_server_map)
+        if analysis is None or analysis.status == "exact":
             continue
-
-        parts = tool_name.split("__", 2)
-        if len(parts) < 2:  # noqa: PLR2004
-            continue
-        raw_segment = parts[1]
-        tool_suffix = parts[2] if len(parts) > 2 else ""  # noqa: PLR2004
-
-        # Resolve the server name, handling the plugin-namespaced format:
-        #   mcp__plugin_{plugin-name}_{server-name}__{tool}
-        # In this format raw_segment = "plugin_{plugin-name}_{server-name}".
-        # We must strip the "plugin_{plugin-name}_" prefix to get the actual
-        # server name, then check it against that plugin's mcpServers.
-        extracted_server, plugin_prefix = resolve_plugin_namespaced_server(raw_segment, plugin_server_map)
-
-        if extracted_server in known_servers:
-            # Exact match — pass
-            continue
-
-        canonical = lower_to_canonical.get(extracted_server.lower())
-        if canonical is not None:
+        if analysis.status == "case-mismatch":
             # Case mismatch with a discoverable server — error
-            full_prefix = f"mcp__{plugin_prefix}{extracted_server}" if plugin_prefix else f"mcp__{extracted_server}"
-            correct_prefix = f"mcp__{plugin_prefix}{canonical}" if plugin_prefix else f"mcp__{canonical}"
-            violations.append(
-                _make_violation(
-                    "AS008",
-                    "error",
-                    f"MCP tool '{tool_name}' has a case mismatch with server '{canonical}'. "
-                    "The tools: field is case-sensitive. "
-                    f"Did you mean '{correct_prefix}__{tool_suffix}'?",
-                    fix=f"Replace '{full_prefix}__' with '{correct_prefix}__'.",
+            canonical = analysis.canonical_server
+            corrected_reference = analysis.corrected_reference
+            replacement_source = analysis.replacement_source
+            replacement_target = analysis.replacement_target
+            if (
+                canonical is not None
+                and corrected_reference is not None
+                and replacement_source is not None
+                and replacement_target is not None
+            ):
+                violations.append(
+                    _make_violation(
+                        "AS008",
+                        "error",
+                        f"MCP tool '{tool_name}' has a case mismatch with server '{canonical}'. "
+                        "The allowed-tools: field is case-sensitive. "
+                        f"Did you mean '{corrected_reference}'?",
+                        fix=f"Replace '{replacement_source}' with '{replacement_target}'.",
+                    )
                 )
-            )
         else:
-            # Unknown server — warning.
-            # Skip if the raw segment starts with "plugin_" but plugin_prefix is
-            # empty: this means the tool is plugin-namespaced but the plugin isn't
-            # in the local ancestry map.  That is expected for externally-installed
-            # plugins and should not produce a violation.
-            if raw_segment.startswith("plugin_") and not plugin_prefix:
-                continue
             violations.append(
                 _make_violation(
                     "AS008",
                     "warning",
-                    f"MCP tool '{tool_name}' references server '{extracted_server}' which was not found "
+                    f"MCP tool '{tool_name}' references server '{analysis.server_name}' which was not found "
                     "in this plugin or project's MCP configuration. "
                     "If this references an external MCP server that end users must configure, "
                     "suppress this warning.",

@@ -32,6 +32,7 @@ Public API:
     extract_frontmatter    -- parse the YAML frontmatter block out of file content
     get_frontmatter_model  -- map a file-type string to a Pydantic model class
     fix_skill_name_field   -- add/correct the 'name' field to match directory name
+    normalize_agent_skills_value -- expose Claude Code's runtime skills list
     normalize_tools_value  -- parse a tools-declaring field value into a list of names
 
 Dependencies (provided by callers' PEP 723 environments):
@@ -73,6 +74,16 @@ Rules (per agentskills.io/specification and init_skill.py):
 - Must not start or end with a hyphen
 - Must not contain consecutive hyphens (--)
 """
+
+# ECMAScript 2026 WhiteSpace + LineTerminator code points used by
+# String.prototype.trim(). Python's str.strip() differs at U+001C-U+001F,
+# U+0085, and U+FEFF, so spelling out the JS set preserves loader parity.
+# Source: https://tc39.es/ecma262/#sec-string.prototype.trim
+_ECMASCRIPT_TRIM_CHARS = (
+    "\u0009\u000a\u000b\u000c\u000d\u0020\u00a0\u1680"
+    "\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a"
+    "\u2028\u2029\u202f\u205f\u3000\ufeff"
+)
 
 
 # ---------------------------------------------------------------------------
@@ -168,7 +179,9 @@ class CommandFrontmatter(BaseModel):
 class AgentFrontmatter(BaseModel):
     """Pydantic model for agents/*.md frontmatter validation.
 
-    Source: .claude/skills/agent-creator/references/agent-schema.md
+    Sources:
+    - https://code.claude.com/docs/en/sub-agents
+    - https://www.npmjs.com/package/@anthropic-ai/claude-code/v/2.1.251
 
     Field names use snake_case with camelCase aliases to match the official
     Claude Code agent schema (disallowedTools, permissionMode, maxTurns,
@@ -187,19 +200,22 @@ class AgentFrontmatter(BaseModel):
         None, alias="permissionMode"
     )
     max_turns: int | None = Field(None, alias="maxTurns")
-    # sub-agents.md "Preload skills into subagents": a YAML list of skill names
-    # to preload, e.g. `skills:\n  - api-conventions`. Unlike `tools`, the spec's
-    # own example gives no inline-string form for this field, so the model must
-    # not coerce a list into a CSV string the way it does for tools fields.
-    # AG003 (rules/ag_series.py) reports the wrong-shape case with a sourced
-    # message; this field simply declares the documented shape.
-    skills: list[str] | None = None
+    # Claude Code's filesystem-agent loader accepts the raw YAML value here,
+    # then normalizes strings and the string members of lists at consumption
+    # time. Keep that authored value untouched so model_dump() and --fix retain
+    # scalar-vs-sequence shape; normalized_skills exposes the loader's view.
+    skills: object | None = None
     mcp_servers: list[Any] | dict[str, Any] | None = Field(None, alias="mcpServers")
     hooks: dict[str, Any] | None = None
     memory: Literal["user", "project", "local"] | None = None
     background: bool | None = None
     isolation: Literal["worktree"] | None = None
     color: str | None = None
+
+    @property
+    def normalized_skills(self) -> list[str]:
+        """Claude Code loader-normalized view of the authored ``skills`` value."""
+        return normalize_agent_skills_value(self.skills)
 
     @field_validator("tools", "disallowed_tools", mode="before")
     @classmethod
@@ -319,6 +335,74 @@ def fix_skill_name_field(normalized_dict: dict[str, Any], file_path: Path, fixes
         normalized_dict["name"] = dir_name
 
     return normalized_dict
+
+
+def _split_agent_skills(values: list[str]) -> list[str]:
+    """Apply Claude Code's comma/space splitter to pre-filtered strings.
+
+    The runtime protects separators between an opening and closing
+    parenthesis with a single boolean flag (rather than nesting depth). Only a
+    literal ASCII space and comma split entries; trimming happens whenever a
+    token is emitted.
+
+    Returns:
+        Split and trimmed tokens in authored order, including duplicates.
+    """
+    normalized: list[str] = []
+    for value in values:
+        if not value:
+            continue
+        token = ""
+        inside_parentheses = False
+        for character in value:
+            if character == "(":
+                inside_parentheses = True
+            elif character == ")":
+                inside_parentheses = False
+
+            if character not in {",", " "} or inside_parentheses:
+                token += character
+                continue
+
+            stripped = token.strip(_ECMASCRIPT_TRIM_CHARS)
+            if stripped:
+                normalized.append(stripped)
+            if character == "," or stripped:
+                token = ""
+        stripped = token.strip(_ECMASCRIPT_TRIM_CHARS)
+        if stripped:
+            normalized.append(stripped)
+    return normalized
+
+
+def normalize_agent_skills_value(value: object) -> list[str]:
+    """Normalize an agent ``skills`` value using Claude Code 2.1.251 semantics.
+
+    Runtime source:
+    https://www.npmjs.com/package/@anthropic-ai/claude-code/v/2.1.251
+
+    Scalar strings are treated as one input entry. Lists retain only string
+    members before splitting. Unsupported scalars and mappings normalize to an
+    empty list. Tokens are split only on commas and literal spaces outside
+    parentheses, then trimmed with empty tokens discarded. Order and
+    duplicates are retained. If any normalized token is exactly ``*``, the
+    runtime collapses the complete result to ``["*"]``.
+
+    Args:
+        value: Raw authored YAML value from an agent's ``skills`` field.
+
+    Returns:
+        The list Claude Code exposes to the filesystem agent at runtime.
+    """
+    if isinstance(value, str):
+        values = [value]
+    elif isinstance(value, list):
+        values = [item for item in value if isinstance(item, str)]
+    else:
+        return []
+
+    normalized = _split_agent_skills(values)
+    return ["*"] if "*" in normalized else normalized
 
 
 def normalize_tools_value(value: object) -> list[str]:
