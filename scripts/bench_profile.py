@@ -9,7 +9,7 @@ summary showing functions that appear in the ``violations`` scenario but not
 Scenarios
 ---------
 1. ``clean``      — scan 1000 well-formed skill documents (no violations)
-2. ``violations`` — scan 200 skills containing FM004/FM007/FM008/FM009 patterns
+2. ``violations`` — scan 200 skills containing FM004/FM007/FM009 patterns
 3. ``fix``        — apply ``--fix`` logic to the violations document in-process
 
 Usage::
@@ -78,7 +78,7 @@ This is the body of the synthetic skill document used for profiling.
 
 
 def _build_violations_document() -> str:
-    """Build a skill frontmatter document containing FM004/FM007/FM008 violations.
+    """Build a skill frontmatter document containing FM004/FM007 violations.
 
     Returns:
         Complete markdown string with violating YAML frontmatter and a short body.
@@ -93,14 +93,11 @@ allowed-tools:
   - Read
   - Write
   - Edit
-skills:
-  - skill-a
-  - skill-b
 ---
 
 # Violations Skill
 
-This document contains FM004, FM007, and FM008 violations for profiling.
+This document contains FM004 and FM007 violations for profiling.
 """
 
 

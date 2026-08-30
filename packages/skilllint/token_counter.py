@@ -4,9 +4,9 @@ Token counts are a first-class concern for loading cost visibility. Frontmatter,
 body, total skill file collections, and other contexts all expose token counts
 to users so they can reason about context window impact.
 
-This module is the single source of truth for:
+This module provides:
 - The shared tiktoken cl100k_base encoding
-- Token threshold constants (TOKEN_WARNING_THRESHOLD, TOKEN_ERROR_THRESHOLD)
+- Token threshold constants (re-exported from skilllint.limits)
 - Low-level token counting (count_tokens)
 - File-level counting (count_file_tokens)
 - Skill-level structured counting (count_skill_tokens, TokenCounts)
@@ -24,6 +24,8 @@ from typing import TYPE_CHECKING
 
 import tiktoken
 
+from skilllint.limits import BODY_TOKEN_ERROR, BODY_TOKEN_WARNING
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -34,14 +36,14 @@ if TYPE_CHECKING:
 _ENCODING_NAME = "cl100k_base"
 
 # ---------------------------------------------------------------------------
-# Threshold constants
+# Threshold constants (canonical source: skilllint.limits)
 # ---------------------------------------------------------------------------
 
-#: Body token count at which AS005 / SK006 emit a warning.
-TOKEN_WARNING_THRESHOLD: int = 4400
+#: Body token count at which SK006 emits a warning.
+TOKEN_WARNING_THRESHOLD: int = BODY_TOKEN_WARNING
 
-#: Body token count at which AS005 / SK007 emit an error.
-TOKEN_ERROR_THRESHOLD: int = 8800
+#: Body token count at which SK007 emits an error.
+TOKEN_ERROR_THRESHOLD: int = BODY_TOKEN_ERROR
 
 # ---------------------------------------------------------------------------
 # Low-level counting

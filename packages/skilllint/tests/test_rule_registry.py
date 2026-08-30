@@ -169,16 +169,20 @@ def test_iter_authority_urls_warns_and_skips_relative_reference_with_empty_origi
 
     Tests: iter_authority_urls unresolvable-relative-reference warning path
     How: Register a rule whose authority.reference is a relative path
-         ("/rules/FM008") but whose authority.origin is "" (empty after strip);
+         ("/rules/ZZ999") but whose authority.origin is "" (empty after strip);
          capture WARNING-level logs; assert the URL is absent and the rule id
          appears in a warning record.
     Why: A relative reference without an origin cannot be resolved to an
          absolute URL.  The function must warn rather than silently skip or
          raise an exception so authoring errors are visible in logs.
+
+         ZZ999 is a synthetic code, not a shipped rule: the assertion is about
+         the resolver, so binding it to a real rule id would couple the test to
+         the rule catalogue.
     """
     # Arrange
     RULE_REGISTRY.clear()
-    RULE_REGISTRY["FM008"] = _entry("FM008", "/rules/FM008", origin="")
+    RULE_REGISTRY["ZZ999"] = _entry("ZZ999", "/rules/ZZ999", origin="")
 
     # Act
     with caplog.at_level(logging.WARNING, logger="skilllint.rule_registry"):
@@ -187,7 +191,7 @@ def test_iter_authority_urls_warns_and_skips_relative_reference_with_empty_origi
     # Assert — URL is skipped
     assert urls == []
     # Assert — a warning was logged that names the rule
-    assert any("FM008" in record.message for record in caplog.records)
+    assert any("ZZ999" in record.message for record in caplog.records)
 
 
 def test_iter_authority_urls_silently_skips_none_reference(caplog: pytest.LogCaptureFixture) -> None:

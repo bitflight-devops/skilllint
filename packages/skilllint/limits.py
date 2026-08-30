@@ -192,26 +192,6 @@ RECOMMENDED_DESCRIPTION_LENGTH: int = DESCRIPTION_MAX_LENGTH
 
 
 # ---------------------------------------------------------------------------
-# AS Rules Reference
-# ---------------------------------------------------------------------------
-# AS (AgentSkills) rules enforce agentskills.io specification compliance.
-# See: https://agentskills.io/specification
-#
-# Rule Source Map:
-#   AS001 - Skill name format     → agentskills.io spec
-#   AS002 - Name matches dir      → agentskills.io spec
-#   AS003 - Description required  → agentskills.io spec
-#   AS004 - YAML parsing          → YAML spec (not agentskills.io)
-#   AS005 - Token limit           → agentskills.io spec
-#   AS006 - Eval queries          → Best practice (not required by spec)
-#
-# IMPORTANT: AS004 and AS006 are NOT from the agentskills.io spec:
-#   - AS004: Detects unquoted colons that break YAML parsing
-#   - AS006: Recommends eval_queries.json for quality testing
-# These are skilllint-specific heuristics, not spec requirements.
-
-
-# ---------------------------------------------------------------------------
 # Token Threshold Aliases (for backwards compatibility)
 # ---------------------------------------------------------------------------
 # These are kept for import compatibility with existing code.

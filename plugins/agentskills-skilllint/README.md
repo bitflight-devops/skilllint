@@ -69,7 +69,7 @@ The skill includes a [full rule catalog](./skills/skilllint/references/rule-cata
 
 | Series | Domain |
 |--------|--------|
-| FM001–FM010 | YAML frontmatter validity |
+| FM001–FM010 | YAML frontmatter validity (FM008 removed) |
 | SK001–SK009 | Skill name, description, and token budget |
 | AS001–AS009 | SKILL.md conformance with the AgentSkills open standard (AS007 removed) |
 | LK001 | Internal markdown links |
