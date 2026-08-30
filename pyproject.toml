@@ -140,6 +140,9 @@ extra-paths = [
     "./packages",
     "./packages/skilllint",
     "./scripts",
+    # pr_review_gh.py and pr_review_models.py carry no PEP 723 metadata, so ty
+    # reads project config for them and needs their own directory on the path.
+    "./.agents/skills/receiving-pr-reviews/scripts",
 ]
 root = ["./"]
 
