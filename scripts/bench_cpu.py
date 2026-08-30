@@ -5,7 +5,7 @@ in-memory scenarios mirroring the I/O benchmark's clean/violations/fix split:
 
 1. ``clean``      — ``loads_frontmatter`` on well-formed frontmatter 1000x
 2. ``violations`` — ``loads_frontmatter`` + ``FrontmatterValidator`` lint
-                    check on frontmatter with FM004/FM007/FM008/FM009 patterns
+                    check on frontmatter with FM004/FM007/FM009 patterns
 3. ``fix``        — ``loads_frontmatter`` + ``FrontmatterValidator._apply_fixes``
                     on the violations document 1000x
 
@@ -61,12 +61,11 @@ This is the body of the synthetic skill document used for CPU benchmarks.
 
 
 def _build_violations_document() -> str:
-    """Build a skill frontmatter document containing FM004/FM007/FM008/FM009 violations.
+    """Build a skill frontmatter document containing FM004/FM007/FM009 violations.
 
     Violation patterns injected:
     - FM004: ``>-`` multiline YAML indicator in description value
     - FM007: ``allowed-tools:`` as a YAML list instead of CSV string
-    - FM008: ``skills:`` as a YAML list instead of CSV string
     - FM009: unquoted colon in description value (triggers YAML parse error)
 
     Returns:
@@ -74,7 +73,7 @@ def _build_violations_document() -> str:
     """
     # FM009 (unquoted colon) is handled separately because it causes a YAML
     # parse error; include a separate key with colon-in-value alongside the
-    # other violations so the validator exercises FM004+FM007+FM008 via the
+    # other violations so the validator exercises FM004+FM007 via the
     # normal parse path, and FM009 via the colon-fix fallback path.
     return """\
 ---
@@ -86,14 +85,11 @@ allowed-tools:
   - Read
   - Write
   - Edit
-skills:
-  - skill-a
-  - skill-b
 ---
 
 # Violations Skill
 
-This document contains FM004, FM007, and FM008 violations for benchmarking.
+This document contains FM004 and FM007 violations for benchmarking.
 """
 
 
@@ -256,7 +252,7 @@ def test_cpu_clean() -> None:
 def test_cpu_violations() -> None:
     """Benchmark: parse violations YAML frontmatter + lint check 1000x within time limit.
 
-    Constructs a skill document with FM004/FM007/FM008 violations in memory,
+    Constructs a skill document with FM004/FM007 violations in memory,
     calls ``loads_frontmatter`` plus a regex lint check for each iteration.
     Asserts that 1000 iterations complete within the time budget.
     """
@@ -266,7 +262,7 @@ def test_cpu_violations() -> None:
 def test_cpu_fix() -> None:
     """Benchmark: parse violations YAML frontmatter + apply fixes 1000x within time limit.
 
-    Constructs a skill document with FM004/FM007/FM008 violations in memory,
+    Constructs a skill document with FM004/FM007 violations in memory,
     calls ``loads_frontmatter`` plus ``FrontmatterValidator._apply_fixes`` for
     each iteration. Asserts that 1000 iterations complete within the time budget.
     """

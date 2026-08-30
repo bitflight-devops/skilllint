@@ -4,10 +4,8 @@ Creates ``tests/fixtures/benchmark-plugin-violations.zip`` (or a custom path via
 ``--output``) with 200 skills that exercise the linter's auto-fixable rules:
 
 - FM004: multiline YAML indicator in description (``>-`` / ``|-``)
-- FM007: ``tools:`` as a YAML list instead of a CSV string
-- FM008: ``skills:`` as a YAML list instead of a CSV string
+- FM007: ``allowed-tools:`` as a YAML list instead of a CSV string
 - FM009: unquoted colon in description value
-- FM007+FM008 combined: both ``tools:`` and ``skills:`` as lists
 
 Usage::
 
@@ -88,19 +86,11 @@ class ViolationType(StrEnum):
 
     FM004 = "FM004"
     FM007 = "FM007"
-    FM008 = "FM008"
     FM009 = "FM009"
-    FM007_FM008 = "FM007+FM008"
 
 
 # Cycle order matches the task specification (1-indexed skill numbering).
-VIOLATION_CYCLE: Final[list[ViolationType]] = [
-    ViolationType.FM004,
-    ViolationType.FM007,
-    ViolationType.FM008,
-    ViolationType.FM009,
-    ViolationType.FM007_FM008,
-]
+VIOLATION_CYCLE: Final[list[ViolationType]] = [ViolationType.FM004, ViolationType.FM007, ViolationType.FM009]
 
 
 # ---------------------------------------------------------------------------
@@ -147,26 +137,6 @@ allowed-tools:
   - Edit"""
 
 
-def _fm008_frontmatter(n: int) -> str:
-    """Return frontmatter with ``skills:`` as a YAML list instead of CSV (FM008).
-
-    Args:
-        n: Skill number (1-based).
-
-    Returns:
-        YAML frontmatter string without surrounding ``---`` delimiters.
-    """
-    return f"""\
-name: violations--{n}
-description: Benchmark violation skill number {n} for FM008 testing
-version: 1.0.0
-triggers:
-  - when working on violations skill {n}
-skills:
-  - skill-a
-  - skill-b"""
-
-
 def _fm009_frontmatter(n: int) -> str:
     """Return frontmatter with an unquoted colon in the description value (FM009).
 
@@ -184,36 +154,10 @@ triggers:
   - when working on violations skill {n}"""
 
 
-def _fm007_fm008_frontmatter(n: int) -> str:
-    """Return frontmatter with both ``allowed-tools:`` and ``skills:`` as YAML lists (FM007+FM008).
-
-    Args:
-        n: Skill number (1-based).
-
-    Returns:
-        YAML frontmatter string without surrounding ``---`` delimiters.
-    """
-    return f"""\
-name: violations--{n}
-description: Benchmark violation skill number {n} for FM007+FM008 testing
-version: 1.0.0
-triggers:
-  - when working on violations skill {n}
-allowed-tools:
-  - Read
-  - Write
-  - Edit
-skills:
-  - skill-a
-  - skill-b"""
-
-
 _FRONTMATTER_BUILDERS = {
     ViolationType.FM004: _fm004_frontmatter,
     ViolationType.FM007: _fm007_frontmatter,
-    ViolationType.FM008: _fm008_frontmatter,
     ViolationType.FM009: _fm009_frontmatter,
-    ViolationType.FM007_FM008: _fm007_fm008_frontmatter,
 }
 
 

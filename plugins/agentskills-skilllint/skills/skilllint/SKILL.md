@@ -136,7 +136,7 @@ skilllint check --fix ./plugins/my-plugin
 
 > **Note:** `--check` and `--fix` are mutually exclusive. Passing both flags at the same time is an error.
 
-**Auto-fixable rules:** FM004, FM007, FM008, FM009, FM010/AS002, SK001, SK002, SK003, SL001
+**Auto-fixable rules:** FM004, FM007, FM009, FM010/AS002, SK001, SK002, SK003, SL001
 
 **Not auto-fixable:** AS005 (token size — requires manual refactoring), PD series, AS006, LK series, most PL/HK rules.
 
@@ -156,7 +156,7 @@ description: >-
 description: 'This is a long description that spans multiple lines.'
 ```
 
-### FM007 / FM008 — allowed-tools or other fields as YAML array
+### FM007 — tools / allowed-tools / disallowedTools as YAML array
 
 ```yaml
 # Wrong

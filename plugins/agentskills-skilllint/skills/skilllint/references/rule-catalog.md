@@ -16,12 +16,11 @@ Validate YAML frontmatter in SKILL.md, agent .md, and command .md files.
 | FM004 | error | **yes** | `description` uses a YAML multiline block scalar (`` >- ``, `` \| ``, `` \|- ``); Claude Code skill indexer reads this as literal `>-`. Use a single-line string. |
 | FM005 | error | no | `name` field contains invalid characters (must be lowercase letters, numbers, hyphens only; max 64 chars) |
 | FM006 | error | no | `description` exceeds 1024 characters |
-| FM007 | error | **yes** | `allowed-tools` is a YAML array instead of a comma-separated string |
-| FM008 | error | **yes** | Another field that requires a comma-separated string is specified as a YAML array |
+| FM007 | error | **yes** | `tools`, `allowed-tools`, or `disallowedTools` is a YAML array instead of a comma-separated string |
 | FM009 | error | **yes** | Unquoted colon in `description` or other string field causes YAML parse failure |
 | FM010 | error | **yes** | `name` field does not match the directory name (same as AS002; FM010 is the frontmatter-level check) |
 
-**Common FM fix:** Run `skilllint check --fix <path>` — FM004, FM007, FM008, FM009, FM010 are all auto-fixable.
+**Common FM fix:** Run `skilllint check --fix <path>` — FM004, FM007, FM009, FM010 are all auto-fixable.
 
 ---
 
@@ -194,8 +193,7 @@ These only fire when `--platform codex` is used.
 Run `skilllint check --fix <path>` to automatically fix:
 
 - **FM004** — multiline block scalar in description
-- **FM007** — allowed-tools as YAML array
-- **FM008** — other comma-separated fields as YAML array
+- **FM007** — tools / allowed-tools / disallowedTools as YAML array
 - **FM009** — unquoted colon in string field
 - **FM010 / AS002** — name/directory mismatch
 - **SK001** — skill name contains uppercase characters (lowercased)
