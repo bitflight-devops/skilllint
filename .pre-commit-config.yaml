@@ -16,7 +16,7 @@ default_stages:
 
 repos:
   - repo: https://github.com/mxr/sync-pre-commit-deps
-    rev: v0.0.3
+    rev: v0.0.5
     hooks:
       - id: sync-pre-commit-deps
 
@@ -54,13 +54,13 @@ repos:
 
   # GitHub Actions workflow static checks
   - repo: https://github.com/rhysd/actionlint
-    rev: v1.7.11
+    rev: v1.7.12
     hooks:
       - id: actionlint
 
   # TOML sorting and formatting
   - repo: https://github.com/bitflight-devops/pyproject-fmt
-    rev: v1.1.5
+    rev: v1.1.11
     hooks:
       - id: pypfmt
         name: Sort and format pyproject.toml with pypfmt
@@ -68,7 +68,7 @@ repos:
 
   # Python formatting and linting
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.16.3
+    rev: v0.16.5
     hooks:
       - id: ruff
         name: Lint Python with ruff
@@ -77,13 +77,13 @@ repos:
         name: Format Python with ruff
   # JavaScript/TypeScript formatting and linting with Biome
   - repo: https://github.com/biomejs/pre-commit
-    rev: "v2.4.6"
+    rev: "v2.5.11"
     hooks:
       - id: biome-check
         exclude: ^(\.?plan(ning)?/|\.claude/backlog/|\.claude/get-shit-done|\.claude/hooks/gsd-.*)
 
   - repo: https://github.com/DavidAnson/markdownlint-cli2
-    rev: v0.21.0
+    rev: v0.23.2
     hooks:
       - id: markdownlint-cli2
         exclude: ^(plan/|\.claude/|.planning/)
@@ -101,7 +101,7 @@ repos:
           - -ci
 
   - repo: https://github.com/shellcheck-py/shellcheck-py
-    rev: v0.11.0.1
+    rev: v0.11.0.1-1
     hooks:
       - id: shellcheck
 
