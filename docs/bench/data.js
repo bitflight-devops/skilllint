@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788065065745,
+  "lastUpdate": 1788082033813,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -960,6 +960,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 105.028,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "728d7ae60a91ce7bb5664da1288ba1d0114de7cc",
+          "message": "fix(PL006): stop --fix from silently rewriting valid marketplace.json (#141)\n\n* fix(PL006): stop --fix from silently rewriting valid marketplace.json\n\n`skilllint check --fix` was relocating documented root-level\n`description`/`version` fields into `metadata`, rewriting valid\nmarketplace.json files with no output and exit 0. The relocation writer\n(`_fix_marketplace_json_metadata_keys`) is deleted rather than repaired:\nits `NotImplementedError` guard on unknown keys was the only thing\nstopping its hardcoded three-key rebuild from dropping `$schema`,\n`renames`, and other unlisted keys, so widening the allowlist first\nwould have converted a false positive into real data loss.\n\n`MARKETPLACE_JSON_ROOT_KEYS` is widened only after the writer is gone,\nto the full documented root-key set (name, owner, plugins, metadata,\n$schema, description, version, allowCrossMarketplaceDependenciesOn,\nrenames), each with a source comment citing the vendored marketplace\nschema doc. `PluginStructureValidator.can_fix()` now returns False, so\nthe amplifier (--fix invoking every validator's fix() regardless of\nwhether it reported anything) can no longer run this writer on files\nPL006 never flagged.\n\nSeverity stays `error` per the issue's explicit constraint, even though\na live `claude plugin validate` v2.1.251 run against an unrecognized\nmarketplace root key returned a warning, not an error -- reported\nseparately rather than acted on, since downgrading was out of scope.\n\nCloses #114\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01QJeBLNA9ybmQvv5REMDkrc\n\n* fix(PL006): preserve recognized metadata in the manual-correction guidance\n\nCodex flagged that deleting the relocation auto-fix carried its data-loss\nrisk into the diagnostic text: `repository`/`homepage`/`license`/`author`/\n`keywords` are documented plugin-manifest and marketplace `plugins[]`-entry\nfields, so a user who followed the (previous) \"remove or rename\" guidance\nfor one of these at the marketplace root would discard real data by hand\ninstead of by `--fix` -- the exact outcome #114 exists to prevent.\n\nReinstates `MARKETPLACE_METADATA_RELOCATABLE_KEYS` and the two-list return\nfrom `analyze_marketplace_root_keys`, used only to word PL006's message --\n`can_fix()` stays False and there is still no writer. The `metadata`\ndestination is documented honestly as not independently spec-verified: a\nlive `claude plugin validate` v2.1.251 run puts `metadata.repository` in\nthe same \"Unknown field ... ignores it at load time\" warning bucket as a\nbare root `repository`. `metadata` is suggested only because it is a\nstrictly less destructive manual home than deletion, sourced to the\ndeleted `_fix_marketplace_json_metadata_keys` rather than presented as\nspec-derived, per the \"no invented constraints\" project rule.\n\nAlso fixes a latent str.capitalize() bug the reinstated code path would\nhave reintroduced: capitalize() lowercases everything after the first\ncharacter, which would corrupt a user's own camelCase key name embedded\nin the suggestion text.\n\nAddresses PR #141 review thread (comment 3888921733, pl_series.py:626).\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01QJeBLNA9ybmQvv5REMDkrc\n\n---------\n\nCo-authored-by: Claude Opus 5 <noreply@anthropic.com>",
+          "timestamp": "2026-08-30T09:24:23Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/728d7ae60a91ce7bb5664da1288ba1d0114de7cc"
+        },
+        "date": 1788082032852,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 11025.538,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 11653.9,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 12763.744,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 85.894,
             "unit": "files/s"
           }
         ]
