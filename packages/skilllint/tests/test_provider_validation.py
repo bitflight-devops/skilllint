@@ -517,3 +517,30 @@ class TestCrossPlatformSkillChecks:
         assert opinions, f"Expected an SK004/SK005 finding, got: {violations}"
         for violation in opinions:
             assert "authority" not in violation, f"Opinion rule claims vendor authority: {violation}"
+
+    @pytest.mark.parametrize("platform", [None, "cursor", "codex"])
+    def test_colon_recovery_is_reported(self, tmp_path: pathlib.Path, platform: str | None) -> None:
+        """FM009 fires for adapters that never run FrontmatterValidator."""
+        adapters = {a.id(): a for a in load_adapters()}
+        skill_dir = tmp_path / "colon-skill"
+        skill_dir.mkdir()
+        skill_file = skill_dir / "SKILL.md"
+        skill_file.write_text("---\nname: colon-skill\ndescription: Use this: when testing\n---\n\nBody.\n")
+
+        codes = {v["code"] for v in validate_file(skill_file, adapters, platform_override=platform)}
+
+        assert "FM009" in codes, f"Colon recovery unreported for platform {platform!r}: {sorted(codes)}"
+
+    @pytest.mark.parametrize("platform", [None, "cursor", "codex", "claude_code"])
+    def test_ignore_config_suppresses_shared_findings(self, tmp_path: pathlib.Path, platform: str | None) -> None:
+        """The --platform route honours .skilllint.json the same as the default path."""
+        adapters = {a.id(): a for a in load_adapters()}
+        (tmp_path / ".skilllint.json").write_text('{"ignore": {"": ["FM010"]}}')
+        skill_dir = tmp_path / "skills" / "wrong-name"
+        skill_dir.mkdir(parents=True)
+        skill_file = skill_dir / "SKILL.md"
+        skill_file.write_text("---\nname: other-name\ndescription: Use when testing suppression\n---\n\nBody.\n")
+
+        codes = {v["code"] for v in validate_file(skill_file, adapters, platform_override=platform)}
+
+        assert "FM010" not in codes, f"Suppressed FM010 still reported for {platform!r}: {sorted(codes)}"

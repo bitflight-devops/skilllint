@@ -65,7 +65,7 @@
       "rationale": "docs/design-rule-provenance-registry.md records that no vendor file enumerates this set: \"Vendor hook files use 'command' and 'http' but no file enumerates the complete valid set.\" Treating the hook-development page as authoritative would attribute 'agent' and 'prompt' to a source that does not list them, so the enumeration is recorded as an opinion until a vendor document defines it.",
       "constraint": "VALID_HOOK_TYPES = frozenset({\"command\", \"http\", \"prompt\", \"agent\"})",
       "references": [
-        "packages/skilllint/plugin_validator.py: HookValidator.VALID_HOOK_TYPES",
+        "packages/skilllint/rules/hk_series.py: VALID_HOOK_TYPES",
         "docs/design-rule-provenance-registry.md: HK003 VALID_HOOK_TYPES has no vendor source"
       ]
     },
@@ -77,6 +77,16 @@
       "references": [
         "packages/skilllint/rules/sk_series.py line 72: _MIN_DESCRIPTION_LENGTH = 20",
         "packages/skilllint/schemas/agentskills_io/v1.json: description minLength = 1 (spec minimum)"
+      ]
+    },
+    "HK002.valid_event_types": {
+      "rule_code": "HK002",
+      "description": "The set of recognized Claude Code hook event names",
+      "rationale": "docs/design-rule-provenance-registry.md records that the vendor material enumerates only part of this set: the frozenset holds 21 event names and the vendor documentation in .claude/vendor/ lists 9 of them, while the remaining 12 (PermissionRequest, PostToolUseFailure, StopFailure, TeammateIdle, TaskCompleted, InstructionsLoaded, ConfigChange, WorktreeCreate, WorktreeRemove, PostCompact, Elicitation, ElicitationResult) have no traceable vendor source. Comparing the whole enforced set against the hook-configuration-formats section would report those 12 as vendor removals and attribute the other 9 to a page that does not enumerate the set. Recorded as an opinion, like HK003, until a vendor document enumerates it.",
+      "constraint": "Hook event names must appear in VALID_EVENT_TYPES",
+      "references": [
+        "packages/skilllint/rules/hk_series.py: VALID_EVENT_TYPES",
+        "docs/design-rule-provenance-registry.md: 12 of the 21 event names have no traceable vendor source"
       ]
     }
   }

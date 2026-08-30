@@ -30,33 +30,6 @@
         "source": "packages/skilllint/schemas/agentskills_io/v1.json"
       }
     },
-    "HK002.valid_event_types": {
-      "rule_code": "HK002",
-      "claim_name": "valid_event_types",
-      "description": "Recognized hook event type names in Claude Code hooks.json configuration",
-      "claim_type": "enum_set",
-      "authority": {
-        "vendor_file": ".claude/vendor/claude_code/plugins/plugin-dev/skills/hook-development/SKILL.md",
-        "anchor_selector": "#hook-configuration-formats",
-        "authority_url": "https://docs.claude.com/en/docs/claude-code/hooks"
-      },
-      "extraction": {
-        "prompt_template": "Extract all recognized hook event type names from this vendor documentation. Return a JSON array of event name strings. {{section}}",
-        "output_schema": {
-          "type": "array"
-        },
-        "post_processing": "sort, unique"
-      },
-      "assertion_location": {
-        "file": "packages/skilllint/plugin_validator.py",
-        "symbol": "HookValidator.VALID_EVENT_TYPES",
-        "source_type": "python_constant"
-      },
-      "x-audited": {
-        "date": "2026-03-23",
-        "source": ".claude/vendor/claude_code/plugins/plugin-dev/skills/hook-development/SKILL.md"
-      }
-    },
     "FM007.tool_field_names": {
       "rule_code": "FM007",
       "claim_name": "tool_field_names",

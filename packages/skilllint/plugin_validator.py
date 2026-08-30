@@ -4151,7 +4151,7 @@ def _skill_md_violations(
     Returns:
         Violation dicts with any configured severity downgrade applied.
     """
-    frontmatter_data, body_lines, yaml_err, _colon_fields = parse_skill_md(path)
+    frontmatter_data, body_lines, yaml_err, colon_fields = parse_skill_md(path)
     violations: list[dict] = []
 
     # Suppress the generic FM002 only when the pipeline will report it — keying
@@ -4163,7 +4163,7 @@ def _skill_md_violations(
     # Resolve per-plugin policy so --platform validation honors the same
     # configured thresholds AND severity as the default path (PR #97 review:
     # the two paths must not lint the same skill differently).
-    policy, _policy_root = _resolve_policy(path, policy_cache)
+    policy, policy_root = _resolve_policy(path, policy_cache)
     violations.extend(
         run_as_series(
             path,
@@ -4174,7 +4174,18 @@ def _skill_md_violations(
         )
     )
     if not pipeline_runs:
+        # FM009 has no reporter here either: parse_skill_md recovers the unquoted
+        # colon in memory and returns no YAML error, and FrontmatterValidator —
+        # which normally raises this — never runs for Cursor or Codex.
+        violations.extend(_issue_to_violation(issue) for issue in _fm009_recovery_warnings(colon_fields))
         violations.extend(_shared_skill_frontmatter_violations(path, frontmatter_data, policy))
+
+    # Suppression applies to every reporter, so the --platform route must honour
+    # the same ignore config as the default path rather than only its thresholds.
+    # _load_policy fills ValidationPolicy.ignore from the same file it reads the
+    # thresholds from, and policy_root is that file's directory.
+    if policy.ignore and policy_root is not None:
+        violations = [v for v in violations if not _is_suppressed(policy.ignore, path, policy_root, str(v.get("code")))]
 
     if not policy.severity:
         return violations

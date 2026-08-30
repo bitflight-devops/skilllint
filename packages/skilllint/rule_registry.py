@@ -3,19 +3,20 @@
 Each validator function is decorated with @skilllint_rule:
 
     @skilllint_rule(
-        "SK001",
-        severity="error",
+        "SK004",
+        severity="warning",
         category="skill",
         platforms=["agentskills"],
-        authority={"origin": "agent-skills.io", "reference": "/rules/SK001"},
+        authority={"origin": "agent-skills.io", "reference": "/rules/SK004"},
     )
-    def check_name_field(frontmatter: dict, path: Path) -> list[ValidationIssue]:
+    def check_description_length(frontmatter: dict, path: Path) -> list[ValidationIssue]:
         \"\"\"
-        ## SK001 — Missing `name` field
+        ## SK004 — Description too short
 
-        Every SKILL.md must declare a `name` field in its frontmatter.
+        A SKILL.md description shorter than the minimum is unlikely to trigger
+        auto-invocation.
 
-        **Fix:** Add `name: your-skill-name` to the frontmatter block.
+        **Fix:** Expand the `description` field to state when the skill applies.
         \"\"\"
 
 The decorator registers the rule in RULE_REGISTRY for `skilllint rule <ID>` lookup.
@@ -61,7 +62,7 @@ class RuleAuthority(BaseModel):
     """
 
     origin: str  # e.g., "agent-skills.io", "anthropic.com"
-    reference: str | None = None  # URL or doc path, e.g., "/rules/SK001"
+    reference: str | None = None  # URL or doc path, e.g., "/rules/SK004"
 
 
 class RuleEntry(BaseModel):
@@ -90,7 +91,7 @@ def skilllint_rule(
     """Decorator to register a validator function as a rule.
 
     Args:
-        rule_id: Rule identifier (e.g., "SK001", "FM002")
+        rule_id: Rule identifier (e.g., "SK004", "FM002")
         severity: One of "error", "warning", "info"
         category: Rule category (e.g., "frontmatter", "skill", "plugin")
         platforms: List of platforms this rule applies to. ["agentskills"] means all platforms.
@@ -103,15 +104,15 @@ def skilllint_rule(
 
     Example:
         @skilllint_rule(
-            "SK001",
-            severity="error",
+            "SK004",
+            severity="warning",
             category="skill",
-            authority={"origin": "agent-skills.io", "reference": "/rules/SK001"},
+            authority={"origin": "agent-skills.io", "reference": "/rules/SK004"},
         )
-        def check_name(frontmatter: dict) -> list[ValidationIssue]:
-            '''## SK001 — Missing name field
+        def check_description_length(frontmatter: dict) -> list[ValidationIssue]:
+            '''## SK004 — Description too short
 
-            Every skill must have a name.
+            A short description is unlikely to trigger auto-invocation.
             '''
             ...
     """
@@ -142,7 +143,7 @@ def get_rule(rule_id: str) -> RuleEntry | None:
     """Look up a rule by ID (case-insensitive).
 
     Args:
-        rule_id: Rule identifier (e.g., "SK001", "sk001")
+        rule_id: Rule identifier (e.g., "SK004", "sk004")
 
     Returns:
         RuleEntry if found, None otherwise.
@@ -241,7 +242,7 @@ def iter_authority_urls(*, unique: bool = True) -> Iterator[str]:
         path component (e.g. ``"github.com/org/repo"``) already stores an
         absolute URL in ``reference`` (starts with ``https://``), so the
         ``urljoin`` branch is never reached for those entries.  Rules that
-        use a root-relative ``reference`` (e.g. ``"/rules/SK001"``) pair it
+        use a root-relative ``reference`` (e.g. ``"/rules/SK004"``) pair it
         with a bare-host origin (e.g. ``"agentskills.io"``), where
         root-relative resolution is correct.
 
