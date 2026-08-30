@@ -1,0 +1,14 @@
+[fixture]
+rule_id = "AG003"
+tier = 1
+description = "Claude agent skills values accepted by the Markdown file loader"
+
+[[variants]]
+name = "scalar-string"
+kind = "passing"
+expected_count = 0
+
+[[variants]]
+name = "string-sequence"
+kind = "passing"
+expected_count = 0

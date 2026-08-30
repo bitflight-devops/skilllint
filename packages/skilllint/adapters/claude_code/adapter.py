@@ -33,7 +33,7 @@ class ClaudeCodeAdapter:
 
     def applicable_rules(self) -> set[str]:
         """Return the set of rule prefixes applicable to this adapter."""
-        return {"SK", "PR", "HK", "AS"}
+        return {"SK", "PR", "HK", "AS", "AG"}
 
     def constraint_scopes(self) -> set[str]:
         """Return the set of constraint_scope values from the provider schema.

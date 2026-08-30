@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-# Full set of expected series prefixes: AS + FM + PA (existing 3) + SK + LK + PD + PL +
-# HK + NR + SL + TC + PR (9 extracted from monolith) + CU + CX (2 adapter-backed).
+# Full set of expected series prefixes: the 14 series from P038 plus the AG
+# agent-frontmatter series added for issue #132.
 # CM001 is scoped out — reserved, no validator logic (P038 architect spec §9).
-# Source: P038 architect spec section 8.
+# Sources: P038 architect spec section 8; issue #132.
 EXPECTED_SERIES: frozenset[str] = frozenset({
+    "AG",
     "AS",
     "FM",
     "PA",

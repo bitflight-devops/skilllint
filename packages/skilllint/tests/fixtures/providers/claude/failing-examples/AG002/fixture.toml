@@ -1,0 +1,9 @@
+[fixture]
+rule_id = "AG002"
+tier = 1
+description = "Claude agent MCP tool grant uses the wrong server-name casing"
+
+[[variants]]
+name = "server-case-mismatch"
+kind = "failing"
+expected_count = 1

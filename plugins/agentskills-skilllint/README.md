@@ -8,7 +8,7 @@ The skill teaches Claude how to:
 
 - **Install** `skilllint` via `uv`, `pipx`, or `pip`
 - **Run** validation scans on plugins, skills, agents, and commands
-- **Read** and interpret violation output (FM, SK, AS, LK, PD, PL, HK, NR, SL, TC, PR, PA, CU, CX rule IDs)
+- **Read** and interpret violation output (FM, SK, AS, AG, LK, PD, PL, HK, NR, SL, TC, PR, PA, CU, CX rule IDs)
 - **Fix** auto-fixable violations with `skilllint check --fix`
 - **Understand** any rule ID by consulting the built-in rule catalog
 - **Check for updates** and upgrade to the latest version
@@ -55,7 +55,7 @@ Runs `skilllint` against the specified path and interprets the output.
 
 ### Model-invoked
 
-Claude will automatically load this skill when you ask about linting plugins, fixing FM/SK/AS violations, or validating Claude Code skills.
+Claude will automatically load this skill when you ask about linting plugins, fixing FM/SK/AS/AG violations, or validating Claude Code skills and agents.
 
 ## Skills
 
@@ -72,6 +72,7 @@ The skill includes a [full rule catalog](./skills/skilllint/references/rule-cata
 | FM001–FM010 | YAML frontmatter validity (FM008 removed) |
 | SK004–SK009 | Skill description and token budget |
 | AS001, AS006, AS008–AS009 | SKILL.md conformance with the AgentSkills open standard |
+| AG001–AG003 | Claude Code agent `tools`, MCP references, and discarded `skills` values |
 | LK001 | Internal markdown links |
 | PD001–PD003 | Progressive disclosure directory structure |
 | PL001–PL006 | Plugin manifest (`plugin.json`) |

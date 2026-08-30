@@ -6,8 +6,8 @@
   "version": "1.0.0",
   "platform": "claude_code",
   "provenance": {
-    "authority_url": "https://docs.anthropic.com/claude-code",
-    "last_verified": "2026-03-14",
+    "authority_url": "https://code.claude.com/docs/en/overview",
+    "last_verified": "2026-08-30",
     "provider_id": "claude_code"
   },
   "file_types": {
@@ -87,6 +87,16 @@
           "x-audited": {
             "date": "2026-03-10",
             "source": ".claude/vendor/claude_code/plugins/plugin-dev/skills/agent-development/SKILL.md"
+          }
+        },
+        "skills": {
+          "required": false,
+          "constraint_scope": "provider_specific",
+          "description": "Catalog metadata only; AG003 owns active validation. Claude Code's Markdown agent loader accepts a scalar string or sequence, passes string values through runtime normalization, and discards non-string values.",
+          "x-audited": {
+            "date": "2026-08-30",
+            "source": "https://www.npmjs.com/package/@anthropic-ai/claude-code/v/2.1.251",
+            "evidence": "docs/runtime-contracts/claude-code-agent-skills-2.1.251.md"
           }
         }
       }

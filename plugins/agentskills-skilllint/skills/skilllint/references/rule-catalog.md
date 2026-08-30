@@ -111,6 +111,22 @@ Anthropic documents that **plugin** subagents do not support `hooks`, `mcpServer
 
 ---
 
+## AG — Agent Frontmatter Rules
+
+Validate Claude Code `agents/*.md` frontmatter on every Claude agent file regardless of scope (personal, project, or plugin) — unlike PA (above), which is plugin-scoped only. Authority: [Create custom subagents](https://code.claude.com/docs/en/sub-agents#available-tools).
+
+| Rule | Severity | Auto-fix | Description |
+|------|----------|----------|-------------|
+| AG001 | error | no | Every entry in `tools` is an unscoped wildcard (e.g. `mcp__*`, bare `*`) that names no server — the subagent fails to launch |
+| AG002 | error / warning | no | MCP tool name in `tools` or `disallowedTools` has a case mismatch with a discovered server (error) or references a server not found in any discovered config (warning) |
+| AG003 | warning | no | Claude Code discards at least part of `skills`: a non-string scalar or mapping is discarded, while a sequence passes string members through runtime normalization and discards non-string members |
+
+**AG003 file-loader contract:** Omitted, null, empty-string, and empty-list values are clean. A scalar string and a sequence containing only strings are also clean and normalize to a string list. Other scalar or mapping values are discarded and warn once; a sequence containing any non-string member passes its strings through runtime normalization, discards the rest, and warns once. This rule follows the Markdown agent loader verified in [Claude Code 2.1.251](https://www.npmjs.com/package/@anthropic-ai/claude-code/v/2.1.251), not the separate strict `--agents` / Agent SDK input, and it neither requires YAML-list syntax nor auto-fixes the authored shape.
+
+**Ported from AS007/AS008:** AG001 and AG002 replace the AgentSkills-family checks that used to read an agent's `tools` field before PR #108 scoped the AS family to `SKILL.md` only. AS008 continues to validate `allowed-tools` on `SKILL.md` under agentskills.io authority; AG002 is a separate rule validating `tools`/`disallowedTools` on agent files under sub-agents.md authority.
+
+---
+
 ## HK — Hook Rules
 
 Validate `hooks.json` and inline hook configurations.
