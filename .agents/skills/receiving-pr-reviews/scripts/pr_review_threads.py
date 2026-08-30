@@ -226,7 +226,12 @@ class WatchResult(BaseModel):
 # from the exec call itself rather than a custom error path.
 _GH = shutil.which("gh") or "gh"
 
-_GH_TIMEOUT_SECONDS = 30
+# `gh` calls are bounded by the caller, not by a constant here. `gh api --paginate` requests
+# every page sequentially inside one subprocess, so any fixed cap would have to cover a whole
+# pagination run on an arbitrarily large PR over an arbitrarily slow link — a number this
+# repository has no source for (CLAUDE.md, "No invented constraints"). `fetch` and `watch`
+# therefore expose `--gh-timeout-seconds`, unbounded by default, and `watch` additionally
+# bounds each *poll* by its own `--timeout-seconds` deadline, which the caller chose.
 
 # Anthropic's raw prompt-cache API defaults to a 5-minute TTL in every billing mode; a 1-hour TTL
 # is opt-in only (https://platform.claude.com/docs/en/build-with-claude/prompt-caching, accessed
@@ -239,7 +244,7 @@ _DEFAULT_WATCH_INTERVAL_SECONDS = 90
 _DEFAULT_WATCH_TIMEOUT_SECONDS = 270
 
 
-def _run_gh(args: list[str], *, timeout: float = _GH_TIMEOUT_SECONDS) -> str:
+def _run_gh(args: list[str], *, timeout: float | None = None) -> str:
     """Run a `gh` command and return its captured stdout.
 
     `gh` spawns no child processes of its own, so a plain timeout is enough to bound it — no
@@ -247,9 +252,9 @@ def _run_gh(args: list[str], *, timeout: float = _GH_TIMEOUT_SECONDS) -> str:
 
     Args:
         args: Full `gh` argv, excluding the executable itself (e.g. `["api", "graphql", ...]`).
-        timeout: Seconds to allow before killing the process. Defaults to `_GH_TIMEOUT_SECONDS`;
-            `watch` passes a smaller value as its own deadline approaches so one slow call near
-            the end of a poll window can't push the whole command past `--timeout-seconds`.
+            timeout: Seconds to allow before killing the process, or `None` for no bound.
+            `watch` passes the time left before its own deadline so one slow call near the end
+            of a poll window can't push the whole command past `--timeout-seconds`.
 
     Returns:
         The command's stdout, decoded as text.
@@ -264,9 +269,7 @@ def _run_gh(args: list[str], *, timeout: float = _GH_TIMEOUT_SECONDS) -> str:
     return result.stdout
 
 
-def _fetch_pages(
-    owner: str, repo: str, pr: int, *, gh_timeout: float = _GH_TIMEOUT_SECONDS
-) -> list[_ReviewThreadsConnection]:
+def _fetch_pages(owner: str, repo: str, pr: int, *, gh_timeout: float | None) -> list[_ReviewThreadsConnection]:
     """Fetch and validate every paginated page of a PR's review threads.
 
     Args:
@@ -301,9 +304,7 @@ def _fetch_pages(
     ]
 
 
-def _fetch_review_pages(
-    owner: str, repo: str, pr: int, *, gh_timeout: float = _GH_TIMEOUT_SECONDS
-) -> list[_ReviewsConnection]:
+def _fetch_review_pages(owner: str, repo: str, pr: int, *, gh_timeout: float | None) -> list[_ReviewsConnection]:
     """Fetch and validate every paginated page of a PR's top-level reviews.
 
     A separate `gh` invocation from `_fetch_pages`: `gh api graphql --paginate` follows exactly
@@ -356,28 +357,30 @@ def _thread_activity_key(thread: UnresolvedThread) -> tuple[int, tuple[int, ...]
     return thread.comments_total, tuple(comment.databaseId for comment in thread.comments)
 
 
-def _gh_timeout_budget(deadline: float | None) -> float:
-    """Bound a `gh` call to whatever time remains before `deadline`, capped at `_GH_TIMEOUT_SECONDS`.
+def _gh_timeout_budget(deadline: float | None, gh_timeout: float | None) -> float | None:
+    """Choose the timeout for one `gh` call.
 
-    `deadline` is `None` for a plain `fetch` (no overall time budget to respect — use the full
-    default). For `watch`, passing its own `deadline` here means each of `_build_fetch_result`'s
-    two `gh` calls is bounded by whatever is actually left, not by a fixed worst-case reservation
-    subtracted from every poll regardless of how fast GitHub responds — a call made with plenty of
-    time left still gets the full `_GH_TIMEOUT_SECONDS`, and only a call made close to `deadline`
-    is tightened.
+    `deadline` is `None` for a plain `fetch` and for `watch`'s mandatory baseline: neither has a
+    window to respect, so the caller's `--gh-timeout-seconds` applies unchanged (`None` = no
+    bound). `watch` passes its own `deadline` for each *poll*, so both of
+    `_build_fetch_result`'s `gh` calls are bounded by whatever is actually left rather than by a
+    fixed reservation subtracted from every poll regardless of how fast GitHub responds.
 
     Args:
         deadline: A `time.monotonic()` timestamp to respect, or `None` for no deadline.
+        gh_timeout: The caller's own per-call bound, used when there is no deadline.
 
     Returns:
-        Seconds to pass as `_run_gh`'s `timeout`, always positive.
+        Seconds to pass as `_run_gh`'s `timeout`, or `None` for no bound.
     """
     if deadline is None:
-        return _GH_TIMEOUT_SECONDS
-    return max(0.1, min(_GH_TIMEOUT_SECONDS, deadline - time.monotonic()))
+        return gh_timeout
+    return max(0.0, deadline - time.monotonic())
 
 
-def _build_fetch_result(owner: str, repo: str, pr: int, *, deadline: float | None = None) -> FetchResult:
+def _build_fetch_result(
+    owner: str, repo: str, pr: int, *, deadline: float | None = None, gh_timeout: float | None = None
+) -> FetchResult:
     """Fetch and assemble one PR's unresolved review threads and top-level review state.
 
     Shared by `fetch` (prints the result once, `deadline=None`) and `watch` (calls this
@@ -390,12 +393,13 @@ def _build_fetch_result(owner: str, repo: str, pr: int, *, deadline: float | Non
         pr: Pull request number.
         deadline: A `time.monotonic()` timestamp the caller wants this call's two `gh`
             invocations to respect — see `_gh_timeout_budget`. `None` means no deadline.
+        gh_timeout: Per-call bound applied when `deadline` is `None`; `None` means no bound.
 
     Returns:
         Totals plus every currently-unresolved thread.
     """
-    thread_pages = _fetch_pages(owner, repo, pr, gh_timeout=_gh_timeout_budget(deadline))
-    review_pages = _fetch_review_pages(owner, repo, pr, gh_timeout=_gh_timeout_budget(deadline))
+    thread_pages = _fetch_pages(owner, repo, pr, gh_timeout=_gh_timeout_budget(deadline, gh_timeout))
+    review_pages = _fetch_review_pages(owner, repo, pr, gh_timeout=_gh_timeout_budget(deadline, gh_timeout))
     all_threads = [node for page in thread_pages for node in page.nodes]
     all_reviews = [node for page in review_pages for node in page.nodes]
     unresolved = [
@@ -423,6 +427,9 @@ def fetch(
     pr: Annotated[int, typer.Option(help="Pull request number.")],
     owner: Annotated[str, typer.Option(help="Repository owner.")] = DEFAULT_OWNER,
     repo: Annotated[str, typer.Option(help="Repository name.")] = DEFAULT_REPO,
+    gh_timeout_seconds: Annotated[
+        float | None, typer.Option(min=0, help="Seconds to bound each `gh` call to. Unbounded by default.")
+    ] = None,
 ) -> None:
     """Fetch a PR's unresolved review threads, auto-paginated so none is silently truncated.
 
@@ -441,7 +448,7 @@ def fetch(
     have no thread at all and would otherwise be invisible even when `unresolved_count` is 0;
     treat each as actionable input too.
     """
-    result = _build_fetch_result(owner, repo, pr)
+    result = _build_fetch_result(owner, repo, pr, gh_timeout=gh_timeout_seconds)
     typer.echo(result.model_dump_json())
 
 
@@ -454,8 +461,19 @@ def watch(
         int, typer.Option(min=1, help="Seconds to sleep between polls. Must be positive.")
     ] = _DEFAULT_WATCH_INTERVAL_SECONDS,
     timeout_seconds: Annotated[
-        int, typer.Option(help="Stop polling and return the current state after this many seconds.")
+        int,
+        typer.Option(
+            min=0,
+            help="Stop polling and return the current state after this many seconds. 0 takes the baseline snapshot and returns.",
+        ),
     ] = _DEFAULT_WATCH_TIMEOUT_SECONDS,
+    gh_timeout_seconds: Annotated[
+        float | None,
+        typer.Option(
+            min=0,
+            help="Seconds to bound the baseline `gh` calls to. Unbounded by default; polls are bounded by --timeout-seconds.",
+        ),
+    ] = None,
 ) -> None:
     """Poll `fetch` until new PR review activity appears, or a timeout elapses.
 
@@ -490,7 +508,10 @@ def watch(
     honest "nothing to report," not a failure.
     """
     deadline = time.monotonic() + timeout_seconds
-    baseline = _build_fetch_result(owner, repo, pr, deadline=deadline)
+    # The baseline is mandatory and is *not* deadline-bounded: with `--timeout-seconds 0` the
+    # deadline is already spent, and starving this call would turn the documented immediate
+    # snapshot into a `TimeoutExpired`. Only the polls below race the deadline.
+    baseline = _build_fetch_result(owner, repo, pr, gh_timeout=gh_timeout_seconds)
     # Keyed by comment identity rather than a plain thread-id set: a reviewer replying to a
     # thread the baseline already listed leaves that thread's id unchanged, so an id-only diff
     # would report `timed_out: true` while unread review activity sits in `unresolved`.
@@ -518,9 +539,9 @@ def watch(
             # here to its 0.1s floor, too little for a `gh api graphql` round trip, so stop and
             # report the last successfully-fetched state rather than spawn a doomed call.
             break
-        # `_build_fetch_result`'s two `gh` calls are each bounded to whatever's left before
-        # `deadline` (see `_gh_timeout_budget`), so a call made with time to spare still gets the
-        # full `_GH_TIMEOUT_SECONDS`.
+        # Each of `_build_fetch_result`'s two `gh` calls is bounded to whatever's left before
+        # `deadline` (see `_gh_timeout_budget`), re-measured between them rather than split from
+        # a fixed reservation.
         poll_attempts += 1
         try:
             current = _build_fetch_result(owner, repo, pr, deadline=deadline)

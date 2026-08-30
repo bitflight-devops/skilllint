@@ -61,9 +61,19 @@ git rebase <target> <branch>
 
 Pass `<branch>` — the same one Steps 1-4 analysed. `git rebase`'s positional form is
 `[<upstream> [<branch>]]`; omitting `<branch>` rebases whatever is currently checked out, which
-is a different branch whenever the analysis targeted one you are not standing on (routine with
-multiple worktrees). That rewrites commits the plan never looked at and leaves the requested
-branch untouched.
+is a different branch whenever the analysis targeted one you are not standing on. That rewrites
+commits the plan never looked at and leaves the requested branch untouched.
+
+Naming `<branch>` makes git check it out first, which fails with `fatal: '<branch>' is already
+used by worktree at ...` when another worktree holds it. Run the rebase from the worktree that
+owns the branch:
+
+```bash
+git worktree list          # find the worktree whose HEAD is <branch>
+```
+
+Then run the `git rebase <target> <branch>` above from that directory. Do not free the branch by
+detaching or switching the other worktree — another session may be mid-task in it.
 
 On each conflict:
 

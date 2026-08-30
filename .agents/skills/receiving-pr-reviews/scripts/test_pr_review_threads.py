@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import time
 from typing import TYPE_CHECKING
 
 import pytest
@@ -408,6 +409,43 @@ def test_watch_rejects_a_non_positive_interval() -> None:
     result = runner.invoke(app, ["watch", "--pr", "3208", "--interval-seconds", "0"])
 
     assert result.exit_code != 0
+
+
+def test_watch_rejects_a_negative_timeout() -> None:
+    """`--timeout-seconds` is constrained to >= 0; 0 is the supported immediate-snapshot value."""
+    assert runner.invoke(app, ["watch", "--pr", "3208", "--timeout-seconds", "-1"]).exit_code != 0
+
+
+def test_watch_baseline_is_not_deadline_bounded(mocker: MockerFixture) -> None:
+    """`--timeout-seconds 0` returns an immediate snapshot rather than starving the baseline.
+
+    Regression coverage for the Codex finding that an already-spent deadline was applied to the
+    mandatory baseline fetch, flooring its `gh` timeout and raising `TimeoutExpired` instead of
+    producing the documented snapshot. The baseline takes the caller's `--gh-timeout-seconds`
+    instead; only the polls race `deadline`.
+    """
+    baseline = FetchResult(reviews_count=0, reviews_with_body=[], threads_count=0, unresolved=[], unresolved_count=0)
+    fetch_mock = mocker.patch.object(pr_review_threads, "_build_fetch_result", return_value=baseline)
+
+    result = runner.invoke(app, ["watch", "--pr", "3208", "--timeout-seconds", "0"])
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["timed_out"] is True
+    assert fetch_mock.call_args.kwargs == {"gh_timeout": None}
+
+
+def test_gh_timeout_budget_without_a_deadline_uses_the_callers_bound() -> None:
+    """No deadline means the caller's `--gh-timeout-seconds` applies unchanged, `None` included."""
+    assert pr_review_threads._gh_timeout_budget(None, None) is None
+    assert pr_review_threads._gh_timeout_budget(None, 12.5) == 12.5
+
+
+def test_gh_timeout_budget_with_a_deadline_uses_the_time_left() -> None:
+    """A poll's bound is the time left before `deadline`, floored at zero once it has passed."""
+    now = time.monotonic()
+
+    assert pr_review_threads._gh_timeout_budget(now + 30, None) == pytest.approx(30, abs=1)
+    assert pr_review_threads._gh_timeout_budget(now - 30, None) == 0.0
 
 
 def test_watch_fails_loudly_when_only_final_poll_fails(mocker: MockerFixture) -> None:
