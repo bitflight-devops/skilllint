@@ -69,11 +69,7 @@ uv add    --group <group> <pkg>...   # floors and uv.lock move together
 ```
 
 Never hand-edit a version string; never `uv tool install`. `uv add` regenerates
-`uv.lock` and a hand edit does not, so CI's `uv run --locked` then fails on the
-mismatch rather than on anything real. Commit the lock with the change.
-
-A toolchain bump ships with the fixes it requires — the bump alone reds CI, the
-fixes alone address a failure the repo cannot reproduce.
+`uv.lock`; a hand edit does not. Commit the lock with the change.
 
 ## Running skilllint during development
 
