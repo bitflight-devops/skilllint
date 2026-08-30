@@ -89,9 +89,13 @@ def test_hooks_value_string_is_not_coerced(tmp_path: Path) -> None:
     assert result.message == "'hooks' value must be an object"
 
 
-@given(st.dictionaries(st.text(max_size=16), st.integers(), max_size=8))
+@given(st.dictionaries(st.text(), st.integers()))
 def test_arbitrary_hooks_mapping_round_trips(mapping: dict[str, int]) -> None:
     """Any JSON object under ``hooks`` is returned unchanged, never raising.
+
+    The strategies are unbounded: the boundary imposes no size limit of its own, so capping
+    the generated mapping would be an invented constraint and would narrow the coverage this
+    property claims. Hypothesis's own default sizing governs instead.
 
     Uses ``tempfile`` rather than the ``tmp_path`` fixture because Hypothesis
     rejects function-scoped fixtures inside ``@given``.

@@ -343,18 +343,22 @@ def _fetch_review_pages(owner: str, repo: str, pr: int, *, gh_timeout: float | N
     ]
 
 
-def _thread_activity_key(thread: UnresolvedThread) -> tuple[int, tuple[int, ...]]:
-    """Return a value that changes whenever a thread gains a comment.
+def _thread_activity_key(thread: UnresolvedThread) -> tuple[int, tuple[tuple[int, str], ...]]:
+    """Return a value that changes whenever a thread's comments change.
+
+    Three kinds of change have to register, and no single component catches all three:
+    a reply adds an id; an *edit* to an existing comment changes neither its `databaseId`
+    nor the count, so the body is needed; and a reply past the query's
+    `comments(first: 100)` page cannot change the id/body tuple at all, so the untruncated
+    `comments_total` is needed.
 
     Args:
         thread: An unresolved thread from a `fetch` snapshot.
 
     Returns:
-        `(comments_total, comment databaseIds)`. The count catches replies past the query's
-        100-comment page, where the id tuple is capped and cannot change; the ids catch the
-        ordinary case without depending on GitHub keeping `totalCount` exact.
+        `(comments_total, ((databaseId, body), ...))`.
     """
-    return thread.comments_total, tuple(comment.databaseId for comment in thread.comments)
+    return thread.comments_total, tuple((comment.databaseId, comment.body) for comment in thread.comments)
 
 
 def _gh_timeout_budget(deadline: float | None, gh_timeout: float | None) -> float | None:
@@ -543,21 +547,28 @@ def watch(
         # `deadline` (see `_gh_timeout_budget`), re-measured between them rather than split from
         # a fixed reservation.
         poll_attempts += 1
+        # `watch` is meant to run unattended, often backgrounded (see the receiving-pr-reviews
+        # skill's own gotchas on polling a backgrounded call for its own result); crashing on a
+        # single bad poll loses the whole call's result. Both handlers below record the outcome
+        # and let the loop continue toward `deadline` on its own schedule.
         try:
             current = _build_fetch_result(owner, repo, pr, deadline=deadline)
             last_poll_ok = True
-        except (subprocess.TimeoutExpired, subprocess.CalledProcessError):
-            # A failure with time still on the clock is a genuine transient `gh` failure (network
-            # hiccup, momentary GitHub error) and leaves the tail of the window unconfirmed. A
-            # failure at or past `deadline` is the window ending instead — `_gh_timeout_budget`
+        except subprocess.TimeoutExpired:
+            # A timeout is the one failure the clock can explain: `_gh_timeout_budget`
             # deliberately shrinks each call to the time left, so the last poll of a window is
-            # *expected* to be cut short — which is the same honest "no time left to check again"
-            # this command already reports when it stops before attempting a poll at all.
+            # *expected* to be cut short. At or past `deadline` that is the same honest "no time
+            # left to check again" this command reports when it stops before polling at all.
+            # With time still on the clock it is a real network stall and leaves the tail
+            # unconfirmed.
             last_poll_ok = time.monotonic() >= deadline
-            # `watch` is meant to run unattended, often backgrounded (see the receiving-pr-reviews
-            # skill's own gotchas on polling a backgrounded call for its own result); crashing
-            # here loses the whole call's result instead of just this one poll. Treat it as no
-            # fresh data this poll and let the loop continue toward `deadline` on its own schedule.
+            continue
+        except subprocess.CalledProcessError:
+            # A non-zero exit is an authentication, rate-limit, API or GraphQL error. The
+            # deadline cannot cause it and cannot excuse it, so it is a failed poll whatever the
+            # clock says — reporting `timed_out: true` off stale state here would tell a caller
+            # the PR is clean when nothing was actually checked.
+            last_poll_ok = False
             continue
         new_thread_ids = {
             thread.id

@@ -319,10 +319,10 @@ def test_watch_fails_loudly_when_every_poll_fails(mocker: MockerFixture) -> None
     )
     mocker.patch.object(pr_review_threads.time, "sleep")
     # 0.0 (deadline = 0.0 + 100). Iter 1: 0.0 (remaining=100 > the 10s interval) → poll raises
-    # TimeoutExpired, handler reads 10.0 (< deadline → a real failure). Iter 2: 20.0 (remaining=80)
-    # → poll raises CalledProcessError, handler reads 30.0 (< deadline). Then 105.0 → remaining
-    # negative, loop ends naturally.
-    mocker.patch.object(pr_review_threads.time, "monotonic", side_effect=[0.0, 0.0, 10.0, 20.0, 30.0, 105.0])
+    # TimeoutExpired, whose handler reads 10.0 (< deadline → a real failure). Iter 2: 20.0
+    # (remaining=80) → poll raises CalledProcessError, whose handler reads no clock at all: a
+    # non-zero exit is never excused by the deadline. Then 105.0 → remaining negative, loop ends.
+    mocker.patch.object(pr_review_threads.time, "monotonic", side_effect=[0.0, 0.0, 10.0, 20.0, 105.0])
 
     result = runner.invoke(app, ["watch", "--pr", "3208", "--interval-seconds", "10", "--timeout-seconds", "100"])
 
@@ -409,6 +409,67 @@ def test_watch_rejects_a_non_positive_interval() -> None:
     result = runner.invoke(app, ["watch", "--pr", "3208", "--interval-seconds", "0"])
 
     assert result.exit_code != 0
+
+
+def test_watch_reports_an_edit_to_an_existing_comment(mocker: MockerFixture) -> None:
+    """Editing an unresolved comment counts as new activity.
+
+    Regression coverage for the Codex finding that an edit changes neither the comment's
+    `databaseId` nor the thread's `comments_total`, so an id-and-count key saw no change.
+    """
+    before = {"databaseId": 11, "body": "first pass", "line": 1, "originalLine": 1, "author": {"login": "codex"}}
+    after = before | {"body": "edited after more thought"}
+    thread = {"id": "T1", "path": "a.py", "comments_total": 1, "comments_truncated": False}
+    baseline = FetchResult.model_validate({
+        "reviews_count": 0,
+        "reviews_with_body": [],
+        "threads_count": 1,
+        "unresolved": [thread | {"comments": [before]}],
+        "unresolved_count": 1,
+    })
+    edited = FetchResult.model_validate({
+        "reviews_count": 0,
+        "reviews_with_body": [],
+        "threads_count": 1,
+        "unresolved": [thread | {"comments": [after]}],
+        "unresolved_count": 1,
+    })
+    mocker.patch.object(pr_review_threads, "_build_fetch_result", side_effect=[baseline, edited])
+    mocker.patch.object(pr_review_threads.time, "sleep")
+
+    result = runner.invoke(app, ["watch", "--pr", "3208", "--interval-seconds", "1", "--timeout-seconds", "20"])
+
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    assert data["timed_out"] is False
+    assert data["new_thread_ids"] == ["T1"]
+
+
+def test_watch_fails_loudly_on_a_nonzero_gh_exit_at_the_deadline(mocker: MockerFixture) -> None:
+    """A non-zero `gh` exit is a failed poll whatever the clock says.
+
+    Regression coverage for the Codex finding that the deadline-aware classification was applied to
+    `CalledProcessError` as well as `TimeoutExpired`. Only a timeout can be explained by the
+    shrinking budget; an authentication, rate-limit, API or GraphQL error cannot, so reporting
+    `timed_out: true` from stale state would tell a caller the PR is clean when nothing was checked.
+    """
+    baseline = FetchResult(reviews_count=0, reviews_with_body=[], threads_count=0, unresolved=[], unresolved_count=0)
+    mocker.patch.object(
+        pr_review_threads,
+        "_build_fetch_result",
+        side_effect=[baseline, subprocess.CalledProcessError(1, ["gh"])],
+    )
+    mocker.patch.object(pr_review_threads.time, "sleep")
+    # 0.0 (deadline=100). Iter 1: 0.0 (remaining=100 > the 10s interval) -> poll raises; the handler
+    # reads 100.0, which would have excused a TimeoutExpired but must not excuse this.
+    mocker.patch.object(pr_review_threads.time, "monotonic", side_effect=[0.0, 0.0, 100.0, 100.0])
+
+    result = runner.invoke(app, ["watch", "--pr", "3208", "--interval-seconds", "10", "--timeout-seconds", "100"])
+
+    assert result.exit_code != 0
+    assert "the last of 1 poll(s) this window failed" in result.output
+    with pytest.raises(json.JSONDecodeError):
+        json.loads(result.output)
 
 
 def test_watch_rejects_a_negative_timeout() -> None:
