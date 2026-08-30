@@ -252,9 +252,9 @@ def _run_gh(args: list[str], *, timeout: float | None = None) -> str:
 
     Args:
         args: Full `gh` argv, excluding the executable itself (e.g. `["api", "graphql", ...]`).
-            timeout: Seconds to allow before killing the process, or `None` for no bound.
-            `watch` passes the time left before its own deadline so one slow call near the end
-            of a poll window can't push the whole command past `--timeout-seconds`.
+        timeout: Seconds to allow before killing the process, or `None` for no bound. `watch`
+            passes the time left before its own deadline so one slow call near the end of a poll
+            window can't push the whole command past `--timeout-seconds`.
 
     Returns:
         The command's stdout, decoded as text.
@@ -459,6 +459,7 @@ def fetch(
 @app.command()
 def watch(
     pr: Annotated[int, typer.Option(help="Pull request number.")],
+    *,
     owner: Annotated[str, typer.Option(help="Repository owner.")] = DEFAULT_OWNER,
     repo: Annotated[str, typer.Option(help="Repository name.")] = DEFAULT_REPO,
     interval_seconds: Annotated[

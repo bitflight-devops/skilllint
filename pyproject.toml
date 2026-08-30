@@ -111,11 +111,10 @@ python_classes = ["Test*"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
 pythonpath = [".", "packages/", "tests/"]
-# Vendored skills from github.com/jamie-bitflight/claude_skills ship each script's tests beside
-# the script rather than in a tests/ directory, so the **/tests glob alone never collects them.
-# Collecting them in place keeps the vendored tree byte-identical to upstream (a re-sync stays a
-# plain copy) and lets pytest's own rootdir insertion resolve each test's sibling import, which
-# is the same resolution the PEP 723 standalone invocation relies on.
+# Skill scripts under .agents/skills/*/scripts ship each script's tests beside the script
+# rather than in a tests/ directory, so the **/tests glob alone never collects them. Collecting
+# them in place lets pytest's own rootdir insertion resolve each test's sibling import, which is
+# the same resolution the PEP 723 standalone invocation relies on.
 testpaths = ["**/tests", ".agents/skills/*/scripts"]
 
 [tool.coverage.report]
@@ -146,23 +145,15 @@ root = ["./"]
 
 [tool.ty.src]
 exclude = [
+    # Deliberately-broken fixtures -- must never be type-checked.
     "packages/skilllint/tests/fixtures/providers/*/failing-examples/*",
-    # Skills vendored from github.com/jamie-bitflight/claude_skills and maintained
-    # there. Their tests import sibling modules that only resolve through runtime
-    # sys.path, so ty cannot resolve them here; type-checking vendored code would
-    # also churn on every upstream sync.
-    ".agents/skills/*",
 ]
-include = [".github", "packages", "scripts", "tests"]
+include = [".agents", ".github", "packages", "scripts", "tests"]
 
 [tool.ruff]
 exclude = [
+    # Deliberately-broken fixtures -- must never be linted or fixed.
     "packages/skilllint/tests/fixtures/providers/*/failing-examples/*",
-    # Skills vendored from github.com/jamie-bitflight/claude_skills and maintained
-    # there. They ship tests beside the script rather than in a tests/ dir, so the
-    # **/tests/** per-file-ignores below miss them; linting vendored code here
-    # would also churn on every upstream sync.
-    ".agents/skills/*",
 ]
 fix = true
 line-length = 120
@@ -276,6 +267,23 @@ max-complexity = 12
     "T201", # print() statements are intentional for CI output visibility
 ]
 "**/tests/**" = [
+    "ANN",  # Type annotations optional for test fixtures/methods
+    "D",    # Docstring requirements relaxed for tests
+    "DOC",  # Docstring content requirements relaxed
+    "E501", # Line length relaxed for test data
+    "EXE",  # Shebang executable check skipped for PEP723 test files
+    "N",    # camelCase in test names acceptable when testing API fields
+    "PLC",  # Local imports acceptable in test helpers
+    "PLR",  # Testing private methods is valid test pattern
+    "S",    # Security checks not needed in tests
+    "SLF",  # Private name imports acceptable for testing internals
+    "T",    # print() statements are intentional for CI output visibility
+]
+# Skill scripts ship their tests beside the script rather than under a tests/ dir
+# (see [tool.pytest.ini_options].testpaths), so the "**/tests/**" glob above misses
+# them. Same ignore set as "**/tests/**" — this is the same relaxation, just reached
+# by a different glob.
+".agents/skills/*/scripts/test_*.py" = [
     "ANN",  # Type annotations optional for test fixtures/methods
     "D",    # Docstring requirements relaxed for tests
     "DOC",  # Docstring content requirements relaxed

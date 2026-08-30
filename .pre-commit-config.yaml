@@ -119,14 +119,20 @@ repos:
 
       - id: ty
         name: ty check
-        entry: uv run -q ty check
+        # --extra-search-path: ty treats any file carrying PEP 723 inline script
+        # metadata (both receiving-pr-reviews scripts do, for `uv run --script`) as
+        # an isolated single-file script and ignores [tool.ty.environment].extra-paths
+        # from pyproject.toml for it entirely (verified against ty 0.0.75). The CLI
+        # flag is honored even in that mode, so it's the only way the hook resolves
+        # test_pr_review_threads.py's sibling `import pr_review_threads`.
+        entry: uv run -q ty check --extra-search-path .agents/skills/receiving-pr-reviews/scripts
         language: system
         types: [python]
         pass_filenames: true
-        # Mirrors [tool.ty.src].exclude in pyproject.toml. pass_filenames sends
-        # paths straight to ty, which bypasses that include/exclude config, so
-        # the vendored-skill exclusion has to be repeated here.
-        exclude: ^\.agents/skills/
+        # No hook-local exclude: pass_filenames bypasses [tool.ty.src] entirely, but
+        # the top-level `exclude:` in this file (below) already covers the one
+        # legitimate exclusion (deliberately-broken fixtures, which are non-Python
+        # anyway) and applies to every hook including this one.
 
       - id: enable-rerere
         name: Enable git rerere (auto-replay conflict resolutions)
