@@ -251,7 +251,10 @@ The `@skilllint_rule` decorator registers a function in the global rule registry
     severity="error",
     category="frontmatter",
     platforms=["agentskills"],
-    authority={"origin": "anthropic.com", "reference": _SKILLS_SPEC_URL},
+    # No `reference`: FM010 serves skills, agents and commands, whose frontmatter
+    # is defined by different vendor pages, so no single URL is correct for every
+    # finding. See the note below on rule-level versus claim-level authority.
+    authority={"origin": "anthropic.com"},
 )
 def check_fm010(frontmatter: dict, path: Path, file_type: str) -> list[ValidationIssue]:
     """## FM010 — Name field does not match directory name or violates naming pattern"""
@@ -357,14 +360,25 @@ Pass the `authority` kwarg to `@skilllint_rule`:
     severity="error",
     category="frontmatter",
     platforms=["agentskills"],
-    authority={"origin": "anthropic.com", "reference": _SKILLS_SPEC_URL},
+    # No `reference`: FM010 serves skills, agents and commands, whose frontmatter
+    # is defined by different vendor pages, so no single URL is correct for every
+    # finding. See the note below on rule-level versus claim-level authority.
+    authority={"origin": "anthropic.com"},
 )
 def check_fm010(frontmatter: dict, path: Path, file_type: str) -> list[ValidationIssue]: ...
 ```
 
 The `authority` kwarg is **rule-level**, and the runtime lookup keys on the rule
-code, so every finding a rule emits inherits the same origin. That is coarser
-than reality whenever one rule carries a mix of sourced and unsourced claims.
+code, so every finding a rule emits inherits the same origin and reference. That
+is coarser than reality in two ways.
+
+First, a rule that serves several file types cannot name one correct page. FM010
+validates skills, agents and commands; `skills.md` and `sub-agents.md` define
+their frontmatter separately. Naming either one would attach it to findings on
+the other, so FM010 and FM001 declare `origin` alone and cite their per-context
+sources in the rule docstring that `skilllint rule <CODE>` renders.
+
+Second, a rule can carry a mix of sourced and unsourced claims.
 
 FM010 is exactly such a rule. Its 64-character limit is schema-backed and is
 registered as the claim `FM010.max_name_length` in
