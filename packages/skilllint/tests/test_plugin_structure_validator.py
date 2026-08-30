@@ -6,11 +6,12 @@ Tests:
 - Error parsing from claude output
 - Subprocess security (no shell=True)
 - Timeout handling
-- marketplace.json layout (PL006) and --fix relocation
+- marketplace.json layout (PL006); no auto-fix exists (skilllint#114)
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 from typing import TYPE_CHECKING
@@ -22,23 +23,29 @@ if TYPE_CHECKING:
 
     from pytest_mock import MockerFixture
 
-from skilllint.plugin_validator import PL006, PluginStructureValidator
+from skilllint.plugin_validator import PL006, PluginStructureValidator, validate_single_path
 
 
 class TestPluginStructureValidatorBasic:
     """Test basic PluginStructureValidator functionality."""
 
     def test_validator_instantiation(self) -> None:
-        """Test PluginStructureValidator can be instantiated."""
+        """Test PluginStructureValidator can be instantiated.
+
+        PL006 has no auto-fix (skilllint#114): a relocation fix once moved
+        marketplace.json root keys into `metadata` and silently rewrote valid
+        files, so `can_fix()` is permanently False.
+        """
         validator = PluginStructureValidator()
         assert validator is not None
-        assert validator.can_fix() is True
+        assert validator.can_fix() is False
 
     def test_fix_raises_not_implemented(self, tmp_path: Path) -> None:
-        """Test fix() raises NotImplementedError when nothing to fix.
+        """Test fix() always raises NotImplementedError.
 
-        Tests: fix() requires a plugin dir with fixable marketplace.json
-        How: Call fix() without marketplace.json, expect NotImplementedError
+        Tests: fix() has no implementation left to invoke (skilllint#114)
+        How: Call fix() on a plugin dir, expect NotImplementedError regardless
+        of marketplace.json contents
         """
         plugin_dir = tmp_path / "test-plugin"
         plugin_dir.mkdir()
@@ -457,7 +464,7 @@ class TestEdgeCases:
 
 
 class TestMarketplaceJsonLayout:
-    """marketplace.json root keys (PL006) and --fix relocation."""
+    """marketplace.json root keys (PL006). No auto-fix exists (skilllint#114)."""
 
     def test_pl006_misplaced_keys_skips_claude_subprocess(self, mocker: MockerFixture, tmp_path: Path) -> None:
         """Disallowed marketplace root keys fail fast with PL006; do not invoke claude."""
@@ -488,33 +495,59 @@ class TestMarketplaceJsonLayout:
         assert any(e.code == PL006 for e in result.errors)
         mock_run.assert_not_called()
 
-    def test_fix_moves_relocatable_keys_to_metadata(self, tmp_path: Path) -> None:
-        """fix() moves repository, homepage, license under metadata."""
+    def test_pl006_accepts_documented_root_fields(self, tmp_path: Path) -> None:
+        """Documented root fields ($schema, description, version, renames, ...) pass PL006."""
         plugin_dir = tmp_path / "test-plugin"
         plugin_dir.mkdir()
         claude_plugin = plugin_dir / ".claude-plugin"
         claude_plugin.mkdir()
         (claude_plugin / "plugin.json").write_text('{"name": "test"}')
         marketplace = {
+            "$schema": "https://code.claude.com/docs/en/plugin-marketplaces.md#marketplace-schema",
             "name": "cat",
+            "description": "A test marketplace",
+            "version": "1.0.0",
             "owner": {"name": "x"},
             "plugins": [],
-            "repository": "https://example.com/r",
-            "homepage": "https://example.com",
-            "license": "MIT",
+            "allowCrossMarketplaceDependenciesOn": [],
+            "renames": {},
         }
         (claude_plugin / "marketplace.json").write_text(json.dumps(marketplace))
 
         validator = PluginStructureValidator()
-        fixes = validator.fix(plugin_dir)
-        assert len(fixes) == 1
-        assert "repository" in fixes[0]
+        result = validator.validate(plugin_dir)
 
-        data = json.loads((claude_plugin / "marketplace.json").read_text(encoding="utf-8"))
-        assert data["metadata"]["repository"] == "https://example.com/r"
-        assert data["metadata"]["homepage"] == "https://example.com"
-        assert data["metadata"]["license"] == "MIT"
-        assert "repository" not in data
+        assert not any(e.code == PL006 for e in result.errors)
+
+    def test_fix_leaves_documented_marketplace_json_byte_identical(self, tmp_path: Path) -> None:
+        """`--fix` must not rewrite a marketplace.json with documented root fields.
+
+        Regression test for skilllint#114: root-level `description`/`version`
+        (both documented-valid) were being silently relocated under `metadata`
+        by an auto-fix that has since been removed. Proof is byte-identity:
+        hash the file, run the `--fix` code path, hash again.
+        """
+        plugin_dir = tmp_path / "test-plugin"
+        plugin_dir.mkdir()
+        claude_plugin = plugin_dir / ".claude-plugin"
+        claude_plugin.mkdir()
+        (claude_plugin / "plugin.json").write_text('{"name": "test"}')
+        marketplace_path = claude_plugin / "marketplace.json"
+        marketplace_path.write_text(
+            json.dumps({
+                "name": "cat",
+                "description": "A test marketplace",
+                "version": "1.0.0",
+                "owner": {"name": "x"},
+                "plugins": [],
+            })
+        )
+        before = hashlib.sha256(marketplace_path.read_bytes()).hexdigest()
+
+        validate_single_path(plugin_dir, check=False, fix=True, verbose=False)
+
+        after = hashlib.sha256(marketplace_path.read_bytes()).hexdigest()
+        assert after == before
 
     def test_claude_output_marketplace_unrecognized_keys_maps_to_pl006(
         self, mocker: MockerFixture, tmp_path: Path

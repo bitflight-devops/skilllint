@@ -97,7 +97,7 @@ Validate `plugin.json` structure.
 | PL003 | error | no | Required `name` field is missing from `plugin.json` |
 | PL004 | error | no | A path in `plugin.json` does not start with `./` |
 | PL005 | error | no | Referenced file in `plugin.json` does not exist |
-| PL006 | error | yes | `marketplace.json` root keys violate [Claude Code marketplace schema](https://code.claude.com/docs/en/plugin-marketplaces.md#marketplace-schema); known plugin-manifest fields can move under `metadata` (`skilllint check --fix`) |
+| PL006 | error | no | `marketplace.json` has an unrecognized top-level key; see [Claude Code marketplace schema](https://code.claude.com/docs/en/plugin-marketplaces.md#marketplace-schema) for the documented root keys (no auto-fix; skilllint#114) |
 
 ---
 

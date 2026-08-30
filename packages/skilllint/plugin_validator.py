@@ -80,7 +80,6 @@ from skilllint.rules.lk_series import check_lk001
 from skilllint.rules.nr_series import check_nr001, check_nr002
 from skilllint.rules.pd_series import check_pd001, check_pd002, check_pd003
 from skilllint.rules.pl_series import (
-    analyze_marketplace_root_keys,
     check_pl001,
     check_pl002,
     check_pl003,
@@ -272,8 +271,8 @@ def safe_load_yaml_with_colon_fix(fm_text: str) -> tuple[dict | None, str | None
 
 
 SKILL_FRONTMATTER_SCHEMA_URL = "https://code.claude.com/docs/en/skills.md#frontmatter-reference"
-# PLUGIN_MANIFEST_SCHEMA_URL, MARKETPLACE_MANIFEST_SCHEMA_URL, MARKETPLACE_JSON_ROOT_KEYS and
-# MARKETPLACE_METADATA_RELOCATABLE_KEYS are rule data and live in rules/pl_series.py.
+# PLUGIN_MANIFEST_SCHEMA_URL, MARKETPLACE_MANIFEST_SCHEMA_URL, and MARKETPLACE_JSON_ROOT_KEYS
+# are rule data and live in rules/pl_series.py.
 
 # FILTER_TYPE_MAP and DEFAULT_SCAN_PATTERNS live in scan_runtime.py
 # and are re-imported at the top of this module.
@@ -3056,45 +3055,6 @@ class PluginRegistrationValidator:
 # ============================================================================
 
 
-def _fix_marketplace_json_metadata_keys(plugin_dir: Path) -> list[str]:
-    """Move MARKETPLACE_METADATA_RELOCATABLE_KEYS from root into ``metadata``.
-
-    Returns:
-        One-line summaries of changes written to ``marketplace.json``.
-    """
-    mp_path = plugin_dir / ".claude-plugin" / "marketplace.json"
-    if not mp_path.exists():
-        raise NotImplementedError("No marketplace.json to fix.")
-    raw = msgspec.json.decode(mp_path.read_bytes())
-    if not isinstance(raw, dict):
-        raise NotImplementedError("marketplace.json root must be a JSON object.")
-    relocatable, unknown = analyze_marketplace_root_keys(raw)
-    if unknown:
-        raise NotImplementedError(
-            "Cannot auto-fix marketplace.json: unrecognized top-level keys must be removed manually: "
-            + ", ".join(unknown)
-        )
-    if not relocatable:
-        raise NotImplementedError("No misplaced marketplace metadata keys to move.")
-    meta_raw = raw.get("metadata")
-    if meta_raw is None:
-        metadata: dict[str, YamlValue] = {}
-    elif isinstance(meta_raw, dict):
-        metadata = dict(meta_raw)
-    else:
-        raise NotImplementedError("marketplace.json `metadata` must be an object to apply fixes.")
-    for k in relocatable:
-        metadata[k] = raw[k]
-    new_root: dict[str, YamlValue] = {}
-    for key in ("name", "owner", "plugins"):
-        if key in raw:
-            new_root[key] = raw[key]
-    new_root["metadata"] = metadata
-    out = msgspec.json.format(msgspec.json.encode(new_root), indent=2).decode() + "\n"
-    mp_path.write_text(out, encoding="utf-8")
-    return [f"Moved {', '.join(relocatable)} under metadata in {mp_path}"]
-
-
 class PluginStructureValidator:
     """Validates plugin structure using claude CLI.
 
@@ -3229,26 +3189,30 @@ class PluginStructureValidator:
         """Check if validator supports auto-fixing.
 
         Returns:
-            True (marketplace.json metadata keys can be relocated under ``metadata``).
+            False. A relocation auto-fix once moved marketplace.json root keys
+            into ``metadata``; it silently rewrote files that already carried
+            documented root-level ``description``/``version`` fields and was
+            removed rather than repaired (skilllint#114).
         """
-        return True
+        return False
 
     def fix(self, path: Path) -> list[str]:
-        """Relocate misplaced marketplace.json root keys into ``metadata``.
+        """Auto-fix marketplace.json layout issues (not supported).
 
         Args:
             path: Path to plugin directory or file within plugin
 
         Returns:
-            Human-readable descriptions of fixes applied
+            Never returns (always raises)
 
         Raises:
-            NotImplementedError: No fixable marketplace layout, or not a plugin directory
+            NotImplementedError: PL006 findings must be corrected by hand; see
+                ``can_fix`` for why the relocation auto-fix was removed.
         """
-        plugin_dir = find_plugin_dir(path)
-        if plugin_dir is None:
-            raise NotImplementedError("Not inside a plugin directory (no .claude-plugin/plugin.json).")
-        return _fix_marketplace_json_metadata_keys(plugin_dir)
+        raise NotImplementedError(
+            "marketplace.json layout issues (PL006) have no auto-fix. An earlier "
+            "relocation fix silently rewrote valid files and was removed (skilllint#114)."
+        )
 
     def _get_claude_path(self) -> str | None:
         """Get full path to claude CLI if available.
