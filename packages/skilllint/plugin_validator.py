@@ -53,7 +53,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from ruamel.yaml import YAML, YAMLError
 from ruamel.yaml.scalarstring import DoubleQuotedScalarString
 
-import skilllint.rules  # noqa: F401 — ensures all 14 series modules register into RULE_REGISTRY
+import skilllint.rules  # ruff: ignore[unused-import] — ensures all 14 series modules register into RULE_REGISTRY
 from skilllint.adapters import PlatformAdapter, load_adapters, matches_file
 from skilllint.adapters.claude_code import ClaudeCodeAdapter
 from skilllint.cli_docs import docs_app
@@ -648,7 +648,14 @@ class ValidationPolicy:
 
 
 DEFAULT_THRESHOLDS: dict[str, int] = {"SK006": TOKEN_WARNING_THRESHOLD, "SK007": TOKEN_ERROR_THRESHOLD}
-_KNOWN_POLICY_RULES = frozenset({"SK006", "SK007", "AS005"})
+# Threshold keys must map to an implemented warning/error band. AS005 measures
+# the same SKILL.md body token count as SK006/SK007 but has no threshold plumbing
+# of its own, so it is not a configurable threshold key (PR #97 review).
+_THRESHOLD_POLICY_RULES = frozenset({"SK006", "SK007"})
+# Severity may be reconfigured for the token-band rules including AS005, which
+# shares the band and can legitimately be downgraded per-plugin.
+_SEVERITY_POLICY_RULES = frozenset({"SK006", "SK007", "AS005"})
+_VALID_SEVERITIES = frozenset({"warning", "info"})
 
 _SKILLLINT_CONFIG_FILENAME = ".skilllint.json"
 
@@ -679,36 +686,97 @@ def _load_ignore_dict(config_path: Path) -> IgnoreConfig:
     return {str(k): [str(c) for c in v] for k, v in ignore.items() if isinstance(v, list)}
 
 
-def _load_policy(config_path: Path) -> ValidationPolicy:
-    """Load thresholds and severity from the existing JSON config.
+def _parse_thresholds(raw: object, config_path: Path, diagnostics: list[str]) -> dict[str, int]:
+    """Parse the ``thresholds`` block, appending a diagnostic per rejected entry.
+
+    Args:
+        raw: The raw ``thresholds`` value from the decoded config.
+        config_path: Config path, used only in diagnostic messages.
+        diagnostics: Mutable list that rejected-entry messages are appended to.
 
     Returns:
-        A policy containing defaults for invalid or missing entries.
+        Thresholds with defaults substituted for missing or invalid entries.
+    """
+    thresholds = dict(DEFAULT_THRESHOLDS)
+    if isinstance(raw, dict):
+        for raw_code, value in raw.items():
+            code = str(raw_code)
+            if code not in _THRESHOLD_POLICY_RULES:
+                diagnostics.append(f"{config_path}: thresholds.{code} is not a configurable threshold; ignored")
+            elif not (isinstance(value, int) and not isinstance(value, bool) and value > 0):
+                diagnostics.append(
+                    f"{config_path}: thresholds.{code}={value!r} is not a positive integer; using default"
+                )
+            else:
+                thresholds[code] = value
+    else:
+        diagnostics.append(f"{config_path}: thresholds is not an object; using defaults")
+    # Warning must stay below error, or the warning band is unreachable
+    # (test_limits.py asserts warning < error as the built-in invariant).
+    if thresholds["SK006"] >= thresholds["SK007"]:
+        diagnostics.append(
+            f"{config_path}: thresholds SK006 ({thresholds['SK006']}) must be below SK007 "
+            f"({thresholds['SK007']}); resetting both to defaults"
+        )
+        thresholds = dict(DEFAULT_THRESHOLDS)
+    return thresholds
+
+
+def _parse_severity(raw: object, config_path: Path, diagnostics: list[str]) -> dict[str, str]:
+    """Parse the ``severity`` block, appending a diagnostic per rejected entry.
+
+    Args:
+        raw: The raw ``severity`` value from the decoded config.
+        config_path: Config path, used only in diagnostic messages.
+        diagnostics: Mutable list that rejected-entry messages are appended to.
+
+    Returns:
+        Mapping of rule code to a valid configured severity; invalid entries
+        are dropped rather than raising.
+    """
+    severity: dict[str, str] = {}
+    if isinstance(raw, dict):
+        for raw_code, value in raw.items():
+            code = str(raw_code)
+            if code not in _SEVERITY_POLICY_RULES:
+                diagnostics.append(f"{config_path}: severity.{code} is not a configurable rule; ignored")
+            elif not (isinstance(value, str) and value in _VALID_SEVERITIES):
+                diagnostics.append(
+                    f"{config_path}: severity.{code}={value!r} must be one of {sorted(_VALID_SEVERITIES)}; ignored"
+                )
+            else:
+                severity[code] = value
+    else:
+        diagnostics.append(f"{config_path}: severity is not an object; using defaults")
+    return severity
+
+
+def _load_policy(config_path: Path) -> tuple[ValidationPolicy, list[str]]:
+    """Load thresholds and severity from the existing JSON config.
+
+    Invalid entries fall back to defaults but are reported: a linter config is
+    producer input, and silently swallowing a typo hides a real error
+    (docs/TYPING_POLICY.md — producer errors must not be silently coerced).
+
+    Returns:
+        The policy (defaults for invalid or missing entries) and a list of
+        human-readable diagnostics describing every rejected entry.
     """
     defaults = dict(DEFAULT_THRESHOLDS)
     if not config_path.is_file():
-        return ValidationPolicy(defaults, {}, {})
+        return ValidationPolicy(defaults, {}, {}), []
     try:
         raw = msgspec.json.decode(config_path.read_bytes())
-    except (OSError, msgspec.DecodeError):
-        return ValidationPolicy(defaults, {}, {})
+    except (OSError, msgspec.DecodeError) as exc:
+        return ValidationPolicy(defaults, {}, {}), [
+            f"{config_path}: unreadable or malformed JSON ({exc}); using defaults"
+        ]
     if not isinstance(raw, dict):
-        return ValidationPolicy(defaults, {}, {})
-    thresholds = dict(defaults)
-    values = raw.get("thresholds", {})
-    if isinstance(values, dict):
-        for raw_code, value in values.items():
-            code = str(raw_code)
-            if code in _KNOWN_POLICY_RULES and isinstance(value, int) and not isinstance(value, bool) and value > 0:
-                thresholds[code] = value
-    severity: dict[str, str] = {}
-    values = raw.get("severity", {})
-    if isinstance(values, dict):
-        for raw_code, value in values.items():
-            code = str(raw_code)
-            if code in _KNOWN_POLICY_RULES and value in {"warning", "info"}:
-                severity[code] = value
-    return ValidationPolicy(thresholds, severity, _load_ignore_dict(config_path))
+        return ValidationPolicy(defaults, {}, {}), [f"{config_path}: top-level config is not an object; using defaults"]
+    diagnostics: list[str] = []
+    thresholds = _parse_thresholds(raw.get("thresholds", {}), config_path, diagnostics)
+    severity = _parse_severity(raw.get("severity", {}), config_path, diagnostics)
+    return ValidationPolicy(thresholds, severity, _load_ignore_dict(config_path)), diagnostics
 
 
 def _load_ignore_config(plugin_root: Path) -> IgnoreConfig:
@@ -806,6 +874,10 @@ def _resolve_policy(
 ) -> tuple[ValidationPolicy, Path | None]:
     """Resolve first-match policy using the existing discovery and cache.
 
+    Diagnostics for invalid config are emitted once per config file: they fire
+    only on a cache miss (the first file that resolves a given config), so a
+    1000-file scan warns once, not once per file.
+
     Returns:
         The policy and its config root, or defaults and ``None``.
     """
@@ -817,20 +889,31 @@ def _resolve_policy(
     current = start_dir
     policy = ValidationPolicy(dict(DEFAULT_THRESHOLDS), {}, {})
     root: Path | None = None
+    diagnostics: list[str] = []
     while True:
+        ancestor_key = str(current)
+        # A sibling file already cached this ancestor: reuse it instead of
+        # re-walking and re-emitting diagnostics once per sibling skill.
+        if ancestor_key in cache:
+            policy, root = cache[ancestor_key]
+            break
         walked.append(current)
         plugin_cfg = current / ".claude-plugin" / "plugin.json"
         skilllint_cfg = current / _SKILLLINT_CONFIG_FILENAME
         if plugin_cfg.exists():
-            policy, root = _load_policy(current / ".claude-plugin" / "validator.json"), current
+            policy, diagnostics = _load_policy(current / ".claude-plugin" / "validator.json")
+            root = current
             break
         if skilllint_cfg.exists():
-            policy, root = _load_policy(skilllint_cfg), current
+            policy, diagnostics = _load_policy(skilllint_cfg)
+            root = current
             break
         parent = current.parent
         if parent == current:
             break
         current = parent
+    for message in diagnostics:
+        typer.echo(f"Warning: {message}", err=True)
     result = (policy, root)
     for directory in walked:
         cache.setdefault(str(directory), result)
@@ -1209,7 +1292,7 @@ def _check_list_valued_tool_fields(
         errors: Mutable list to append error issues to (unused, kept for API compat).
         warnings: Mutable list to append warning issues to.
     """
-    from pathlib import Path as _Path  # noqa: PLC0415
+    from pathlib import Path as _Path  # ruff: ignore[import-outside-top-level]
 
     sentinel_path = _Path()
     warnings.extend(check_fm007(data, sentinel_path, "skill"))
@@ -2350,7 +2433,7 @@ class AsSeriesValidator:
         Returns:
             ValidationResult grouping AS-series issues by severity.
         """
-        from skilllint.rules.as_series import run_as_series  # noqa: PLC0415
+        from skilllint.rules.as_series import run_as_series  # ruff: ignore[import-outside-top-level]
 
         frontmatter_data, body_lines, _yaml_err, _colon_fields = parse_skill_md(path)
         thresholds = policy.thresholds if policy is not None else DEFAULT_THRESHOLDS
@@ -2430,7 +2513,7 @@ def _validate_skill_directory_name(skill_dir_name: str) -> list[tuple[str, str]]
         List of (message, suggestion) tuples for each violation found.
         Empty list if the name is valid.
     """
-    from skilllint._spec_constants import MAX_NAME_LENGTH  # noqa: PLC0415
+    from skilllint._spec_constants import MAX_NAME_LENGTH  # ruff: ignore[import-outside-top-level]
 
     if not skill_dir_name:
         return [("Skill directory name cannot be empty", "Provide a non-empty directory name")]
@@ -3035,7 +3118,7 @@ class NameFormatValidator:
             name: The name value to check (must be non-empty str).
             errors: Mutable list to append ValidationIssue objects to.
         """
-        from pathlib import Path as _Path  # noqa: PLC0415
+        from pathlib import Path as _Path  # ruff: ignore[import-outside-top-level]
 
         frontmatter: dict[str, object] = {"name": name}
         sentinel = _Path()
@@ -3222,7 +3305,7 @@ class DescriptionValidator:
         Delegates to sk_series check_sk004/check_sk005 — the series module is
         the single source of truth for SK-series rule logic.
         """
-        from pathlib import Path as _Path  # noqa: PLC0415
+        from pathlib import Path as _Path  # ruff: ignore[import-outside-top-level]
 
         frontmatter: dict[str, object] = {"description": description}
         sentinel = _Path()
@@ -4407,7 +4490,7 @@ class PluginStructureValidator:
         }
         return fallbacks.get(str(code), "Plugin structure validation failed")
 
-    def _get_error_suggestion(self, code: str) -> str:  # noqa: PLR0911
+    def _get_error_suggestion(self, code: str) -> str:  # ruff: ignore[too-many-return-statements]
         """Get suggestion for fixing error.
 
         Args:
@@ -5088,7 +5171,7 @@ def get_staged_files() -> list[Path]:
         return [Path(item.a_path) for item in diffs if item.a_path]
     except (InvalidGitRepositoryError, NoSuchPathError, ValueError):
         return []
-    except Exception:  # noqa: BLE001
+    except Exception:  # ruff: ignore[blind-except]
         return []
 
 
@@ -5308,6 +5391,7 @@ def validate_single_path(
     fix: bool,
     verbose: bool,
     per_run_cache: dict[str, tuple[IgnoreConfig, Path | None]] | None = None,
+    per_run_policy_cache: dict[str, tuple[ValidationPolicy, Path | None]] | None = None,
 ) -> FileResults:
     """Validate a single path and return results grouped by file.
 
@@ -5320,6 +5404,9 @@ def validate_single_path(
             When provided, directory-tree walks are cached across calls so
             sibling files share the same lookup result.  Pass the same dict
             for the lifetime of a single scan run.
+        per_run_policy_cache: Optional mutable cache for policy resolution,
+            with the same per-run lifetime as ``per_run_cache``.  Sharing it
+            avoids re-walking and re-reading config for every sibling file.
 
     Returns:
         Mapping of file path to list of (validator_class_name, result) tuples.
@@ -5349,7 +5436,10 @@ def validate_single_path(
 
     cache: dict[str, tuple[IgnoreConfig, Path | None]] = per_run_cache if per_run_cache is not None else {}
     ignore_config, config_root = _resolve_ignore_config(path, cache)
-    policy, _policy_root = _resolve_policy(path, {})
+    policy_cache: dict[str, tuple[ValidationPolicy, Path | None]] = (
+        per_run_policy_cache if per_run_policy_cache is not None else {}
+    )
+    policy, _policy_root = _resolve_policy(path, policy_cache)
     policy = ValidationPolicy(policy.thresholds, policy.severity, ignore_config)
 
     validator_results = _collect_validator_results(
@@ -5479,7 +5569,9 @@ def parse_skill_md(path: Path) -> tuple[dict, list[str], str | None, list[str]]:
     return frontmatter_dict, body_lines, yaml_err, colon_fields
 
 
-def run_platform_checks(path: Path, adapter: PlatformAdapter) -> list[dict]:
+def run_platform_checks(
+    path: Path, adapter: PlatformAdapter, *, policy_cache: dict[str, tuple[ValidationPolicy, Path | None]] | None = None
+) -> list[dict]:
     """Run platform-specific validation for a single adapter.
 
     Dispatches to adapter.validate(path) for all adapter types.
@@ -5488,6 +5580,9 @@ def run_platform_checks(path: Path, adapter: PlatformAdapter) -> list[dict]:
     Args:
         path: File path to validate.
         adapter: PlatformAdapter instance for constraint scope filtering.
+        policy_cache: Optional mutable per-run policy cache, forwarded to the
+            nested Claude pipeline so a multi-file scan reads each config —
+            and emits its diagnostics — once rather than once per file.
 
     Returns:
         List of violation dicts with keys: code, severity, message.
@@ -5504,7 +5599,9 @@ def run_platform_checks(path: Path, adapter: PlatformAdapter) -> list[dict]:
         if not sk_validators:
             return list(adapter.validate(path))
 
-        file_results = validate_single_path(path, check=True, fix=False, verbose=False)
+        file_results = validate_single_path(
+            path, check=True, fix=False, verbose=False, per_run_policy_cache=policy_cache
+        )
 
         violations: list[dict] = []
         for validator_results in file_results.values():
@@ -5525,7 +5622,12 @@ def run_platform_checks(path: Path, adapter: PlatformAdapter) -> list[dict]:
     return list(adapter.validate(path))
 
 
-def validate_file(path: Path, adapters: dict, platform_override: str | None = None) -> list[dict]:
+def validate_file(
+    path: Path,
+    adapters: dict,
+    platform_override: str | None = None,
+    policy_cache: dict[str, tuple[ValidationPolicy, Path | None]] | None = None,
+) -> list[dict]:
     """Dispatch validation for a single file using the adapter registry.
 
     AS-series fires ONCE per file (before per-adapter loop) — structural dedup.
@@ -5536,12 +5638,18 @@ def validate_file(path: Path, adapters: dict, platform_override: str | None = No
         platform_override: If set, restrict to this adapter ID. The selected
             adapter's constraint_scopes() will be used to filter rules by
             provider relevance (shared vs provider_specific).
+        policy_cache: Optional mutable per-run policy cache. Sharing it across
+            a scan prevents re-reading config and re-emitting diagnostics once
+            per file.
 
     Returns:
         List of violation dicts with keys: code, severity, message.
         May include 'authority' key with origin and reference when the rule
         has authority metadata.
     """
+    resolved_policy_cache: dict[str, tuple[ValidationPolicy, Path | None]] = (
+        policy_cache if policy_cache is not None else {}
+    )
     pure = PurePath(path)
     if platform_override:
         matching = [adapters[platform_override]]
@@ -5568,7 +5676,31 @@ def validate_file(path: Path, adapters: dict, platform_override: str | None = No
                 "severity": "error",
                 "message": f"Invalid YAML frontmatter: {yaml_err}",
             })
-        violations.extend(run_as_series(path, frontmatter_data, body_lines))
+        # Resolve per-plugin policy so --platform validation honors the same
+        # configured thresholds AND severity as the default path (PR #97 review:
+        # the two paths must not lint the same skill differently). Reuse a shared
+        # per-run cache so a 1000-file platform scan reads each config once.
+        policy, _policy_root = _resolve_policy(path, resolved_policy_cache)
+        violations.extend(
+            run_as_series(
+                path,
+                frontmatter_data,
+                body_lines,
+                warning_threshold=policy.thresholds.get("SK006", TOKEN_WARNING_THRESHOLD),
+                error_threshold=policy.thresholds.get("SK007", TOKEN_ERROR_THRESHOLD),
+            )
+        )
+        if policy.severity:
+            # Apply configured severity downgrades to the AS-series dict
+            # violations so --platform matches the default-path remap.
+            remapped: list[dict[str, object]] = []
+            for violation in violations:
+                configured = policy.severity.get(str(violation.get("code")))
+                if configured in _VALID_SEVERITIES:
+                    remapped.append({**violation, "severity": configured})
+                else:
+                    remapped.append(violation)
+            violations = remapped
 
     if not matching:
         return violations
@@ -5584,7 +5716,7 @@ def validate_file(path: Path, adapters: dict, platform_override: str | None = No
     sk_validators = filter_validators_by_constraint_scopes(sk_validators, constraint_scopes)
 
     for adapter in matching:
-        violations.extend(run_platform_checks(path, adapter))
+        violations.extend(run_platform_checks(path, adapter, policy_cache=resolved_policy_cache))
 
     return violations
 
@@ -5734,9 +5866,17 @@ def main(
         # One shared cache per scan run — prevents re-walking the directory
         # tree for every file when many files share the same config root.
         per_run_cache: dict[str, tuple[IgnoreConfig, Path | None]] = {}
+        per_run_policy_cache: dict[str, tuple[ValidationPolicy, Path | None]] = {}
 
         def _validate_with_cache(p: Path, *, check: bool, fix: bool, verbose: bool) -> FileResults:
-            return validate_single_path(p, check=check, fix=fix, verbose=verbose, per_run_cache=per_run_cache)
+            return validate_single_path(
+                p,
+                check=check,
+                fix=fix,
+                verbose=verbose,
+                per_run_cache=per_run_cache,
+                per_run_policy_cache=per_run_policy_cache,
+            )
 
         run_validation_loop(
             expanded_paths=expanded_paths,
@@ -5748,7 +5888,7 @@ def main(
             show_summary=show_summary,
             platform_override=platform_override,
             validate_single_path=_validate_with_cache,
-            validate_file=validate_file,
+            validate_file=lambda p, a, o: validate_file(p, a, o, policy_cache=per_run_policy_cache),
             violations_to_result=violations_to_result,
             adapters=ADAPTERS,
             record_console=record_console,
