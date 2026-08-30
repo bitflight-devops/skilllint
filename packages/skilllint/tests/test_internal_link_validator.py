@@ -2,7 +2,7 @@
 
 Tests:
 - Broken link detection (LK001)
-- Missing ./ prefix warnings (LK002)
+- ${CLAUDE_*} substitution before existence check
 - External link filtering
 - Path resolution
 """
@@ -193,68 +193,6 @@ See [linked](./references/linked.md).
 
         assert result.passed is True
         assert not any(issue.code == "LK001" for issue in result.errors)
-
-
-class TestMissingPrefixWarning:
-    """Test warning for links without ./ prefix (LK002)."""
-
-    def test_link_without_prefix_warning(self, tmp_path: Path) -> None:
-        """Test warning when link missing ./ prefix (LK002).
-
-        Tests: Missing ./ prefix detection
-        How: Create link without ./ prefix, validate
-        Why: Ensure LK002 warning raised for missing prefix
-        """
-        skill_dir = tmp_path / "test-skill"
-        skill_dir.mkdir()
-        refs_dir = skill_dir / "references"
-        refs_dir.mkdir()
-        (refs_dir / "existing.md").write_text("# Reference\n")
-
-        skill_md = skill_dir / "SKILL.md"
-        skill_md.write_text("""---
-description: Test skill
----
-
-# Test Skill
-
-See [no prefix](references/existing.md) for details.
-""")
-
-        validator = InternalLinkValidator()
-        result = validator.validate(skill_md)
-
-        # Should have warning
-        assert result.passed is True
-        assert any(issue.code == "LK002" for issue in result.warnings)
-
-    def test_multiple_links_without_prefix(self, tmp_path: Path) -> None:
-        """Test multiple warnings for links without prefix.
-
-        Tests: Multiple missing prefix warnings
-        How: Create multiple links without ./ prefix, validate
-        Why: Ensure all missing prefixes reported
-        """
-        skill_dir = tmp_path / "test-skill"
-        skill_dir.mkdir()
-        refs_dir = skill_dir / "references"
-        refs_dir.mkdir()
-        (refs_dir / "ref1.md").write_text("# Ref 1\n")
-        (refs_dir / "ref2.md").write_text("# Ref 2\n")
-
-        skill_md = skill_dir / "SKILL.md"
-        skill_md.write_text("""---
-description: Test skill
----
-
-See [ref1](references/ref1.md) and [ref2](references/ref2.md).
-""")
-
-        validator = InternalLinkValidator()
-        result = validator.validate(skill_md)
-
-        lk002_warnings = [w for w in result.warnings if w.code == "LK002"]
-        assert len(lk002_warnings) >= 2
 
 
 class TestExternalLinkFiltering:

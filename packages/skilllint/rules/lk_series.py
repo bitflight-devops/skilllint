@@ -1,22 +1,30 @@
-"""LK-series internal link rules (LK001-LK002).
+"""LK-series internal link rules (LK001).
 
 Each function is decorated with @skilllint_rule and returns a list of
 ValidationIssue objects.
 
-LK001 and LK002 are emitted by ``InternalLinkValidator`` in
-``plugin_validator.py`` after reading file content and resolving filesystem
-paths.  The validator functions registered here are **registration-only
-stubs** — they exist to make rule metadata available via ``RULE_REGISTRY``
-(and therefore via ``skilllint rule LKxxx``) without duplicating the
-detection logic that requires live file I/O.
+LK001 is emitted by ``InternalLinkValidator`` in ``plugin_validator.py``
+after reading file content and resolving filesystem paths.  The validator
+function registered here is a **registration-only stub** — it exists to
+make rule metadata available via ``RULE_REGISTRY`` (and therefore via
+``skilllint rule LKxxx``) without duplicating the detection logic that
+requires live file I/O.
 
 Rule IDs and default severities:
     +-------+-----------------------------------------------+-----------+
     | ID    | Summary                                       | Severity  |
     +-------+-----------------------------------------------+-----------+
     | LK001 | Broken internal link (file does not exist)    | error     |
-    | LK002 | Relative link missing ./ prefix               | warning   |
     +-------+-----------------------------------------------+-----------+
+
+LK002 ("relative link missing ./ prefix") was deleted: both the
+AgentSkills specification's own worked example
+(``[the reference guide](references/REFERENCE.md)``) and Anthropic's
+skills doc (``[reference.md](reference.md)``) use bare relative links
+with no ``./`` prefix. LK002 fired on both specs' own examples and had no
+sourced justification. The real ``./``-prefix requirement upstream
+applies to ``plugin.json`` manifest path fields, a different thing
+already covered by PL004.
 
 Import note: ValidationIssue is deferred inside each function to break the
 circular import: plugin_validator imports rules/, so rules/ cannot import
@@ -74,6 +82,15 @@ def check_lk001(frontmatter: dict[str, object], path: Path, file_type: str) -> l
     each relative link path against the `SKILL.md` parent directory and
     checks for existence via ``Path.exists()``.
 
+    Links containing Claude Code's documented ``${CLAUDE_SKILL_DIR}`` and
+    ``${CLAUDE_PLUGIN_ROOT}`` substitution variables are resolved before the
+    existence check (see `code.claude.com/docs/en/skills.md
+    #available-string-substitutions`). Links containing any other
+    unexpanded ``${...}`` token (e.g. ``${CLAUDE_PROJECT_DIR}``,
+    ``${CLAUDE_PLUGIN_DATA}``, or an unrecognized variable) are skipped —
+    skilllint has no static basis for resolving those targets and no basis
+    for asserting they are broken.
+
     **Fix:** Either create the missing file at the referenced path, or
     correct the link to point to an existing file:
 
@@ -95,49 +112,4 @@ def check_lk001(frontmatter: dict[str, object], path: Path, file_type: str) -> l
     return []
 
 
-# ---------------------------------------------------------------------------
-# LK002 — Relative link missing ./ prefix
-# ---------------------------------------------------------------------------
-
-
-@skilllint_rule(
-    "LK002",
-    severity="warning",
-    category="link",
-    platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
-)
-def check_lk002(frontmatter: dict[str, object], path: Path, file_type: str) -> list[ValidationIssue]:
-    """## LK002 — Relative link missing ./ prefix
-
-    A relative markdown link does not start with `./` or `../`.  The `./`
-    prefix makes the relative nature of the link explicit and avoids
-    ambiguity on systems that interpret bare names differently.
-
-    **Source:** `InternalLinkValidator` in `plugin_validator.py` — checks
-    each relative link URL for a leading `./` or `../` prefix.
-
-    **Fix:** Add the `./` prefix to the relative link:
-
-    ```markdown
-    <!-- Before -->
-    See [Reference](references/my-doc.md)
-
-    <!-- After -->
-    See [Reference](./references/my-doc.md)
-    ```
-
-    Links that already start with `../` (cross-directory references) are
-    valid and do not trigger this warning.
-
-    Returns:
-        Always an empty list.  LK002 is emitted by ``InternalLinkValidator``
-        in ``plugin_validator.py`` after inspecting the link URL prefix; this
-        function exists for rule metadata registration only.
-
-    <!-- examples: LK002 -->
-    """
-    return []
-
-
-__all__ = ["check_lk001", "check_lk002"]
+__all__ = ["check_lk001"]

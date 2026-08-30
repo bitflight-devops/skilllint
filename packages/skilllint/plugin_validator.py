@@ -318,9 +318,8 @@ class ErrorCode(StrEnum):
     SK008 = "SK008"  # Skill directory name violates naming convention
     SK009 = "SK009"  # Plugin uses manual skill selection (overrides auto-discovery)
 
-    # Link (LK001-LK002)
+    # Link (LK001)
     LK001 = "LK001"  # Broken internal link (file does not exist)
-    LK002 = "LK002"  # Link missing ./ prefix
 
     # Progressive Disclosure (PD001-PD003)
     PD001 = "PD001"  # No `references/` directory found
@@ -400,7 +399,7 @@ SK001, SK002, SK003, SK004, SK005, SK006, SK007, SK008, SK009 = (
     ErrorCode.SK008,
     ErrorCode.SK009,
 )
-LK001, LK002 = ErrorCode.LK001, ErrorCode.LK002
+LK001 = ErrorCode.LK001
 PD001, PD002, PD003 = ErrorCode.PD001, ErrorCode.PD002, ErrorCode.PD003
 PL001, PL002, PL003, PL004, PL005, PL006 = (
     ErrorCode.PL001,
@@ -1377,8 +1376,7 @@ class ProgressiveDisclosureValidator:
 class InternalLinkValidator:
     """Validates internal markdown links in SKILL.md files.
 
-    Checks that relative links point to existing files (LK001) and that
-    relative links use the ./ prefix convention (LK002).
+    Checks that relative links point to existing files (LK001).
 
     Architecture lines 1188-1256, Task T8 lines 897-982
     """
@@ -1481,20 +1479,6 @@ class InternalLinkValidator:
                         code=LK001,
                         docs_url=generate_docs_url(LK001),
                         suggestion=f"Create missing file or fix link path: {link_url}",
-                    )
-                )
-
-            # Warn if relative link is missing ./ prefix (LK002)
-            # Links starting with ../ are valid cross-directory references; skip them.
-            if not link_url_no_fragment.startswith(("./", "../")):
-                warnings.append(
-                    ValidationIssue(
-                        field="internal-links",
-                        severity="warning",
-                        message=f"Link missing ./ prefix: [{link_text}]({link_url})",
-                        code=LK002,
-                        docs_url=generate_docs_url(LK002),
-                        suggestion=f"Add ./ prefix: ./{link_url}",
                     )
                 )
 

@@ -70,7 +70,6 @@ Validate internal markdown links in SKILL.md and agent files.
 | Rule | Severity | Auto-fix | Description |
 |------|----------|----------|-------------|
 | LK001 | error | no | Internal link target file does not exist on disk |
-| LK002 | warning | no | Internal link target exists but the anchor fragment (#section) does not match any heading |
 
 **LK001 fix:** Verify the linked file path is correct. Links in `skills/<name>/SKILL.md` are relative to the skill directory, not the plugin root.
 
