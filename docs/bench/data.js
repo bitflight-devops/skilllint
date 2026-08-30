@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788058454885,
+  "lastUpdate": 1788059282803,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -666,6 +666,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 61.958,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "b9336318b9018bf2ca7b00f737fdf5047490f271",
+          "message": "fix(lk,nr): correct NR002 citation, delete LK002, resolve ${CLAUDE_*} vars before LK001 (#122)\n\n* fix(nr): correct NR002 citation to the real path-traversal source\n\nNR002's authority cited agentskills.io/specification.md, which says\nnothing about traversal, boundaries, escaping, or symlinks (verified:\ngrep -ci for those terms returns 0 against the cached spec). The rule\nitself is correct; point it at code.claude.com/docs/en/plugins-reference's\n\"Path traversal limitations\" section instead, which documents exactly\nthe `..`, `/`, and `\\` rejections NR002 enforces.\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01QJeBLNA9ybmQvv5REMDkrc\n\n* fix(lk): delete LK002 -- upstream specs use bare relative links\n\nLK002 warned that relative markdown links need a ./ prefix. The\nAgentSkills specification's own worked example\n([the reference guide](references/REFERENCE.md)) and Anthropic's\nskills doc ([reference.md](reference.md)) both use bare links with no\n./ prefix (verified: zero `](./` occurrences in either cached doc).\nLK002 fired on both specs' own examples. Its docstring justification\nhad no source; the real ./-prefix requirement upstream applies to\nplugin.json manifest path fields, already covered by PL004.\n\nDeletes check_lk002, its registry entry, LK002's ErrorCode/alias, the\nLK002-emitting block in InternalLinkValidator.validate(), and its\ntests/fixtures. test_ignore_config_discovery.py used LK002 purely as a\nconvenient warning-level rule to exercise the generic suppression\nmechanism (not testing LK002 semantics) -- swapped to FM007. Updates\nREADME tables, plugin README, rule-catalog.md, and docs/ignore-config.md.\n\nTest count: -2 (TestMissingPrefixWarning class deleted; the ignore-config\nsuite's LK002-based tests were renamed to FM007, net 0 there).\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01QJeBLNA9ybmQvv5REMDkrc\n\n* fix(lk): resolve \\${CLAUDE_*} substitution variables before LK001 (#111)\n\nLK001 flagged [text](\\${CLAUDE_PLUGIN_ROOT}/docs/foo.md) as a broken link\nbecause it treated the literal \\${CLAUDE_PLUGIN_ROOT} string as a\nfilesystem path. code.claude.com/docs/en/skills.md documents four\nsubstitution variables Claude Code expands in skill markdown content:\n\\${CLAUDE_SKILL_DIR}, \\${CLAUDE_PROJECT_DIR}, \\${CLAUDE_PLUGIN_ROOT}, and\n\\${CLAUDE_PLUGIN_DATA}.\n\nInternalLinkValidator now resolves the two variables it can determine\nstatically from the plugin source tree before the existence check:\n\\${CLAUDE_SKILL_DIR} (the SKILL.md's own directory) and\n\\${CLAUDE_PLUGIN_ROOT} (via find_plugin_dir -- same lookup\nHookValidator already uses for \\${CLAUDE_PLUGIN_ROOT} in hook commands).\n\\${CLAUDE_PROJECT_DIR} and \\${CLAUDE_PLUGIN_DATA} target install-time\nlocations that don't exist in the plugin source, and any other\nunrecognized \\${...} token has no documented meaning skilllint could\nresolve -- both are skipped rather than reported, since skilllint has\nno basis for asserting an unresolvable target is broken.\n\nTest count: +8 (TestClaudeVariableSubstitution).\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01QJeBLNA9ybmQvv5REMDkrc\n\n---------\n\nCo-authored-by: Claude Opus 5 <noreply@anthropic.com>",
+          "timestamp": "2026-08-30T03:04:50Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/b9336318b9018bf2ca7b00f737fdf5047490f271"
+        },
+        "date": 1788059281842,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 14932.241,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 15611.61,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 16809.299,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 64.119,
             "unit": "files/s"
           }
         ]
