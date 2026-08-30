@@ -495,6 +495,48 @@ class TestMarketplaceJsonLayout:
         assert any(e.code == PL006 for e in result.errors)
         mock_run.assert_not_called()
 
+    def test_pl006_recognized_field_suggests_move_to_metadata(self, tmp_path: Path) -> None:
+        """A root key recognized elsewhere in the plugin ecosystem (`repository`) gets
+        move-under-`metadata` guidance, not delete-it guidance (skilllint#141 review:
+        the old auto-fix moved this field, so telling users to delete it loses data).
+        """
+        plugin_dir = tmp_path / "test-plugin"
+        plugin_dir.mkdir()
+        claude_plugin = plugin_dir / ".claude-plugin"
+        claude_plugin.mkdir()
+        (claude_plugin / "plugin.json").write_text('{"name": "test"}')
+        marketplace = {"name": "cat", "owner": {"name": "x"}, "plugins": [], "repository": "https://example.com/r"}
+        (claude_plugin / "marketplace.json").write_text(json.dumps(marketplace))
+
+        validator = PluginStructureValidator()
+        result = validator.validate(plugin_dir)
+
+        pl006 = [e for e in result.errors if e.code == PL006]
+        assert len(pl006) == 1
+        assert pl006[0].suggestion is not None
+        assert "metadata" in pl006[0].suggestion
+        assert "`repository`" in pl006[0].suggestion
+        assert "remove or rename these unrecognized" not in pl006[0].suggestion
+
+    def test_pl006_unknown_key_still_suggests_remove_or_rename(self, tmp_path: Path) -> None:
+        """A genuinely unrecognized root key (a typo) still gets remove-or-rename guidance."""
+        plugin_dir = tmp_path / "test-plugin"
+        plugin_dir.mkdir()
+        claude_plugin = plugin_dir / ".claude-plugin"
+        claude_plugin.mkdir()
+        (claude_plugin / "plugin.json").write_text('{"name": "test"}')
+        marketplace = {"name": "cat", "owner": {"name": "x"}, "plugins": [], "pluginz": "typo"}
+        (claude_plugin / "marketplace.json").write_text(json.dumps(marketplace))
+
+        validator = PluginStructureValidator()
+        result = validator.validate(plugin_dir)
+
+        pl006 = [e for e in result.errors if e.code == PL006]
+        assert len(pl006) == 1
+        assert pl006[0].suggestion is not None
+        assert "remove or rename" in pl006[0].suggestion.lower()
+        assert "`pluginz`" in pl006[0].suggestion
+
     def test_pl006_accepts_documented_root_fields(self, tmp_path: Path) -> None:
         """Documented root fields ($schema, description, version, renames, ...) pass PL006."""
         plugin_dir = tmp_path / "test-plugin"

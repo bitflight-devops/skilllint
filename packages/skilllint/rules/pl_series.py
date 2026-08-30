@@ -91,6 +91,31 @@ MARKETPLACE_JSON_ROOT_KEYS: frozenset[str] = frozenset({
     "renames",  # Optional fields -- former plugin name -> current name (or null) map
 })
 
+# Root keys with no documented marketplace-root or root-`metadata` meaning, but that
+# ARE documented fields elsewhere in the Claude Code plugin ecosystem: the plugin
+# manifest schema (PLUGIN_MANIFEST_SCHEMA_URL, "Standard fields") and, identically,
+# each marketplace `plugins[]` entry (MARKETPLACE_MANIFEST_SCHEMA_URL, "Optional plugin
+# fields" > "Standard metadata fields"). A user who puts one of these at the
+# marketplace root almost certainly meant it as real information, not garbage --
+# telling them to delete it destroys data a rename/remove instruction should not.
+#
+# The `metadata` destination is NOT itself independently spec-verified: a live
+# `claude plugin validate` v2.1.251 run puts `metadata.repository` in the exact same
+# "Unknown field ... Claude Code ignores it at load time" warning bucket as a bare
+# root `repository` -- moving it there does not silence the CLI. This set and its
+# `metadata` destination are inherited from the deleted `_fix_marketplace_json_
+# metadata_keys` / original `MARKETPLACE_METADATA_RELOCATABLE_KEYS`
+# (github.com/bitflight-devops/skilllint#114); `metadata` is suggested only as a
+# manual home strictly less destructive than deletion, not because upstream
+# recognizes these keys there (github.com/bitflight-devops/skilllint#141 review).
+MARKETPLACE_METADATA_RELOCATABLE_KEYS: frozenset[str] = frozenset({
+    "author",
+    "homepage",
+    "repository",
+    "license",
+    "keywords",
+})
+
 # Patterns matched against combined stdout/stderr of `claude plugin validate`.
 # Source: PluginStructureValidator._parse_claude_errors, plugin_validator.py.
 _CLAUDE_ERROR_PATTERNS: dict[str, str] = {
@@ -126,19 +151,27 @@ def _make_issue(
     )
 
 
-def analyze_marketplace_root_keys(data: dict[str, YamlValue]) -> list[str]:
-    """Find unrecognized top-level keys in marketplace.json.
+def analyze_marketplace_root_keys(data: dict[str, YamlValue]) -> tuple[list[str], list[str]]:
+    """Classify misplaced top-level keys in marketplace.json.
 
     PL006's only detection source; there is no accompanying auto-fix (see the
-    module docstring and the comment on ``MARKETPLACE_JSON_ROOT_KEYS``).
+    module docstring and the comment on ``MARKETPLACE_JSON_ROOT_KEYS``). The
+    classification exists purely to word the diagnostic accurately -- telling a
+    user to delete a recognized field (see ``MARKETPLACE_METADATA_RELOCATABLE_KEYS``)
+    would destroy data a move-to-``metadata`` instruction should not.
 
     Args:
         data: Parsed marketplace.json root object.
 
     Returns:
-        Sorted root keys that are not in ``MARKETPLACE_JSON_ROOT_KEYS``.
+        (relocatable, unknown) -- root keys recognized elsewhere in the plugin
+        ecosystem that a user should move under ``metadata`` by hand, and root
+        keys with no such recognition that a user should remove or rename.
     """
-    return sorted(k for k in data if k not in MARKETPLACE_JSON_ROOT_KEYS)
+    misplaced = [k for k in data if k not in MARKETPLACE_JSON_ROOT_KEYS]
+    relocatable = sorted(k for k in misplaced if k in MARKETPLACE_METADATA_RELOCATABLE_KEYS)
+    unknown = sorted(k for k in misplaced if k not in MARKETPLACE_METADATA_RELOCATABLE_KEYS)
+    return relocatable, unknown
 
 
 def _claude_error_message(code: str, output: str) -> str:
@@ -252,8 +285,9 @@ def claude_validation_failure_issue(stdout: str, stderr: str) -> ValidationIssue
             code="PL006",
             suggestion=(
                 "Plugin-manifest fields such as `repository`, `homepage`, and `license` are not "
-                "documented marketplace root keys and must be removed or renamed manually "
-                "(there is no auto-fix). "
+                "documented marketplace root keys, but they hold real data -- move them under "
+                "`metadata` by hand rather than deleting them. Remove or rename any other, "
+                "genuinely unrecognized key. There is no auto-fix. "
                 f"Reference: {MARKETPLACE_MANIFEST_SCHEMA_URL}. CLI output: {detail}"
             ),
         )
@@ -563,18 +597,27 @@ def check_pl006(plugin_dir: Path) -> list[ValidationIssue]:
 
     **Fix:** There is no auto-fix (github.com/bitflight-devops/skilllint#114:
     an earlier relocation fix silently rewrote valid files carrying documented
-    root fields).  Remove or rename the unrecognized key by hand:
+    root fields).  Correct the file by hand, and correct it two different ways
+    depending on the key (see ``MARKETPLACE_METADATA_RELOCATABLE_KEYS``):
 
-    ```json
-    {
-      "name": "my-catalog",
-      "owner": {"name": "my-org"},
-      "plugins": [],
-      "metadata": {
-        "repository": "https://github.com/my-org/my-plugin"
+    - A key recognized elsewhere in the plugin ecosystem (``author``,
+      ``homepage``, ``repository``, ``license``, ``keywords``) almost
+      certainly holds real data -- move it under ``metadata`` instead of
+      deleting it:
+
+      ```json
+      {
+        "name": "my-catalog",
+        "owner": {"name": "my-org"},
+        "plugins": [],
+        "metadata": {
+          "repository": "https://github.com/my-org/my-plugin"
+        }
       }
-    }
-    ```
+      ```
+
+    - A genuinely unrecognized key (a typo, or a field with no meaning
+      anywhere in the schema) should be removed or renamed.
 
     Args:
         plugin_dir: Plugin root directory containing ``.claude-plugin/``.
@@ -616,23 +659,29 @@ def check_pl006(plugin_dir: Path) -> list[ValidationIssue]:
                 suggestion=f"See: {MARKETPLACE_MANIFEST_SCHEMA_URL}",
             )
         ]
-    unknown = analyze_marketplace_root_keys(raw)
-    if not unknown:
+    relocatable, unknown = analyze_marketplace_root_keys(raw)
+    if not relocatable and not unknown:
         return []
-    keys = ", ".join(f"`{k}`" for k in unknown)
+    parts: list[str] = []
+    if relocatable:
+        relocatable_keys = ", ".join(f"`{k}`" for k in relocatable)
+        parts.append(f"move these under `metadata` by hand (there is no auto-fix): {relocatable_keys}")
+    if unknown:
+        unknown_keys = ", ".join(f"`{k}`" for k in unknown)
+        parts.append(f"remove or rename these unrecognized top-level keys: {unknown_keys}")
+    detail = "; ".join(parts)
     suggestion = (
         "Claude Code marketplace manifests only allow top-level `name`, `owner`, `plugins`, `metadata`, "
         "`$schema`, `description`, `version`, `allowCrossMarketplaceDependenciesOn`, and `renames`. "
-        f"Remove or rename: {keys}. There is no auto-fix; correct the file by hand. "
-        f"Reference: {MARKETPLACE_MANIFEST_SCHEMA_URL}"
+        # Capitalize only the leading letter -- str.capitalize() would lowercase a
+        # user's own camelCase key name embedded later in `detail`.
+        f"{detail[:1].upper()}{detail[1:]}. Reference: {MARKETPLACE_MANIFEST_SCHEMA_URL}"
     )
     return [
         _make_issue(
             field="marketplace.json",
             severity="error",
-            message=(
-                f"marketplace.json violates the Claude Code marketplace schema: unrecognized top-level key(s): {keys}."
-            ),
+            message=f"marketplace.json violates the Claude Code marketplace schema: {detail}.",
             code="PL006",
             suggestion=suggestion,
         )
@@ -642,6 +691,7 @@ def check_pl006(plugin_dir: Path) -> list[ValidationIssue]:
 __all__ = [
     "MARKETPLACE_JSON_ROOT_KEYS",
     "MARKETPLACE_MANIFEST_SCHEMA_URL",
+    "MARKETPLACE_METADATA_RELOCATABLE_KEYS",
     "PLUGIN_MANIFEST_SCHEMA_URL",
     "analyze_marketplace_root_keys",
     "check_pl001",

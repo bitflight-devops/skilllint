@@ -271,8 +271,8 @@ def safe_load_yaml_with_colon_fix(fm_text: str) -> tuple[dict | None, str | None
 
 
 SKILL_FRONTMATTER_SCHEMA_URL = "https://code.claude.com/docs/en/skills.md#frontmatter-reference"
-# PLUGIN_MANIFEST_SCHEMA_URL, MARKETPLACE_MANIFEST_SCHEMA_URL, and MARKETPLACE_JSON_ROOT_KEYS
-# are rule data and live in rules/pl_series.py.
+# PLUGIN_MANIFEST_SCHEMA_URL, MARKETPLACE_MANIFEST_SCHEMA_URL, MARKETPLACE_JSON_ROOT_KEYS and
+# MARKETPLACE_METADATA_RELOCATABLE_KEYS are rule data and live in rules/pl_series.py.
 
 # FILTER_TYPE_MAP and DEFAULT_SCAN_PATTERNS live in scan_runtime.py
 # and are re-imported at the top of this module.
