@@ -445,3 +445,193 @@ See [absolute](/absolute/path/file.md).
         # Absolute paths should be ignored
         assert result.passed is True
         assert len(result.errors) == 0
+
+
+class TestClaudeVariableSubstitution:
+    """Test ${CLAUDE_*} substitution before the LK001 existence check.
+
+    Reproduces issue #111: LK001 flagged
+    ``[text](${CLAUDE_PLUGIN_ROOT}/docs/foo.md)`` as a broken link because it
+    treated the literal ``${CLAUDE_PLUGIN_ROOT}`` string as a filesystem path.
+    Claude Code documents four substitution variables
+    (code.claude.com/docs/en/skills.md#available-string-substitutions):
+    ``${CLAUDE_SKILL_DIR}``, ``${CLAUDE_PROJECT_DIR}``,
+    ``${CLAUDE_PLUGIN_ROOT}``, and ``${CLAUDE_PLUGIN_DATA}``.
+    """
+
+    def test_claude_skill_dir_resolves_to_existing_file(self, tmp_path: Path) -> None:
+        """${CLAUDE_SKILL_DIR} resolves to the SKILL.md directory and passes
+        when the target exists there."""
+        skill_dir = tmp_path / "my-skill"
+        docs_dir = skill_dir / "docs"
+        docs_dir.mkdir(parents=True)
+        (docs_dir / "foo.md").write_text("# Foo\n")
+
+        skill_md = skill_dir / "SKILL.md"
+        skill_md.write_text("""---
+description: Test skill
+---
+
+See [foo](${CLAUDE_SKILL_DIR}/docs/foo.md) for details.
+""")
+
+        validator = InternalLinkValidator()
+        result = validator.validate(skill_md)
+
+        assert result.passed is True
+        assert not any(issue.code == "LK001" for issue in result.errors)
+
+    def test_claude_skill_dir_missing_target_still_reports_lk001(self, tmp_path: Path) -> None:
+        """${CLAUDE_SKILL_DIR} is always resolvable, so a genuinely missing
+        target must still be reported."""
+        skill_dir = tmp_path / "my-skill"
+        skill_dir.mkdir(parents=True)
+
+        skill_md = skill_dir / "SKILL.md"
+        skill_md.write_text("""---
+description: Test skill
+---
+
+See [missing](${CLAUDE_SKILL_DIR}/docs/missing.md) for details.
+""")
+
+        validator = InternalLinkValidator()
+        result = validator.validate(skill_md)
+
+        assert result.passed is False
+        assert any(issue.code == "LK001" for issue in result.errors)
+
+    def test_claude_plugin_root_resolves_when_plugin_json_present(self, tmp_path: Path) -> None:
+        """${CLAUDE_PLUGIN_ROOT} resolves via find_plugin_dir and passes
+        when the target exists relative to the plugin root."""
+        plugin_dir = tmp_path / "my-plugin"
+        claude_plugin_dir = plugin_dir / ".claude-plugin"
+        claude_plugin_dir.mkdir(parents=True)
+        (claude_plugin_dir / "plugin.json").write_text('{"name": "my-plugin"}', encoding="utf-8")
+
+        docs_dir = plugin_dir / "docs"
+        docs_dir.mkdir()
+        (docs_dir / "foo.md").write_text("# Foo\n")
+
+        skill_dir = plugin_dir / "skills" / "my-skill"
+        skill_dir.mkdir(parents=True)
+        skill_md = skill_dir / "SKILL.md"
+        skill_md.write_text("""---
+description: Test skill
+---
+
+See [foo](${CLAUDE_PLUGIN_ROOT}/docs/foo.md) for details.
+""")
+
+        validator = InternalLinkValidator()
+        result = validator.validate(skill_md)
+
+        assert result.passed is True
+        assert not any(issue.code == "LK001" for issue in result.errors)
+
+    def test_claude_plugin_root_skipped_when_no_plugin_json_found(self, tmp_path: Path) -> None:
+        """${CLAUDE_PLUGIN_ROOT} is skipped (not reported broken) when no
+        plugin.json exists anywhere above the skill -- skilllint has no basis
+        for asserting the target is broken when it cannot determine the
+        plugin root."""
+        skill_dir = tmp_path / "my-skill"
+        skill_dir.mkdir(parents=True)
+
+        skill_md = skill_dir / "SKILL.md"
+        skill_md.write_text("""---
+description: Test skill
+---
+
+See [foo](${CLAUDE_PLUGIN_ROOT}/docs/foo.md) for details.
+""")
+
+        validator = InternalLinkValidator()
+        result = validator.validate(skill_md)
+
+        assert result.passed is True
+        assert not any(issue.code == "LK001" for issue in result.errors)
+
+    def test_claude_project_dir_always_skipped(self, tmp_path: Path) -> None:
+        """${CLAUDE_PROJECT_DIR} targets an install-time location skilllint
+        cannot determine from the plugin source tree -- always skipped."""
+        skill_dir = tmp_path / "my-skill"
+        skill_dir.mkdir(parents=True)
+
+        skill_md = skill_dir / "SKILL.md"
+        skill_md.write_text("""---
+description: Test skill
+---
+
+See [foo](${CLAUDE_PROJECT_DIR}/scripts/foo.sh) for details.
+""")
+
+        validator = InternalLinkValidator()
+        result = validator.validate(skill_md)
+
+        assert result.passed is True
+        assert not any(issue.code == "LK001" for issue in result.errors)
+
+    def test_claude_plugin_data_always_skipped(self, tmp_path: Path) -> None:
+        """${CLAUDE_PLUGIN_DATA} targets the plugin's persistent data
+        directory, which does not exist in the plugin source -- always
+        skipped."""
+        plugin_dir = tmp_path / "my-plugin"
+        claude_plugin_dir = plugin_dir / ".claude-plugin"
+        claude_plugin_dir.mkdir(parents=True)
+        (claude_plugin_dir / "plugin.json").write_text('{"name": "my-plugin"}', encoding="utf-8")
+
+        skill_dir = plugin_dir / "skills" / "my-skill"
+        skill_dir.mkdir(parents=True)
+        skill_md = skill_dir / "SKILL.md"
+        skill_md.write_text("""---
+description: Test skill
+---
+
+See [cache](${CLAUDE_PLUGIN_DATA}/cache/foo.json) for details.
+""")
+
+        validator = InternalLinkValidator()
+        result = validator.validate(skill_md)
+
+        assert result.passed is True
+        assert not any(issue.code == "LK001" for issue in result.errors)
+
+    def test_unknown_claude_variable_skipped(self, tmp_path: Path) -> None:
+        """An unrecognized ${...} token is skipped -- skilllint has no basis
+        for asserting an unknown variable's expansion is broken."""
+        skill_dir = tmp_path / "my-skill"
+        skill_dir.mkdir(parents=True)
+
+        skill_md = skill_dir / "SKILL.md"
+        skill_md.write_text("""---
+description: Test skill
+---
+
+See [foo](${SOME_UNKNOWN_VAR}/docs/foo.md) for details.
+""")
+
+        validator = InternalLinkValidator()
+        result = validator.validate(skill_md)
+
+        assert result.passed is True
+        assert not any(issue.code == "LK001" for issue in result.errors)
+
+    def test_mixed_known_and_unknown_variables_skipped(self, tmp_path: Path) -> None:
+        """A link mixing a resolvable variable with an unknown one is skipped
+        entirely -- skilllint cannot assert the unknown half is broken."""
+        skill_dir = tmp_path / "my-skill"
+        skill_dir.mkdir(parents=True)
+
+        skill_md = skill_dir / "SKILL.md"
+        skill_md.write_text("""---
+description: Test skill
+---
+
+See [foo](${CLAUDE_SKILL_DIR}/${SOME_UNKNOWN_VAR}/foo.md) for details.
+""")
+
+        validator = InternalLinkValidator()
+        result = validator.validate(skill_md)
+
+        assert result.passed is True
+        assert not any(issue.code == "LK001" for issue in result.errors)

@@ -1391,6 +1391,21 @@ class InternalLinkValidator:
     # Regex pattern for inline code spans (single or multiple backticks)
     INLINE_CODE_PATTERN: ClassVar[str] = r"(`+)(?!`)(.+?)(?<!`)\1(?!`)"
 
+    # Regex pattern for any ${...} substitution-style token. Matches both
+    # Claude Code's documented ${CLAUDE_*} variables
+    # (code.claude.com/docs/en/skills.md#available-string-substitutions)
+    # and any other unrecognized ${...} token, so both can be routed through
+    # _STATICALLY_RESOLVABLE_CLAUDE_VARS and skipped when unresolvable.
+    CLAUDE_VAR_PATTERN: ClassVar[str] = r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}"
+
+    # Of the four documented variables, only these two have a target
+    # skilllint can determine statically from the plugin source tree.
+    # ${CLAUDE_PROJECT_DIR} and ${CLAUDE_PLUGIN_DATA} target install-time
+    # locations (the invoking project root; the plugin's persistent data
+    # directory) that do not exist in the plugin source, so skilllint has
+    # no basis for resolving or asserting them broken.
+    _STATICALLY_RESOLVABLE_CLAUDE_VARS: ClassVar[frozenset[str]] = frozenset({"CLAUDE_SKILL_DIR", "CLAUDE_PLUGIN_ROOT"})
+
     @staticmethod
     def _strip_code_blocks(content: str) -> str:
         """Remove fenced code blocks and inline code spans from content.
@@ -1465,9 +1480,16 @@ class InternalLinkValidator:
             # e.g., ./references/file.md#heading → ./references/file.md
             link_url_no_fragment = link_url.split("#")[0]
 
-            # Resolve link path relative to SKILL.md directory
+            # Resolve documented ${CLAUDE_*} substitution variables before
+            # the existence check. Returns None when the link must be
+            # skipped because a variable's target cannot be determined.
             skill_dir = path.parent
-            link_path = (skill_dir / link_url_no_fragment).resolve()
+            resolved_url = self._resolve_claude_variables(link_url_no_fragment, skill_dir)
+            if resolved_url is None:
+                continue
+
+            # Resolve link path relative to SKILL.md directory
+            link_path = (skill_dir / resolved_url).resolve()
 
             # Check if linked file exists (error)
             if not link_path.exists():
@@ -1530,6 +1552,54 @@ class InternalLinkValidator:
 
         # Ignore absolute paths
         return bool(url.startswith("/"))
+
+    @classmethod
+    def _resolve_claude_variables(cls, url: str, skill_dir: Path) -> str | None:
+        """Substitute ${CLAUDE_*} variables skilllint can statically resolve.
+
+        Claude Code substitutes ``${CLAUDE_SKILL_DIR}``, ``${CLAUDE_PROJECT_DIR}``,
+        ``${CLAUDE_PLUGIN_ROOT}``, and ``${CLAUDE_PLUGIN_DATA}`` in skill markdown
+        content at runtime (code.claude.com/docs/en/skills.md
+        #available-string-substitutions). ``${CLAUDE_SKILL_DIR}`` always
+        resolves to the directory containing ``SKILL.md``. ``${CLAUDE_PLUGIN_ROOT}``
+        resolves via :func:`find_plugin_dir` when the link's SKILL.md lives
+        inside a plugin (same lookup ``HookValidator`` uses for
+        ``${CLAUDE_PLUGIN_ROOT}`` in hook commands).
+
+        ``${CLAUDE_PROJECT_DIR}`` and ``${CLAUDE_PLUGIN_DATA}`` target
+        install-time locations skilllint cannot determine from the plugin
+        source tree, and any other ``${...}`` token is not a documented
+        substitution variable at all. skilllint has no basis for asserting
+        either kind of target is broken, so the link is skipped rather than
+        reported.
+
+        Args:
+            url: The link URL (fragment already stripped) as written in the
+                markdown source.
+            skill_dir: Directory containing the ``SKILL.md`` file being
+                validated -- used both as the ``${CLAUDE_SKILL_DIR}`` target
+                and as the search start for ``${CLAUDE_PLUGIN_ROOT}``.
+
+        Returns:
+            The URL with resolvable variables substituted, or ``None`` if the
+            link should be skipped because a variable's target cannot be
+            determined.
+        """
+        tokens = set(re.findall(cls.CLAUDE_VAR_PATTERN, url))
+        if not tokens:
+            return url
+        if tokens - cls._STATICALLY_RESOLVABLE_CLAUDE_VARS:
+            return None
+
+        resolved = url
+        if "${CLAUDE_SKILL_DIR}" in resolved:
+            resolved = resolved.replace("${CLAUDE_SKILL_DIR}", str(skill_dir))
+        if "${CLAUDE_PLUGIN_ROOT}" in resolved:
+            plugin_root = find_plugin_dir(skill_dir)
+            if plugin_root is None:
+                return None
+            resolved = resolved.replace("${CLAUDE_PLUGIN_ROOT}", str(plugin_root))
+        return resolved
 
 
 # ============================================================================
