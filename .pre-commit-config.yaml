@@ -75,11 +75,19 @@ repos:
         args: [--fix]
       - id: ruff-format
         name: Format Python with ruff
-  # JavaScript/TypeScript formatting and linting with Biome
-  - repo: https://github.com/biomejs/pre-commit
-    rev: "v2.5.11"
+  # JavaScript/TypeScript linting with oxlint
+  - repo: https://github.com/oxc-project/mirrors-oxlint
+    rev: "v1.80.0"
     hooks:
-      - id: biome-check
+      - id: oxlint
+        args: [--fix]
+        exclude: ^(\.?plan(ning)?/|\.claude/backlog/|\.claude/get-shit-done|\.claude/hooks/gsd-.*)
+
+  # JavaScript/TypeScript formatting with oxfmt
+  - repo: https://github.com/oxc-project/mirrors-oxfmt
+    rev: "v0.65.0"
+    hooks:
+      - id: oxfmt
         exclude: ^(\.?plan(ning)?/|\.claude/backlog/|\.claude/get-shit-done|\.claude/hooks/gsd-.*)
 
   - repo: https://github.com/DavidAnson/markdownlint-cli2

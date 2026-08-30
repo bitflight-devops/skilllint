@@ -4529,7 +4529,7 @@ class HookValidator:
 
     Validates JSON structure, event types, and hook entries.
     Hook scripts themselves are language-agnostic (any executable) and validated
-    by their respective language linters (biome, ruff, shellcheck, etc.).
+    by their respective language linters (oxlint, ruff, shellcheck, etc.).
     """
 
     VALID_EVENT_TYPES: ClassVar[frozenset[str]] = frozenset({
