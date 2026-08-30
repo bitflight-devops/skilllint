@@ -14,6 +14,8 @@ import pathlib
 import subprocess
 import sys
 
+import pytest
+
 from skilllint.adapters import load_adapters
 from skilllint.adapters.claude_code import ClaudeCodeAdapter
 from skilllint.adapters.codex import CodexAdapter
@@ -21,6 +23,7 @@ from skilllint.adapters.cursor import CursorAdapter
 from skilllint.plugin_validator import validate_file
 from skilllint.rule_registry import RULE_REGISTRY
 from skilllint.schemas import get_provider_ids
+from skilllint.token_counter import TOKEN_ERROR_THRESHOLD
 
 FIXTURES = pathlib.Path(__file__).parent / "fixtures"
 CLAUDE_CODE_FIXTURES = FIXTURES / "claude_code"
@@ -415,3 +418,88 @@ Body content.
         assert len(fm010) == 1, f"Expected exactly one FM010 violation, got: {violations}"
 
         _assert_authority(fm010[0])
+
+
+# ---------------------------------------------------------------------------
+# Shared SKILL.md checks for adapters that skip the frontmatter pipeline
+# ---------------------------------------------------------------------------
+
+
+class TestCrossPlatformSkillChecks:
+    """A SKILL.md is checked even when no adapter runs the frontmatter pipeline.
+
+    Only ClaudeCodeAdapter routes SKILL.md through FrontmatterValidator. Cursor
+    validates ``.mdc`` and Codex validates ``AGENTS.md``/``.rules``, so the
+    canonical rule owners have to run on the shared path for those.
+    """
+
+    @staticmethod
+    def _write_skill(tmp_path: pathlib.Path, body: str = "Body content.\n") -> pathlib.Path:
+        """Write a SKILL.md with an invalid name and no description.
+
+        Args:
+            tmp_path: Test-scoped directory.
+            body: Markdown body to write after the frontmatter.
+
+        Returns:
+            Path to the written SKILL.md.
+        """
+        skill_dir = tmp_path / "bad-name"
+        skill_dir.mkdir()
+        skill_file = skill_dir / "SKILL.md"
+        skill_file.write_text(f"---\nname: Bad_Name!\n---\n\n{body}")
+        return skill_file
+
+    @pytest.mark.parametrize("platform", [None, "cursor", "codex"])
+    def test_name_and_description_are_checked(self, tmp_path: pathlib.Path, platform: str | None) -> None:
+        """FM010 and FM001 fire for adapters that never run the pipeline."""
+        adapters = {a.id(): a for a in load_adapters()}
+        skill_file = self._write_skill(tmp_path)
+
+        codes = {v["code"] for v in validate_file(skill_file, adapters, platform_override=platform)}
+
+        assert "FM010" in codes, f"Invalid name unreported for platform {platform!r}: {sorted(codes)}"
+        assert "FM001" in codes, f"Missing description unreported for platform {platform!r}: {sorted(codes)}"
+
+    @pytest.mark.parametrize("platform", [None, "cursor", "codex"])
+    def test_oversized_body_is_checked(self, tmp_path: pathlib.Path, platform: str | None) -> None:
+        """The SK006/SK007 token band fires for adapters that skip the pipeline."""
+        adapters = {a.id(): a for a in load_adapters()}
+        skill_file = self._write_skill(tmp_path, body="word " * (TOKEN_ERROR_THRESHOLD + 100))
+
+        codes = {v["code"] for v in validate_file(skill_file, adapters, platform_override=platform)}
+
+        assert codes & {"SK006", "SK007"}, f"Token band unreported for platform {platform!r}: {sorted(codes)}"
+
+    @pytest.mark.parametrize("platform", [None, "cursor", "codex", "claude_code"])
+    def test_invalid_yaml_reports_fm002_exactly_once(self, tmp_path: pathlib.Path, platform: str | None) -> None:
+        """FM002 survives for adapters that do not report it themselves."""
+        adapters = {a.id(): a for a in load_adapters()}
+        skill_dir = tmp_path / "broken"
+        skill_dir.mkdir()
+        skill_file = skill_dir / "SKILL.md"
+        skill_file.write_text("---\ndescription: [unclosed bracket\n---\n\nBody.\n")
+
+        codes = [v["code"] for v in validate_file(skill_file, adapters, platform_override=platform)]
+
+        assert codes.count("FM002") == 1, f"Expected one FM002 for platform {platform!r}, got: {codes}"
+
+    def test_opinion_rules_carry_no_vendor_authority(self, tmp_path: pathlib.Path) -> None:
+        """SK004-SK007 findings must not claim an upstream origin.
+
+        opinion-catalog.json records all four as lint opinions with no vendor
+        source, so attaching an authority would present a repository heuristic
+        as a vendor requirement.
+        """
+        adapters = {a.id(): a for a in load_adapters()}
+        skill_dir = tmp_path / "short-desc"
+        skill_dir.mkdir()
+        skill_file = skill_dir / "SKILL.md"
+        skill_file.write_text("---\nname: short-desc\ndescription: Too short\n---\n\nBody.\n")
+
+        violations = validate_file(skill_file, adapters, platform_override="claude_code")
+        opinions = [v for v in violations if v["code"] in {"SK004", "SK005", "SK006", "SK007"}]
+
+        assert opinions, f"Expected an SK004/SK005 finding, got: {violations}"
+        for violation in opinions:
+            assert "authority" not in violation, f"Opinion rule claims vendor authority: {violation}"

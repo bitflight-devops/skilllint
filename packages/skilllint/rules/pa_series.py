@@ -213,25 +213,46 @@ def _check_permission_mode(
 def _ingest_agent_frontmatter_for_pa001(
     fm_text: str, agent_md: Path, plugin_dir: Path, errors: list, warnings: list
 ) -> PluginAgentPa001Snapshot | None:
-    """Parse agent frontmatter YAML via the boundary ingestor; record FM002 issues.
+    """Parse agent frontmatter YAML via the boundary ingestor; record FM002/FM009 issues.
 
     Args:
         fm_text: Raw YAML frontmatter text (no ``---`` delimiters).
         agent_md: Path to the agent markdown file.
         plugin_dir: Plugin root directory for relative path display.
         errors: Mutable error list — FM002 appended on unrecoverable failure.
-        warnings: Mutable warning list for non-parser issues.
+        warnings: Mutable warning list — FM009 appended when colon recovery was
+            needed to parse the frontmatter at all.
 
     Returns:
         Snapshot for PA001 checks, or None on YAML failure or non-mapping document root.
     """
     from skilllint.plugin_validator import (  # noqa: PLC0415 — deferred to break circular import
         FM002,
+        FM009,
         ValidationIssue,
         generate_docs_url,
     )
 
     outcome = ingest_plugin_agent_frontmatter_for_pa001(fm_text)
+
+    # The ingestor quotes unquoted colon values in memory and reports no YAML
+    # error, but the file on disk is unchanged and still invalid. FM009 owns
+    # that claim; this path is not covered by FrontmatterValidator.
+    for field_name in outcome.colon_fields_fixed:
+        rel = str(agent_md.relative_to(plugin_dir))
+        warnings.append(
+            ValidationIssue(
+                field=field_name,
+                severity="warning",
+                message=(
+                    f"{rel}: Unquoted value containing a colon in field '{field_name}' breaks YAML parsing "
+                    "(parsed here only after quoting it)"
+                ),
+                code=FM009,
+                docs_url=generate_docs_url(FM009),
+                suggestion=f"Quote the value of '{field_name}', or run with --fix",
+            )
+        )
 
     if outcome.yaml_error is not None:
         rel = str(agent_md.relative_to(plugin_dir))

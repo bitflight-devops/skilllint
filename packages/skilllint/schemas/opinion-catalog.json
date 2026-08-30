@@ -58,6 +58,16 @@
         "packages/skilllint/rules/fm_series.py: _NAME_RE = re.compile(r'^[a-z0-9]([a-z0-9-]*[a-z0-9])?$')",
         "packages/skilllint/rules/fm_series.py: _CONSECUTIVE_HYPHENS_RE = re.compile(r'--')"
       ]
+    },
+    "FM007.claude_code_tool_fields": {
+      "rule_code": "FM007",
+      "description": "FM007 also inspects the Claude Code agent frontmatter fields `tools` and `disallowedTools`",
+      "rationale": "The AgentSkills specification declares only `allowed-tools` (tracked as the provenance claim FM007.tool_field_names). `packages/skilllint/schemas/claude_code/v1.json` declares `tools` but not `disallowedTools`, which comes from the sub-agents.md prose reference and appears in no packaged schema. With no vendor file covering both, this portion of the field set has no drift-checkable source and is recorded here rather than as a provenance claim.",
+      "constraint": "FM007 inspects `tools` and `disallowedTools` in addition to the specification's `allowed-tools`",
+      "references": [
+        "packages/skilllint/rules/fm_series.py: _CLAUDE_CODE_TOOL_FIELD_NAMES",
+        "packages/skilllint/schemas/claude_code/v1.json: declares `tools`, does not declare `disallowedTools`"
+      ]
     }
   }
 }

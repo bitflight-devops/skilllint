@@ -64,7 +64,7 @@ from skilllint.record_export import (
 )
 from skilllint.rule_registry import rule_authority, rule_reference
 from skilllint.rules.as_series import run_as_series
-from skilllint.rules.fm_series import check_fm004, check_fm007, check_fm010
+from skilllint.rules.fm_series import check_fm001, check_fm004, check_fm007, check_fm010
 from skilllint.rules.hk_series import (
     check_hk002,
     check_hk003,
@@ -1866,6 +1866,36 @@ def _validation_result_with_error(
     return _build_validation_result(errors=errors, warnings=warnings, info=info)
 
 
+def _fm009_recovery_warnings(colon_fields: list[str]) -> list[ValidationIssue]:
+    """Return one FM009 warning per field that only parsed after colon recovery.
+
+    ``safe_load_yaml_with_colon_fix`` quotes unquoted colon values in memory so
+    validation can continue, and returns ``yaml_err=None``. The source file is
+    unchanged and still breaks a plain YAML parse, so the recovery has to be
+    reported rather than swallowed.
+
+    Args:
+        colon_fields: Field names whose values required quoting to parse.
+
+    Returns:
+        One FM009 warning per field; empty when no recovery was needed.
+    """
+    return [
+        ValidationIssue(
+            field=field_name,
+            severity="warning",
+            message=(
+                f"Unquoted value containing a colon in field '{field_name}' breaks YAML parsing "
+                "(parsed here only after quoting it)"
+            ),
+            code=FM009,
+            docs_url=generate_docs_url(FM009),
+            suggestion=f"Quote the value of '{field_name}', or run with --fix",
+        )
+        for field_name in colon_fields
+    ]
+
+
 def _validate_frontmatter_yaml(
     frontmatter_text: str,
     *,
@@ -1885,7 +1915,11 @@ def _validate_frontmatter_yaml(
         Tuple of parsed mapping or None, and a terminal ValidationResult when
         validation must stop.
     """
-    data, yaml_err, _colon_fields, _used_text = safe_load_yaml_with_colon_fix(frontmatter_text)
+    data, yaml_err, colon_fields, _used_text = safe_load_yaml_with_colon_fix(frontmatter_text)
+    # Recovery keeps validation going, but the file on disk is still invalid
+    # YAML. Report it, or a check-only run reports nothing at all for a source
+    # that only parsed because the colon was quoted for us.
+    warnings.extend(_fm009_recovery_warnings(colon_fields))
 
     if yaml_err is not None:
         result = _validation_result_with_error(
@@ -4046,6 +4080,104 @@ def run_platform_checks(
     return list(adapter.validate(path))
 
 
+def _adapter_runs_frontmatter_pipeline(matching: list[PlatformAdapter]) -> bool:
+    """Report whether a selected adapter routes SKILL.md through the validator pipeline.
+
+    Only ``ClaudeCodeAdapter`` does — Cursor validates ``.mdc`` files and Codex
+    validates ``AGENTS.md``/``.rules``, so neither runs ``FrontmatterValidator``
+    over a ``SKILL.md``. Callers use this to decide whether the canonical rule
+    owners still need invoking directly, and whether a generic finding would be
+    a duplicate.
+
+    Args:
+        matching: Adapters selected for this file.
+
+    Returns:
+        True when at least one selected adapter runs the frontmatter pipeline.
+    """
+    return any(isinstance(adapter, ClaudeCodeAdapter) for adapter in matching)
+
+
+def _shared_skill_frontmatter_violations(path: Path, frontmatter: dict, policy: ValidationPolicy | None) -> list[dict]:
+    """Return canonical SKILL.md findings for adapters that skip the pipeline.
+
+    AS001-AS003 and AS005 used to cover name syntax, the directory match, the
+    missing description and the token budget on this path. They were duplicates
+    of FM010, FM001 and SK006/SK007 and were retired, so the canonical owners
+    are invoked here instead. Without this a Cursor or Codex skill, or a
+    ``SKILL.md`` no adapter claims, would be checked by nothing but AS006.
+
+    Args:
+        path: Path to the SKILL.md file.
+        frontmatter: Parsed frontmatter mapping.
+        policy: Resolved per-plugin policy, for the configured token thresholds.
+
+    Returns:
+        Violation dicts, with authority attached where the rule declares one.
+    """
+    # FM001 covers both `name` and `description`, but AS001 already owns name
+    # presence for a SKILL.md on this same path, so only the description claim
+    # (the one AS003 used to carry here) is taken.
+    issues = [issue for issue in check_fm001(frontmatter, path, "skill") if issue.field == "description"]
+    issues.extend(check_fm010(frontmatter, path, "skill"))
+    complexity = ComplexityValidator().validate(path, policy)
+    issues.extend([*complexity.errors, *complexity.warnings])
+    return [_issue_to_violation(issue) for issue in issues]
+
+
+def _skill_md_violations(
+    path: Path, *, pipeline_runs: bool, policy_cache: dict[str, tuple[ValidationPolicy, Path | None]]
+) -> list[dict]:
+    """Return everything ``validate_file`` reports for a SKILL.md before dispatch.
+
+    Args:
+        path: Path to the SKILL.md file.
+        pipeline_runs: Whether a selected adapter runs the frontmatter pipeline,
+            which decides whether the generic FM002 and the canonical rule
+            owners would be duplicates here.
+        policy_cache: Per-run policy cache, shared so a large scan reads each
+            config once.
+
+    Returns:
+        Violation dicts with any configured severity downgrade applied.
+    """
+    frontmatter_data, body_lines, yaml_err, _colon_fields = parse_skill_md(path)
+    violations: list[dict] = []
+
+    # Suppress the generic FM002 only when the pipeline will report it — keying
+    # on whether any adapter matched silenced it for Cursor and Codex, neither
+    # of which validates SKILL.md frontmatter.
+    if yaml_err is not None and not pipeline_runs:
+        violations.append({"code": str(FM002), "severity": "error", "message": f"Invalid YAML frontmatter: {yaml_err}"})
+
+    # Resolve per-plugin policy so --platform validation honors the same
+    # configured thresholds AND severity as the default path (PR #97 review:
+    # the two paths must not lint the same skill differently).
+    policy, _policy_root = _resolve_policy(path, policy_cache)
+    violations.extend(
+        run_as_series(
+            path,
+            frontmatter_data,
+            body_lines,
+            warning_threshold=policy.thresholds.get("SK006", TOKEN_WARNING_THRESHOLD),
+            error_threshold=policy.thresholds.get("SK007", TOKEN_ERROR_THRESHOLD),
+        )
+    )
+    if not pipeline_runs:
+        violations.extend(_shared_skill_frontmatter_violations(path, frontmatter_data, policy))
+
+    if not policy.severity:
+        return violations
+    # Apply configured severity downgrades so --platform matches the
+    # default-path remap.
+    return [
+        {**violation, "severity": configured}
+        if (configured := policy.severity.get(str(violation.get("code")))) in _VALID_SEVERITIES
+        else violation
+        for violation in violations
+    ]
+
+
 def validate_file(
     path: Path,
     adapters: dict,
@@ -4080,58 +4212,23 @@ def validate_file(
     else:
         matching = [a for a in adapters.values() if matches_file(a, pure)]
 
-    violations: list[dict] = []
-
     # AS-series rules are cross-platform — they run before the adapter matching
     # guard so that a SKILL.md outside a recognised plugin structure is still
     # checked even when no platform adapter claims the file. They do not extend
     # to agent files: the AgentSkills specification defines SKILL.md only.
-    if is_skill_md(path):
-        frontmatter_data, body_lines, yaml_err, _colon_fields = parse_skill_md(path)
-        if yaml_err is not None and not matching:
-            violations.append({
-                "code": str(FM002),
-                "severity": "error",
-                "message": f"Invalid YAML frontmatter: {yaml_err}",
-            })
-        # Resolve per-plugin policy so --platform validation honors the same
-        # configured thresholds AND severity as the default path (PR #97 review:
-        # the two paths must not lint the same skill differently). Reuse a shared
-        # per-run cache so a 1000-file platform scan reads each config once.
-        policy, _policy_root = _resolve_policy(path, resolved_policy_cache)
-        violations.extend(
-            run_as_series(
-                path,
-                frontmatter_data,
-                body_lines,
-                warning_threshold=policy.thresholds.get("SK006", TOKEN_WARNING_THRESHOLD),
-                error_threshold=policy.thresholds.get("SK007", TOKEN_ERROR_THRESHOLD),
-            )
+    violations: list[dict] = (
+        _skill_md_violations(
+            path, pipeline_runs=_adapter_runs_frontmatter_pipeline(matching), policy_cache=resolved_policy_cache
         )
-        if policy.severity:
-            # Apply configured severity downgrades to the AS-series dict
-            # violations so --platform matches the default-path remap.
-            remapped: list[dict[str, object]] = []
-            for violation in violations:
-                configured = policy.severity.get(str(violation.get("code")))
-                if configured in _VALID_SEVERITIES:
-                    remapped.append({**violation, "severity": configured})
-                else:
-                    remapped.append(violation)
-            violations = remapped
+        if is_skill_md(path)
+        else []
+    )
 
     if not matching:
         return violations
 
-    # Get constraint scopes from the primary adapter for filtering
-    # Validators are filtered by constraint_scopes to support provider-specific rules.
     primary_adapter = matching[0]
-    constraint_scopes = primary_adapter.constraint_scopes()
-    _logger.debug("Validating %s with adapter %s, constraint_scopes=%s", path, primary_adapter.id(), constraint_scopes)
-
-    # Filter validators based on provider constraint scopes
-    sk_validators = _get_validators_for_path(path)
-    sk_validators = filter_validators_by_constraint_scopes(sk_validators, constraint_scopes)
+    _logger.debug("Validating %s with adapter %s", path, primary_adapter.id())
 
     for adapter in matching:
         violations.extend(run_platform_checks(path, adapter, policy_cache=resolved_policy_cache))

@@ -63,7 +63,8 @@ _MIN_DESCRIPTION_LENGTH = 20
     severity="warning",
     category="skill",
     platforms=["agentskills"],
-    authority={"origin": "anthropic.com", "reference": _SKILLS_SPEC_URL},
+    # No authority: opinion-catalog.json records this constraint as a lint
+    # opinion with no upstream source, so violations must not carry a vendor origin.
 )
 def check_sk004(frontmatter: dict[str, object], path: Path, file_type: str) -> list[ValidationIssue]:
     """## SK004 — Description too short or exceeds recommended length
@@ -157,7 +158,8 @@ _REQUIRED_TRIGGER_PHRASES = [
     severity="warning",
     category="skill",
     platforms=["agentskills"],
-    authority={"origin": "anthropic.com", "reference": _SKILLS_SPEC_URL},
+    # No authority: opinion-catalog.json records this constraint as a lint
+    # opinion with no upstream source, so violations must not carry a vendor origin.
 )
 def check_sk005(frontmatter: dict[str, object], path: Path, file_type: str) -> list[ValidationIssue]:
     """## SK005 — Description missing trigger phrases
@@ -225,7 +227,8 @@ def check_sk005(frontmatter: dict[str, object], path: Path, file_type: str) -> l
     severity="warning",
     category="skill",
     platforms=["agentskills"],
-    authority={"origin": "anthropic.com", "reference": _SKILLS_SPEC_URL},
+    # No authority: opinion-catalog.json records this constraint as a lint
+    # opinion with no upstream source, so violations must not carry a vendor origin.
 )
 def check_sk006(frontmatter: dict[str, object], path: Path, file_type: str) -> list[ValidationIssue]:
     """## SK006 — Skill body exceeds token warning threshold
@@ -261,7 +264,8 @@ def check_sk006(frontmatter: dict[str, object], path: Path, file_type: str) -> l
     severity="error",
     category="skill",
     platforms=["agentskills"],
-    authority={"origin": "anthropic.com", "reference": _SKILLS_SPEC_URL},
+    # No authority: opinion-catalog.json records this constraint as a lint
+    # opinion with no upstream source, so violations must not carry a vendor origin.
 )
 def check_sk007(frontmatter: dict[str, object], path: Path, file_type: str) -> list[ValidationIssue]:
     """## SK007 — Skill body exceeds token error threshold

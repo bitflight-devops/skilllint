@@ -442,11 +442,14 @@ def check_fm007(frontmatter: dict, path: Path, file_type: str) -> list[Validatio
     authority={"origin": "anthropic.com", "reference": _SKILLS_SPEC_URL},
 )
 def check_fm009(frontmatter: dict, path: Path, file_type: str) -> list[ValidationIssue]:
-    """## FM009 — Unquoted value containing colon (auto-fixed)
+    """## FM009 — Unquoted value containing colon
 
-    A frontmatter field value contained an unquoted colon (`:`) which can
-    break YAML parsing. The linter detected and auto-fixed this by wrapping
-    the value in double quotes. This `info` entry reports what was repaired.
+    A frontmatter field value contains an unquoted colon (`:`), which breaks
+    YAML parsing. The linter recovers by quoting the value so validation can
+    continue.
+
+    Reported as a `warning` on a check-only run, where the file on disk is
+    still invalid, and as `info` after `--fix` has quoted the value on disk.
 
     **Source:** YAML specification — colons in unquoted values are interpreted
     as key separators, causing parse errors.
@@ -459,8 +462,9 @@ def check_fm009(frontmatter: dict, path: Path, file_type: str) -> list[Validatio
     ```
 
     Returns:
-        Always an empty list. FM009 is emitted as ``info`` by
-        _queue_fm009_info() after auto-fix; this function exists for rule
+        Always an empty list. FM009 is emitted by
+        ``_fm009_recovery_warnings()`` on a check-only run and by
+        ``_queue_fm009_info()`` after auto-fix; this function exists for rule
         metadata registration only.
 
     <!-- examples: FM009 -->

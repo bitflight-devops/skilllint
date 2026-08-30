@@ -90,3 +90,42 @@ def test_parser_failure_has_only_fm002_finding(tmp_path: Path, adapters: dict) -
 
 
 __all__ = []
+
+
+def test_colon_recovery_is_reported_without_fix(tmp_path: Path, adapters: dict) -> None:
+    """An unquoted colon is reported on a check-only run.
+
+    ``safe_load_yaml_with_colon_fix`` quotes the value in memory and reports no
+    YAML error, so without a diagnostic the unchanged invalid source produces
+    nothing at all. FM009 owns the claim; AS004 used to duplicate it.
+    """
+    skill_dir = tmp_path / "colon-skill"
+    skill_dir.mkdir()
+    skill_md = skill_dir / "SKILL.md"
+    skill_md.write_text("---\nname: colon-skill\ndescription: Use this: when testing colons\n---\n\nBody.\n")
+
+    codes = _codes(skill_md, adapters)
+    assert "AS004" not in codes
+    assert codes.count("FM009") == 1, f"Expected one FM009 finding, got: {codes}"
+
+
+def test_plugin_agent_colon_recovery_is_reported(tmp_path: Path) -> None:
+    """The PA001 ingestion path reports colon recovery under FM009."""
+    from skilllint.plugin_validator import PluginAgentFrontmatterValidator
+
+    plugin_dir = tmp_path / "probe-plugin"
+    (plugin_dir / ".claude-plugin").mkdir(parents=True)
+    (plugin_dir / ".claude-plugin" / "plugin.json").write_text(
+        '{"name": "probe-plugin", "version": "0.0.1", "description": "Probe plugin for colon recovery"}'
+    )
+    agents_dir = plugin_dir / "agents"
+    agents_dir.mkdir()
+    (agents_dir / "probe-agent.md").write_text(
+        "---\nname: probe-agent\ndescription: Use this: when testing colons\n---\n\nBody.\n"
+    )
+
+    result = PluginAgentFrontmatterValidator().validate(plugin_dir)
+    codes = [issue.code for issue in result.errors + result.warnings + result.info]
+
+    assert "FM009" in codes, f"Expected FM009 for the recovered colon, got: {codes}"
+    assert "AS004" not in codes
