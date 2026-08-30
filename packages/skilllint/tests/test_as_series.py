@@ -1,5 +1,5 @@
 """
-Test stubs for AS-series agentskills.io rule validation (AS001 through AS006).
+Tests for AS-series agentskills.io rule validation (AS001, AS006, AS008, AS009).
 
 Wave 0 TDD scaffold — all tests fail RED (ImportError) until plan 02-02
 creates the skilllint.rules.as_series module.
@@ -24,7 +24,7 @@ def _violations_with_code(violations: list[dict], code: str) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# AS001: name format — lowercase alphanumeric + hyphens only
+# AS001: SKILL.md declares a name field (syntax belongs to FM010)
 # ---------------------------------------------------------------------------
 
 
@@ -49,8 +49,8 @@ def test_as001_name_format_valid(tmp_path: pathlib.Path):
     )
 
 
-def _retired_name_rules_are_removed(tmp_path: pathlib.Path):
-    """name 'My_Skill!' produces AS001 error."""
+def test_as001_ignores_name_syntax(tmp_path: pathlib.Path):
+    """A malformed name produces no AS001 — FM010 owns name syntax."""
     skill_dir = tmp_path / "my-skill"
     skill_dir.mkdir()
     skill_md = skill_dir / "SKILL.md"
@@ -67,11 +67,12 @@ def _retired_name_rules_are_removed(tmp_path: pathlib.Path):
     assert "AS001" not in {v.get("code") for v in check_skill_md(skill_md)}
 
 
-def _retired_missing_name_rule_is_removed(tmp_path: pathlib.Path):
+def test_as001_missing_name_is_error(tmp_path: pathlib.Path):
     """Absent name field produces AS001 with severity 'error'.
 
     The AgentSkills spec (agentskills.io/specification) marks name as required.
-    A missing name must be an error, not a warning.
+    Claude Code's skills.md treats it as optional, so SkillFrontmatter declares
+    it ``str | None`` and FM001 stays silent — AS001 is the only signal.
     """
     skill_dir = tmp_path / "my-skill"
     skill_dir.mkdir()
@@ -85,7 +86,9 @@ def _retired_missing_name_rule_is_removed(tmp_path: pathlib.Path):
             Body content.
         """)
     )
-    assert "AS001" not in {v.get("code") for v in check_skill_md(skill_md)}
+    as001 = _violations_with_code(check_skill_md(skill_md), "AS001")
+    assert as001 != [], "Expected AS001 when the name field is absent"
+    assert as001[0]["severity"] == "error", f"AS001 missing-name must be an error, got: {as001[0]['severity']}"
 
 
 # ---------------------------------------------------------------------------
@@ -93,8 +96,8 @@ def _retired_missing_name_rule_is_removed(tmp_path: pathlib.Path):
 # ---------------------------------------------------------------------------
 
 
-def _retired_directory_name_rule_is_removed(tmp_path: pathlib.Path):
-    """name 'foo' in directory 'bar/' produces AS002 error."""
+def test_as002_directory_match_is_retired(tmp_path: pathlib.Path):
+    """A name/directory mismatch produces no AS002 — FM010 owns the match."""
     skill_dir = tmp_path / "bar"
     skill_dir.mkdir()
     skill_md = skill_dir / "SKILL.md"
@@ -319,11 +322,11 @@ def test_name_check_suppressed_for_agent_files_via_validator(tmp_path: pathlib.P
     assert "AS002" not in codes, f"AS002 must not fire for agent files, got: {codes}"
 
 
-def _retired_skill_directory_name_rule_is_removed(tmp_path: pathlib.Path):
-    """AsSeriesValidator emits AS002 for a SKILL.md whose name mismatches its directory.
+def test_as002_directory_match_is_retired_for_skill_md(tmp_path: pathlib.Path):
+    """AsSeriesValidator emits no AS002 for a SKILL.md/directory mismatch.
 
-    AS002 suppression must only apply to agent files. SKILL.md files in a
-    directory named differently from their name field must still get AS002.
+    FM010 owns the name/directory match; it reports the mismatch as a warning
+    from ``check_fm010``. AS002 was retired to leave that claim one owner.
     """
     from skilllint.plugin_validator import AsSeriesValidator
 

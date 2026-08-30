@@ -1,6 +1,6 @@
 """AS-series rule validation for agentskills.io SKILL.md files.
 
-Rules AS006-AS009 fire on SKILL.md files only, regardless of which platform
+Rules AS001 and AS006-AS009 fire on SKILL.md files only, regardless of which platform
 adapter is active. They enforce the AgentSkills specification, a cross-harness
 baseline that defines SKILL.md and does not describe agent files. A check on
 agent frontmatter belongs to a series that governs agent files, cited to the
@@ -12,6 +12,7 @@ Each violation dict has the shape:
     {"code": str, "severity": str, "message": str}
 
 Severities:
+    "error"   — AS001
     "warning" — AS008, AS009
     "info"    — AS006
 """
@@ -34,6 +35,7 @@ _logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 AS_RULES: dict[str, str] = {
+    "AS001": "SKILL.md must declare a name field",
     "AS006": "No eval_queries.json found — add evaluation queries for quality assurance",
     "AS008": "MCP tool name may have incorrect casing — case is sensitive in the tools field",
     "AS009": "Nested skill will not be auto-discovered — skills must be direct children of the skills/ directory",
@@ -150,6 +152,39 @@ def _make_violation(code: str, severity: str, message: str, fix: str | None = No
 # ---------------------------------------------------------------------------
 # Individual rule checks
 # ---------------------------------------------------------------------------
+
+
+@skilllint_rule(
+    "AS001",
+    severity="error",
+    category="skill",
+    authority={"origin": "agentskills.io", "reference": "/specification#skill-naming"},
+)
+def _check_as001(name: str | None) -> dict | None:
+    """AS001 — SKILL.md declares no name field.
+
+    agentskills.io requires ``name`` on a SKILL.md. FM001 stays silent here
+    because Claude Code's own skills.md treats the field as optional and falls
+    back to the directory name, so ``SkillFrontmatter.name`` is declared
+    ``str | None``. AS001 is therefore the only signal that a skill is missing
+    its name under the AgentSkills specification.
+
+    Name *syntax* — casing, hyphens, length, and the directory match — is
+    FM010's, not AS001's. This rule asserts presence only.
+
+    Args:
+        name: The skill name from frontmatter, or None if missing.
+
+    Returns:
+        Violation dict when the name field is absent, None otherwise.
+
+    Fix:
+        Add a ``name`` field to the frontmatter, matching the skill directory.
+    """
+    if name is None:
+        return _make_violation("AS001", "error", "name field is missing")
+
+    return None
 
 
 def _extract_tools_list(path: pathlib.Path, field: str = "allowed-tools") -> list[str]:
@@ -661,7 +696,7 @@ def _check_as009(path: pathlib.Path) -> dict | None:
 
 
 def check_skill_md(path: pathlib.Path) -> list[dict]:
-    """Run AS006-AS009 checks on a SKILL.md file.
+    """Run AS001 and AS006-AS009 checks on a SKILL.md file.
 
     Reads and parses the file at the given path, then runs all AS-series
     rules. Returns a list of violation dicts; empty list means no issues.
@@ -673,9 +708,13 @@ def check_skill_md(path: pathlib.Path) -> list[dict]:
         List of violation dicts, each with keys: code, severity, message.
         May include 'fix' key with auto-fix suggestion for AS008, AS009.
     """
-    _frontmatter, _body_lines = _parse_skill_md(path)
+    frontmatter, _body_lines = _parse_skill_md(path)
 
     violations: list[dict] = []
+
+    v = _check_as001(frontmatter.get("name") or None)
+    if v:
+        violations.append(v)
 
     v = _check_as006(path)
     if v:
@@ -710,6 +749,10 @@ def run_as_series(
         List of violation dicts, each with keys: code, severity, message.
     """
     violations: list[dict] = []
+
+    v = _check_as001(frontmatter.get("name") or None)
+    if v:
+        violations.append(v)
 
     v = _check_as006(path)
     if v:
