@@ -125,8 +125,9 @@ repos:
         pass_filenames: true
         # Mirrors [tool.ty.src].exclude in pyproject.toml. pass_filenames sends
         # paths straight to ty, which bypasses that include/exclude config, so
-        # the vendored-skill exclusion has to be repeated here.
-        exclude: ^\.agents/skills/
+        # the vendored-skill exclusion has to be repeated here -- including the
+        # named-skill list, so the two do not drift into disagreeing.
+        exclude: ^\.agents/skills/(rebase|receiving-pr-reviews)/
 
       - id: enable-rerere
         name: Enable git rerere (auto-replay conflict resolutions)

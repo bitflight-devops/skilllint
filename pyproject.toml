@@ -151,7 +151,13 @@ exclude = [
     # there. Their tests import sibling modules that only resolve through runtime
     # sys.path, so ty cannot resolve them here; type-checking vendored code would
     # also churn on every upstream sync.
-    ".agents/skills/*",
+    #
+    # Listed by name, not as `.agents/skills/*`: the exclusion is earned by a
+    # skill being vendored, not by where it sits. A skill added here that is
+    # authored in this repo gets checked. Delete an entry when its skill stops
+    # being vendored.
+    ".agents/skills/rebase/*",
+    ".agents/skills/receiving-pr-reviews/*",
 ]
 include = [".github", "packages", "scripts", "tests"]
 
@@ -162,7 +168,13 @@ exclude = [
     # there. They ship tests beside the script rather than in a tests/ dir, so the
     # **/tests/** per-file-ignores below miss them; linting vendored code here
     # would also churn on every upstream sync.
-    ".agents/skills/*",
+    #
+    # Listed by name, not as `.agents/skills/*`: the exclusion is earned by a
+    # skill being vendored, not by where it sits. A skill added here that is
+    # authored in this repo gets linted. Delete an entry when its skill stops
+    # being vendored.
+    ".agents/skills/rebase/*",
+    ".agents/skills/receiving-pr-reviews/*",
 ]
 fix = true
 line-length = 120
