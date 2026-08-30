@@ -12,6 +12,10 @@ on:
 
 jobs:
   claude-review:
+    # Dependabot PRs are version bumps with no design to review, and the action
+    # rejects bot actors outright ("Workflow initiated by non-human actor").
+    # Skipping reports SKIPPED rather than a spurious FAILURE on every bump.
+    if: github.event.pull_request.user.login != 'dependabot[bot]'
     # Optional: Filter by PR author
     # if: |
     #   github.event.pull_request.user.login == 'external-contributor' ||
