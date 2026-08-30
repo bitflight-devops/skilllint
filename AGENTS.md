@@ -83,20 +83,20 @@ global copy goes stale and shadows the source you're editing.
 
 ## After pushing to a branch
 
-1. **Check CI pipelines** — use `gh run list --repo bitflight-devops/skilllint --limit 10` to see recent runs. If the benchmark or test workflow hasn't triggered (e.g. the workflow file only exists on the branch, not yet on `main`), open a PR to get it running.
+1. **Check CI pipelines** — use `gh run list --limit 10` to see recent runs. If the benchmark or test workflow hasn't triggered (e.g. the workflow file only exists on the branch, not yet on `main`), open a PR to get it running.
 
 2. **Trigger workflow_dispatch manually** — only works if the workflow exists on the default branch. Use:
    ```
-   gh workflow run <workflow-file>.yml --repo bitflight-devops/skilllint --ref <branch>
+   gh workflow run <workflow-file>.yml --ref <branch>
    ```
 
 3. **Check for PR review comments** — after a PR is open, poll with:
    ```
-   gh pr checks --repo bitflight-devops/skilllint <pr-number>
-   gh api repos/bitflight-devops/skilllint/pulls/<pr-number>/comments
+   gh pr checks <pr-number>
+   gh api repos/{owner}/{repo}/pulls/<pr-number>/comments
    ```
 
-4. **Always use `--repo bitflight-devops/skilllint`** with `gh` commands — the git remote points to a local proxy (`127.0.0.1`) which `gh` cannot auto-detect as GitHub.
+4. **`gh` auto-detects the repo unless a `127.0.0.1` proxy hides it — check with `gh repo view`, then pass `--repo`.**
 
 ## Benchmark workflow
 
