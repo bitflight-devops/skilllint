@@ -63,25 +63,17 @@ Before declaring success, confirm:
 
 ## Changing dependencies
 
-Dependencies change through `uv` only. Never hand-edit a version string in
-`pyproject.toml`, and never `uv tool install`.
-
-To move a pinned tool to its current release, remove and re-add it so the
-floor and the lockfile move together in one step:
-
-```
-uv remove --group dev ruff ty
-uv add --group dev ruff ty
-prek autoupdate
+```sh
+uv remove --group <group> <pkg>...
+uv add    --group <group> <pkg>...   # floors and uv.lock move together
 ```
 
-`uv add` updates `uv.lock`, which must be committed with the change. Editing
-the version string by hand leaves the lockfile behind, and any CI step running
-`uv run --locked` fails on the mismatch rather than on anything real.
+Never hand-edit a version string; never `uv tool install`. `uv add` regenerates
+`uv.lock` and a hand edit does not, so CI's `uv run --locked` then fails on the
+mismatch rather than on anything real. Commit the lock with the change.
 
-A toolchain bump and the fixes it requires belong in the same pull request.
-A bump alone reds CI; compatibility fixes alone address a failure the repo
-cannot reproduce, so neither half is reviewable without the other.
+A toolchain bump ships with the fixes it requires — the bump alone reds CI, the
+fixes alone address a failure the repo cannot reproduce.
 
 ## Running skilllint during development
 
