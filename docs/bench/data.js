@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788094340361,
+  "lastUpdate": 1788098360657,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -1086,6 +1086,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 85.305,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "5224488329243c71f1c5d261177a2bae3273adad",
+          "message": "feat(receiving-pr-reviews): surface PR reviewability in fetch/watch (#159)\n\nA draft or conflicting PR never receives reviews, so unresolved_count: 0\nin that state means \"nothing can happen yet\", not \"nothing to do\" — the\nsame misleading-empty-result trap the reviews_count/threads_count triple\nalready warns about. Add reviewability (is_draft, mergeable,\nmerge_state_status, blockers) to FetchResult, derived from isDraft/\nmergeable/mergeStateStatus folded into the existing reviewThreads query\n(no extra gh round trip). mergeable: UNKNOWN is never reported as a\nblocker, since GitHub computes it asynchronously and returns UNKNOWN\nright after a push.",
+          "timestamp": "2026-08-30T13:56:36Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/5224488329243c71f1c5d261177a2bae3273adad"
+        },
+        "date": 1788098359835,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 8623.908,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 9157.014,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 10163.783,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 109.315,
             "unit": "files/s"
           }
         ]
