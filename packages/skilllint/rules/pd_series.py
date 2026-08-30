@@ -29,29 +29,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from skilllint.rule_registry import rule_reference, skilllint_rule
+from skilllint.rule_registry import skilllint_rule
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     from skilllint.plugin_validator import ValidationIssue
-
-# ---------------------------------------------------------------------------
-# Spec sources
-# ---------------------------------------------------------------------------
-
-
-def _docs_url(code: str) -> str:
-    """Return the documentation URL for a PD rule code.
-
-    Args:
-        code: Rule code string (e.g., "PD001").
-
-    Returns:
-        Full URL with anchor for the error code documentation.
-    """
-    return rule_reference(code)
-
 
 # ---------------------------------------------------------------------------
 # PD001 — No references/ directory found

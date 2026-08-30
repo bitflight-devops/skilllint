@@ -57,18 +57,6 @@ _PREFIX_RULE_RE = re.compile(r"prefix_rule\s*\(([^)]*)\)", re.DOTALL)
 _FIELD_RE = re.compile(r"^\s*(\w+)\s*=", re.MULTILINE)
 
 
-def _docs_url(code: str) -> str:
-    """Return the documentation URL for a CX rule code.
-
-    Args:
-        code: Rule code string (e.g., "CX001").
-
-    Returns:
-        Full URL with anchor for the error code documentation.
-    """
-    return rule_reference(code)
-
-
 # ---------------------------------------------------------------------------
 # CX001 — AGENTS.md content is empty
 # ---------------------------------------------------------------------------
@@ -117,7 +105,7 @@ def check_cx001(content: str) -> list[ValidationIssue]:
                 severity="error",
                 message="AGENTS.md is empty",
                 code="CX001",
-                docs_url=_docs_url("CX001"),
+                docs_url=rule_reference("CX001"),
             )
         ]
     return []
@@ -189,7 +177,7 @@ def check_cx002(content: str, schema: dict[str, object]) -> list[ValidationIssue
                         severity="error",
                         message=f"Unknown field '{field}' in prefix_rule() (known fields: {sorted(known_fields)})",
                         code="CX002",
-                        docs_url=_docs_url("CX002"),
+                        docs_url=rule_reference("CX002"),
                     )
                 )
     return issues

@@ -30,7 +30,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from skilllint.rule_registry import rule_reference, skilllint_rule
+from skilllint.rule_registry import skilllint_rule
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -53,18 +53,6 @@ if TYPE_CHECKING:
 # which says nothing about traversal, boundaries, escaping, or symlinks —
 # verified via `grep -ci` returning 0 for those terms against the cached spec.)
 _NR002_PATH_TRAVERSAL_URL = "https://code.claude.com/docs/en/plugins-reference.md#path-traversal-limitations"
-
-
-def _docs_url(code: str) -> str:
-    """Return the documentation URL for an NR rule code.
-
-    Args:
-        code: Rule code string (e.g., "NR001").
-
-    Returns:
-        Full URL with anchor for the error code documentation.
-    """
-    return rule_reference(code)
 
 
 # ---------------------------------------------------------------------------

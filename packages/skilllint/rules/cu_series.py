@@ -44,18 +44,6 @@ if TYPE_CHECKING:
 _CURSOR_DOCS_URL = "https://docs.cursor.com/context/rules-for-ai"
 
 
-def _docs_url(code: str) -> str:
-    """Return the documentation URL for a CU rule code.
-
-    Args:
-        code: Rule code string (e.g., "CU001").
-
-    Returns:
-        Full URL with anchor for the error code documentation.
-    """
-    return rule_reference(code)
-
-
 # ---------------------------------------------------------------------------
 # CU001 — Required field missing from .mdc frontmatter
 # ---------------------------------------------------------------------------
@@ -108,7 +96,7 @@ def check_cu001(frontmatter: dict[str, object], mdc_schema: dict[str, object]) -
             severity="error",
             message=f"Required field '{field}' is missing from .mdc frontmatter",
             code="CU001",
-            docs_url=_docs_url("CU001"),
+            docs_url=rule_reference("CU001"),
         )
         for field in required_fields
         if field not in frontmatter
@@ -178,7 +166,7 @@ def check_cu002(frontmatter: dict[str, object], mdc_schema: dict[str, object]) -
             severity="error",
             message=f"Unknown field '{field}' in .mdc frontmatter (additionalProperties is false)",
             code="CU002",
-            docs_url=_docs_url("CU002"),
+            docs_url=rule_reference("CU002"),
         )
         for field in frontmatter
         if field not in known_fields

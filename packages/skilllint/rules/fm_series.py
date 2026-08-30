@@ -45,18 +45,6 @@ _CONSECUTIVE_HYPHENS_RE = re.compile(r"--")
 _MAX_NAME_LENGTH = 64
 
 
-def _docs_url(code: str) -> str:
-    """Return the documentation URL for an FM rule code.
-
-    Args:
-        code: Rule code string (e.g., "FM001").
-
-    Returns:
-        Full URL with anchor for the error code documentation.
-    """
-    return rule_reference(code)
-
-
 def _make_issue(
     *,
     field: str,
@@ -88,7 +76,7 @@ def _make_issue(
         severity=severity,
         message=message,
         code=code,
-        docs_url=_docs_url(code),
+        docs_url=rule_reference(code),
         suggestion=suggestion,
         line=line,
     )
