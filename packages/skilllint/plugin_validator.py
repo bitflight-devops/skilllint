@@ -4118,7 +4118,17 @@ def _shared_skill_frontmatter_violations(path: Path, frontmatter: dict, policy: 
     # FM001 covers both `name` and `description`, but AS001 already owns name
     # presence for a SKILL.md on this same path, so only the description claim
     # (the one AS003 used to carry here) is taken.
-    issues = [issue for issue in check_fm001(frontmatter, path, "skill") if issue.field == "description"]
+    #
+    # check_fm001 grades a skill description as a warning because skills.md calls
+    # it "Recommended". This path runs only where no adapter applies the Claude
+    # Code reading, and the AgentSkills specification the AS series enforces marks
+    # description Required, which is why AS003 was an error here. Keep that grade
+    # so an invalid file still fails the run.
+    issues = [
+        issue.model_copy(update={"severity": "error"})
+        for issue in check_fm001(frontmatter, path, "skill")
+        if issue.field == "description"
+    ]
     issues.extend(check_fm010(frontmatter, path, "skill"))
     complexity = ComplexityValidator().validate(path, policy)
     issues.extend([*complexity.errors, *complexity.warnings])
