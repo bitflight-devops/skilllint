@@ -1312,30 +1312,51 @@ def _check_list_valued_tool_fields(
     warnings.extend(check_fm007(data, sentinel_path, "skill"))
 
 
-def _check_skill_name_and_directory(
+def _check_name_field_format(
     data: dict[str, YamlValue],
     path: Path,
     file_type: FileType,
     errors: list[ValidationIssue],
     warnings: list[ValidationIssue],
 ) -> None:
-    """Validate skill name field and directory name for SKILL.md files.
+    """Emit FM010 for the ``name`` field on any frontmatter-bearing file type.
+
+    Runs for skills, agents and commands alike. ``SkillFrontmatter`` and
+    ``AgentFrontmatter`` declare ``name`` with the same pattern constraint, so
+    for those types the Pydantic path usually reports FM010 first and the
+    duplicate guard below suppresses a second copy. ``CommandFrontmatter``
+    declares no ``name`` field (it is accepted as an extra), so this call is the
+    only FM010 source for ``commands/*.md``.
 
     Args:
         data: Parsed frontmatter dict.
-        path: Path to SKILL.md file.
+        path: Path to the file being validated.
         file_type: Detected file type.
         errors: Mutable list to append errors to.
         warnings: Mutable list to append warnings to.
+    """
+    if data.get("name") is None or any(issue.code == FM010 for issue in (*errors, *warnings)):
+        return
+
+    for issue in check_fm010(data, path, file_type.value):
+        (errors if issue.severity == "error" else warnings).append(issue)
+
+
+def _check_skill_directory_name(path: Path, file_type: FileType, errors: list[ValidationIssue]) -> None:
+    """Validate the directory name that contains a SKILL.md file (SK008).
+
+    SK008 constrains the directory layout, not the frontmatter, so it stays
+    skill-only while FM010 name-format checking applies to every file type.
+
+    Args:
+        path: Path to SKILL.md file.
+        file_type: Detected file type.
+        errors: Mutable list to append errors to.
     """
     if file_type != FileType.SKILL or path.name != "SKILL.md":
         return
 
     skill_dir_name = path.parent.name
-
-    if data.get("name") and not any(issue.code == FM010 for issue in errors + warnings):
-        for issue in check_fm010(data, path, file_type.value):
-            (errors if issue.severity == "error" else warnings).append(issue)
 
     if path.parent.parent.name == "skills":
         dir_name_issues = _validate_skill_directory_name(skill_dir_name)
@@ -2029,7 +2050,8 @@ class FrontmatterValidator:
 
         warnings.extend(check_fm004(data, path, file_type.value, frontmatter_yaml=frontmatter_text))
         _check_list_valued_tool_fields(data, errors, warnings)
-        _check_skill_name_and_directory(data, path, file_type, errors, warnings)
+        _check_name_field_format(data, path, file_type, errors, warnings)
+        _check_skill_directory_name(path, file_type, errors)
 
         hooks_value = data.get("hooks")
         if isinstance(hooks_value, dict):
@@ -2251,13 +2273,20 @@ class FrontmatterValidator:
 
 
 class NameFormatValidator:
-    """Validates skill/agent/command name format.
+    """Repairs skill/agent/command name format (FM010).
 
-    Checks for:
-    - Lowercase characters only (no uppercase)
-    - Hyphens only (no underscores)
-    - No leading/trailing hyphens
-    - No consecutive hyphens
+    Delegates every check to :func:`check_fm010`, the single owner of the
+    name-format rule:
+
+    - Lowercase letters, digits and hyphens only
+    - No leading/trailing hyphens and no consecutive hyphens
+    - 1-64 characters
+    - For SKILL.md, ``name`` matching the parent directory name
+
+    In the CLI this validator runs from ``_get_fixers_for_path`` only, so that
+    FM010 has exactly one reporter (``FrontmatterValidator``) and exactly one
+    fixer (this class). ``validate()`` remains available to callers that want
+    the rule in isolation.
     """
 
     def validate(self, path: Path) -> ValidationResult:
@@ -2307,24 +2336,14 @@ class NameFormatValidator:
                     if name is None or not isinstance(name, str):
                         result = ValidationResult(passed=True, errors=errors, warnings=warnings, info=info)
                     else:
-                        errors.extend(check_fm010(data, path, "skill"))
+                        file_type = FileType.detect_file_type(path)
+                        for issue in check_fm010(data, path, file_type.value):
+                            (errors if issue.severity == "error" else warnings).append(issue)
                         result = ValidationResult(passed=len(errors) == 0, errors=errors, warnings=warnings, info=info)
 
         return (
             result if result is not None else ValidationResult(passed=True, errors=errors, warnings=warnings, info=info)
         )
-
-    def _check_name_format(self, name: str, errors: list[ValidationIssue]) -> None:
-        """Append format errors for a non-empty name string.
-
-        Retained only as a compatibility helper for callers of the fix path.
-
-
-        Args:
-            name: The name value to check (must be non-empty str).
-            errors: Mutable list to append ValidationIssue objects to.
-        """
-        errors.extend(check_fm010({"name": name}, Path(), "skill"))
 
     def can_fix(self) -> bool:
         """Check if validator supports auto-fixing.
@@ -3620,6 +3639,10 @@ def _file_has_frontmatter(path: Path) -> bool:
 # ============================================================================
 
 
+_NAME_BEARING_FILE_TYPES: frozenset[FileType] = frozenset({FileType.SKILL, FileType.AGENT, FileType.COMMAND})
+"""File types whose frontmatter may carry a ``name`` field (FM010 applies)."""
+
+
 def _get_validators_for_path(path: Path) -> list[Validator]:
     """Return validators to run for the given path based on file type.
 
@@ -3632,7 +3655,7 @@ def _get_validators_for_path(path: Path) -> list[Validator]:
     file_type = FileType.detect_file_type(path)
     validators: list[Validator] = [SymlinkTargetValidator()]
 
-    if file_type in {FileType.SKILL, FileType.AGENT, FileType.COMMAND}:
+    if file_type in _NAME_BEARING_FILE_TYPES:
         fm_req = _frontmatter_requirement(path)
         if fm_req == _FrontmatterRequirement.EXEMPT:
             return [SymlinkTargetValidator()]
@@ -3665,6 +3688,28 @@ def _get_validators_for_path(path: Path) -> list[Validator]:
         return []
 
     return validators
+
+
+def _get_fixers_for_path(path: Path) -> list[Validator]:
+    """Return validators to invoke for ``--fix`` on the given path.
+
+    A validator that reports a rule and a validator that repairs it need not be
+    the same object. FM010 is reported by ``FrontmatterValidator`` so that each
+    finding has exactly one owner, but ``NameFormatValidator`` holds the only
+    implementation of the FM010 repair — normalising the ``name`` field and
+    renaming a mismatched skill directory. It is therefore appended here as a
+    fix-only participant and deliberately kept out of the reporting pipeline.
+
+    Args:
+        path: Path to fix.
+
+    Returns:
+        List of validator instances whose ``fix()`` should run for this path.
+    """
+    validators = _get_validators_for_path(path)
+    if not validators or FileType.detect_file_type(path) not in _NAME_BEARING_FILE_TYPES:
+        return validators
+    return [*validators, NameFormatValidator()]
 
 
 def _collect_validator_results(
@@ -3807,7 +3852,7 @@ def validate_single_path(
             _logger.debug("Skipping auto-fix for fixture file: %s", path)
         else:
             fixes_applied: list[str] = []
-            for validator in validators:
+            for validator in _get_fixers_for_path(path):
                 if validator.can_fix():
                     try:
                         validator_fixes = validator.fix(path)
