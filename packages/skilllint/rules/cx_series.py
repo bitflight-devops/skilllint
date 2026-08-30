@@ -39,7 +39,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
-from skilllint.rule_registry import skilllint_rule
+from skilllint.rule_registry import rule_reference, skilllint_rule
 
 if TYPE_CHECKING:
     from skilllint.plugin_validator import ValidationIssue
@@ -49,8 +49,6 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 _CODEX_AUTHORITY_URL = "https://github.com/openai/codex"
-_CX_DOCS_BASE = "https://github.com/jamie-bitflight/claude_skills/blob/main/plugins/plugin-creator/docs/ERROR_CODES.md"
-
 # Matches: prefix_rule(\n    key = value,\n    ...\n)
 # Captures the body between the outer parentheses.
 # Source: adapters/codex/adapter.py — same regex, moved here with the logic.
@@ -68,7 +66,7 @@ def _docs_url(code: str) -> str:
     Returns:
         Full URL with anchor for the error code documentation.
     """
-    return f"{_CX_DOCS_BASE}#{code.lower()}"
+    return rule_reference(code)
 
 
 # ---------------------------------------------------------------------------

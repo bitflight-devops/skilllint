@@ -36,6 +36,23 @@ if TYPE_CHECKING:
 _logger = logging.getLogger(__name__)
 
 
+def rule_reference(code: str) -> str:
+    """Return the command that renders a rule's full documentation.
+
+    Findings point here rather than at an external URL. The reference is
+    derived from the rule code, so it cannot drift from the registry, and it
+    resolves for every user of the published CLI regardless of which
+    repository they are linting.
+
+    Args:
+        code: Rule code, e.g. "FM001".
+
+    Returns:
+        The ``skilllint rule <CODE>`` invocation for that rule.
+    """
+    return f"skilllint rule {str(code).upper()}"
+
+
 class RuleAuthority(BaseModel):
     """Structured authority metadata for a validation rule.
 

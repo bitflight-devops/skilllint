@@ -1,7 +1,10 @@
 """AS-series rule validation for agentskills.io SKILL.md files.
 
-Rules AS001-AS009 fire on any SKILL.md file regardless of which platform
-adapter is active. They enforce cross-platform quality standards.
+Rules AS001-AS009 fire on SKILL.md files only, regardless of which platform
+adapter is active. They enforce the AgentSkills specification, a cross-harness
+baseline that defines SKILL.md and does not describe agent files. A check on
+agent frontmatter belongs to a series that governs agent files, cited to the
+harness documentation that defines them — not here.
 
 Entry point: check_skill_md(path: Path) -> list[dict]
 
@@ -9,7 +12,7 @@ Each violation dict has the shape:
     {"code": str, "severity": str, "message": str}
 
 Severities:
-    "error"   — AS001, AS002, AS003, AS007
+    "error"   — AS001, AS002, AS003
     "warning" — AS004, AS005, AS008, AS009
     "info"    — AS006
 """
@@ -39,7 +42,6 @@ AS_RULES: dict[str, str] = {
     "AS004": "description contains unquoted colons that break YAML — quote the string to fix",
     "AS005": f"SKILL.md body token count exceeds {TOKEN_WARNING_THRESHOLD} tokens — consider splitting into sub-skills",
     "AS006": "No eval_queries.json found — add evaluation queries for quality assurance",
-    "AS007": "Wildcard pattern in tools field will not resolve — list each tool by its exact registered name",
     "AS008": "MCP tool name may have incorrect casing — case is sensitive in the tools field",
     "AS009": "Nested skill will not be auto-discovered — skills must be direct children of the skills/ directory",
 }
@@ -197,6 +199,11 @@ def _check_as001(name: str | None) -> dict | None:
         Invalid: ``MySkill``, ``my_skill``, ``skill--name``, ``-skill``
     """
     if name is None:
+        # agentskills.io requires `name` on a SKILL.md, and FM001 stays silent
+        # there (skills.md treats it as optional, falling back to the directory
+        # name), so this is the only signal for a skill missing its name.
+        # It used to double-report alongside FM001 on agent files; that is now
+        # impossible because the AS family is wired to SKILL.md only.
         return _make_violation("AS001", "error", "name field is missing")
 
     if len(name) == 0 or len(name) > _MAX_NAME_LENGTH:
@@ -400,18 +407,28 @@ def _check_as005(
     return None
 
 
-def _extract_tools_list(path: pathlib.Path) -> list[str]:
-    """Extract tool names from the tools: frontmatter field.
+def _extract_tools_list(path: pathlib.Path, field: str = "allowed-tools") -> list[str]:
+    """Extract tool names from a tool-declaring frontmatter field.
 
-    Handles both YAML list form and inline comma-separated string form.
-    Uses proper YAML parsing (not the simple key/value parser used by
-    _parse_skill_md) so that multi-line list values are read correctly.
+    Handles the YAML list form and the inline string form. Uses proper YAML
+    parsing (not the simple key/value parser used by _parse_skill_md) so that
+    multi-line list values are read correctly.
+
+    The inline form is split on **both** whitespace and commas. The AgentSkills
+    specification describes ``allowed-tools`` as a space-separated string
+    (agentskills.io/specification.md, fetched 2026-08-22), but marks the field
+    Experimental and notes support varies between implementations, and nothing
+    establishes that another separator is an error. Parsing liberally is what
+    lets a rule *see* the entries either way; whether a given separator is
+    worth reporting is a separate question this function does not answer.
 
     Args:
         path: Path to the SKILL.md file.
+        field: Frontmatter key to read. Defaults to ``allowed-tools``, the
+            field the AgentSkills specification defines for skills.
 
     Returns:
-        List of tool name strings. Empty list if tools field is absent or
+        List of tool name strings. Empty list if the field is absent or
         the file cannot be parsed.
     """
     # Deferred import to break circular dependency; plugin_validator imports
@@ -432,12 +449,12 @@ def _extract_tools_list(path: pathlib.Path) -> list[str]:
     if not isinstance(parsed, dict):
         return []
 
-    tools_value = parsed.get("tools")
+    tools_value = parsed.get(field)
     if isinstance(tools_value, list):
         return [str(t) for t in tools_value if t is not None]
     if isinstance(tools_value, str):
-        # Inline comma-separated: "mcp__Ref__foo, mcp__Bar__baz"
-        return [t.strip() for t in tools_value.split(",") if t.strip()]
+        # Inline form, either separator: "Read Grep" or "Read, Grep".
+        return [t for t in tools_value.replace(",", " ").split() if t]
     return []
 
 
@@ -650,48 +667,6 @@ def _discover_mcp_servers(file_path: pathlib.Path) -> set[str]:
         Set of MCP server name strings (exact case as declared in config).
     """
     return _collect_servers_from_ancestry(file_path) | _collect_servers_from_frontmatter(file_path)
-
-
-@skilllint_rule(
-    "AS007",
-    severity="error",
-    category="skill",
-    authority={"origin": "agentskills.io", "reference": "/specification#tools-field"},
-)
-def _check_as007(tools: list[str]) -> list[dict]:
-    """AS007 — Wildcard pattern in tools field will not resolve.
-
-    Wildcard patterns such as ``mcp__Ref__*`` in the ``tools:`` frontmatter
-    field are silently ignored at runtime. The agent receives no MCP tools
-    when wildcards are used.
-
-    Args:
-        tools: List of tool name strings from the tools: frontmatter field.
-
-    Returns:
-        List of violation dicts — one per wildcard tool entry.
-
-    Fix:
-        Replace each wildcard with the exact registered tool names.
-        For example, replace ``mcp__Ref__*`` with the explicit tool names
-        ``mcp__Ref__ref_read_url`` and ``mcp__Ref__ref_search_documentation``.
-
-    Examples:
-        Invalid: ``mcp__Ref__*``, ``mcp__*``, ``*``
-        Valid: ``mcp__Ref__ref_read_url``, ``Bash``, ``Read``
-    """
-    violations: list[dict] = [
-        _make_violation(
-            "AS007",
-            "error",
-            f"Wildcard pattern '{tool_name}' in tools field will not resolve. "
-            "List each tool by its exact registered name.",
-            fix=f"Replace '{tool_name}' with the explicit tool names (e.g., 'mcp__Ref__ref_read_url').",
-        )
-        for tool_name in tools
-        if "*" in tool_name
-    ]
-    return violations
 
 
 @skilllint_rule(
@@ -951,7 +926,7 @@ def check_skill_md(path: pathlib.Path) -> list[dict]:
 
     Returns:
         List of violation dicts, each with keys: code, severity, message.
-        May include 'fix' key with auto-fix suggestion for AS004, AS007, AS008, AS009.
+        May include 'fix' key with auto-fix suggestion for AS004, AS008, AS009.
     """
     frontmatter, body_lines, raw_description_line = _parse_skill_md(path)
 
@@ -991,7 +966,6 @@ def check_skill_md(path: pathlib.Path) -> list[dict]:
         violations.append(v)
 
     tools = _extract_tools_list(path)
-    violations.extend(_check_as007(tools))
     violations.extend(_check_as008(tools, path))
 
     v = _check_as009(path)
@@ -1054,7 +1028,6 @@ def run_as_series(
         violations.append(v)
 
     tools = _extract_tools_list(path)
-    violations.extend(_check_as007(tools))
     violations.extend(_check_as008(tools, path))
 
     v = _check_as009(path)

@@ -32,7 +32,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from skilllint.rule_registry import skilllint_rule
+from skilllint.rule_registry import rule_reference, skilllint_rule
 
 if TYPE_CHECKING:
     from skilllint.plugin_validator import ValidationIssue
@@ -42,7 +42,6 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 _CURSOR_DOCS_URL = "https://docs.cursor.com/context/rules-for-ai"
-_CU_DOCS_BASE = "https://github.com/jamie-bitflight/claude_skills/blob/main/plugins/plugin-creator/docs/ERROR_CODES.md"
 
 
 def _docs_url(code: str) -> str:
@@ -54,7 +53,7 @@ def _docs_url(code: str) -> str:
     Returns:
         Full URL with anchor for the error code documentation.
     """
-    return f"{_CU_DOCS_BASE}#{code.lower()}"
+    return rule_reference(code)
 
 
 # ---------------------------------------------------------------------------

@@ -20,7 +20,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Literal
 
-from skilllint.rule_registry import skilllint_rule
+from skilllint.rule_registry import rule_reference, skilllint_rule
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -34,8 +34,6 @@ if TYPE_CHECKING:
 
 _SKILLS_SPEC_URL = "https://docs.anthropic.com/en/docs/claude-code/skills"
 _AGENTS_SPEC_URL = "https://docs.anthropic.com/en/docs/claude-code/sub-agents"
-_FM_DOCS_BASE = "https://github.com/jamie-bitflight/claude_skills/blob/main/plugins/plugin-creator/docs/ERROR_CODES.md"
-
 # Name pattern: lowercase alphanumeric with hyphens, no leading/trailing/consecutive hyphens.
 # Source: skills.md frontmatter reference table — "Lowercase letters, numbers, and hyphens only (max 64 characters)"
 # Source: sub-agents.md — "Unique identifier using lowercase letters and hyphens"
@@ -56,7 +54,7 @@ def _docs_url(code: str) -> str:
     Returns:
         Full URL with anchor for the error code documentation.
     """
-    return f"{_FM_DOCS_BASE}#{code.lower()}"
+    return rule_reference(code)
 
 
 def _make_issue(

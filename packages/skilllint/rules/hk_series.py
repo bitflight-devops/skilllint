@@ -33,7 +33,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from skilllint.rule_registry import skilllint_rule
+from skilllint.rule_registry import rule_reference, skilllint_rule
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -43,8 +43,6 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 # Spec sources
 # ---------------------------------------------------------------------------
-
-_HK_DOCS_BASE = "https://github.com/jamie-bitflight/claude_skills/blob/main/plugins/plugin-creator/docs/ERROR_CODES.md"
 
 
 def _docs_url(code: str) -> str:
@@ -56,7 +54,7 @@ def _docs_url(code: str) -> str:
     Returns:
         Full URL with anchor for the error code documentation.
     """
-    return f"{_HK_DOCS_BASE}#{code.lower()}"
+    return rule_reference(code)
 
 
 # ---------------------------------------------------------------------------
@@ -69,7 +67,7 @@ def _docs_url(code: str) -> str:
     severity="error",
     category="hook",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills", "reference": _HK_DOCS_BASE},
+    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
 )
 def check_hk001(frontmatter: dict[str, object], path: Path, file_type: str) -> list[ValidationIssue]:
     """## HK001 — Invalid hooks.json structure
@@ -137,7 +135,7 @@ def check_hk001(frontmatter: dict[str, object], path: Path, file_type: str) -> l
     severity="error",
     category="hook",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills", "reference": _HK_DOCS_BASE},
+    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
 )
 def check_hk002(frontmatter: dict[str, object], path: Path, file_type: str) -> list[ValidationIssue]:
     """## HK002 — Invalid event type in hooks.json
@@ -191,7 +189,7 @@ def check_hk002(frontmatter: dict[str, object], path: Path, file_type: str) -> l
     severity="error",
     category="hook",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills", "reference": _HK_DOCS_BASE},
+    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
 )
 def check_hk003(frontmatter: dict[str, object], path: Path, file_type: str) -> list[ValidationIssue]:
     """## HK003 — Invalid hook entry structure
@@ -254,7 +252,7 @@ def check_hk003(frontmatter: dict[str, object], path: Path, file_type: str) -> l
     severity="error",
     category="hook",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills", "reference": _HK_DOCS_BASE},
+    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
 )
 def check_hk004(frontmatter: dict[str, object], path: Path, file_type: str) -> list[ValidationIssue]:
     """## HK004 — Hook script referenced but not found
@@ -308,7 +306,7 @@ def check_hk004(frontmatter: dict[str, object], path: Path, file_type: str) -> l
     severity="warning",
     category="hook",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills", "reference": _HK_DOCS_BASE},
+    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
 )
 def check_hk005(frontmatter: dict[str, object], path: Path, file_type: str) -> list[ValidationIssue]:
     """## HK005 — Hook script exists but is not executable

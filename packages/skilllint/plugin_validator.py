@@ -62,6 +62,7 @@ from skilllint.record_export import (
     export_recording as _export_recording,
     make_recording_console as _make_recording_console,
 )
+from skilllint.rule_registry import rule_reference
 from skilllint.rules.as_series import run_as_series
 from skilllint.rules.fm_series import check_fm004, check_fm007, check_fm008, check_fm010
 from skilllint.rules.sk_series import check_sk001, check_sk002, check_sk003, check_sk004, check_sk005
@@ -234,11 +235,6 @@ def safe_load_yaml_with_colon_fix(fm_text: str) -> tuple[dict | None, str | None
         parsed = dict(data) if isinstance(data, dict) else None
         return parsed, None, [], fm_text
 
-
-# Error code base URL for documentation links
-ERROR_CODE_BASE_URL = (
-    "https://github.com/jamie-bitflight/claude_skills/blob/main/plugins/plugin-creator/docs/ERROR_CODES.md"
-)
 
 # Official plugin.json schema (plugin manifest)
 PLUGIN_MANIFEST_SCHEMA_URL = "https://code.claude.com/docs/en/plugins-reference.md#plugin-manifest-schema"
@@ -1134,9 +1130,9 @@ def generate_docs_url(error_code: ErrorCode) -> str:
         error_code: Error code (ErrorCode enum or string like "FM001", "SK006").
 
     Returns:
-        Full URL to error code documentation with anchor
+        The ``skilllint rule <CODE>`` invocation that renders the rule docs.
     """
-    return f"{ERROR_CODE_BASE_URL}#{str(error_code).lower()}"
+    return rule_reference(str(error_code))
 
 
 # extract_frontmatter imported from frontmatter_core
@@ -2272,12 +2268,16 @@ class SymlinkTargetValidator:
 
 
 class AsSeriesValidator:
-    """Runs AS001-AS008 rules on SKILL.md and agent .md files.
+    """Runs AS001-AS009 rules on SKILL.md files.
 
-    AS-series rules are cross-platform quality checks that apply to any file
-    carrying skill or agent frontmatter, regardless of which platform adapter
-    is active. This validator integrates them into the default
-    ``validate_single_path`` code path so they fire without ``--platform``.
+    AS-series rules enforce the AgentSkills specification, which is a
+    cross-harness baseline for skills. It defines ``SKILL.md`` and does not
+    describe agent files at all, so this validator is wired only to
+    ``FileType.SKILL``. A check on agent frontmatter belongs to a series that
+    governs agent files, cited to the harness documentation defining them.
+
+    These are platform-independent, so this validator integrates into the
+    default ``validate_single_path`` code path and fires without ``--platform``.
     """
 
     def validate(self, path: Path, policy: ValidationPolicy | None = None) -> ValidationResult:
@@ -5144,7 +5144,11 @@ def _get_validators_for_path(path: Path) -> list[Validator]:
         if fm_req == _FrontmatterRequirement.REQUIRED or _file_has_frontmatter(path):
             validators.extend([NameFormatValidator(), DescriptionValidator(file_type=file_type)])
         validators.append(NamespaceReferenceValidator())
-        if file_type in {FileType.SKILL, FileType.AGENT}:
+        # AS-series rules enforce the AgentSkills specification, which governs
+        # SKILL.md and nothing else. Agent files are a harness extension the
+        # spec does not define, so running AS rules on them is a category error
+        # regardless of what an individual rule happens to check.
+        if file_type == FileType.SKILL:
             validators.append(AsSeriesValidator())
         if file_type == FileType.SKILL:
             validators.extend([ComplexityValidator(), InternalLinkValidator(), ProgressiveDisclosureValidator()])
@@ -5487,9 +5491,10 @@ def validate_file(path: Path, adapters: dict, platform_override: str | None = No
     violations: list[dict] = []
 
     # AS-series rules are cross-platform — they run before the adapter matching
-    # guard so that agent files outside a recognised plugin structure still get
-    # AS007/AS008 checks even when no platform adapter claims the file.
-    if is_skill_md(path) or "agents" in path.parts:
+    # guard so that a SKILL.md outside a recognised plugin structure is still
+    # checked even when no platform adapter claims the file. They do not extend
+    # to agent files: the AgentSkills specification defines SKILL.md only.
+    if is_skill_md(path):
         frontmatter_data, body_lines, yaml_err, colon_fields = parse_skill_md(path)
         if colon_fields:
             violations.append({

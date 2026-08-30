@@ -30,7 +30,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from skilllint.rule_registry import skilllint_rule
+from skilllint.rule_registry import rule_reference, skilllint_rule
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -40,8 +40,6 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 # Spec sources
 # ---------------------------------------------------------------------------
-
-_NR_DOCS_BASE = "https://github.com/jamie-bitflight/claude_skills/blob/main/plugins/plugin-creator/docs/ERROR_CODES.md"
 
 
 def _docs_url(code: str) -> str:
@@ -53,7 +51,7 @@ def _docs_url(code: str) -> str:
     Returns:
         Full URL with anchor for the error code documentation.
     """
-    return f"{_NR_DOCS_BASE}#{code.lower()}"
+    return rule_reference(code)
 
 
 # ---------------------------------------------------------------------------
@@ -66,7 +64,7 @@ def _docs_url(code: str) -> str:
     severity="error",
     category="namespace-reference",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills", "reference": _NR_DOCS_BASE},
+    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
 )
 def check_nr001(frontmatter: dict[str, object], path: Path, file_type: str) -> list[ValidationIssue]:
     """## NR001 — Namespace reference target does not exist
@@ -128,7 +126,7 @@ def check_nr001(frontmatter: dict[str, object], path: Path, file_type: str) -> l
     severity="error",
     category="namespace-reference",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills", "reference": _NR_DOCS_BASE},
+    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
 )
 def check_nr002(frontmatter: dict[str, object], path: Path, file_type: str) -> list[ValidationIssue]:
     """## NR002 — Namespace reference points outside plugin directory

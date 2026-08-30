@@ -71,7 +71,7 @@ The skill includes a [full rule catalog](./skills/skilllint/references/rule-cata
 |--------|--------|
 | FM001–FM010 | YAML frontmatter validity |
 | SK001–SK009 | Skill name, description, and token budget |
-| AS001–AS009 | AgentSkills open standard cross-platform compliance |
+| AS001–AS009 | SKILL.md conformance with the AgentSkills open standard (AS007 removed) |
 | LK001–LK002 | Internal markdown links |
 | PD001–PD003 | Progressive disclosure directory structure |
 | PL001–PL006 | Plugin manifest (`plugin.json`) |

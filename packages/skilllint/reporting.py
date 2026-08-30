@@ -76,7 +76,7 @@ class ConsoleReporter:
             self.console.print(f"      [dim]→[/dim] {issue.suggestion}", crop=False, overflow="ignore")
 
         if issue.docs_url:
-            self.console.print(f"      [dim]→[/dim] [link]{issue.docs_url}[/link]", crop=False, overflow="ignore")
+            self.console.print(f"      [dim]→[/dim] [cyan]{issue.docs_url}[/cyan]", crop=False, overflow="ignore")
 
     def report(self, file_results: FileResults, verbose: bool = False, *, show_progress: bool = False) -> None:
         """Display validation results with Rich formatting, grouped by file."""

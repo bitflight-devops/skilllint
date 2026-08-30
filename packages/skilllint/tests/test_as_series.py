@@ -269,12 +269,12 @@ def test_as006_no_eval_queries_info(tmp_path: pathlib.Path):
 
 
 # ---------------------------------------------------------------------------
-# AS007: wildcard patterns in tools field produce an error
+# AS008: MCP server name references in the allowed-tools field
 # ---------------------------------------------------------------------------
 
 
 def _make_skill_with_tools(tmp_path: pathlib.Path, tools_block: str) -> pathlib.Path:
-    """Write a minimal valid SKILL.md with the given tools: block and return its path.
+    """Write a minimal valid SKILL.md with the given tool-field block and return its path.
 
     The tools_block is inserted verbatim between the description line and the
     closing '---' delimiter. It must not be indented (textwrap.dedent would
@@ -292,70 +292,37 @@ def _make_skill_with_tools(tmp_path: pathlib.Path, tools_block: str) -> pathlib.
     return skill_md
 
 
-def test_as007_wildcard_in_tools_list_produces_error(tmp_path: pathlib.Path):
-    """tools: list containing a wildcard entry produces AS007 error."""
-    skill_md = _make_skill_with_tools(tmp_path, "tools:\n  - mcp__Ref__ref_read_url\n  - mcp__Ref__*")
-    violations = check_skill_md(skill_md)
-    as007 = _violations_with_code(violations, "AS007")
-    assert as007 != [], "Expected AS007 violation for wildcard 'mcp__Ref__*'"
-    assert as007[0]["severity"] == "error"
-    assert "mcp__Ref__*" in as007[0]["message"]
-    assert "fix" in as007[0]
+def test_as008_reads_the_spec_field_and_both_separators(tmp_path: pathlib.Path):
+    """AS008 must see `allowed-tools`, in list form and either inline separator.
 
-
-def test_as007_wildcard_inline_tools_produces_error(tmp_path: pathlib.Path):
-    """Inline comma-separated tools: containing a wildcard produces AS007 error."""
-    skill_md = _make_skill_with_tools(tmp_path, "tools: mcp__Ref__ref_read_url, mcp__Ref__*")
-    violations = check_skill_md(skill_md)
-    as007 = _violations_with_code(violations, "AS007")
-    assert as007 != [], "Expected AS007 violation for inline wildcard 'mcp__Ref__*'"
-    assert as007[0]["severity"] == "error"
-
-
-def test_as007_multiple_wildcards_produce_one_violation_each(tmp_path: pathlib.Path):
-    """Each wildcard tool entry produces its own AS007 violation."""
-    skill_md = _make_skill_with_tools(tmp_path, "tools:\n  - mcp__Ref__*\n  - mcp__*\n  - Read")
-    violations = check_skill_md(skill_md)
-    as007 = _violations_with_code(violations, "AS007")
-    assert len(as007) == 2, f"Expected 2 AS007 violations for 2 wildcards, got: {len(as007)}"
-
-
-def test_as007_explicit_tool_names_pass(tmp_path: pathlib.Path):
-    """Explicit tool names without wildcards do not trigger AS007."""
-    skill_md = _make_skill_with_tools(
-        tmp_path, "tools:\n  - mcp__Ref__ref_read_url\n  - mcp__Ref__ref_search_documentation\n  - Bash"
+    `allowed-tools` is the field the AgentSkills specification defines for
+    skills (agentskills.io/specification.md, fetched 2026-08-22); AS008 read
+    `tools:` and was blind to it. The spec describes the inline form as
+    space-separated but marks the field Experimental, and nothing establishes
+    that a comma is an error — so the parser accepts both rather than picking
+    one and silently missing entries written the other way.
+    """
+    _write_mcp_json(tmp_path, "Ref")
+    forms = (
+        "allowed-tools:\n  - mcp__ref__read_url\n  - Bash",  # YAML list
+        "allowed-tools: mcp__ref__read_url Bash",  # space-separated (spec form)
+        "allowed-tools: mcp__ref__read_url, Bash",  # comma-separated
     )
-    violations = check_skill_md(skill_md)
-    assert _violations_with_code(violations, "AS007") == [], (
-        "AS007 must not fire for explicit tool names without wildcards"
+    for i, block in enumerate(forms):
+        case_dir = tmp_path / f"form{i}"
+        case_dir.mkdir()
+        _write_mcp_json(case_dir, "Ref")
+        as008 = _violations_with_code(check_skill_md(_make_skill_with_tools(case_dir, block)), "AS008")
+        assert as008 != [], f"AS008 must catch the wrong-case server in form {block!r}"
+
+
+def test_as008_ignores_the_agent_tools_field_on_a_skill(tmp_path: pathlib.Path):
+    """`tools:` is agent frontmatter; the AgentSkills spec does not define it for skills."""
+    _write_mcp_json(tmp_path, "Ref")
+    skill_md = _make_skill_with_tools(tmp_path, "tools:\n  - mcp__ref__read_url")
+    assert _violations_with_code(check_skill_md(skill_md), "AS008") == [], (
+        "AS008 must not read `tools:` on a SKILL.md — that is not the spec's field"
     )
-
-
-def test_as007_no_tools_field_passes(tmp_path: pathlib.Path):
-    """SKILL.md without a tools: field produces no AS007 violation."""
-    skill_dir = tmp_path / "my-skill"
-    skill_dir.mkdir()
-    skill_md = skill_dir / "SKILL.md"
-    skill_md.write_text(
-        textwrap.dedent("""\
-            ---
-            name: my-skill
-            description: A skill without a tools field.
-            ---
-
-            Body content.
-        """)
-    )
-    violations = check_skill_md(skill_md)
-    assert _violations_with_code(violations, "AS007") == [], "AS007 must not fire when tools field is absent"
-
-
-# ---------------------------------------------------------------------------
-# AS008: MCP server discovery — exact match, case mismatch, unknown server
-# ---------------------------------------------------------------------------
-
-# Helper: write a .mcp.json in tmp_path with the given server names so that
-# _discover_mcp_servers() finds them when scanning skill files under tmp_path.
 
 
 def _write_mcp_json(directory: pathlib.Path, *server_names: str) -> None:
@@ -369,7 +336,7 @@ def _write_mcp_json(directory: pathlib.Path, *server_names: str) -> None:
 def test_as008_exact_match_discovered_server_passes(tmp_path: pathlib.Path):
     """Exact server name match against .mcp.json discovery produces no AS008 violation."""
     _write_mcp_json(tmp_path, "Ref")
-    skill_md = _make_skill_with_tools(tmp_path, "tools:\n  - mcp__Ref__ref_search_documentation")
+    skill_md = _make_skill_with_tools(tmp_path, "allowed-tools:\n  - mcp__Ref__ref_search_documentation")
     violations = check_skill_md(skill_md)
     assert _violations_with_code(violations, "AS008") == [], (
         "AS008 must not fire when server 'Ref' exactly matches .mcp.json discovery"
@@ -380,7 +347,7 @@ def test_as008_case_mismatch_with_discovered_server_produces_error(tmp_path: pat
     """Wrong-case server name against a discovered server produces AS008 error."""
     # .mcp.json declares 'Ref'; skill uses 'ref' (lowercase) — case mismatch
     _write_mcp_json(tmp_path, "Ref")
-    skill_md = _make_skill_with_tools(tmp_path, "tools:\n  - mcp__ref__ref_search_documentation")
+    skill_md = _make_skill_with_tools(tmp_path, "allowed-tools:\n  - mcp__ref__ref_search_documentation")
     violations = check_skill_md(skill_md)
     as008 = _violations_with_code(violations, "AS008")
     assert as008 != [], "Expected AS008 error for case mismatch 'mcp__ref__' vs discovered 'Ref'"
@@ -392,7 +359,7 @@ def test_as008_case_mismatch_with_discovered_server_produces_error(tmp_path: pat
 def test_as008_unknown_server_not_in_any_config_produces_warning(tmp_path: pathlib.Path):
     """MCP tool referencing a server absent from all config files produces AS008 warning."""
     # No .mcp.json written — server is entirely unknown
-    skill_md = _make_skill_with_tools(tmp_path, "tools:\n  - mcp__someUnknownServer__some_tool")
+    skill_md = _make_skill_with_tools(tmp_path, "allowed-tools:\n  - mcp__someUnknownServer__some_tool")
     violations = check_skill_md(skill_md)
     as008 = _violations_with_code(violations, "AS008")
     assert as008 != [], "Expected AS008 warning for server not found in any config"
@@ -403,7 +370,7 @@ def test_as008_unknown_server_not_in_any_config_produces_warning(tmp_path: pathl
 # ---------------------------------------------------------------------------
 # AsSeriesValidator integration — agent file wiring
 # ---------------------------------------------------------------------------
-# These tests verify that AS007 and AS008 fire when AsSeriesValidator is used
+# These tests verify the AS family's file-type boundary and AS008 wiring
 # via the default validate_single_path code path (not --platform).
 # AS002 must be suppressed for agent files because agents live directly in
 # agents/ — the parent directory name is always "agents", not the agent name.
@@ -437,20 +404,32 @@ def _make_agent_md(tmp_path: pathlib.Path, tools_yaml: str) -> pathlib.Path:
     return agent_md
 
 
-def test_as007_fires_on_agent_file_with_wildcard_via_validator(tmp_path: pathlib.Path):
-    """AsSeriesValidator surfaces AS007 for wildcard tools on an agent .md file.
+def test_as_family_does_not_run_on_agent_files(tmp_path: pathlib.Path):
+    """No AS-series rule may fire on an agent file.
 
-    This verifies the wiring in _get_validators_for_path: agent files must
-    have AsSeriesValidator in their validator list so AS007 fires without
-    requiring --platform.
+    The AgentSkills specification is a cross-harness baseline that defines
+    SKILL.md and does not describe agent files at all. An AS rule evaluating
+    agent frontmatter is a category error regardless of what it checks, so the
+    boundary lives in the family wiring rather than in each rule's own guard.
+
+    This asserts the routing in _get_validators_for_path, not a rule in
+    isolation — calling AsSeriesValidator directly would bypass the boundary
+    and pass even when the wiring is wrong.
     """
-    from skilllint.plugin_validator import AsSeriesValidator
+    from skilllint.plugin_validator import _get_validators_for_path
 
-    agent_md = _make_agent_md(tmp_path, "tools: mcp__Ref__*, Read, Bash")
-    result = AsSeriesValidator().validate(agent_md)
-    codes = [i.field for i in result.errors + result.warnings + result.info]
-    assert "AS007" in codes, f"Expected AS007 in AsSeriesValidator output for wildcard tool, got: {codes}"
-    assert not result.passed, "AsSeriesValidator must not pass when a wildcard tool is present"
+    agent_md = _make_agent_md(tmp_path, "allowed-tools: mcp__*, Read, Bash")
+    names = [type(v).__name__ for v in _get_validators_for_path(agent_md)]
+    assert "AsSeriesValidator" not in names, f"AS family must not be wired to agent files, got: {names}"
+
+
+def test_as_family_still_runs_on_skill_md(tmp_path: pathlib.Path):
+    """The boundary must not cost SKILL.md its AS coverage."""
+    from skilllint.plugin_validator import _get_validators_for_path
+
+    skill_md = _make_skill_with_tools(tmp_path, "allowed-tools:\n  - Read")
+    names = [type(v).__name__ for v in _get_validators_for_path(skill_md)]
+    assert "AsSeriesValidator" in names, f"AS family must still run on SKILL.md, got: {names}"
 
 
 def test_as002_suppressed_for_agent_files_via_validator(tmp_path: pathlib.Path):
@@ -462,7 +441,7 @@ def test_as002_suppressed_for_agent_files_via_validator(tmp_path: pathlib.Path):
     """
     from skilllint.plugin_validator import AsSeriesValidator
 
-    agent_md = _make_agent_md(tmp_path, "tools: Read")
+    agent_md = _make_agent_md(tmp_path, "allowed-tools: Read")
     result = AsSeriesValidator().validate(agent_md)
     codes = [i.field for i in result.errors + result.warnings + result.info]
     assert "AS002" not in codes, f"AS002 must not fire for agent files, got: {codes}"
@@ -499,7 +478,7 @@ def test_as008_hyphen_vs_underscore_unrecognized_server_produces_warning(tmp_pat
     # 'sequential-thinking' (hyphen) vs 'sequential_thinking' (underscore) differ by more than
     # case — case-folding won't unify them, so it falls through to "unknown server → warning".
     _write_mcp_json(tmp_path, "sequential_thinking")
-    skill_md = _make_skill_with_tools(tmp_path, "tools:\n  - mcp__sequential-thinking__sequentialthinking")
+    skill_md = _make_skill_with_tools(tmp_path, "allowed-tools:\n  - mcp__sequential-thinking__sequentialthinking")
     violations = check_skill_md(skill_md)
     as008 = _violations_with_code(violations, "AS008")
     assert as008 != [], "Expected AS008 warning for 'mcp__sequential-thinking__' (not a case-fold match)"
@@ -510,7 +489,7 @@ def test_as008_hyphen_vs_underscore_unrecognized_server_produces_warning(tmp_pat
 def test_as008_correct_server_with_discovered_context_passes(tmp_path: pathlib.Path):
     """Correct server name when that server is in .mcp.json produces no AS008 violation."""
     _write_mcp_json(tmp_path, "sequential_thinking")
-    skill_md = _make_skill_with_tools(tmp_path, "tools:\n  - mcp__sequential_thinking__sequentialthinking")
+    skill_md = _make_skill_with_tools(tmp_path, "allowed-tools:\n  - mcp__sequential_thinking__sequentialthinking")
     violations = check_skill_md(skill_md)
     assert _violations_with_code(violations, "AS008") == [], (
         "AS008 must not fire when server name exactly matches discovered 'sequential_thinking'"
@@ -521,7 +500,7 @@ def test_as008_mixed_exact_and_case_mismatch_produces_one_error(tmp_path: pathli
     """One case-mismatched and one correct tool produces exactly one AS008 violation."""
     _write_mcp_json(tmp_path, "Ref")
     skill_md = _make_skill_with_tools(
-        tmp_path, "tools:\n  - mcp__ref__ref_read_url\n  - mcp__Ref__ref_search_documentation\n  - Bash"
+        tmp_path, "allowed-tools:\n  - mcp__ref__ref_read_url\n  - mcp__Ref__ref_search_documentation\n  - Bash"
     )
     violations = check_skill_md(skill_md)
     as008 = _violations_with_code(violations, "AS008")
@@ -531,7 +510,7 @@ def test_as008_mixed_exact_and_case_mismatch_produces_one_error(tmp_path: pathli
 
 def test_as008_non_mcp_tools_are_ignored(tmp_path: pathlib.Path):
     """Non-MCP tool names (Bash, Read, Write) never trigger AS008."""
-    skill_md = _make_skill_with_tools(tmp_path, "tools:\n  - Bash\n  - Read\n  - Write\n  - Edit")
+    skill_md = _make_skill_with_tools(tmp_path, "allowed-tools:\n  - Bash\n  - Read\n  - Write\n  - Edit")
     violations = check_skill_md(skill_md)
     assert _violations_with_code(violations, "AS008") == [], "AS008 must not fire for non-MCP tool names"
 
