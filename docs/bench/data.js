@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788091112076,
+  "lastUpdate": 1788094340361,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -1044,6 +1044,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 94.726,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "24b2bb640349e1f3045af4d1728ce9fa556b4a9e",
+          "message": "fix(ty): move script-mode extra-paths config into the script itself (#157)\n\nPR #154 fixed ty's inability to resolve test_pr_review_threads.py's\nsibling `import pr_review_threads` by adding --extra-search-path to\nthe pre-commit hook's entry: line. That only helped when ty is\ninvoked through that one hook -- a direct `uv run ty check .agents/`\nstill failed, and every other caller (CI, editors) would need to\nre-know the flag.\n\nPEP 723 script metadata is TOML and accepts arbitrary [tool.*]\ntables. Verified empirically (ty 0.0.75) that ty reads a\n[tool.ty.environment] table declared inside the script's own\nmetadata block even in single-file script mode, and that relative\nextra-paths there resolve against the script's own directory (not\ninvocation cwd, not project root) -- so extra-paths = [\".\"] is the\nsibling directory ty needs.\n\nMove the config into the script's PEP 723 block so it travels with\nthe file for every caller, and drop the now-unneeded CLI flag from\nthe pre-commit hook.\n\n\nClaude-Session: https://claude.ai/code/session_01QJeBLNA9ybmQvv5REMDkrc\n\nCo-authored-by: Claude Opus 5 <noreply@anthropic.com>",
+          "timestamp": "2026-08-30T12:49:39Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/24b2bb640349e1f3045af4d1728ce9fa556b4a9e"
+        },
+        "date": 1788094339577,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 11097.309,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 11734.378,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 12923.523,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 85.305,
             "unit": "files/s"
           }
         ]
