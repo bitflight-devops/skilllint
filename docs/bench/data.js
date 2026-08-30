@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788059282803,
+  "lastUpdate": 1788059692836,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -708,6 +708,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 64.119,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "79aa3487fd38868edfb12b08f7f9e57bbb7a4d69",
+          "message": "feat(policy): add configurable skill thresholds (#97)\n\n* fix(policy): address PR #97 review findings\n\n- #1: drop AS005 from the configurable threshold set (it shares the\n  SK006/SK007 token band and has no threshold plumbing of its own);\n  keep AS005 severity configurable\n- #2: reset both thresholds to defaults when SK006 >= SK007 so the\n  warning band stays reachable (matches test_limits.py invariant)\n- #3: guard severity values with isinstance(str) before set membership\n  so a composite value (list/dict) no longer raises TypeError and\n  aborts the run\n- #4: resolve and apply per-plugin policy in validate_file so the\n  --platform path honors the same thresholds as the default path\n- #5: thread a per-run policy cache through validate_single_path/scan\n  loop instead of a fresh {} per call\n- #6: document the numeric test literals in test_policy_config.py\n\nAlso: surface invalid config on stderr (once per config) instead of\nsilently defaulting, per docs/TYPING_POLICY.md (producer errors must\nnot be silently coerced). Bump ruff>=0.16.2, ty>=0.0.69 via uv.\n\n* fix(policy): address Codex re-review on a1f264f\n\n- Cache ancestor lookup during the policy walk so a sibling skill reuses\n  the already-cached ancestor instead of re-walking, re-reading config,\n  and re-emitting each diagnostic once per sibling\n- Apply resolved severity (not just thresholds) in the --platform\n  validation path so the two paths no longer lint the same skill\n  differently for configured AS005/SK006/SK007 severities\n\nAdds a sibling-cache-reuse regression test.\n\n* fix(policy): address Codex re-review on 4a33171\n\n- Report a diagnostic when a present policy section (thresholds/severity)\n  is not an object instead of silently defaulting\n- Thread the per-run policy cache into validate_file so --platform scans\n  reuse the shared cache instead of re-reading config and re-emitting\n  diagnostics once per file\n\nAdds regression tests for both.\n\n* fix(policy): share the per-run policy cache with nested Claude validation\n\nvalidate_file() normalised its policy cache inline for its own\n_resolve_policy() call but passed nothing to run_platform_checks(), whose\nClaude branch calls validate_single_path() with a fresh cache. A\n--platform claude-code scan therefore re-read each .skilllint.json /\nvalidator.json and re-emitted its invalid-policy diagnostics once per\nfile — twice for a single file, ~2000 times for a 1000-file scan.\n\nNormalise the cache once in validate_file() and thread it through\nrun_platform_checks() into the nested pipeline, restoring the\nonce-per-config diagnostic contract on the platform path.\n\nAlso reuse _VALID_SEVERITIES in the AS-series severity remap instead of\nrepeating the literal set.\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01QJeBLNA9ybmQvv5REMDkrc\n\n---------\n\nCo-authored-by: Claude Opus 5 <noreply@anthropic.com>",
+          "timestamp": "2026-08-30T03:11:40Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/79aa3487fd38868edfb12b08f7f9e57bbb7a4d69"
+        },
+        "date": 1788059691968,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 14959.533,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 15626.764,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 16867.318,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 64.057,
             "unit": "files/s"
           }
         ]
