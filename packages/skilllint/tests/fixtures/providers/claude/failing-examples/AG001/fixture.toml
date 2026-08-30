@@ -1,0 +1,9 @@
+[fixture]
+rule_id = "AG001"
+tier = 1
+description = "Claude agent tools grant uses an unscoped wildcard that resolves to no server"
+
+[[variants]]
+name = "unscoped-mcp-wildcard"
+kind = "failing"
+expected_count = 1

@@ -74,6 +74,34 @@ class TestLoadProviderSchema:
         assert isinstance(result, dict), f"{provider}: schema with version param must be a dict"
 
 
+class TestClaudeAgentSkillsCatalog:
+    """Tests for the optional Claude agent ``skills`` catalog entry."""
+
+    def test_skills_is_optional_provider_catalog_metadata(self) -> None:
+        """The catalog records ownership without imposing a JSON type validator."""
+        schema = load_provider_schema("claude_code")
+        skills = schema["file_types"]["agent"]["fields"]["skills"]
+
+        assert skills["required"] is False
+        assert skills["constraint_scope"] == "provider_specific"
+        assert "type" not in skills
+        assert skills["description"].startswith("Catalog metadata only;")
+
+    def test_skills_catalog_has_current_official_provenance(self) -> None:
+        """The catalog cites the pinned Claude Code runtime-package audit."""
+        schema = load_provider_schema("claude_code")
+        provenance = schema["provenance"]
+        audit = schema["file_types"]["agent"]["fields"]["skills"]["x-audited"]
+
+        assert provenance["authority_url"] == "https://code.claude.com/docs/en/overview"
+        assert provenance["last_verified"] == "2026-08-30"
+        assert audit == {
+            "date": "2026-08-30",
+            "source": "https://www.npmjs.com/package/@anthropic-ai/claude-code/v/2.1.251",
+            "evidence": "docs/runtime-contracts/claude-code-agent-skills-2.1.251.md",
+        }
+
+
 class TestBackwardsCompatibleAlias:
     """Tests for load_bundled_schema backwards-compatible alias."""
 

@@ -17,8 +17,8 @@ if TYPE_CHECKING:
     from typer.testing import CliRunner
 
 # MIN_REGISTERED_SERIES and EXPECTED_SERIES are re-exported from skilllint.rules._constants.
-# Source: P038 architect spec section 8 -- 14 series total (AS + FM + PA existing,
-# SK + LK + PD + PL + HK + NR + SL + TC + PR extracted, CU + CX adapter-backed).
+# Sources: P038 architect spec section 8 (14 series) and issue #132 (AG, the
+# fifteenth series).
 from skilllint.rules import EXPECTED_SERIES, MIN_REGISTERED_SERIES
 
 # Local alias preserving the underscore-prefixed naming convention used in tests.
@@ -88,7 +88,7 @@ class TestRegisteredSeriesCount:
         """Registry must contain at least MIN_REGISTERED_SERIES distinct series.
 
         This test fails pre-migration (only AS, FM, PA registered = 3 series)
-        and passes once T3-T13 complete and all 14 series are populated.
+        and passes once all 15 expected series are populated.
         """
         prefixes = _registered_prefixes()
         count = len(prefixes)
@@ -104,11 +104,10 @@ class TestExpectedSeriesSubset:
     """Assert expected series set is a subset of registered prefixes."""
 
     def test_expected_series_subset_of_registered(self) -> None:
-        """All 14 expected series prefixes must be present in RULE_REGISTRY.
+        """All 15 expected series prefixes must be present in RULE_REGISTRY.
 
-        Expected: {AS, FM, PA, SK, LK, PD, PL, HK, NR, SL, TC, PR, CU, CX}.
-        This test fails pre-migration (SK, LK, PD, PL, HK, NR, SL, TC, PR, CU, CX
-        are not yet registered) and passes once all series tasks complete.
+        Expected: {AG, AS, FM, PA, SK, LK, PD, PL, HK, NR, SL, TC, PR, CU, CX}.
+        This test fails whenever an expected series has not been registered.
         """
         prefixes = _registered_prefixes()
         missing = _EXPECTED_SERIES - prefixes
@@ -128,8 +127,8 @@ class TestCliOutputMatchesRegistry:
         Verifies that every series visible in the registry is surfaced by the CLI,
         and that no extra series appear in CLI output that are not in the registry.
 
-        This test fails pre-migration because RULE_REGISTRY only has 3 series
-        while the full migration requires 14.
+        This test fails when RULE_REGISTRY and CLI discovery drift or the
+        combined set contains fewer than 15 series.
         """
         import skilllint.plugin_validator as plugin_validator
 
@@ -171,8 +170,8 @@ class TestReadmeTableMatchesRegistry:
         table so documentation stays in sync with code.
 
         Pre-migration this test passes trivially for the 3 existing series.
-        It becomes a meaningful guard during T14 (documentation sync) when
-        all 14 series must be in both the registry and the README.
+        It becomes a meaningful documentation-sync guard when all 15 series
+        must be in both the registry and the README.
         """
         registry_series = _registered_prefixes()
         readme_series = _readme_series_from_table()
@@ -186,7 +185,7 @@ class TestReadmeTableMatchesRegistry:
         )
 
     def test_readme_table_completeness_against_expected(self) -> None:
-        """README table must eventually list all 14 expected series.
+        """README table must eventually list all 15 expected series.
 
         This test fails until T14 updates the README to include all series.
         It is a documentation completeness gate, not a registry gate.

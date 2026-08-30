@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from skilllint.rules import (
+    ag_series as ag_series,
     as_series as as_series,
     cu_series as cu_series,
     cx_series as cx_series,

@@ -53,7 +53,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from ruamel.yaml import YAML, YAMLError
 from ruamel.yaml.scalarstring import DoubleQuotedScalarString
 
-import skilllint.rules  # ruff: ignore[unused-import] — ensures all 14 series modules register into RULE_REGISTRY
+import skilllint.rules  # ruff: ignore[unused-import] — ensures all 15 series modules register into RULE_REGISTRY
 from skilllint.adapters import PlatformAdapter, load_adapters, matches_file
 from skilllint.adapters.claude_code import ClaudeCodeAdapter
 from skilllint.cli_docs import docs_app
@@ -63,6 +63,7 @@ from skilllint.record_export import (
     make_recording_console as _make_recording_console,
 )
 from skilllint.rule_registry import rule_authority, rule_reference
+from skilllint.rules.ag_series import check_ag001, check_ag002, check_ag003
 from skilllint.rules.as_series import run_as_series
 from skilllint.rules.fm_series import check_fm001, check_fm004, check_fm007, check_fm010
 from skilllint.rules.hk_series import (
@@ -385,6 +386,11 @@ class ErrorCode(StrEnum):
     # Plugin Agent Frontmatter (PA001)
     PA001 = "PA001"  # Plugin agent: hooks/mcpServers/permissionMode unsupported per Anthropic (ignored at load)
 
+    # Agent frontmatter (AG001-AG003)
+    AG001 = "AG001"  # Agent tools entries all resolve to nothing
+    AG002 = "AG002"  # Agent MCP server reference is unknown or incorrectly cased
+    AG003 = "AG003"  # Agent skills value contains runtime-ignored entries
+
     # Cursor adapter (CU001-CU002)
     CU001 = "CU001"  # Required field missing from .mdc frontmatter
     CU002 = "CU002"  # Unknown field in .mdc frontmatter (additionalProperties is false)
@@ -442,6 +448,7 @@ PR001, PR002, PR003, PR004, PR005 = (
     ErrorCode.PR005,
 )
 PA001 = ErrorCode.PA001
+AG001, AG002, AG003 = ErrorCode.AG001, ErrorCode.AG002, ErrorCode.AG003
 
 # ============================================================================
 # VALIDATOR OWNERSHIP
@@ -1311,6 +1318,26 @@ def _check_list_valued_tool_fields(
     warnings.extend(check_fm007(data, sentinel_path, "skill"))
 
 
+def _check_agent_tools_and_skills_fields(
+    data: dict[str, YamlValue], path: Path, errors: list[ValidationIssue], warnings: list[ValidationIssue]
+) -> None:
+    """Append AG001-AG003 issues for agent frontmatter (tools/disallowedTools/skills).
+
+    Only called for ``FileType.AGENT``. Reads the raw parsed dict so a
+    YAML-list ``tools``/``skills`` value is inspected before
+    ``AgentFrontmatter``'s own field-level CSV coercion of ``tools``/
+    ``disallowedTools``.
+
+    Args:
+        data: Parsed frontmatter dict.
+        path: Path to the agent file (AG002 uses it to discover MCP server config).
+        errors: Mutable list to append error issues to.
+        warnings: Mutable list to append warning issues to.
+    """
+    for issue in (*check_ag001(data), *check_ag002(data, path), *check_ag003(data)):
+        (errors if issue.severity == "error" else warnings).append(issue)
+
+
 def _check_name_field_format(
     data: dict[str, YamlValue],
     path: Path,
@@ -2085,6 +2112,8 @@ class FrontmatterValidator:
         _check_list_valued_tool_fields(data, errors, warnings)
         _check_name_field_format(data, path, file_type, errors, warnings)
         _check_skill_directory_name(path, file_type, errors)
+        if file_type == FileType.AGENT:
+            _check_agent_tools_and_skills_fields(data, path, errors, warnings)
 
         hooks_value = data.get("hooks")
         if isinstance(hooks_value, dict):
@@ -2208,8 +2237,8 @@ class FrontmatterValidator:
         fixes = list(colon_fixes)
         if file_type == FileType.SKILL and file_path is not None:
             normalized_dict = fix_skill_name_field(normalized_dict, file_path, fixes)
-        # Restore the original `skills` value so model_validate/model_dump coercion
-        # (list → CSV string via frontmatter_core) never rewrites the field.
+        # Both frontmatter models expose runtime-friendly views of `skills`,
+        # but --fix must preserve its parsed value and scalar/sequence/null shape.
         if "skills" in original_data:
             normalized_dict["skills"] = original_data["skills"]
         tool_fields = {"tools", "disallowedTools", "allowed-tools"}

@@ -231,6 +231,47 @@ def test_as008_case_mismatch_with_discovered_server_produces_error(tmp_path: pat
     assert "fix" in as008[0]
 
 
+def test_as008_bare_server_grant_has_suffix_safe_correction(tmp_path: pathlib.Path) -> None:
+    """A bare server grant must not acquire a dangling ``__`` in its fix."""
+    _write_mcp_json(tmp_path, "Ref")
+    skill_md = _make_skill_with_tools(tmp_path, "allowed-tools: mcp__ref")
+
+    as008 = _violations_with_code(check_skill_md(skill_md), "AS008")
+
+    assert len(as008) == 1
+    assert "Did you mean 'mcp__Ref'?" in as008[0]["message"]
+    assert as008[0]["fix"] == "Replace 'mcp__ref' with 'mcp__Ref'."
+
+
+def test_as008_unscoped_wildcard_is_reported_as_unknown_server(tmp_path: pathlib.Path) -> None:
+    """``mcp__*`` on SKILL.md has no AG001 equivalent -- AS008 must still flag it.
+
+    Regression test for PR #147 review thread PRRT_kwDORXxKvc6dgksD: the
+    ``analyze_mcp_tool_reference`` extraction shared by AS008 and AG002 briefly
+    silenced this case for both callers. AG002 is right to skip it (AG001 owns
+    "does this wildcard resolve" for agent files), but SKILL.md's `allowed-tools`
+    has no such sibling rule, so AS008 must keep reporting it exactly as it did
+    before the shared extraction (see ``git show 728d7ae:.../as_series.py``).
+    """
+    skill_md = _make_skill_with_tools(tmp_path, "allowed-tools: mcp__*")
+    as008 = _violations_with_code(check_skill_md(skill_md), "AS008")
+    assert as008 != [], "AS008 must report 'mcp__*' as an unknown server on SKILL.md"
+    assert as008[0]["severity"] == "warning"
+    assert "*" in as008[0]["message"]
+
+
+def test_as008_scoped_wildcard_still_checks_server_casing(tmp_path: pathlib.Path) -> None:
+    """Only the server segment is skipped; a wildcard suffix remains valid."""
+    _write_mcp_json(tmp_path, "Ref")
+    skill_md = _make_skill_with_tools(tmp_path, "allowed-tools: mcp__ref__*")
+
+    as008 = _violations_with_code(check_skill_md(skill_md), "AS008")
+
+    assert len(as008) == 1
+    assert "Did you mean 'mcp__Ref__*'?" in as008[0]["message"]
+    assert as008[0]["fix"] == "Replace 'mcp__ref__' with 'mcp__Ref__'."
+
+
 def test_as008_unknown_server_not_in_any_config_produces_warning(tmp_path: pathlib.Path):
     """MCP tool referencing a server absent from all config files produces AS008 warning."""
     # No .mcp.json written — server is entirely unknown

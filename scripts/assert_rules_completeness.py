@@ -32,7 +32,8 @@ import subprocess
 import sys
 
 # MIN_REGISTERED_SERIES is re-exported from skilllint.rules._constants.
-# Source: P038 architect spec section 8 -- 14 series total.
+# Sources: P038 architect spec section 8 (14 series) and issue #132 (AG, the
+# fifteenth series).
 from skilllint.rules import MIN_REGISTERED_SERIES
 
 
