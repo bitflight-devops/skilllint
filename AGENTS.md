@@ -61,15 +61,6 @@ Before declaring success, confirm:
 
 # Project-specific: skilllint
 
-## Writing output
-
-Write in ASD-STE100 structure: one instruction per sentence, active voice,
-present tense, no synonyms for the same concept. Keep procedural sentences to
-20 words and descriptive sentences to 25.
-
-Put the bottom line first. After each task, state what the user can act on
-before you give the supporting detail.
-
 ## Verifying a change
 
 ```sh
