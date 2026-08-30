@@ -680,6 +680,7 @@ Absolute path to the repository root.
 
 ```python
 from skilllint.vendor_io import PROJECT_ROOT
+
 print(PROJECT_ROOT)  # /path/to/agentskills-linter
 ```
 
@@ -695,6 +696,7 @@ Vendor documentation directory inside `.claude/`.
 
 ```python
 from skilllint.vendor_io import VENDOR_DIR
+
 print(VENDOR_DIR)  # /path/to/agentskills-linter/.claude/vendor
 ```
 
@@ -710,6 +712,7 @@ Per-source cached documents directory.
 
 ```python
 from skilllint.vendor_io import SOURCES_DIR
+
 print(SOURCES_DIR)  # /path/to/agentskills-linter/.claude/vendor/sources
 ```
 

@@ -110,9 +110,7 @@ GIT_PLATFORMS = [
 ]
 
 DOC_SITE_PLATFORMS = [
-    DocSitePlatform("cursor", [
-        DocPage("https://cursor.com/docs/context/rules", "rules.md"),
-    ]),
+    DocSitePlatform("cursor", [DocPage("https://cursor.com/docs/context/rules", "rules.md")])
     # ...
 ]
 ```

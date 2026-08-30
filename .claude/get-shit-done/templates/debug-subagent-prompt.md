@@ -53,11 +53,7 @@ Create: .planning/debug/{slug}.md
 
 **From /gsd:debug:**
 ```python
-Task(
-  prompt=filled_template,
-  subagent_type="gsd-debugger",
-  description="Debug {slug}"
-)
+Task(prompt=filled_template, subagent_type="gsd-debugger", description="Debug {slug}")
 ```
 
 **From diagnose-issues (UAT):**

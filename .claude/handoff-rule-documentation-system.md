@@ -57,7 +57,10 @@ Create `packages/skilllint/rules/fm_series.py` with 10 `@skilllint_rule` decorat
     severity="error",  # or "warning" — see severity classification
     category="frontmatter",
     platforms=["agentskills"],
-    authority={"origin": "anthropic.com", "reference": "https://code.claude.com/docs/en/skills.md#frontmatter-reference"},
+    authority={
+        "origin": "anthropic.com",
+        "reference": "https://code.claude.com/docs/en/skills.md#frontmatter-reference",
+    },
 )
 def check_fm001(frontmatter, path, file_type):
     """## FM001 — Missing required frontmatter field
