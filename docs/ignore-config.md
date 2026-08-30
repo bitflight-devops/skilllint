@@ -75,7 +75,7 @@ For files inside a plugin (a directory containing `.claude-plugin/plugin.json`),
   "ignore": {
     "": ["PA001"],
     "agents/generated": ["FM004", "FM007"],
-    "skills/vendor": ["SK006", "AS005"]
+    "skills/vendor": ["SK006", "SK007"]
   }
 }
 ```

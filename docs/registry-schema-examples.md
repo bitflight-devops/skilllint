@@ -43,7 +43,9 @@ An enumerated set of valid values. The assertion is "this set of strings is the 
 }
 ```
 
-### HK003.valid_hook_types
+### HK003.valid_hook_types (NOT SHIPPED AS A CLAIM)
+
+Kept here as a worked `enum_set` example. See the note below it.
 
 ```json
 {
@@ -79,6 +81,19 @@ An enumerated set of valid values. The assertion is "this set of strings is the 
   }
 }
 ```
+
+`packages/skilllint/schemas/provenance-registry.json` does **not** ship this
+claim. Line 11 of `design-rule-provenance-registry.md` already says why: "no
+file enumerates the complete valid set". The enforced set is `{command, http,
+prompt, agent}`, and the hook-development section lists `command` and `http`
+only, so a comparison against it would either mismatch on every run or attribute
+`prompt` and `agent` to a page that does not mention them. HK003 is recorded in
+`opinion-catalog.json` instead, and moves to a claim if a vendor document ever
+enumerates the set.
+
+The shape above is still the right shape for an `enum_set` claim — that is why
+it is kept. The lesson is that an `enum_set` claim needs a source that
+enumerates the *whole* set, not one that happens to mention some members.
 
 ### FM007.tool_field_names
 
@@ -121,11 +136,11 @@ An enumerated set of valid values. The assertion is "this set of strings is the 
 
 A single value constraint. The assertion is "this field has this specific limit/value."
 
-### AS001.max_name_length
+### FM010.max_name_length
 
 ```json
 {
-  "rule_code": "AS001",
+  "rule_code": "FM010",
   "claim_name": "max_name_length",
   "description": "Maximum character length for skill names",
   "claim_type": "scalar",
@@ -160,7 +175,7 @@ A single value constraint. The assertion is "this field has this specific limit/
 }
 ```
 
-Note: For AS001, the `maxLength` claim has direct provenance through the schema JSON (the schema itself is the authority, fetched by `fetch_spec_schema.py`). The regex pattern and consecutive-hyphen constraints are classified as opinions because they have no vendor source (see opinion catalog).
+Note: For FM010, the `maxLength` claim has direct provenance through the schema JSON (the schema itself is the authority, fetched by `fetch_spec_schema.py`). The regex pattern and consecutive-hyphen constraints are classified as opinions because they have no vendor source (see opinion catalog).
 
 ## Claim type: field_set
 
@@ -249,13 +264,13 @@ that turned out to contradict the runtime. That is the case for the provenance
 registry rather than an argument against recording opinions -- but an opinion
 must be labelled as one, not shipped as an error with a spec anchor attached.
 
-### AS001.name_pattern (partial opinion)
+### FM010.name_pattern (partial opinion)
 
 ```json
 {
-  "rule_code": "AS001",
+  "rule_code": "FM010",
   "description": "Skill name must match ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ with no consecutive hyphens",
-  "rationale": "The maxLength=64 constraint is schema-backed (see provenance registry AS001.max_name_length). The regex pattern and consecutive-hyphen rule have no vendor source. They enforce a stricter convention than the spec requires.",
+  "rationale": "The maxLength=64 constraint is schema-backed (see provenance registry FM010.max_name_length). The regex pattern and consecutive-hyphen rule have no vendor source. They enforce a stricter convention than the spec requires.",
   "constraint": "_NAME_RE = re.compile(r\"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$\"), _CONSECUTIVE_HYPHENS_RE = re.compile(r\"--\")",
   "references": [
     "Schema maxLength=64 in agentskills_io/v1.json, cursor/v1.json, codex/v1.json (backed -- see provenance registry)"
@@ -354,8 +369,8 @@ A complete `provenance-registry.json` with all claims identified in the provenan
       },
       "x-audited": { "date": "2026-03-23", "source": ".claude/vendor/claude_code/plugins/plugin-dev/skills/plugin-structure/SKILL.md" }
     },
-    "AS001.max_name_length": {
-      "rule_code": "AS001",
+    "FM010.max_name_length": {
+      "rule_code": "FM010",
       "claim_name": "max_name_length",
       "description": "Maximum character length for skill names",
       "claim_type": "scalar",

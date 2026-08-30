@@ -62,9 +62,9 @@ from skilllint.record_export import (
     export_recording as _export_recording,
     make_recording_console as _make_recording_console,
 )
-from skilllint.rule_registry import rule_reference
+from skilllint.rule_registry import rule_authority, rule_reference
 from skilllint.rules.as_series import run_as_series
-from skilllint.rules.fm_series import check_fm004, check_fm007, check_fm010
+from skilllint.rules.fm_series import check_fm001, check_fm004, check_fm007, check_fm010
 from skilllint.rules.hk_series import (
     check_hk002,
     check_hk003,
@@ -98,7 +98,7 @@ from skilllint.rules.pr_series import (
     find_actual_capabilities,
     parse_registered_paths,
 )
-from skilllint.rules.sk_series import check_sk001, check_sk002, check_sk003, check_sk004, check_sk005
+from skilllint.rules.sk_series import check_sk004, check_sk005
 from skilllint.rules.sl_series import check_sl001, iter_symlinks
 from skilllint.rules.tc_series import check_tc001
 from skilllint.scan_runtime import ScanContext
@@ -331,10 +331,8 @@ class ErrorCode(StrEnum):
     FM009 = "FM009"  # Unquoted description with colons
     FM010 = "FM010"  # Name pattern invalid (not lowercase-hyphens)
 
-    # Skill (SK001-SK008)
-    SK001 = "SK001"  # Name contains uppercase characters
-    SK002 = "SK002"  # Name contains underscores (use hyphens)
-    SK003 = "SK003"  # Name has leading/trailing/consecutive hyphens
+    # Skill (SK004-SK009)
+
     SK004 = "SK004"  # Description too short (minimum 20 characters)
     SK005 = "SK005"  # Description missing trigger phrases
     SK006 = "SK006"  # Token count exceeds TOKEN_WARNING_THRESHOLD
@@ -375,9 +373,6 @@ class ErrorCode(StrEnum):
     # Symlink (SL001)
     SL001 = "SL001"  # Symlink target has trailing whitespace/newlines
 
-    # AgentSkills cross-platform (AS004)
-    AS004 = "AS004"  # Unquoted colons in description (auto-fixable style warning)
-
     # Token Count (TC001)
     TC001 = "TC001"  # Token count info (total, frontmatter, body)
 
@@ -412,10 +407,7 @@ FM001, FM002, FM003, FM004, FM005, FM006, FM007, FM009, FM010 = (
     ErrorCode.FM009,
     ErrorCode.FM010,
 )
-SK001, SK002, SK003, SK004, SK005, SK006, SK007, SK008, SK009 = (
-    ErrorCode.SK001,
-    ErrorCode.SK002,
-    ErrorCode.SK003,
+SK004, SK005, SK006, SK007, SK008, SK009 = (
     ErrorCode.SK004,
     ErrorCode.SK005,
     ErrorCode.SK006,
@@ -497,7 +489,7 @@ VALIDATOR_OWNERSHIP: dict[str, ValidatorOwnership] = {
 # Downgraded to warning (runtime-accepted patterns):
 #   FM004 — multiline YAML (|, >, |-, >-) accepted by Claude Code runtime
 #   FM007 — tools field as YAML array accepted by Claude Code runtime
-#   AS004 — unquoted colons in description valid in proper YAML context
+
 # Evidence: Official repos (claude-plugins-official, skills, claude-code-plugins)
 #   contain these patterns and Claude Code runtime accepts them.
 
@@ -672,13 +664,11 @@ class ValidationPolicy:
 
 
 DEFAULT_THRESHOLDS: dict[str, int] = {"SK006": TOKEN_WARNING_THRESHOLD, "SK007": TOKEN_ERROR_THRESHOLD}
-# Threshold keys must map to an implemented warning/error band. AS005 measures
-# the same SKILL.md body token count as SK006/SK007 but has no threshold plumbing
-# of its own, so it is not a configurable threshold key (PR #97 review).
+# Threshold keys must map to an implemented warning/error band.
 _THRESHOLD_POLICY_RULES = frozenset({"SK006", "SK007"})
-# Severity may be reconfigured for the token-band rules including AS005, which
-# shares the band and can legitimately be downgraded per-plugin.
-_SEVERITY_POLICY_RULES = frozenset({"SK006", "SK007", "AS005"})
+# Severity may be reconfigured for the token-band rules. AS005 shared this band
+# and was listed here until it was retired into SK006/SK007.
+_SEVERITY_POLICY_RULES = frozenset({"SK006", "SK007"})
 _VALID_SEVERITIES = frozenset({"warning", "info"})
 
 _SKILLLINT_CONFIG_FILENAME = ".skilllint.json"
@@ -1322,26 +1312,50 @@ def _check_list_valued_tool_fields(
     warnings.extend(check_fm007(data, sentinel_path, "skill"))
 
 
-def _check_skill_name_and_directory(
+def _check_name_field_format(
     data: dict[str, YamlValue],
     path: Path,
     file_type: FileType,
     errors: list[ValidationIssue],
     warnings: list[ValidationIssue],
 ) -> None:
-    """Validate skill name field and directory name for SKILL.md files.
+    """Emit FM010 for the ``name`` field on any frontmatter-bearing file type.
+
+    Runs for skills, agents and commands alike. ``SkillFrontmatter`` and
+    ``AgentFrontmatter`` declare ``name`` with the same pattern constraint, so
+    for those types the Pydantic path usually reports FM010 first and the
+    duplicate guard below suppresses a second copy. ``CommandFrontmatter``
+    declares no ``name`` field (it is accepted as an extra), so this call is the
+    only FM010 source for ``commands/*.md``.
 
     Args:
         data: Parsed frontmatter dict.
-        path: Path to SKILL.md file.
+        path: Path to the file being validated.
         file_type: Detected file type.
         errors: Mutable list to append errors to.
         warnings: Mutable list to append warnings to.
     """
+    if data.get("name") is None or any(issue.code == FM010 for issue in (*errors, *warnings)):
+        return
+
+    for issue in check_fm010(data, path, file_type.value):
+        (errors if issue.severity == "error" else warnings).append(issue)
+
+
+def _check_skill_directory_name(path: Path, file_type: FileType, errors: list[ValidationIssue]) -> None:
+    """Validate the directory name that contains a SKILL.md file (SK008).
+
+    SK008 constrains the directory layout, not the frontmatter, so it stays
+    skill-only while FM010 name-format checking applies to every file type.
+
+    Args:
+        path: Path to SKILL.md file.
+        file_type: Detected file type.
+        errors: Mutable list to append errors to.
+    """
     if file_type != FileType.SKILL or path.name != "SKILL.md":
         return
 
-    skill_name_in_fm = data.get("name")
     skill_dir_name = path.parent.name
 
     if path.parent.parent.name == "skills":
@@ -1357,13 +1371,6 @@ def _check_skill_name_and_directory(
                     suggestion=issue_suggestion,
                 )
             )
-
-    if skill_name_in_fm:
-        for issue in check_fm010(data, path, file_type.value):
-            if issue.severity == "error":
-                errors.append(issue)
-            else:
-                warnings.append(issue)
 
 
 # ============================================================================
@@ -1669,7 +1676,7 @@ class SymlinkTargetValidator:
 
 
 class AsSeriesValidator:
-    """Runs AS-series rules on SKILL.md files.
+    """Runs AS001 and AS006-AS009 rules on SKILL.md files.
 
     AS-series rules enforce the AgentSkills specification, which is a
     cross-harness baseline for skills. It defines ``SKILL.md`` and does not
@@ -1703,12 +1710,6 @@ class AsSeriesValidator:
             error_threshold=thresholds.get("SK007", TOKEN_ERROR_THRESHOLD),
         )
 
-        # AS002 checks that `name` matches the skill's own directory name
-        # (e.g. skills/my-skill/SKILL.md). Agent files are stored directly in
-        # agents/, so their parent is always "agents" — AS002 is not meaningful
-        # for them and would produce false positives on every agent file.
-        if path.name != "SKILL.md":
-            violations = [v for v in violations if v.get("code") != "AS002"]
         issues = [
             ValidationIssue(
                 field=v.get("code", "unknown"),
@@ -1865,6 +1866,36 @@ def _validation_result_with_error(
     return _build_validation_result(errors=errors, warnings=warnings, info=info)
 
 
+def _fm009_recovery_warnings(colon_fields: list[str]) -> list[ValidationIssue]:
+    """Return one FM009 warning per field that only parsed after colon recovery.
+
+    ``safe_load_yaml_with_colon_fix`` quotes unquoted colon values in memory so
+    validation can continue, and returns ``yaml_err=None``. The source file is
+    unchanged and still breaks a plain YAML parse, so the recovery has to be
+    reported rather than swallowed.
+
+    Args:
+        colon_fields: Field names whose values required quoting to parse.
+
+    Returns:
+        One FM009 warning per field; empty when no recovery was needed.
+    """
+    return [
+        ValidationIssue(
+            field=field_name,
+            severity="warning",
+            message=(
+                f"Unquoted value containing a colon in field '{field_name}' breaks YAML parsing "
+                "(parsed here only after quoting it)"
+            ),
+            code=FM009,
+            docs_url=generate_docs_url(FM009),
+            suggestion=f"Quote the value of '{field_name}', or run with --fix",
+        )
+        for field_name in colon_fields
+    ]
+
+
 def _validate_frontmatter_yaml(
     frontmatter_text: str,
     *,
@@ -1885,19 +1916,10 @@ def _validate_frontmatter_yaml(
         validation must stop.
     """
     data, yaml_err, colon_fields, _used_text = safe_load_yaml_with_colon_fix(frontmatter_text)
-    if colon_fields:
-        # AS004: Unquoted colons break YAML parsing, but auto-fixable.
-        # Emit warning and continue with fixed YAML (runtime accepts quoted values).
-        warnings.append(
-            ValidationIssue(
-                field="description",
-                severity="warning",
-                message="Frontmatter contains unquoted colons that break YAML parsing",
-                code=ErrorCode.AS004,
-                docs_url=generate_docs_url(ErrorCode.AS004),
-                suggestion=f"Quote the following field values: {', '.join(colon_fields)}",
-            )
-        )
+    # Recovery keeps validation going, but the file on disk is still invalid
+    # YAML. Report it, or a check-only run reports nothing at all for a source
+    # that only parsed because the colon was quoted for us.
+    warnings.extend(_fm009_recovery_warnings(colon_fields))
 
     if yaml_err is not None:
         result = _validation_result_with_error(
@@ -2051,8 +2073,7 @@ class FrontmatterValidator:
             # SK004 (description length) is emitted exclusively by DescriptionValidator,
             # which calls check_sk004 directly. Emitting it here as well produced
             # duplicate warnings for over-length descriptions.
-            # AS004 check removed — AS-series rules in as_series.py handle
-            # unquoted colon detection; emitting here would cause duplicates.
+            # AS-series rules do not duplicate parser-owned findings.
         except ValidationError as e:
             for err in e.errors():
                 issue = _pydantic_error_to_validation_issue(err)
@@ -2063,7 +2084,8 @@ class FrontmatterValidator:
 
         warnings.extend(check_fm004(data, path, file_type.value, frontmatter_yaml=frontmatter_text))
         _check_list_valued_tool_fields(data, errors, warnings)
-        _check_skill_name_and_directory(data, path, file_type, errors, warnings)
+        _check_name_field_format(data, path, file_type, errors, warnings)
+        _check_skill_directory_name(path, file_type, errors)
 
         hooks_value = data.get("hooks")
         if isinstance(hooks_value, dict):
@@ -2285,13 +2307,20 @@ class FrontmatterValidator:
 
 
 class NameFormatValidator:
-    """Validates skill/agent/command name format.
+    """Repairs skill/agent/command name format (FM010).
 
-    Checks for:
-    - Lowercase characters only (no uppercase)
-    - Hyphens only (no underscores)
-    - No leading/trailing hyphens
-    - No consecutive hyphens
+    Delegates every check to :func:`check_fm010`, the single owner of the
+    name-format rule:
+
+    - Lowercase letters, digits and hyphens only
+    - No leading/trailing hyphens and no consecutive hyphens
+    - 1-64 characters
+    - For SKILL.md, ``name`` matching the parent directory name
+
+    In the CLI this validator runs from ``_get_fixers_for_path`` only, so that
+    FM010 has exactly one reporter (``FrontmatterValidator``) and exactly one
+    fixer (this class). ``validate()`` remains available to callers that want
+    the rule in isolation.
     """
 
     def validate(self, path: Path) -> ValidationResult:
@@ -2340,57 +2369,15 @@ class NameFormatValidator:
                     name = data.get("name")
                     if name is None or not isinstance(name, str):
                         result = ValidationResult(passed=True, errors=errors, warnings=warnings, info=info)
-                    elif not name:
-                        errors.append(
-                            ValidationIssue(
-                                field="name",
-                                severity="error",
-                                message="Name field is empty",
-                                code=SK003,
-                                docs_url=generate_docs_url(SK003),
-                                suggestion=f"Provide a non-empty name using lowercase letters, numbers, and hyphens. Schema: {SKILL_FRONTMATTER_SCHEMA_URL}",
-                            )
-                        )
-                        result = ValidationResult(passed=False, errors=errors, warnings=warnings, info=info)
                     else:
-                        self._check_name_format(name, errors)
+                        file_type = FileType.detect_file_type(path)
+                        for issue in check_fm010(data, path, file_type.value):
+                            (errors if issue.severity == "error" else warnings).append(issue)
                         result = ValidationResult(passed=len(errors) == 0, errors=errors, warnings=warnings, info=info)
 
         return (
             result if result is not None else ValidationResult(passed=True, errors=errors, warnings=warnings, info=info)
         )
-
-    def _check_name_format(self, name: str, errors: list[ValidationIssue]) -> None:
-        """Append format errors for a non-empty name string.
-
-        Delegates to sk_series check_sk001/check_sk002/check_sk003 — the series
-        module is the single source of truth for SK-series rule logic.
-
-        SK003 (generic pattern) only fires when SK001 and SK002 find nothing — the
-        same guard that the original _check_name_format used (``and not errors``).
-
-        Args:
-            name: The name value to check (must be non-empty str).
-            errors: Mutable list to append ValidationIssue objects to.
-        """
-        from pathlib import Path as _Path  # ruff: ignore[import-outside-top-level]
-
-        frontmatter: dict[str, object] = {"name": name}
-        sentinel = _Path()
-        # Coerce through _coerce_validation_issues so that ValidationIssue
-        # instances built inside sk_series (under a possibly distinct module
-        # load path, e.g. ``python -m skilllint.plugin_validator``) are
-        # rebuilt as this module's canonical class. Without this, Pydantic
-        # rejects them with model_type errors when ValidationResult is built.
-        sk001_issues = _coerce_validation_issues(check_sk001(frontmatter, sentinel, "skill"))
-        sk002_issues = _coerce_validation_issues(check_sk002(frontmatter, sentinel, "skill"))
-        errors.extend(sk001_issues)
-        errors.extend(sk002_issues)
-        # SK003 covers structural hyphen issues and the fallback pattern error.
-        # The fallback only fires when no other specific issues were found — mirror
-        # the original guard of ``and not errors`` in the old inline implementation.
-        if not sk001_issues and not sk002_issues:
-            errors.extend(_coerce_validation_issues(check_sk003(frontmatter, sentinel, "skill")))
 
     def can_fix(self) -> bool:
         """Check if validator supports auto-fixing.
@@ -2458,7 +2445,10 @@ class NameFormatValidator:
         data["name"] = fixed_name
         end_match = re.search(r"\n---\s*\n", content[3:])
         body = content[end_match.end() + 3 :] if end_match else ""
-        new_content = f"---\n{_dump_yaml(data)}{body}"
+        # `body` starts after the closing delimiter, so the delimiter has to be
+        # written back explicitly — omitting it left the file with no closing
+        # `---`, which FM003 then reported as missing frontmatter.
+        new_content = f"---\n{_dump_yaml(data)}---\n{body}"
         try:
             path.write_text(new_content, encoding="utf-8")
         except OSError:
@@ -3686,6 +3676,10 @@ def _file_has_frontmatter(path: Path) -> bool:
 # ============================================================================
 
 
+_NAME_BEARING_FILE_TYPES: frozenset[FileType] = frozenset({FileType.SKILL, FileType.AGENT, FileType.COMMAND})
+"""File types whose frontmatter may carry a ``name`` field (FM010 applies)."""
+
+
 def _get_validators_for_path(path: Path) -> list[Validator]:
     """Return validators to run for the given path based on file type.
 
@@ -3698,14 +3692,14 @@ def _get_validators_for_path(path: Path) -> list[Validator]:
     file_type = FileType.detect_file_type(path)
     validators: list[Validator] = [SymlinkTargetValidator()]
 
-    if file_type in {FileType.SKILL, FileType.AGENT, FileType.COMMAND}:
+    if file_type in _NAME_BEARING_FILE_TYPES:
         fm_req = _frontmatter_requirement(path)
         if fm_req == _FrontmatterRequirement.EXEMPT:
             return [SymlinkTargetValidator()]
         if fm_req == _FrontmatterRequirement.REQUIRED or _file_has_frontmatter(path):
             validators.append(FrontmatterValidator())
         if fm_req == _FrontmatterRequirement.REQUIRED or _file_has_frontmatter(path):
-            validators.extend([NameFormatValidator(), DescriptionValidator(file_type=file_type)])
+            validators.append(DescriptionValidator(file_type=file_type))
         validators.append(NamespaceReferenceValidator())
         # AS-series rules enforce the AgentSkills specification, which governs
         # SKILL.md and nothing else. Agent files are a harness extension the
@@ -3731,6 +3725,32 @@ def _get_validators_for_path(path: Path) -> list[Validator]:
         return []
 
     return validators
+
+
+def _get_fixers_for_path(validators: list[Validator], path: Path) -> list[Validator]:
+    """Return validators to invoke for ``--fix`` on the given path.
+
+    A validator that reports a rule and a validator that repairs it need not be
+    the same object. FM010 is reported by ``FrontmatterValidator`` so that each
+    finding has exactly one owner, but ``NameFormatValidator`` holds the only
+    implementation of the FM010 repair — normalising the ``name`` field and
+    renaming a mismatched skill directory. It is therefore appended here as a
+    fix-only participant and deliberately kept out of the reporting pipeline.
+
+    The reporting instances are reused rather than rebuilt: ``FrontmatterValidator``
+    carries FM009 info from ``fix()`` to the following ``validate()`` on
+    ``_pending_fm009_info``, and a fresh instance would drop it.
+
+    Args:
+        validators: Reporting validators already built for this path.
+        path: Path to fix.
+
+    Returns:
+        ``validators`` plus any fix-only validator that applies to this path.
+    """
+    if not validators or FileType.detect_file_type(path) not in _NAME_BEARING_FILE_TYPES:
+        return validators
+    return [*validators, NameFormatValidator()]
 
 
 def _collect_validator_results(
@@ -3873,7 +3893,7 @@ def validate_single_path(
             _logger.debug("Skipping auto-fix for fixture file: %s", path)
         else:
             fixes_applied: list[str] = []
-            for validator in validators:
+            for validator in _get_fixers_for_path(validators, path):
                 if validator.can_fix():
                     try:
                         validator_fixes = validator.fix(path)
@@ -3989,6 +4009,27 @@ def parse_skill_md(path: Path) -> tuple[dict, list[str], str | None, list[str]]:
     return frontmatter_dict, body_lines, yaml_err, colon_fields
 
 
+def _issue_to_violation(issue: ValidationIssue) -> dict:
+    """Convert a ValidationIssue to the violation dict shape used by adapters.
+
+    Attaches the rule's registry authority so that findings from the validator
+    pipeline carry the same provenance as AS-series violations, which build
+    theirs through ``rule_authority`` in ``rules/as_series.py``.
+
+    Args:
+        issue: Issue emitted by a validator.
+
+    Returns:
+        Violation dict with code, severity and message, plus authority when the
+        rule declares one.
+    """
+    violation = {"code": str(issue.code), "severity": str(issue.severity), "message": str(issue.message)}
+    authority = rule_authority(str(issue.code))
+    if authority is not None:
+        violation["authority"] = authority
+    return violation
+
+
 def run_platform_checks(
     path: Path, adapter: PlatformAdapter, *, policy_cache: dict[str, tuple[ValidationPolicy, Path | None]] | None = None
 ) -> list[dict]:
@@ -4032,14 +4073,130 @@ def run_platform_checks(
                 if name == "AsSeriesValidator":
                     continue
                 all_issues = [*vr_result.errors, *vr_result.warnings, *vr_result.info]
-                violations.extend(
-                    {"code": str(issue.code), "severity": str(issue.severity), "message": str(issue.message)}
-                    for issue in all_issues
-                )
+                violations.extend(_issue_to_violation(issue) for issue in all_issues)
         return violations
 
     # Cursor and Codex adapters implement validate() directly
     return list(adapter.validate(path))
+
+
+def _adapter_runs_frontmatter_pipeline(matching: list[PlatformAdapter]) -> bool:
+    """Report whether a selected adapter routes SKILL.md through the validator pipeline.
+
+    Only ``ClaudeCodeAdapter`` does — Cursor validates ``.mdc`` files and Codex
+    validates ``AGENTS.md``/``.rules``, so neither runs ``FrontmatterValidator``
+    over a ``SKILL.md``. Callers use this to decide whether the canonical rule
+    owners still need invoking directly, and whether a generic finding would be
+    a duplicate.
+
+    Args:
+        matching: Adapters selected for this file.
+
+    Returns:
+        True when at least one selected adapter runs the frontmatter pipeline.
+    """
+    return any(isinstance(adapter, ClaudeCodeAdapter) for adapter in matching)
+
+
+def _shared_skill_frontmatter_violations(path: Path, frontmatter: dict, policy: ValidationPolicy | None) -> list[dict]:
+    """Return canonical SKILL.md findings for adapters that skip the pipeline.
+
+    AS001-AS003 and AS005 used to cover name syntax, the directory match, the
+    missing description and the token budget on this path. They were duplicates
+    of FM010, FM001 and SK006/SK007 and were retired, so the canonical owners
+    are invoked here instead. Without this a Cursor or Codex skill, or a
+    ``SKILL.md`` no adapter claims, would be checked by nothing but AS006.
+
+    Args:
+        path: Path to the SKILL.md file.
+        frontmatter: Parsed frontmatter mapping.
+        policy: Resolved per-plugin policy, for the configured token thresholds.
+
+    Returns:
+        Violation dicts, with authority attached where the rule declares one.
+    """
+    # FM001 covers both `name` and `description`, but AS001 already owns name
+    # presence for a SKILL.md on this same path, so only the description claim
+    # (the one AS003 used to carry here) is taken.
+    #
+    # check_fm001 grades a skill description as a warning because skills.md calls
+    # it "Recommended". This path runs only where no adapter applies the Claude
+    # Code reading, and the AgentSkills specification the AS series enforces marks
+    # description Required, which is why AS003 was an error here. Keep that grade
+    # so an invalid file still fails the run.
+    issues = [
+        issue.model_copy(update={"severity": "error"})
+        for issue in check_fm001(frontmatter, path, "skill")
+        if issue.field == "description"
+    ]
+    issues.extend(check_fm010(frontmatter, path, "skill"))
+    complexity = ComplexityValidator().validate(path, policy)
+    issues.extend([*complexity.errors, *complexity.warnings])
+    return [_issue_to_violation(issue) for issue in issues]
+
+
+def _skill_md_violations(
+    path: Path, *, pipeline_runs: bool, policy_cache: dict[str, tuple[ValidationPolicy, Path | None]]
+) -> list[dict]:
+    """Return everything ``validate_file`` reports for a SKILL.md before dispatch.
+
+    Args:
+        path: Path to the SKILL.md file.
+        pipeline_runs: Whether a selected adapter runs the frontmatter pipeline,
+            which decides whether the generic FM002 and the canonical rule
+            owners would be duplicates here.
+        policy_cache: Per-run policy cache, shared so a large scan reads each
+            config once.
+
+    Returns:
+        Violation dicts with any configured severity downgrade applied.
+    """
+    frontmatter_data, body_lines, yaml_err, colon_fields = parse_skill_md(path)
+    violations: list[dict] = []
+
+    # Suppress the generic FM002 only when the pipeline will report it — keying
+    # on whether any adapter matched silenced it for Cursor and Codex, neither
+    # of which validates SKILL.md frontmatter.
+    if yaml_err is not None and not pipeline_runs:
+        violations.append({"code": str(FM002), "severity": "error", "message": f"Invalid YAML frontmatter: {yaml_err}"})
+
+    # Resolve per-plugin policy so --platform validation honors the same
+    # configured thresholds AND severity as the default path (PR #97 review:
+    # the two paths must not lint the same skill differently).
+    policy, policy_root = _resolve_policy(path, policy_cache)
+    violations.extend(
+        run_as_series(
+            path,
+            frontmatter_data,
+            body_lines,
+            warning_threshold=policy.thresholds.get("SK006", TOKEN_WARNING_THRESHOLD),
+            error_threshold=policy.thresholds.get("SK007", TOKEN_ERROR_THRESHOLD),
+        )
+    )
+    if not pipeline_runs:
+        # FM009 has no reporter here either: parse_skill_md recovers the unquoted
+        # colon in memory and returns no YAML error, and FrontmatterValidator —
+        # which normally raises this — never runs for Cursor or Codex.
+        violations.extend(_issue_to_violation(issue) for issue in _fm009_recovery_warnings(colon_fields))
+        violations.extend(_shared_skill_frontmatter_violations(path, frontmatter_data, policy))
+
+    # Suppression applies to every reporter, so the --platform route must honour
+    # the same ignore config as the default path rather than only its thresholds.
+    # _load_policy fills ValidationPolicy.ignore from the same file it reads the
+    # thresholds from, and policy_root is that file's directory.
+    if policy.ignore and policy_root is not None:
+        violations = [v for v in violations if not _is_suppressed(policy.ignore, path, policy_root, str(v.get("code")))]
+
+    if not policy.severity:
+        return violations
+    # Apply configured severity downgrades so --platform matches the
+    # default-path remap.
+    return [
+        {**violation, "severity": configured}
+        if (configured := policy.severity.get(str(violation.get("code")))) in _VALID_SEVERITIES
+        else violation
+        for violation in violations
+    ]
 
 
 def validate_file(
@@ -4076,64 +4233,23 @@ def validate_file(
     else:
         matching = [a for a in adapters.values() if matches_file(a, pure)]
 
-    violations: list[dict] = []
-
     # AS-series rules are cross-platform — they run before the adapter matching
     # guard so that a SKILL.md outside a recognised plugin structure is still
     # checked even when no platform adapter claims the file. They do not extend
     # to agent files: the AgentSkills specification defines SKILL.md only.
-    if is_skill_md(path):
-        frontmatter_data, body_lines, yaml_err, colon_fields = parse_skill_md(path)
-        if colon_fields:
-            violations.append({
-                "code": "AS004",
-                "severity": "warning",
-                "message": f"Description contains unquoted colons that break YAML — quote the following fields: {', '.join(colon_fields)}",
-            })
-        if yaml_err is not None:
-            violations.append({
-                "code": str(FM002),
-                "severity": "error",
-                "message": f"Invalid YAML frontmatter: {yaml_err}",
-            })
-        # Resolve per-plugin policy so --platform validation honors the same
-        # configured thresholds AND severity as the default path (PR #97 review:
-        # the two paths must not lint the same skill differently). Reuse a shared
-        # per-run cache so a 1000-file platform scan reads each config once.
-        policy, _policy_root = _resolve_policy(path, resolved_policy_cache)
-        violations.extend(
-            run_as_series(
-                path,
-                frontmatter_data,
-                body_lines,
-                warning_threshold=policy.thresholds.get("SK006", TOKEN_WARNING_THRESHOLD),
-                error_threshold=policy.thresholds.get("SK007", TOKEN_ERROR_THRESHOLD),
-            )
+    violations: list[dict] = (
+        _skill_md_violations(
+            path, pipeline_runs=_adapter_runs_frontmatter_pipeline(matching), policy_cache=resolved_policy_cache
         )
-        if policy.severity:
-            # Apply configured severity downgrades to the AS-series dict
-            # violations so --platform matches the default-path remap.
-            remapped: list[dict[str, object]] = []
-            for violation in violations:
-                configured = policy.severity.get(str(violation.get("code")))
-                if configured in _VALID_SEVERITIES:
-                    remapped.append({**violation, "severity": configured})
-                else:
-                    remapped.append(violation)
-            violations = remapped
+        if is_skill_md(path)
+        else []
+    )
 
     if not matching:
         return violations
 
-    # Get constraint scopes from the primary adapter for filtering
-    # Validators are filtered by constraint_scopes to support provider-specific rules.
     primary_adapter = matching[0]
-    constraint_scopes = primary_adapter.constraint_scopes()
-    _logger.debug("Validating %s with adapter %s, constraint_scopes=%s", path, primary_adapter.id(), constraint_scopes)
-
-    # Filter validators based on provider constraint scopes
-    sk_validators = _get_validators_for_path(path)
-    sk_validators = filter_validators_by_constraint_scopes(sk_validators, constraint_scopes)
+    _logger.debug("Validating %s with adapter %s", path, primary_adapter.id())
 
     for adapter in matching:
         violations.extend(run_platform_checks(path, adapter, policy_cache=resolved_policy_cache))

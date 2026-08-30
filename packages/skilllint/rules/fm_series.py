@@ -44,6 +44,20 @@ _CONSECUTIVE_HYPHENS_RE = re.compile(r"--")
 # Source: sub-agents.md — max 64 chars implied by same pattern constraint
 _MAX_NAME_LENGTH = 64
 
+# Tool allow/deny field defined by the AgentSkills specification.
+# Source: packages/skilllint/schemas/agentskills_io/v1.json — the schema declares
+# `allowed-tools` and no other tool field. Named separately from the full set so
+# the provenance registry can load exactly the fields this authority defines.
+_AGENTSKILLS_TOOL_FIELD_NAMES: tuple[str, ...] = ("allowed-tools",)
+
+# Tool allow/deny fields Claude Code adds on top of the specification.
+# Source: sub-agents.md — agent frontmatter declares `tools` and `disallowedTools`.
+# Provider-specific, so not drift-checkable against the AgentSkills schema.
+_CLAUDE_CODE_TOOL_FIELD_NAMES: tuple[str, ...] = ("tools", "disallowedTools")
+
+# Every field FM007 inspects, across both sources.
+_TOOL_FIELD_NAMES: tuple[str, ...] = _AGENTSKILLS_TOOL_FIELD_NAMES + _CLAUDE_CODE_TOOL_FIELD_NAMES
+
 
 def _make_issue(
     *,
@@ -92,7 +106,12 @@ def _make_issue(
     severity="warning",  # default severity; FM001 is file-type-aware (see function body)
     category="frontmatter",
     platforms=["agentskills"],
-    authority={"origin": "anthropic.com", "reference": _AGENTS_SPEC_URL},
+    # `reference` omitted: this rule serves skills, agents and commands, whose
+    # frontmatter is defined by different vendor pages, so no single URL is
+    # correct for every finding it emits. The per-context sources stay in the
+    # docstring that `skilllint rule <CODE>` renders, and claim-level provenance
+    # lives in schemas/provenance-registry.json.
+    authority={"origin": "anthropic.com"},
 )
 def check_fm001(frontmatter: dict, path: Path, file_type: str) -> list[ValidationIssue]:
     """## FM001 — Missing required field
@@ -234,7 +253,9 @@ _FM004_DESCRIPTION_BLOCK_SCALAR = re.compile(r"(?m)^description\s*:\s*(?:\|[-+]?
     severity="warning",
     category="frontmatter",
     platforms=["agentskills"],
-    authority={"origin": "anthropic.com", "reference": _SKILLS_SPEC_URL},
+    # No authority: opinion-catalog.json records FM004 as a style preference with
+    # no upstream source — the Claude Code runtime accepts block scalars — so
+    # violations must not carry a vendor origin.
 )
 def check_fm004(
     frontmatter: dict, path: Path, file_type: str, *, frontmatter_yaml: str | None = None
@@ -400,7 +421,7 @@ def check_fm007(frontmatter: dict, path: Path, file_type: str) -> list[Validatio
     <!-- examples: FM007 -->
     """
     issues: list[ValidationIssue] = []
-    for field_name in ("tools", "allowed-tools", "disallowedTools"):
+    for field_name in _TOOL_FIELD_NAMES:
         val = frontmatter.get(field_name)
         if isinstance(val, list):
             issues.append(
@@ -428,11 +449,14 @@ def check_fm007(frontmatter: dict, path: Path, file_type: str) -> list[Validatio
     authority={"origin": "anthropic.com", "reference": _SKILLS_SPEC_URL},
 )
 def check_fm009(frontmatter: dict, path: Path, file_type: str) -> list[ValidationIssue]:
-    """## FM009 — Unquoted value containing colon (auto-fixed)
+    """## FM009 — Unquoted value containing colon
 
-    A frontmatter field value contained an unquoted colon (`:`) which can
-    break YAML parsing. The linter detected and auto-fixed this by wrapping
-    the value in double quotes. This `info` entry reports what was repaired.
+    A frontmatter field value contains an unquoted colon (`:`), which breaks
+    YAML parsing. The linter recovers by quoting the value so validation can
+    continue.
+
+    Reported as a `warning` on a check-only run, where the file on disk is
+    still invalid, and as `info` after `--fix` has quoted the value on disk.
 
     **Source:** YAML specification — colons in unquoted values are interpreted
     as key separators, causing parse errors.
@@ -445,8 +469,9 @@ def check_fm009(frontmatter: dict, path: Path, file_type: str) -> list[Validatio
     ```
 
     Returns:
-        Always an empty list. FM009 is emitted as ``info`` by
-        _queue_fm009_info() after auto-fix; this function exists for rule
+        Always an empty list. FM009 is emitted by
+        ``_fm009_recovery_warnings()`` on a check-only run and by
+        ``_queue_fm009_info()`` after auto-fix; this function exists for rule
         metadata registration only.
 
     <!-- examples: FM009 -->
@@ -464,7 +489,12 @@ def check_fm009(frontmatter: dict, path: Path, file_type: str) -> list[Validatio
     severity="error",
     category="frontmatter",
     platforms=["agentskills"],
-    authority={"origin": "anthropic.com", "reference": _SKILLS_SPEC_URL},
+    # `reference` omitted: this rule serves skills, agents and commands, whose
+    # frontmatter is defined by different vendor pages, so no single URL is
+    # correct for every finding it emits. The per-context sources stay in the
+    # docstring that `skilllint rule <CODE>` renders, and claim-level provenance
+    # lives in schemas/provenance-registry.json.
+    authority={"origin": "anthropic.com"},
 )
 def check_fm010(frontmatter: dict, path: Path, file_type: str) -> list[ValidationIssue]:
     """## FM010 — Name field does not match directory name or violates naming pattern
@@ -534,10 +564,13 @@ def check_fm010(frontmatter: dict, path: Path, file_type: str) -> list[Validatio
     if path.name == "SKILL.md" and not issues:
         dir_name = path.parent.name
         if name != dir_name:
+            # Error, not warning: the AgentSkills specification requires the match
+            # and the retired AS002 graded it an error. FM010 is now its only
+            # owner, so downgrading here would leave an invalid layout passing.
             issues.append(
                 _make_issue(
                     field="name",
-                    severity="warning",
+                    severity="error",
                     message=f"'name' field value '{name}' does not match directory name '{dir_name}'",
                     code="FM010",
                     suggestion=f"Set name: {dir_name} to match the directory name",

@@ -18,7 +18,7 @@ Validate YAML frontmatter in SKILL.md, agent .md, and command .md files.
 | FM006 | error | no | `description` exceeds 1024 characters |
 | FM007 | error | **yes** | `tools`, `allowed-tools`, or `disallowedTools` is a YAML array instead of a comma-separated string |
 | FM009 | error | **yes** | Unquoted colon in `description` or other string field causes YAML parse failure |
-| FM010 | error | **yes** | `name` field does not match the directory name (same as AS002; FM010 is the frontmatter-level check) |
+| FM010 | error | **yes** | Skill `name` syntax, length, pattern, and directory equality |
 
 **Common FM fix:** Run `skilllint check --fix <path>` — FM004, FM007, FM009, FM010 are all auto-fixable.
 
@@ -30,17 +30,14 @@ Validate skill name, description quality, and token budget.
 
 | Rule | Severity | Auto-fix | Description |
 |------|----------|----------|-------------|
-| SK001 | error | **yes** | Skill name is not lowercase kebab-case |
-| SK002 | error | **yes** | Skill name contains underscores (use hyphens) |
-| SK003 | error | **yes** | Skill name has leading/trailing/consecutive hyphens, or name field is empty |
 | SK004 | warning | no | Skill description is very short (< 20 chars); may not trigger auto-invocation |
 | SK005 | warning | no | Skill description lacks trigger phrases ("Use when...", keywords); Claude may not auto-invoke |
-| SK006 | warning | no | (Legacy) Skill is approaching token limit; see AS005 for current thresholds |
-| SK007 | error | no | (Legacy) Skill exceeds token limit; see AS005 for current thresholds |
+| SK006 | warning | no | Skill body is large (over `TOKEN_WARNING_THRESHOLD` tokens); consider splitting |
+| SK007 | error | no | Skill body exceeds token limit (`TOKEN_ERROR_THRESHOLD`); must be split into sub-skills |
 | SK008 | info | no | Skill has no `argument-hint` but appears to accept arguments based on `$ARGUMENTS` usage |
 | SK009 | info | no | Token count report (informational; always emitted with `--verbose`) |
 
-**Token limit fix (AS005):** Move large sections to `skills/<name>/references/<file>.md` and add a link from SKILL.md. Thresholds are `TOKEN_WARNING_THRESHOLD` (warning) and `TOKEN_ERROR_THRESHOLD` (error) — body text only, frontmatter excluded. Run `skilllint rules` to see current values.
+**Token limit fix (SK006/SK007):** Move large sections to `skills/<name>/references/<file>.md` and add a link from SKILL.md. Thresholds are `TOKEN_WARNING_THRESHOLD` (warning) and `TOKEN_ERROR_THRESHOLD` (error) — body text only, frontmatter excluded. Run `skilllint rules` to see current values.
 
 ---
 
@@ -51,14 +48,17 @@ Use `skilllint check --filter <ID> --verbose <path>` to see detailed output for 
 
 | Rule | Severity | Auto-fix | Description |
 |------|----------|----------|-------------|
-| AS001 | error | no | Invalid skill name format — must be lowercase alphanumeric with hyphens, 1–64 chars, no consecutive hyphens, start/end with letter or digit |
-| AS002 | error | **yes** | Skill `name` field does not match the parent directory name |
-| AS003 | error | no | `description` field is missing or empty |
-| AS004 | error | no | `description` contains unquoted colons that break YAML — quote the string to fix |
-| AS005 | warning | no | SKILL.md body exceeds token threshold (`TOKEN_WARNING_THRESHOLD` warning, `TOKEN_ERROR_THRESHOLD` error — body only, frontmatter excluded); split or move content to `references/` |
+| AS001 | error | no | `SKILL.md` declares no `name` field (required by the AgentSkills spec; `skills.md` treats it as optional, so no FM rule covers this) |
 | AS006 | info | no | No evaluation queries file found (optional but recommended) |
+| AS008 | warning | no | MCP tool name casing does not match the referenced server (case is significant) |
+| AS009 | warning | no | Nested skill will not be auto-discovered — skills must be direct children of `skills/` |
 
-**Full detail:** Use `skilllint check --filter <ID> --verbose <path>` (e.g. `skilllint check --filter AS001 --verbose <path>`) to see detailed output for any AS rule.
+**Retired:** AS002–AS005 folded into the FM series (`name` syntax and directory
+equality into FM010, `description` presence into FM001, unquoted colons into
+FM009, body token budget into SK006/SK007). AS007 was deleted outright — see
+`docs/registry-schema-examples.md`.
+
+**Full detail:** Use `skilllint check --filter <ID> --verbose <path>` (e.g. `skilllint check --filter AS006 --verbose <path>`) to see detailed output for any AS rule.
 
 ---
 
@@ -80,7 +80,7 @@ Validate the `references/` directory structure for progressive disclosure.
 
 | Rule | Severity | Auto-fix | Description |
 |------|----------|----------|-------------|
-| PD001 | warning | no | Large skill (approaching AS005 threshold) has no `references/` directory; consider adding one |
+| PD001 | warning | no | Large skill (approaching SK006 token threshold) has no `references/` directory; consider adding one |
 | PD002 | warning | no | `references/` directory exists but is not linked from SKILL.md |
 | PD003 | info | no | Files in `references/` are never referenced in SKILL.md |
 
@@ -195,10 +195,7 @@ Run `skilllint check --fix <path>` to automatically fix:
 - **FM004** — multiline block scalar in description
 - **FM007** — tools / allowed-tools / disallowedTools as YAML array
 - **FM009** — unquoted colon in string field
-- **FM010 / AS002** — name/directory mismatch
-- **SK001** — skill name contains uppercase characters (lowercased)
-- **SK002** — skill name contains underscores (replaced with hyphens)
-- **SK003** — skill name has leading/trailing/consecutive hyphens (normalized)
+- **FM010** — skill name syntax and name/directory mismatch
 - **SL001** — symlink outside plugin directory
 
-All other rules (including AS005 token size, PD, LK, HK series) require manual fixes.
+All other rules (including SK006/SK007 token size, PD, LK, HK series) require manual fixes.

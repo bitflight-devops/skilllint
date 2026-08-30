@@ -661,12 +661,14 @@ description: Skill with mismatched name
         assert "name: correct-name" in content
         assert "name: wrong-name" not in content
 
-    def test_mismatched_name_raises_validation_warning(self, tmp_path: Path) -> None:
-        """Test validation warns when name field doesn't match directory name.
+    def test_mismatched_name_is_an_error(self, tmp_path: Path) -> None:
+        """Test validation errors when name field doesn't match directory name.
 
         Tests: Skill with name: field value different from parent directory
-        How: Create SKILL.md with mismatched name, run validate(), check warning
-        Why: Ensure validator catches name/directory mismatches
+        How: Create SKILL.md with mismatched name, run validate(), check error
+        Why: The AgentSkills specification requires the match. AS002 graded it an
+             error until it was retired into FM010; grading it a warning here
+             would leave an invalid layout passing with no other reporter.
         """
         skill_dir = tmp_path / "actual-dir-name"
         skill_dir.mkdir()
@@ -682,7 +684,7 @@ description: Skill with mismatched name field
         validator = FrontmatterValidator()
         result = validator.validate(skill_md)
 
-        # Mismatch is a warning, not an error — passed should be True
-        assert result.passed is True
-        all_issues = result.warnings + result.errors
-        assert any("name" in issue.field.lower() and "actual-dir-name" in issue.message for issue in all_issues)
+        assert result.passed is False
+        assert any(issue.code == "FM010" and "actual-dir-name" in issue.message for issue in result.errors), (
+            f"Expected an FM010 directory-mismatch error, got: {result.errors}"
+        )

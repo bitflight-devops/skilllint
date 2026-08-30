@@ -207,8 +207,8 @@ skilllint check --platform claude-code plugins/my-plugin
 | Code | Category | Description |
 |---|---|---|
 | FM001–FM010 | Frontmatter | Required fields, valid values, schema compliance (FM008 removed) |
-| SK001–SK009 | Skill | Description quality, token limits, complexity, internal links |
-| AS001–AS009 | AgentSkills | SKILL.md conformance with the AgentSkills open standard (AS007 removed) |
+| SK004–SK009 | Skill | Description quality, token limits, complexity, internal links |
+| AS001, AS006, AS008–AS009 | AgentSkills | SKILL.md conformance with the AgentSkills open standard |
 | LK001 | Links | Broken internal markdown link detection |
 | PD001–PD003 | Progressive disclosure | Directory structure for references/, examples/, scripts/ |
 | PL001–PL006 | Plugin | Structure, manifest correctness, marketplace layout, subprocess safety |
@@ -281,7 +281,7 @@ Options:
 Usage: skilllint rule [OPTIONS] RULE_ID
 
 Arguments:
-  rule_id  Rule identifier (e.g., "SK001", "FM002", "AS001")  [required]
+  rule_id  Rule identifier (e.g., "SK004", "FM002", "AS001")  [required]
 
 Options:
   --record PATH  Record terminal output to SVG or HTML file

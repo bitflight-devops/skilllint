@@ -1,4 +1,4 @@
-"""SK-series skill quality rules (SK001-SK009).
+"""SK-series skill quality rules (SK004-SK009).
 
 Each function is decorated with @skilllint_rule and returns a list of
 ValidationIssue objects. Functions receive the parsed frontmatter dict,
@@ -8,9 +8,6 @@ Rule IDs and default severities:
     +-------+-----------------------------------------------------------+-----------+
     | ID    | Summary                                                   | Severity  |
     +-------+-----------------------------------------------------------+-----------+
-    | SK001 | Skill name contains uppercase characters                  | error     |
-    | SK002 | Skill name contains underscores (use hyphens)             | error     |
-    | SK003 | Skill name has invalid format                             | error     |
     | SK004 | Description too short or exceeds recommended length       | warning   |
     | SK005 | Description missing trigger phrases                       | warning   |
     | SK006 | Skill body exceeds token warning threshold                | warning   |
@@ -51,252 +48,6 @@ _DIR_CONVENTION_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 
 
 # ---------------------------------------------------------------------------
-# SK001 — Name contains uppercase characters
-# ---------------------------------------------------------------------------
-
-
-@skilllint_rule(
-    "SK001",
-    severity="error",
-    category="skill",
-    platforms=["agentskills"],
-    authority={"origin": "anthropic.com", "reference": _SKILLS_SPEC_URL},
-)
-def check_sk001(frontmatter: dict[str, object], path: Path, file_type: str) -> list[ValidationIssue]:
-    """## SK001 — Skill name contains uppercase characters
-
-    The `name` field in the frontmatter must use only lowercase letters.
-    Uppercase characters violate the skill naming convention and may cause
-    discovery or resolution failures on case-sensitive systems.
-
-    **Source:** skills.md — "name — Lowercase letters, numbers, and hyphens only (max 64 characters)."
-
-    **Fix:** Convert the name to lowercase:
-
-    ```yaml
-    # Before
-    name: MySkill
-
-    # After
-    name: my-skill
-    ```
-
-    Returns:
-        List containing one error issue when the name contains uppercase
-        characters; empty otherwise.
-
-    <!-- examples: SK001 -->
-    """
-    # Deferred import to break circular dependency:
-    # plugin_validator imports rules/, so rules/ cannot import plugin_validator at module level.
-    from skilllint.plugin_validator import ValidationIssue  # noqa: PLC0415
-
-    name_val = frontmatter.get("name")
-    if not isinstance(name_val, str) or not name_val:
-        return []
-
-    if any(c.isupper() for c in name_val):
-        return [
-            ValidationIssue(
-                field="name",
-                severity="error",
-                message="Name contains uppercase characters",
-                code="SK001",
-                docs_url=rule_reference("SK001"),
-                suggestion=f"Use lowercase only (e.g., '{name_val.lower()}' not '{name_val}')",
-            )
-        ]
-    return []
-
-
-# ---------------------------------------------------------------------------
-# SK002 — Name contains underscores
-# ---------------------------------------------------------------------------
-
-
-@skilllint_rule(
-    "SK002",
-    severity="error",
-    category="skill",
-    platforms=["agentskills"],
-    authority={"origin": "anthropic.com", "reference": _SKILLS_SPEC_URL},
-)
-def check_sk002(frontmatter: dict[str, object], path: Path, file_type: str) -> list[ValidationIssue]:
-    """## SK002 — Skill name contains underscores
-
-    The `name` field must use hyphens (`-`) as word separators, not
-    underscores (`_`). Underscores are not part of the allowed character
-    set for skill names.
-
-    **Source:** skills.md — "name — Lowercase letters, numbers, and hyphens only (max 64 characters)."
-
-    **Fix:** Replace underscores with hyphens:
-
-    ```yaml
-    # Before
-    name: my_skill_name
-
-    # After
-    name: my-skill-name
-    ```
-
-    Returns:
-        List containing one error issue when the name contains underscores;
-        empty otherwise.
-
-    <!-- examples: SK002 -->
-    """
-    # Deferred import to break circular dependency:
-    # plugin_validator imports rules/, so rules/ cannot import plugin_validator at module level.
-    from skilllint.plugin_validator import ValidationIssue  # noqa: PLC0415
-
-    name_val = frontmatter.get("name")
-    if not isinstance(name_val, str) or not name_val:
-        return []
-
-    if "_" in name_val:
-        return [
-            ValidationIssue(
-                field="name",
-                severity="error",
-                message="Name contains underscores (use hyphens instead)",
-                code="SK002",
-                docs_url=rule_reference("SK002"),
-                suggestion=f"Replace underscores with hyphens: '{name_val.replace('_', '-')}'",
-            )
-        ]
-    return []
-
-
-# ---------------------------------------------------------------------------
-# SK003 — Name has invalid format (leading/trailing/consecutive hyphens,
-#         empty name, or generic pattern mismatch)
-# ---------------------------------------------------------------------------
-
-
-@skilllint_rule(
-    "SK003",
-    severity="error",
-    category="skill",
-    platforms=["agentskills"],
-    authority={"origin": "anthropic.com", "reference": _SKILLS_SPEC_URL},
-)
-def check_sk003(frontmatter: dict[str, object], path: Path, file_type: str) -> list[ValidationIssue]:
-    """## SK003 — Skill name has invalid format
-
-    The `name` field must not start or end with a hyphen, must not contain
-    consecutive hyphens, and must not be empty. The allowed pattern is
-    `^[a-z0-9]+(-[a-z0-9]+)*$`.
-
-    **Source:** skills.md — "name — Lowercase letters, numbers, and hyphens only (max 64 characters)."
-
-    **Fix:** Correct the name to conform to the pattern:
-
-    ```yaml
-    # Before (leading hyphen)
-    name: -my-skill
-
-    # After
-    name: my-skill
-    ```
-
-    Returns:
-        List of error issues for each format violation found; empty when the
-        name is absent (SK001/FM001 covers that), or valid.
-
-    <!-- examples: SK003 -->
-    """
-    # Deferred import to break circular dependency:
-    # plugin_validator imports rules/, so rules/ cannot import plugin_validator at module level.
-    from skilllint._spec_constants import MAX_NAME_LENGTH  # noqa: PLC0415
-    from skilllint.plugin_validator import ValidationIssue  # noqa: PLC0415
-
-    name_val = frontmatter.get("name")
-    if not isinstance(name_val, str):
-        return []
-
-    issues: list[ValidationIssue] = []
-
-    if not name_val:
-        issues.append(
-            ValidationIssue(
-                field="name",
-                severity="error",
-                message="Name field is empty",
-                code="SK003",
-                docs_url=rule_reference("SK003"),
-                suggestion="Provide a non-empty name using lowercase letters, numbers, and hyphens",
-            )
-        )
-        return issues
-
-    # Source: agentskills.io spec / _spec_constants.MAX_NAME_LENGTH = 64.
-    # FM010 enforces the same 64-char ceiling; SK003 must too.
-    if len(name_val) > MAX_NAME_LENGTH:
-        issues.append(
-            ValidationIssue(
-                field="name",
-                severity="error",
-                message=f"Name exceeds maximum length of {MAX_NAME_LENGTH} characters (got {len(name_val)})",
-                code="SK003",
-                docs_url=rule_reference("SK003"),
-                suggestion=f"Shorten the name to {MAX_NAME_LENGTH} characters or less",
-            )
-        )
-        return issues
-
-    if name_val.startswith("-"):
-        issues.append(
-            ValidationIssue(
-                field="name",
-                severity="error",
-                message="Name has leading hyphen",
-                code="SK003",
-                docs_url=rule_reference("SK003"),
-                suggestion=f"Remove leading hyphen: '{name_val.lstrip('-')}'",
-            )
-        )
-
-    if name_val.endswith("-"):
-        issues.append(
-            ValidationIssue(
-                field="name",
-                severity="error",
-                message="Name has trailing hyphen",
-                code="SK003",
-                docs_url=rule_reference("SK003"),
-                suggestion=f"Remove trailing hyphen: '{name_val.rstrip('-')}'",
-            )
-        )
-
-    if "--" in name_val:
-        issues.append(
-            ValidationIssue(
-                field="name",
-                severity="error",
-                message="Name has consecutive hyphens",
-                code="SK003",
-                docs_url=rule_reference("SK003"),
-                suggestion="Use single hyphens only (e.g., 'test-skill' not 'test--skill')",
-            )
-        )
-
-    if not issues and not _NAME_RE.match(name_val):
-        issues.append(
-            ValidationIssue(
-                field="name",
-                severity="error",
-                message="Name format invalid",
-                code="SK003",
-                docs_url=rule_reference("SK003"),
-                suggestion="Use lowercase letters, numbers, and hyphens only (e.g., 'my-skill-name')",
-            )
-        )
-
-    return issues
-
-
-# ---------------------------------------------------------------------------
 # SK004 — Description too short or exceeds recommended length
 # ---------------------------------------------------------------------------
 
@@ -312,7 +63,8 @@ _MIN_DESCRIPTION_LENGTH = 20
     severity="warning",
     category="skill",
     platforms=["agentskills"],
-    authority={"origin": "anthropic.com", "reference": _SKILLS_SPEC_URL},
+    # No authority: opinion-catalog.json records this constraint as a lint
+    # opinion with no upstream source, so violations must not carry a vendor origin.
 )
 def check_sk004(frontmatter: dict[str, object], path: Path, file_type: str) -> list[ValidationIssue]:
     """## SK004 — Description too short or exceeds recommended length
@@ -406,7 +158,8 @@ _REQUIRED_TRIGGER_PHRASES = [
     severity="warning",
     category="skill",
     platforms=["agentskills"],
-    authority={"origin": "anthropic.com", "reference": _SKILLS_SPEC_URL},
+    # No authority: opinion-catalog.json records this constraint as a lint
+    # opinion with no upstream source, so violations must not carry a vendor origin.
 )
 def check_sk005(frontmatter: dict[str, object], path: Path, file_type: str) -> list[ValidationIssue]:
     """## SK005 — Description missing trigger phrases
@@ -474,7 +227,8 @@ def check_sk005(frontmatter: dict[str, object], path: Path, file_type: str) -> l
     severity="warning",
     category="skill",
     platforms=["agentskills"],
-    authority={"origin": "anthropic.com", "reference": _SKILLS_SPEC_URL},
+    # No authority: opinion-catalog.json records this constraint as a lint
+    # opinion with no upstream source, so violations must not carry a vendor origin.
 )
 def check_sk006(frontmatter: dict[str, object], path: Path, file_type: str) -> list[ValidationIssue]:
     """## SK006 — Skill body exceeds token warning threshold
@@ -510,7 +264,8 @@ def check_sk006(frontmatter: dict[str, object], path: Path, file_type: str) -> l
     severity="error",
     category="skill",
     platforms=["agentskills"],
-    authority={"origin": "anthropic.com", "reference": _SKILLS_SPEC_URL},
+    # No authority: opinion-catalog.json records this constraint as a lint
+    # opinion with no upstream source, so violations must not carry a vendor origin.
 )
 def check_sk007(frontmatter: dict[str, object], path: Path, file_type: str) -> list[ValidationIssue]:
     """## SK007 — Skill body exceeds token error threshold
@@ -616,14 +371,4 @@ def check_sk009(frontmatter: dict[str, object], path: Path, file_type: str) -> l
     return []
 
 
-__all__ = [
-    "check_sk001",
-    "check_sk002",
-    "check_sk003",
-    "check_sk004",
-    "check_sk005",
-    "check_sk006",
-    "check_sk007",
-    "check_sk008",
-    "check_sk009",
-]
+__all__ = ["check_sk004", "check_sk005", "check_sk006", "check_sk007", "check_sk008", "check_sk009"]

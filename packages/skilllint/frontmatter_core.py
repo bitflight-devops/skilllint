@@ -44,6 +44,8 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from skilllint.limits import DESCRIPTION_MAX_LENGTH
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -51,11 +53,14 @@ if TYPE_CHECKING:
 # Constants
 # ---------------------------------------------------------------------------
 
-# agentskills.io/specification.md: description Required=Yes, max 1024 chars, non-empty
-MAX_DESCRIPTION_LENGTH: int = 1024
+# agentskills.io/specification.md: description Required=Yes, max 1024 chars, non-empty.
+# Both names alias skilllint.limits.DESCRIPTION_MAX_LENGTH rather than repeating
+# the literal: independent copies drift, and the provenance registry locates the
+# claim at the canonical constant.
+MAX_DESCRIPTION_LENGTH: int = DESCRIPTION_MAX_LENGTH
 """Maximum allowed length for a skill description (agentskills.io spec)."""
 
-RECOMMENDED_DESCRIPTION_LENGTH: int = 1024
+RECOMMENDED_DESCRIPTION_LENGTH: int = DESCRIPTION_MAX_LENGTH
 """Warn when a description exceeds this many characters."""
 
 _SKILL_DIR_NAME_PATTERN: re.Pattern[str] = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")

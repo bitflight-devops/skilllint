@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Rule Provenance Registry — maps lint rule claims to upstream authority sources",
+  "version": "1",
+  "claims": {
+    "FM010.max_name_length": {
+      "rule_code": "FM010",
+      "claim_name": "max_name_length",
+      "description": "Maximum character length for the skill name field (64 characters)",
+      "claim_type": "scalar",
+      "authority": {
+        "vendor_file": "packages/skilllint/schemas/agentskills_io/v1.json",
+        "anchor_selector": null,
+        "authority_url": "https://agentskills.io/specification"
+      },
+      "extraction": {
+        "prompt_template": "Extract the maxLength value for the 'name' property from the JSON schema. Return an integer. {{section}}",
+        "output_schema": {
+          "type": "integer"
+        },
+        "post_processing": null
+      },
+      "assertion_location": {
+        "file": "packages/skilllint/rules/fm_series.py",
+        "symbol": "_MAX_NAME_LENGTH",
+        "source_type": "python_constant"
+      },
+      "x-audited": {
+        "date": "2026-03-14",
+        "source": "packages/skilllint/schemas/agentskills_io/v1.json"
+      }
+    },
+    "FM007.tool_field_names": {
+      "rule_code": "FM007",
+      "claim_name": "tool_field_names",
+      "description": "Tool allow/deny field names the AgentSkills specification defines for frontmatter",
+      "claim_type": "field_set",
+      "authority": {
+        "vendor_file": "packages/skilllint/schemas/agentskills_io/v1.json",
+        "anchor_selector": null,
+        "authority_url": "https://agentskills.io/specification"
+      },
+      "extraction": {
+        "prompt_template": "Extract all property names from the JSON schema that relate to tool allow/deny lists (e.g., allowed-tools). Return a JSON array of field name strings. {{section}}",
+        "output_schema": {
+          "type": "array"
+        },
+        "post_processing": "sort, unique"
+      },
+      "assertion_location": {
+        "file": "packages/skilllint/rules/fm_series.py",
+        "symbol": "_AGENTSKILLS_TOOL_FIELD_NAMES",
+        "source_type": "python_constant"
+      },
+      "x-audited": {
+        "date": "2026-03-14",
+        "source": "packages/skilllint/schemas/agentskills_io/v1.json"
+      }
+    },
+    "SK004.max_description_length": {
+      "rule_code": "SK004",
+      "claim_name": "max_description_length",
+      "description": "Maximum character length for the skill description field (1024 characters)",
+      "claim_type": "scalar",
+      "authority": {
+        "vendor_file": "packages/skilllint/schemas/agentskills_io/v1.json",
+        "anchor_selector": null,
+        "authority_url": "https://agentskills.io/specification"
+      },
+      "extraction": {
+        "prompt_template": "Extract the maxLength value for the 'description' property from the JSON schema. Return an integer. {{section}}",
+        "output_schema": {
+          "type": "integer"
+        },
+        "post_processing": null
+      },
+      "assertion_location": {
+        "file": "packages/skilllint/limits.py",
+        "symbol": "DESCRIPTION_MAX_LENGTH",
+        "source_type": "python_constant"
+      },
+      "x-audited": {
+        "date": "2026-08-30",
+        "source": "packages/skilllint/schemas/agentskills_io/v1.json"
+      }
+    }
+  }
+}

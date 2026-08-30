@@ -85,8 +85,9 @@ def test_malformed_policy_reports_and_defaults(tmp_path: Path) -> None:
 
 
 def test_as005_is_not_a_configurable_threshold(tmp_path: Path) -> None:
-    # AS005 shares the SK006/SK007 token band and has no threshold plumbing of
-    # its own, so an AS005 threshold key is rejected (PR #97 review finding #1).
+    # AS005 shared the SK006/SK007 token band and never had threshold plumbing
+    # of its own (PR #97 review finding #1); it has since been retired into
+    # SK006/SK007, so the key is rejected either way.
     cfg = tmp_path / ".skilllint.json"
     cfg.write_text(json.dumps({"thresholds": {"AS005": 1000}}))
     policy, diagnostics = _load_policy(cfg)
@@ -95,11 +96,22 @@ def test_as005_is_not_a_configurable_threshold(tmp_path: Path) -> None:
     assert len(diagnostics) == 1
 
 
-def test_as005_severity_is_configurable(tmp_path: Path) -> None:
+def test_retired_rule_severity_is_rejected(tmp_path: Path) -> None:
+    # AS005 was retired into SK006/SK007. A config that still names it must be
+    # reported, not silently accepted as a severity override for a rule that no
+    # longer emits anything.
     cfg = tmp_path / ".skilllint.json"
     cfg.write_text(json.dumps({"severity": {"AS005": "info"}}))
     policy, diagnostics = _load_policy(cfg)
-    assert policy.severity == {"AS005": "info"}
+    assert policy.severity == {}
+    assert any("severity.AS005" in d for d in diagnostics)
+
+
+def test_token_band_severity_is_configurable(tmp_path: Path) -> None:
+    cfg = tmp_path / ".skilllint.json"
+    cfg.write_text(json.dumps({"severity": {"SK006": "info"}}))
+    policy, diagnostics = _load_policy(cfg)
+    assert policy.severity == {"SK006": "info"}
     assert diagnostics == []
 
 

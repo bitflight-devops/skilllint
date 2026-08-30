@@ -1,5 +1,5 @@
 """
-Test stubs for AS-series agentskills.io rule validation (AS001 through AS006).
+Tests for AS-series agentskills.io rule validation (AS001, AS006, AS008, AS009).
 
 Wave 0 TDD scaffold — all tests fail RED (ImportError) until plan 02-02
 creates the skilllint.rules.as_series module.
@@ -24,7 +24,7 @@ def _violations_with_code(violations: list[dict], code: str) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# AS001: name format — lowercase alphanumeric + hyphens only
+# AS001: SKILL.md declares a name field (syntax belongs to FM010)
 # ---------------------------------------------------------------------------
 
 
@@ -49,8 +49,8 @@ def test_as001_name_format_valid(tmp_path: pathlib.Path):
     )
 
 
-def test_as001_name_format_invalid(tmp_path: pathlib.Path):
-    """name 'My_Skill!' produces AS001 error."""
+def test_as001_ignores_name_syntax(tmp_path: pathlib.Path):
+    """A malformed name produces no AS001 — FM010 owns name syntax."""
     skill_dir = tmp_path / "my-skill"
     skill_dir.mkdir()
     skill_md = skill_dir / "SKILL.md"
@@ -64,15 +64,15 @@ def test_as001_name_format_invalid(tmp_path: pathlib.Path):
             Body content.
         """)
     )
-    violations = check_skill_md(skill_md)
-    assert _violations_with_code(violations, "AS001") != [], "Expected AS001 violation for name 'My_Skill!'"
+    assert "AS001" not in {v.get("code") for v in check_skill_md(skill_md)}
 
 
 def test_as001_missing_name_is_error(tmp_path: pathlib.Path):
     """Absent name field produces AS001 with severity 'error'.
 
     The AgentSkills spec (agentskills.io/specification) marks name as required.
-    A missing name must be an error, not a warning.
+    Claude Code's skills.md treats it as optional, so SkillFrontmatter declares
+    it ``str | None`` and FM001 stays silent — AS001 is the only signal.
     """
     skill_dir = tmp_path / "my-skill"
     skill_dir.mkdir()
@@ -86,12 +86,9 @@ def test_as001_missing_name_is_error(tmp_path: pathlib.Path):
             Body content.
         """)
     )
-    violations = check_skill_md(skill_md)
-    as001 = _violations_with_code(violations, "AS001")
-    assert as001 != [], "Expected AS001 violation when name field is absent"
-    assert as001[0]["severity"] == "error", (
-        f"AS001 missing-name must be 'error' (name is required per AgentSkills spec), got: {as001[0]['severity']}"
-    )
+    as001 = _violations_with_code(check_skill_md(skill_md), "AS001")
+    assert as001 != [], "Expected AS001 when the name field is absent"
+    assert as001[0]["severity"] == "error", f"AS001 missing-name must be an error, got: {as001[0]['severity']}"
 
 
 # ---------------------------------------------------------------------------
@@ -99,8 +96,8 @@ def test_as001_missing_name_is_error(tmp_path: pathlib.Path):
 # ---------------------------------------------------------------------------
 
 
-def test_as002_name_matches_directory(tmp_path: pathlib.Path):
-    """name 'foo' in directory 'bar/' produces AS002 error."""
+def test_as002_directory_match_is_retired(tmp_path: pathlib.Path):
+    """A name/directory mismatch produces no AS002 — FM010 owns the match."""
     skill_dir = tmp_path / "bar"
     skill_dir.mkdir()
     skill_md = skill_dir / "SKILL.md"
@@ -114,129 +111,7 @@ def test_as002_name_matches_directory(tmp_path: pathlib.Path):
             Body content.
         """)
     )
-    violations = check_skill_md(skill_md)
-    assert _violations_with_code(violations, "AS002") != [], (
-        "Expected AS002 violation when name 'foo' does not match directory 'bar'"
-    )
-
-
-# ---------------------------------------------------------------------------
-# AS003: description must be present and non-empty
-# ---------------------------------------------------------------------------
-
-
-def test_as003_description_present(tmp_path: pathlib.Path):
-    """Missing description field produces AS003 error."""
-    skill_dir = tmp_path / "my-skill"
-    skill_dir.mkdir()
-    skill_md = skill_dir / "SKILL.md"
-    skill_md.write_text(
-        textwrap.dedent("""\
-            ---
-            name: my-skill
-            ---
-
-            Body content.
-        """)
-    )
-    violations = check_skill_md(skill_md)
-    assert _violations_with_code(violations, "AS003") != [], "Expected AS003 violation when description is missing"
-
-
-# ---------------------------------------------------------------------------
-# AS004: description must not contain HTML tags
-# ---------------------------------------------------------------------------
-
-
-def test_as004_description_unquoted_colon(tmp_path: pathlib.Path):
-    """description containing unquoted colon produces AS004 error."""
-    skill_dir = tmp_path / "my-skill"
-    skill_dir.mkdir()
-    skill_md = skill_dir / "SKILL.md"
-    skill_md.write_text(
-        textwrap.dedent("""\
-            ---
-            name: my-skill
-            description: Use this: for examples Context: testing
-            ---
-
-            Body content.
-        """)
-    )
-    violations = check_skill_md(skill_md)
-    assert _violations_with_code(violations, "AS004") != [], (
-        "Expected AS004 violation when description contains unquoted colons"
-    )
-    # Check that fix is provided
-    as004 = _violations_with_code(violations, "AS004")[0]
-    assert "fix" in as004, "AS004 should provide a fix suggestion"
-    assert "Wrap description in quotes" in as004["fix"]
-
-
-def test_as004_angle_brackets_allowed(tmp_path: pathlib.Path):
-    """description with angle brackets but no colons should NOT trigger AS004."""
-    skill_dir = tmp_path / "my-skill"
-    skill_dir.mkdir()
-    skill_md = skill_dir / "SKILL.md"
-    skill_md.write_text(
-        textwrap.dedent("""\
-            ---
-            name: my-skill
-            description: Use this for <testing> purposes only
-            ---
-
-            Body content.
-        """)
-    )
-    violations = check_skill_md(skill_md)
-    assert _violations_with_code(violations, "AS004") == [], "AS004 should NOT fire for angle brackets without colons"
-
-
-# ---------------------------------------------------------------------------
-# AS005: SKILL.md body token count warning (> TOKEN_WARNING_THRESHOLD tokens)
-# ---------------------------------------------------------------------------
-
-
-def test_as005_body_token_count_warning(tmp_path: pathlib.Path):
-    """SKILL.md body exceeding TOKEN_WARNING_THRESHOLD tokens produces AS005 warning."""
-    import tiktoken
-
-    from skilllint.token_counter import TOKEN_WARNING_THRESHOLD
-
-    skill_dir = tmp_path / "my-skill"
-    skill_dir.mkdir()
-    skill_md = skill_dir / "SKILL.md"
-
-    # Build body text that exceeds TOKEN_WARNING_THRESHOLD tokens.
-    # "word " is 2 tokens (word + space) in cl100k_base; repeat enough times
-    # to comfortably exceed the threshold.
-    enc = tiktoken.get_encoding("cl100k_base")
-    unit = "The quick brown fox jumps over the lazy dog. "
-    unit_tokens = len(enc.encode(unit))
-    repeats = (TOKEN_WARNING_THRESHOLD // unit_tokens) + 50
-    body_text = unit * repeats
-
-    assert len(enc.encode(body_text)) > TOKEN_WARNING_THRESHOLD, (
-        "Test setup: body must exceed TOKEN_WARNING_THRESHOLD tokens"
-    )
-
-    skill_md.write_text(
-        textwrap.dedent("""\
-            ---
-            name: my-skill
-            description: A skill with a very long body that exceeds the token warning threshold.
-            ---
-
-        """)
-        + body_text
-        + "\n"
-    )
-    violations = check_skill_md(skill_md)
-    as005 = _violations_with_code(violations, "AS005")
-    assert as005 != [], "Expected AS005 violation when body exceeds TOKEN_WARNING_THRESHOLD tokens"
-    assert as005[0].get("severity") in ("warning", "warn", "error"), (
-        f"Expected AS005 severity to be warning or error, got: {as005[0].get('severity')}"
-    )
+    assert "AS002" not in {v.get("code") for v in check_skill_md(skill_md)}
 
 
 # ---------------------------------------------------------------------------
@@ -432,7 +307,7 @@ def test_as_family_still_runs_on_skill_md(tmp_path: pathlib.Path):
     assert "AsSeriesValidator" in names, f"AS family must still run on SKILL.md, got: {names}"
 
 
-def test_as002_suppressed_for_agent_files_via_validator(tmp_path: pathlib.Path):
+def test_name_check_suppressed_for_agent_files_via_validator(tmp_path: pathlib.Path):
     """AsSeriesValidator does not emit AS002 for agent files.
 
     AS002 compares the name field against the parent directory name. For agents
@@ -447,11 +322,11 @@ def test_as002_suppressed_for_agent_files_via_validator(tmp_path: pathlib.Path):
     assert "AS002" not in codes, f"AS002 must not fire for agent files, got: {codes}"
 
 
-def test_as002_still_fires_for_skill_md_name_mismatch(tmp_path: pathlib.Path):
-    """AsSeriesValidator emits AS002 for a SKILL.md whose name mismatches its directory.
+def test_as002_directory_match_is_retired_for_skill_md(tmp_path: pathlib.Path):
+    """AsSeriesValidator emits no AS002 for a SKILL.md/directory mismatch.
 
-    AS002 suppression must only apply to agent files. SKILL.md files in a
-    directory named differently from their name field must still get AS002.
+    FM010 owns the name/directory match; it reports the mismatch as a warning
+    from ``check_fm010``. AS002 was retired to leave that claim one owner.
     """
     from skilllint.plugin_validator import AsSeriesValidator
 
@@ -470,7 +345,7 @@ def test_as002_still_fires_for_skill_md_name_mismatch(tmp_path: pathlib.Path):
     )
     result = AsSeriesValidator().validate(skill_md)
     codes = [i.field for i in result.errors + result.warnings + result.info]
-    assert "AS002" in codes, f"AS002 must still fire for SKILL.md with name/directory mismatch, got: {codes}"
+    assert "AS002" not in codes
 
 
 def test_as008_hyphen_vs_underscore_unrecognized_server_produces_warning(tmp_path: pathlib.Path):

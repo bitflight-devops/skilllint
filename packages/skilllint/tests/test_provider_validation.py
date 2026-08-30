@@ -14,6 +14,8 @@ import pathlib
 import subprocess
 import sys
 
+import pytest
+
 from skilllint.adapters import load_adapters
 from skilllint.adapters.claude_code import ClaudeCodeAdapter
 from skilllint.adapters.codex import CodexAdapter
@@ -21,6 +23,7 @@ from skilllint.adapters.cursor import CursorAdapter
 from skilllint.plugin_validator import validate_file
 from skilllint.rule_registry import RULE_REGISTRY
 from skilllint.schemas import get_provider_ids
+from skilllint.token_counter import TOKEN_ERROR_THRESHOLD
 
 FIXTURES = pathlib.Path(__file__).parent / "fixtures"
 CLAUDE_CODE_FIXTURES = FIXTURES / "claude_code"
@@ -48,15 +51,15 @@ class TestProviderValidationRouting:
         assert errors == [], f"Expected no errors for valid skill, got: {errors}"
 
     def test_claude_code_adapter_detects_invalid_skill(self) -> None:
-        """Claude Code adapter detects AS001 violation for invalid name format."""
+        """Claude Code adapter detects FM010 violation for invalid name format."""
         adapters = {a.id(): a for a in load_adapters()}
         skill_file = CLAUDE_CODE_FIXTURES / "invalid-skill" / "SKILL.md"
 
         violations = validate_file(skill_file, adapters, platform_override="claude_code")
 
-        # Invalid name (My_Skill!) should trigger AS001
-        as001 = [v for v in violations if v.get("code") == "AS001"]
-        assert len(as001) == 1, f"Expected exactly one AS001 violation, got: {violations}"
+        # Invalid name (My_Skill!) should trigger FM010
+        fm010 = [v for v in violations if v.get("code") == "FM010"]
+        assert len(fm010) == 1, f"Expected exactly one FM010 violation, got: {violations}"
 
     def test_cursor_adapter_validates_cursor_fixtures(self) -> None:
         """Cursor adapter validates fixtures in cursor/ directory."""
@@ -106,27 +109,42 @@ class TestProviderValidationRouting:
 # ---------------------------------------------------------------------------
 
 
+def _assert_authority(violation: dict) -> None:
+    """Assert a violation dict carries populated authority provenance.
+
+    ``reference`` is asserted only when the rule declares one. A rule serving
+    several file types registers ``origin`` alone, because no single vendor page
+    covers every finding it emits; its per-claim URLs live in
+    ``schemas/provenance-registry.json``.
+
+    Args:
+        violation: Violation dict emitted by validate_file().
+    """
+    assert "authority" in violation, f"Expected 'authority' key in violation, got: {violation}"
+    authority = violation["authority"]
+    assert authority.get("origin"), f"Expected non-empty 'origin' in authority, got: {authority}"
+    assert set(authority) <= {"origin", "reference"}, f"Unexpected authority keys: {authority}"
+    if "reference" in authority:
+        assert authority["reference"], f"Expected non-empty 'reference' when declared, got: {authority}"
+
+
 class TestAuthorityProvenance:
     """Tests for authority metadata in violation output."""
 
-    def test_as001_violation_includes_authority(self) -> None:
-        """AS001 violation dict includes authority field with origin and reference."""
+    def test_fm010_violation_includes_authority(self) -> None:
+        """FM010 violation dict includes authority field with origin and reference."""
         adapters = {a.id(): a for a in load_adapters()}
         skill_file = CLAUDE_CODE_FIXTURES / "invalid-skill" / "SKILL.md"
 
         violations = validate_file(skill_file, adapters, platform_override="claude_code")
 
-        as001 = [v for v in violations if v.get("code") == "AS001"]
-        assert len(as001) == 1, f"Expected exactly one AS001 violation, got: {violations}"
+        fm010 = [v for v in violations if v.get("code") == "FM010"]
+        assert len(fm010) == 1, f"Expected exactly one FM010 violation, got: {violations}"
 
-        violation = as001[0]
-        assert "authority" in violation, f"Expected 'authority' key in violation, got: {violation}"
-        authority = violation["authority"]
-        assert "origin" in authority, f"Expected 'origin' in authority, got: {authority}"
-        assert authority["origin"] == "agentskills.io", f"Expected origin 'agentskills.io', got: {authority['origin']}"
+        _assert_authority(fm010[0])
 
-    def test_as003_violation_includes_authority(self, tmp_path: pathlib.Path) -> None:
-        """AS003 violation (missing description) includes authority metadata."""
+    def test_fm001_violation_is_emitted_once(self, tmp_path: pathlib.Path) -> None:
+        """FM001 is the sole missing-description finding."""
         adapters = {a.id(): a for a in load_adapters()}
 
         # Create skill with missing description
@@ -144,17 +162,14 @@ Body content.
 
         violations = validate_file(skill_file, adapters, platform_override="claude_code")
 
-        as003 = [v for v in violations if v.get("code") == "AS003"]
-        assert len(as003) == 1, f"Expected exactly one AS003 violation, got: {violations}"
+        fm001 = [v for v in violations if v.get("code") == "FM001"]
+        assert len(fm001) == 1, f"Expected exactly one FM001 violation, got: {violations}"
 
-        violation = as003[0]
-        assert "authority" in violation, f"Expected 'authority' key in violation, got: {violation}"
-        authority = violation["authority"]
-        assert authority["origin"] == "agentskills.io"
+        assert "AS003" not in {v.get("code") for v in violations}
 
     def test_all_as_rules_have_authority_metadata(self) -> None:
         """All AS-series rules in the registry have authority metadata."""
-        as_rules = ["AS001", "AS002", "AS003", "AS004", "AS005", "AS006"]
+        as_rules = ["AS006"]
 
         for rule_id in as_rules:
             entry = RULE_REGISTRY.get(rule_id)
@@ -164,16 +179,21 @@ Body content.
                 f"Rule {rule_id} has wrong origin: {entry.authority.origin}"
             )
 
-    def test_authority_reference_is_url(self) -> None:
-        """Authority reference field should be a URL path for rules that have one."""
-        # AS001 has a reference URL
-        entry = RULE_REGISTRY.get("AS001")
-        assert entry is not None
-        assert entry.authority is not None
-        assert entry.authority.reference is not None
-        assert entry.authority.reference.startswith("/"), (
-            f"Expected reference to start with /, got: {entry.authority.reference}"
-        )
+    def test_declared_authority_references_are_resolvable(self) -> None:
+        """Every declared authority reference is an absolute URL or a rooted path.
+
+        ``iter_authority_urls`` joins a rooted path onto its origin, so those two
+        forms are the only ones that resolve. A rule may declare no reference at
+        all — FM001 and FM010 serve several file types whose frontmatter is
+        defined by different vendor pages, so neither names one.
+        """
+        for rule_id, entry in RULE_REGISTRY.items():
+            if entry.authority is None or entry.authority.reference is None:
+                continue
+            reference = entry.authority.reference
+            assert reference.startswith(("http://", "https://", "/")), (
+                f"Rule {rule_id} reference is neither an absolute URL nor a rooted path: {reference!r}"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -390,7 +410,7 @@ class TestCLIProviderIntegration:
         appears in JSON output. The actual JSON reporter implementation may
         vary; this test checks that validate_file() includes authority.
         """
-        # Create skill with AS001 violation
+        # Create skill with FM010 violation
         skill_dir = tmp_path / "bad-skill"
         skill_dir.mkdir()
         skill_file = skill_dir / "SKILL.md"
@@ -407,11 +427,120 @@ Body content.
         adapters = {a.id(): a for a in load_adapters()}
         violations = validate_file(skill_file, adapters, platform_override="claude_code")
 
-        # Find AS001 violation
-        as001 = [v for v in violations if v.get("code") == "AS001"]
-        assert len(as001) == 1, f"Expected exactly one AS001 violation, got: {violations}"
+        # Find FM010 violation
+        fm010 = [v for v in violations if v.get("code") == "FM010"]
+        assert len(fm010) == 1, f"Expected exactly one FM010 violation, got: {violations}"
 
-        # Verify authority is present
-        violation = as001[0]
-        assert "authority" in violation, f"Missing authority in violation: {violation}"
-        assert violation["authority"]["origin"] == "agentskills.io"
+        _assert_authority(fm010[0])
+
+
+# ---------------------------------------------------------------------------
+# Shared SKILL.md checks for adapters that skip the frontmatter pipeline
+# ---------------------------------------------------------------------------
+
+
+class TestCrossPlatformSkillChecks:
+    """A SKILL.md is checked even when no adapter runs the frontmatter pipeline.
+
+    Only ClaudeCodeAdapter routes SKILL.md through FrontmatterValidator. Cursor
+    validates ``.mdc`` and Codex validates ``AGENTS.md``/``.rules``, so the
+    canonical rule owners have to run on the shared path for those.
+    """
+
+    @staticmethod
+    def _write_skill(tmp_path: pathlib.Path, body: str = "Body content.\n") -> pathlib.Path:
+        """Write a SKILL.md with an invalid name and no description.
+
+        Args:
+            tmp_path: Test-scoped directory.
+            body: Markdown body to write after the frontmatter.
+
+        Returns:
+            Path to the written SKILL.md.
+        """
+        skill_dir = tmp_path / "bad-name"
+        skill_dir.mkdir()
+        skill_file = skill_dir / "SKILL.md"
+        skill_file.write_text(f"---\nname: Bad_Name!\n---\n\n{body}")
+        return skill_file
+
+    @pytest.mark.parametrize("platform", [None, "cursor", "codex"])
+    def test_name_and_description_are_checked(self, tmp_path: pathlib.Path, platform: str | None) -> None:
+        """FM010 and FM001 fire for adapters that never run the pipeline."""
+        adapters = {a.id(): a for a in load_adapters()}
+        skill_file = self._write_skill(tmp_path)
+
+        codes = {v["code"] for v in validate_file(skill_file, adapters, platform_override=platform)}
+
+        assert "FM010" in codes, f"Invalid name unreported for platform {platform!r}: {sorted(codes)}"
+        assert "FM001" in codes, f"Missing description unreported for platform {platform!r}: {sorted(codes)}"
+
+    @pytest.mark.parametrize("platform", [None, "cursor", "codex"])
+    def test_oversized_body_is_checked(self, tmp_path: pathlib.Path, platform: str | None) -> None:
+        """The SK006/SK007 token band fires for adapters that skip the pipeline."""
+        adapters = {a.id(): a for a in load_adapters()}
+        skill_file = self._write_skill(tmp_path, body="word " * (TOKEN_ERROR_THRESHOLD + 100))
+
+        codes = {v["code"] for v in validate_file(skill_file, adapters, platform_override=platform)}
+
+        assert codes & {"SK006", "SK007"}, f"Token band unreported for platform {platform!r}: {sorted(codes)}"
+
+    @pytest.mark.parametrize("platform", [None, "cursor", "codex", "claude_code"])
+    def test_invalid_yaml_reports_fm002_exactly_once(self, tmp_path: pathlib.Path, platform: str | None) -> None:
+        """FM002 survives for adapters that do not report it themselves."""
+        adapters = {a.id(): a for a in load_adapters()}
+        skill_dir = tmp_path / "broken"
+        skill_dir.mkdir()
+        skill_file = skill_dir / "SKILL.md"
+        skill_file.write_text("---\ndescription: [unclosed bracket\n---\n\nBody.\n")
+
+        codes = [v["code"] for v in validate_file(skill_file, adapters, platform_override=platform)]
+
+        assert codes.count("FM002") == 1, f"Expected one FM002 for platform {platform!r}, got: {codes}"
+
+    def test_opinion_rules_carry_no_vendor_authority(self, tmp_path: pathlib.Path) -> None:
+        """SK004-SK007 findings must not claim an upstream origin.
+
+        opinion-catalog.json records all four as lint opinions with no vendor
+        source, so attaching an authority would present a repository heuristic
+        as a vendor requirement.
+        """
+        adapters = {a.id(): a for a in load_adapters()}
+        skill_dir = tmp_path / "short-desc"
+        skill_dir.mkdir()
+        skill_file = skill_dir / "SKILL.md"
+        skill_file.write_text("---\nname: short-desc\ndescription: Too short\n---\n\nBody.\n")
+
+        violations = validate_file(skill_file, adapters, platform_override="claude_code")
+        opinions = [v for v in violations if v["code"] in {"SK004", "SK005", "SK006", "SK007"}]
+
+        assert opinions, f"Expected an SK004/SK005 finding, got: {violations}"
+        for violation in opinions:
+            assert "authority" not in violation, f"Opinion rule claims vendor authority: {violation}"
+
+    @pytest.mark.parametrize("platform", [None, "cursor", "codex"])
+    def test_colon_recovery_is_reported(self, tmp_path: pathlib.Path, platform: str | None) -> None:
+        """FM009 fires for adapters that never run FrontmatterValidator."""
+        adapters = {a.id(): a for a in load_adapters()}
+        skill_dir = tmp_path / "colon-skill"
+        skill_dir.mkdir()
+        skill_file = skill_dir / "SKILL.md"
+        skill_file.write_text("---\nname: colon-skill\ndescription: Use this: when testing\n---\n\nBody.\n")
+
+        codes = {v["code"] for v in validate_file(skill_file, adapters, platform_override=platform)}
+
+        assert "FM009" in codes, f"Colon recovery unreported for platform {platform!r}: {sorted(codes)}"
+
+    @pytest.mark.parametrize("platform", [None, "cursor", "codex", "claude_code"])
+    def test_ignore_config_suppresses_shared_findings(self, tmp_path: pathlib.Path, platform: str | None) -> None:
+        """The --platform route honours .skilllint.json the same as the default path."""
+        adapters = {a.id(): a for a in load_adapters()}
+        (tmp_path / ".skilllint.json").write_text('{"ignore": {"": ["FM010"]}}')
+        skill_dir = tmp_path / "skills" / "wrong-name"
+        skill_dir.mkdir(parents=True)
+        skill_file = skill_dir / "SKILL.md"
+        skill_file.write_text("---\nname: other-name\ndescription: Use when testing suppression\n---\n\nBody.\n")
+
+        codes = {v["code"] for v in validate_file(skill_file, adapters, platform_override=platform)}
+
+        assert "FM010" not in codes, f"Suppressed FM010 still reported for {platform!r}: {sorted(codes)}"

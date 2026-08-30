@@ -1,6 +1,6 @@
 """AS-series rule validation for agentskills.io SKILL.md files.
 
-Rules AS001-AS009 fire on SKILL.md files only, regardless of which platform
+Rules AS001 and AS006-AS009 fire on SKILL.md files only, regardless of which platform
 adapter is active. They enforce the AgentSkills specification, a cross-harness
 baseline that defines SKILL.md and does not describe agent files. A check on
 agent frontmatter belongs to a series that governs agent files, cited to the
@@ -12,19 +12,18 @@ Each violation dict has the shape:
     {"code": str, "severity": str, "message": str}
 
 Severities:
-    "error"   — AS001, AS002, AS003
-    "warning" — AS004, AS005, AS008, AS009
+    "error"   — AS001
+    "warning" — AS008, AS009
     "info"    — AS006
 """
 
 from __future__ import annotations
 
 import logging
-import re
 from typing import TYPE_CHECKING
 
-from skilllint.rule_registry import RULE_REGISTRY, skilllint_rule
-from skilllint.token_counter import TOKEN_ERROR_THRESHOLD, TOKEN_WARNING_THRESHOLD, count_tokens
+from skilllint.rule_registry import rule_authority, skilllint_rule
+from skilllint.token_counter import TOKEN_ERROR_THRESHOLD, TOKEN_WARNING_THRESHOLD
 
 if TYPE_CHECKING:
     import pathlib
@@ -36,11 +35,7 @@ _logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 AS_RULES: dict[str, str] = {
-    "AS001": "Skill name must be lowercase alphanumeric with hyphens only, 1-64 chars, no consecutive hyphens",
-    "AS002": "Skill name must match the parent directory name",
-    "AS003": "description field must be present and non-empty",
-    "AS004": "description contains unquoted colons that break YAML — quote the string to fix",
-    "AS005": f"SKILL.md body token count exceeds {TOKEN_WARNING_THRESHOLD} tokens — consider splitting into sub-skills",
+    "AS001": "SKILL.md must declare a name field",
     "AS006": "No eval_queries.json found — add evaluation queries for quality assurance",
     "AS008": "MCP tool name may have incorrect casing — case is sensitive in the tools field",
     "AS009": "Nested skill will not be auto-discovered — skills must be direct children of the skills/ directory",
@@ -50,34 +45,26 @@ AS_RULES: dict[str, str] = {
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-_MAX_NAME_LENGTH = 64
 
-_NAME_RE = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")
-_CONSECUTIVE_HYPHENS_RE = re.compile(r"--")
-
-
-def _parse_skill_md(path: pathlib.Path) -> tuple[dict, list[str], str | None]:
+def _parse_skill_md(path: pathlib.Path) -> tuple[dict, list[str]]:
     """Parse a SKILL.md file into frontmatter dict and body lines.
 
     Frontmatter is delimited by leading '---' lines. Everything after
     the closing '---' is the body.
 
     Returns:
-        (frontmatter, body_lines, raw_description_line) where frontmatter is a dict of parsed
-        YAML fields, body_lines is a list of non-empty content lines
-        after the frontmatter block, and raw_description_line is the raw
-        "description:" line from frontmatter (if present) for validation.
+        (frontmatter, body_lines) where frontmatter is a dict of parsed YAML
+        fields and body_lines is the content after the frontmatter block.
     """
     text = path.read_text(encoding="utf-8")
     lines = text.splitlines()
 
     frontmatter: dict = {}
     body_lines: list[str] = []
-    raw_description_line: str | None = None
 
     if not lines or lines[0].strip() != "---":
         # No frontmatter — treat entire file as body
-        return {}, lines, None
+        return {}, lines
 
     # Find closing '---'
     close_idx = None
@@ -88,7 +75,7 @@ def _parse_skill_md(path: pathlib.Path) -> tuple[dict, list[str], str | None]:
 
     if close_idx is None:
         # Unclosed frontmatter — parse what we can, no body
-        return {}, [], None
+        return {}, []
 
     # Parse frontmatter lines as simple key: value YAML
     for line in lines[1:close_idx]:
@@ -98,13 +85,9 @@ def _parse_skill_md(path: pathlib.Path) -> tuple[dict, list[str], str | None]:
             value_stripped = value.strip()
             frontmatter[key_stripped] = value_stripped
 
-            # Track raw description line for AS004 validation
-            if key_stripped == "description":
-                raw_description_line = line
-
     body_lines = lines[close_idx + 1 :]
 
-    return frontmatter, body_lines, raw_description_line
+    return frontmatter, body_lines
 
 
 def _violation(
@@ -113,7 +96,7 @@ def _violation(
     """Build a violation dict.
 
     Args:
-        code: Rule code (e.g., "AS001").
+        code: Rule code (e.g., "AS006").
         severity: Severity level ("error", "warning", "info").
         message: Human-readable message.
         fix: Optional auto-fix instruction.
@@ -130,24 +113,6 @@ def _violation(
     return result
 
 
-def _get_rule_authority(code: str) -> dict | None:
-    """Get authority metadata for a rule from the registry.
-
-    Args:
-        code: Rule ID (e.g., "AS001")
-
-    Returns:
-        Authority dict with 'origin' and optional 'reference', or None if not found.
-    """
-    entry = RULE_REGISTRY.get(code.upper())
-    if entry and entry.authority:
-        result = {"origin": entry.authority.origin}
-        if entry.authority.reference:
-            result["reference"] = entry.authority.reference
-        return result
-    return None
-
-
 def _make_violation(code: str, severity: str, message: str, fix: str | None = None) -> dict:
     """Create a violation dict with authority metadata from the rule registry.
 
@@ -155,7 +120,7 @@ def _make_violation(code: str, severity: str, message: str, fix: str | None = No
     looks up and includes authority metadata from the rule registry.
 
     Args:
-        code: Rule ID (e.g., "AS001")
+        code: Rule ID (e.g., "AS006")
         severity: One of "error", "warning", "info"
         message: Human-readable violation message
         fix: Optional auto-fix suggestion
@@ -163,7 +128,7 @@ def _make_violation(code: str, severity: str, message: str, fix: str | None = No
     Returns:
         Violation dict with code, severity, message, and optionally fix and authority.
     """
-    return _violation(code, severity, message, fix=fix, authority=_get_rule_authority(code))
+    return _violation(code, severity, message, fix=fix, authority=rule_authority(code))
 
 
 # ---------------------------------------------------------------------------
@@ -178,231 +143,28 @@ def _make_violation(code: str, severity: str, message: str, fix: str | None = No
     authority={"origin": "agentskills.io", "reference": "/specification#skill-naming"},
 )
 def _check_as001(name: str | None) -> dict | None:
-    """AS001 — Invalid skill name format.
+    """AS001 — SKILL.md declares no name field.
 
-    Skill names must be lowercase alphanumeric with hyphens only, between
-    1-64 characters, with no consecutive hyphens. The name must start and
-    end with a letter or digit.
+    agentskills.io requires ``name`` on a SKILL.md. FM001 stays silent here
+    because Claude Code's own skills.md treats the field as optional and falls
+    back to the directory name, so ``SkillFrontmatter.name`` is declared
+    ``str | None``. AS001 is therefore the only signal that a skill is missing
+    its name under the AgentSkills specification.
+
+    Name *syntax* — casing, hyphens, length, and the directory match — is
+    FM010's, not AS001's. This rule asserts presence only.
 
     Args:
         name: The skill name from frontmatter, or None if missing.
 
     Returns:
-        Violation dict if invalid, None otherwise.
+        Violation dict when the name field is absent, None otherwise.
 
     Fix:
-        Rename the skill to use lowercase letters, digits, and hyphens only.
-        For example, change ``My_Skill`` to ``my-skill``.
-
-    Examples:
-        Valid: ``my-skill``, ``skill-123``, ``a``
-        Invalid: ``MySkill``, ``my_skill``, ``skill--name``, ``-skill``
+        Add a ``name`` field to the frontmatter, matching the skill directory.
     """
     if name is None:
-        # agentskills.io requires `name` on a SKILL.md, and FM001 stays silent
-        # there (skills.md treats it as optional, falling back to the directory
-        # name), so this is the only signal for a skill missing its name.
-        # It used to double-report alongside FM001 on agent files; that is now
-        # impossible because the AS family is wired to SKILL.md only.
         return _make_violation("AS001", "error", "name field is missing")
-
-    if len(name) == 0 or len(name) > _MAX_NAME_LENGTH:
-        return _make_violation(
-            "AS001", "error", f"name '{name}' must be 1-{_MAX_NAME_LENGTH} characters long (got {len(name)})"
-        )
-
-    if _CONSECUTIVE_HYPHENS_RE.search(name):
-        return _make_violation("AS001", "error", f"name '{name}' must not contain consecutive hyphens")
-
-    if not _NAME_RE.match(name):
-        return _make_violation(
-            "AS001",
-            "error",
-            f"name '{name}' must match ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ (lowercase letters, digits, and hyphens only)",
-        )
-
-    return None
-
-
-@skilllint_rule(
-    "AS002",
-    severity="error",
-    category="skill",
-    authority={"origin": "agentskills.io", "reference": "/specification#skill-directory-structure"},
-)
-def _check_as002(name: str | None, path: pathlib.Path) -> dict | None:
-    """AS002 — Skill name does not match directory name.
-
-    The skill's ``name`` field in frontmatter must match the parent
-    directory name. This ensures consistency and makes skills easier
-    to locate.
-
-    Args:
-        name: The skill name from frontmatter, or None if missing.
-        path: Path to the SKILL.md file being validated.
-
-    Returns:
-        Violation dict if invalid, None otherwise.
-
-    Fix:
-        Either rename the directory to match the ``name`` field, or update
-        the ``name`` field to match the directory name.
-    """
-    if name is None:
-        return None  # AS001 already covers missing name
-
-    dir_name = path.parent.name
-    if name != dir_name:
-        return _make_violation("AS002", "error", f"name '{name}' does not match parent directory name '{dir_name}'")
-
-    return None
-
-
-@skilllint_rule(
-    "AS003",
-    severity="error",
-    category="skill",
-    authority={"origin": "agentskills.io", "reference": "/specification#skill-description"},
-)
-def _check_as003(description: str | None) -> dict | None:
-    """AS003 — Missing or empty description field.
-
-    Every SKILL.md must have a ``description`` field in its frontmatter.
-    The description helps AI agents understand when to use this skill
-    and provides context for users.
-
-    Args:
-        description: The description from frontmatter, or None if missing.
-
-    Returns:
-        Violation dict if invalid, None otherwise.
-
-    Fix:
-        Add a ``description`` field to the frontmatter with a brief
-        explanation of what this skill does.
-    """
-    if description is None or not description.strip():
-        return _make_violation("AS003", "error", "description field must be present and non-empty")
-
-    return None
-
-
-@skilllint_rule(
-    "AS004",
-    severity="warning",
-    category="skill",
-    authority={"origin": "agentskills.io", "reference": "/specification#yaml-frontmatter"},
-)
-def _check_as004(description: str | None, raw_line: str | None = None) -> dict | None:
-    """AS004 — Description contains unquoted colons that will break YAML.
-
-    The ``description`` field must be valid YAML. If it contains unquoted
-    colons (e.g., "Examples: Context:"), YAML parsing will fail because
-    the colon is interpreted as a key-value separator.
-
-    Args:
-        description: The parsed description from frontmatter, or None if missing.
-        raw_line: The raw frontmatter line before parsing (optional, for validation).
-
-    Returns:
-        Violation dict if invalid, None otherwise.
-
-    Fix:
-        Quote the description string in the frontmatter. For example, change:
-            description: Use this: for examples
-        To:
-            description: "Use this: for examples"
-    """
-    if description is None:
-        return None  # AS003 already covers missing description
-
-    # Check if the raw line (if provided) has unquoted colons that would break YAML
-    # An unquoted colon is ":" followed by a space, not inside quotes
-    if raw_line is not None and raw_line.startswith("description:"):
-        value_part = raw_line[len("description:") :].strip()
-        # Check for unquoted colons (colon followed by space, not in quotes)
-        if _has_unquoted_colon(value_part):
-            return _make_violation(
-                "AS004",
-                "warning",
-                "description contains unquoted colon that will break YAML parsing",
-                fix=f'Wrap description in quotes: description: "{value_part}"',
-            )
-
-    return None
-
-
-def _has_unquoted_colon(text: str) -> bool:
-    """Check if text contains an unquoted colon followed by space.
-
-    This detects YAML-breaking patterns like "Examples: Context: Test"
-    which would cause 'mapping values are not allowed here' error.
-
-    Returns:
-        True when an unquoted colon-space pattern is present, False otherwise.
-    """
-    if not text:
-        return False
-
-    # Already quoted - safe
-    if (text.startswith('"') and text.endswith('"')) or (text.startswith("'") and text.endswith("'")):
-        return False
-
-    # Simple check: look for ":" followed by space/alphanumeric
-    # that indicates YAML value separator
-    colon_pattern = re.compile(r":\s+[a-zA-Z<]")
-    return bool(colon_pattern.search(text))
-
-
-@skilllint_rule(
-    "AS005",
-    severity="warning",
-    category="skill",
-    authority={"origin": "agentskills.io", "reference": "/specification#skill-complexity"},
-)
-def _check_as005(
-    body_lines: list[str],
-    warning_threshold: int = TOKEN_WARNING_THRESHOLD,
-    error_threshold: int = TOKEN_ERROR_THRESHOLD,
-) -> dict | None:
-    """AS005 — SKILL.md body exceeds token threshold.
-
-    Counts tokens in the body text (frontmatter excluded) using tiktoken
-    cl100k_base encoding. Large skills can degrade AI agent performance
-    and increase API costs.
-
-    Args:
-        body_lines: List of content lines from the SKILL.md body.
-        warning_threshold: Body token warning threshold.
-        error_threshold: Body token error threshold.
-
-    Returns:
-        Violation dict if threshold exceeded, None otherwise.
-
-    Thresholds:
-        - Warning at 4400 tokens — consider splitting
-        - Error at 8800 tokens — must split
-
-    Fix:
-        Split the skill into smaller sub-skills or move detailed content
-        to reference files in a ``references/`` directory.
-    """
-    body_text = "\n".join(body_lines)
-    token_count = count_tokens(body_text)
-
-    if token_count > error_threshold:
-        return _make_violation(
-            "AS005",
-            "error",
-            f"SKILL.md body is {token_count} tokens — exceeds {error_threshold} token limit; skill must be split into sub-skills",
-        )
-
-    if token_count > warning_threshold:
-        return _make_violation(
-            "AS005",
-            "warning",
-            f"SKILL.md body is {token_count} tokens — exceeds {warning_threshold} token threshold; consider splitting into sub-skills",
-        )
 
     return None
 
@@ -916,7 +678,7 @@ def _check_as009(path: pathlib.Path) -> dict | None:
 
 
 def check_skill_md(path: pathlib.Path) -> list[dict]:
-    """Run AS001-AS008 checks on a SKILL.md file.
+    """Run AS001 and AS006-AS009 checks on a SKILL.md file.
 
     Reads and parses the file at the given path, then runs all AS-series
     rules. Returns a list of violation dicts; empty list means no issues.
@@ -926,38 +688,13 @@ def check_skill_md(path: pathlib.Path) -> list[dict]:
 
     Returns:
         List of violation dicts, each with keys: code, severity, message.
-        May include 'fix' key with auto-fix suggestion for AS004, AS008, AS009.
+        May include 'fix' key with auto-fix suggestion for AS008, AS009.
     """
-    frontmatter, body_lines, raw_description_line = _parse_skill_md(path)
-
-    name: str | None = frontmatter.get("name") or None
-    description: str | None = frontmatter.get("description") or None
-
-    # Normalise empty strings to None
-    if name is not None and not name.strip():
-        name = None
-    if description is not None and not description.strip():
-        description = None
+    frontmatter, _body_lines = _parse_skill_md(path)
 
     violations: list[dict] = []
 
-    v = _check_as001(name)
-    if v:
-        violations.append(v)
-
-    v = _check_as002(name, path)
-    if v:
-        violations.append(v)
-
-    v = _check_as003(description)
-    if v:
-        violations.append(v)
-
-    v = _check_as004(description, raw_description_line)
-    if v:
-        violations.append(v)
-
-    v = _check_as005(body_lines)
+    v = _check_as001(frontmatter.get("name") or None)
     if v:
         violations.append(v)
 
@@ -993,33 +730,9 @@ def run_as_series(
     Returns:
         List of violation dicts, each with keys: code, severity, message.
     """
-    name: str | None = frontmatter.get("name") or None
-    description: str | None = frontmatter.get("description") or None
-
-    if name is not None and not name.strip():
-        name = None
-    if description is not None and not description.strip():
-        description = None
-
     violations: list[dict] = []
 
-    v = _check_as001(name)
-    if v:
-        violations.append(v)
-
-    v = _check_as002(name, path)
-    if v:
-        violations.append(v)
-
-    v = _check_as003(description)
-    if v:
-        violations.append(v)
-
-    v = _check_as004(description)
-    if v:
-        violations.append(v)
-
-    v = _check_as005(body_lines, warning_threshold, error_threshold)
+    v = _check_as001(frontmatter.get("name") or None)
     if v:
         violations.append(v)
 
