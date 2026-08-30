@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788060928909,
+  "lastUpdate": 1788061640170,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -792,6 +792,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 64.535,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "48997a6c44bb1393d3030904ca5684da65816faa",
+          "message": "refactor: fix orphaned Architecture citations, canonicalize thresholds, delete FM008 (#105)\n\n* fix(#40): citation cleanup — canonicalize thresholds, delete FM008, remove stale comments\n\nStep 1: Remove architecture line citations from plugin_validator.py and\nsk_series.py docstrings/comments (already done, uncommitted).\n\nStep 2: Make limits.py the canonical threshold source. token_counter.py now\nimports BODY_TOKEN_WARNING/BODY_TOKEN_ERROR from limits.py instead of\ndefining its own 4400/8800 literals. TOKEN_WARNING_THRESHOLD and\nTOKEN_ERROR_THRESHOLD are now aliases of the limits.py values.\n\nStep 3: Delete FM008 (Skills field not a YAML list) from RULE_REGISTRY.\nRemoved @skilllint_rule decorator, check_fm008 function, __all__ entry,\nimport in plugin_validator.py, call site, and test fixtures.\n\nStep 4: Remove stale comments referencing retired codes:\n- limits.py: Deleted 'AS Rules Reference' block (AS001-AS006)\n- token_counter.py: Updated threshold comments (removed AS005 refs)\n- fm_series.py: Updated severity docstring (removed FM008)\n- sk_series.py: Updated comment (removed AS001 ref)\n- plugin_validator.py: Updated docstrings (removed specific AS/SK code refs)\n\nVerified: uv run pytest (1136 passed, 1 skipped); ruff check (clean);\nty check (clean).\n\n* fix(#40): remove stale FM008 consumers left by the rule deletion\n\nFM008 (\"skills must be a YAML list of strings\") is gone from the registry\nand the validation pipeline, but its consumers still advertised it:\n\n- plugins/agentskills-skilllint/skills/skilllint/SKILL.md and\n  references/rule-catalog.md listed FM008 as a shipped, auto-fixable rule\n- scripts/generate_violations_fixture.py, bench_cpu.py and bench_profile.py\n  built and labelled FM008 violation cases\n- CLAUDE.md described the benchmark fixture as covering FM008\n\nThose benchmark cases never exercised FM008. Commit 5a88d60 (v1.6.1)\ninverted the rule from \"skills must be CSV\" to \"skills must be a YAML list\"\nbut left the fixture generator emitting `skills:` as a YAML list and calling\nit a violation — which the post-5a88d60 rule body accepted. The generator's\nFM008 and FM007+FM008 cases have produced zero FM008 findings since v1.6.1,\nso dropping them removes dead scenarios rather than real coverage.\n\ntest_rule_registry.py registered a synthetic RULE_REGISTRY[\"FM008\"] entry to\nexercise the unresolvable-relative-reference warning. Retitled to ZZ999 so a\nretired rule id is not reintroduced by a grep.\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01QJeBLNA9ybmQvv5REMDkrc\n\n* fix(#40): regenerate benchmark fixture and rules screenshot after FM008 deletion\n\nBoth artifacts are committed build outputs that no code regenerates, so the\nFM008 deletion left them advertising a rule skilllint can no longer run.\n\ntests/fixtures/benchmark-plugin-violations.zip — benchmark.yml extracts this\narchive directly and never invokes the generator, so editing VIOLATION_CYCLE\nalone left 40 of 200 skills carrying only the deleted FM008 pattern. The\ncommitted blob was stale in a second way as well: its FM007 cases used a\n`tools:` key, from a generator revision older than the switch to\n`allowed-tools:`. Regenerated from the current generator — 200 skills split\n67/67/66 across FM004/FM007/FM009.\n\nThe regenerated fixture exercises more, not less. Scanning the old archive\nyielded 40 FM004, 80 FM007 and 40 colon-parse findings (160 total); the 40\npure-FM008 skills produced nothing. The new archive yields 67 FM004, 67 FM007\nand 66 colon-parse findings (200 total). Both the compare-ref and base-ref\nbenchmark runs read a single extraction of the same archive, so the A/B\ncomparison stays valid across the change.\n\ndocs/screenshots/rules.svg — README.md:38 embeds this as the rule overview.\nRe-recorded through the same code path as `skilllint rules` at the file's\nexisting 100-column geometry. Drops the FM008 row, and also the LK002 row\nleft behind when #122 deleted that rule.\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01QJeBLNA9ybmQvv5REMDkrc\n\n* style: trim trailing whitespace from regenerated rules.svg\n\nRich's `Console.export_svg` emits two lines with trailing whitespace, so every\nre-record reintroduces them. The `trailing-whitespace` pre-commit hook already\ntrims this on the way in — all five committed screenshots have zero such lines\non main — so no change to `record_export.export_recording` is warranted; the\nhook is the guard and it is self-healing on future regenerations.\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01QJeBLNA9ybmQvv5REMDkrc\n\n* docs: note FM008 removal in the advertised FM rule ranges\n\nREADME.md and plugins/agentskills-skilllint/README.md both advertise\n\"FM001–FM010\", which now spans a gap: the series jumps FM007 to FM009. The\nadjacent AS row already discloses its gap as \"(AS007 removed)\", so the two\nrows read inconsistently otherwise. Applied the same annotation rather than\nsplitting the range, since the gap is interior and a range cannot express it.\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01QJeBLNA9ybmQvv5REMDkrc\n\n---------\n\nCo-authored-by: Claude Opus 5 <noreply@anthropic.com>",
+          "timestamp": "2026-08-30T03:44:24Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/48997a6c44bb1393d3030904ca5684da65816faa"
+        },
+        "date": 1788061639258,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 13492.26,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 14482.375,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 15799.878,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 69.118,
             "unit": "files/s"
           }
         ]
