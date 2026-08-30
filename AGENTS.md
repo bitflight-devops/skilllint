@@ -63,12 +63,7 @@ Before declaring success, confirm:
 
 ## Changing dependencies
 
-```sh
-uv remove --group <group> <pkg>...
-uv add    --group <group> <pkg>...
-```
-
-Never hand-edit a version string.
+`uv remove` then `uv add` — never hand-edit a version string.
 
 ## Running skilllint during development
 
