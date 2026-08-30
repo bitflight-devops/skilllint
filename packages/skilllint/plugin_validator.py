@@ -1878,8 +1878,14 @@ class NamespaceReferenceValidator:
         contains such a sequence, the reference is treated as escaping the
         plugin boundary and NR002 is emitted.
 
-        Source: https://agentskills.io/specification.md — plugin boundary is
-        a portability and security constraint.
+        Source: https://code.claude.com/docs/en/plugins-reference.md#path-traversal-limitations
+        — "Claude Code doesn't let a plugin reference files outside its own
+        directory. It rejects a component path that resolves outside the
+        plugin root, such as `../shared-utils`...". The `/` and `\\`
+        separator check derives from the same doc's plugin-init reference
+        (#plugin-init): a plugin `<name>` "cannot contain spaces or path
+        separators" because it becomes the skill namespace and directory
+        name.
 
         Args:
             label: Human-readable reference label for the error message.
