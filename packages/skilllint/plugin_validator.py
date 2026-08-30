@@ -5509,7 +5509,9 @@ def parse_skill_md(path: Path) -> tuple[dict, list[str], str | None, list[str]]:
     return frontmatter_dict, body_lines, yaml_err, colon_fields
 
 
-def run_platform_checks(path: Path, adapter: PlatformAdapter) -> list[dict]:
+def run_platform_checks(
+    path: Path, adapter: PlatformAdapter, *, policy_cache: dict[str, tuple[ValidationPolicy, Path | None]] | None = None
+) -> list[dict]:
     """Run platform-specific validation for a single adapter.
 
     Dispatches to adapter.validate(path) for all adapter types.
@@ -5518,6 +5520,9 @@ def run_platform_checks(path: Path, adapter: PlatformAdapter) -> list[dict]:
     Args:
         path: File path to validate.
         adapter: PlatformAdapter instance for constraint scope filtering.
+        policy_cache: Optional mutable per-run policy cache, forwarded to the
+            nested Claude pipeline so a multi-file scan reads each config —
+            and emits its diagnostics — once rather than once per file.
 
     Returns:
         List of violation dicts with keys: code, severity, message.
@@ -5534,7 +5539,9 @@ def run_platform_checks(path: Path, adapter: PlatformAdapter) -> list[dict]:
         if not sk_validators:
             return list(adapter.validate(path))
 
-        file_results = validate_single_path(path, check=True, fix=False, verbose=False)
+        file_results = validate_single_path(
+            path, check=True, fix=False, verbose=False, per_run_policy_cache=policy_cache
+        )
 
         violations: list[dict] = []
         for validator_results in file_results.values():
@@ -5580,6 +5587,9 @@ def validate_file(
         May include 'authority' key with origin and reference when the rule
         has authority metadata.
     """
+    resolved_policy_cache: dict[str, tuple[ValidationPolicy, Path | None]] = (
+        policy_cache if policy_cache is not None else {}
+    )
     pure = PurePath(path)
     if platform_override:
         matching = [adapters[platform_override]]
@@ -5610,7 +5620,7 @@ def validate_file(
         # configured thresholds AND severity as the default path (PR #97 review:
         # the two paths must not lint the same skill differently). Reuse a shared
         # per-run cache so a 1000-file platform scan reads each config once.
-        policy, _policy_root = _resolve_policy(path, policy_cache if policy_cache is not None else {})
+        policy, _policy_root = _resolve_policy(path, resolved_policy_cache)
         violations.extend(
             run_as_series(
                 path,
@@ -5626,7 +5636,7 @@ def validate_file(
             remapped: list[dict[str, object]] = []
             for violation in violations:
                 configured = policy.severity.get(str(violation.get("code")))
-                if configured in {"warning", "info"}:
+                if configured in _VALID_SEVERITIES:
                     remapped.append({**violation, "severity": configured})
                 else:
                     remapped.append(violation)
@@ -5646,7 +5656,7 @@ def validate_file(
     sk_validators = filter_validators_by_constraint_scopes(sk_validators, constraint_scopes)
 
     for adapter in matching:
-        violations.extend(run_platform_checks(path, adapter))
+        violations.extend(run_platform_checks(path, adapter, policy_cache=resolved_policy_cache))
 
     return violations
 

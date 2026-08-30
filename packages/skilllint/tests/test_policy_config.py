@@ -193,3 +193,37 @@ def test_platform_path_reuses_policy_cache_across_files(tmp_path: Path) -> None:
     with contextlib.redirect_stderr(buf):
         validate_file(b, {}, policy_cache=cache)
     assert "AS005 is not a configurable threshold" not in buf.getvalue()
+
+
+def test_nested_claude_platform_path_reuses_policy_cache(tmp_path: Path) -> None:
+    # Codex re-review #3 (268a8d9): validate_file() shared the per-run cache with
+    # its own _resolve_policy() but not with the nested Claude pipeline, so
+    # run_platform_checks() -> validate_single_path() re-read the config and
+    # re-emitted its diagnostics for every scanned file.
+    import contextlib
+    import io
+
+    from skilllint.plugin_validator import ADAPTERS, validate_file
+
+    (tmp_path / ".skilllint.json").write_text(json.dumps({"thresholds": {"AS005": 1000}}))
+    first = tmp_path / "skills" / "a" / "SKILL.md"
+    second = tmp_path / "skills" / "b" / "SKILL.md"
+    first.parent.mkdir(parents=True)
+    second.parent.mkdir(parents=True)
+    for skill in (first, second):
+        skill.write_text(f"---\nname: {skill.parent.name}\ndescription: demo skill\n---\nbody")
+
+    cache: dict[str, tuple[ValidationPolicy, Path | None]] = {}
+    marker = "AS005 is not a configurable threshold"
+
+    first_buf = io.StringIO()
+    with contextlib.redirect_stderr(first_buf):
+        validate_file(first, ADAPTERS, "claude_code", policy_cache=cache)
+    # Outer resolve and the nested Claude pipeline must share one cache entry,
+    # so the config is read — and reported — exactly once for the whole run.
+    assert first_buf.getvalue().count(marker) == 1
+
+    second_buf = io.StringIO()
+    with contextlib.redirect_stderr(second_buf):
+        validate_file(second, ADAPTERS, "claude_code", policy_cache=cache)
+    assert marker not in second_buf.getvalue()
