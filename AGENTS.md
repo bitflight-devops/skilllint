@@ -68,7 +68,7 @@ uv remove --group <group> <pkg>...
 uv add    --group <group> <pkg>...
 ```
 
-Never hand-edit a version string; never `uv tool install`.
+Never hand-edit a version string.
 
 ## Running skilllint during development
 
