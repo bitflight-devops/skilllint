@@ -40,10 +40,18 @@ DEFAULT_REPO = "skilllint"
 
 app = typer.Typer(help="GitHub PR review-thread operations (fetch/watch/reply/resolve) via gh.")
 
+# `isDraft`/`mergeable`/`mergeStateStatus` are selected alongside `reviewThreads` rather than in a
+# query of their own: they live on the same `pullRequest` object this query already fetches, so
+# reading them here costs no extra `gh` round trip. They're repeated identically on every slurped
+# page `--paginate` returns (each page is a fresh request against the same `pullRequest`), so
+# `_build_fetch_result` reads them off the first page only.
 _UNRESOLVED_THREADS_QUERY = """
 query($endCursor: String, $o: String!, $r: String!, $pr: Int!) {
   repository(owner: $o, name: $r) {
     pullRequest(number: $pr) {
+      isDraft
+      mergeable
+      mergeStateStatus
       reviewThreads(first: 100, after: $endCursor) {
         totalCount
         pageInfo { hasNextPage endCursor }
@@ -90,8 +98,8 @@ class _GitHubResponseModel(BaseModel):
     `strict=True` so a producer-shape mismatch — GitHub or `gh` returning a string where the
     schema declares an integer or a boolean — is rejected at ingress instead of being coerced
     into apparently valid review state. Models this script builds itself from already-validated
-    values (`UnresolvedThread`, `FetchResult`, `WatchResult`) are not ingress and do not inherit
-    this: no untrusted input reaches them.
+    values (`UnresolvedThread`, `FetchResult`, `WatchResult`, `Reviewability`) are not ingress and
+    do not inherit this: no untrusted input reaches them.
     """
 
     model_config = ConfigDict(strict=True)
@@ -137,17 +145,32 @@ class _ReviewThreadNode(_GitHubResponseModel):
 
 
 class _ReviewThreadsConnection(_GitHubResponseModel):
-    """One page's `reviewThreads` connection, already unwrapped from `data.repository.pullRequest`.
-
-    `_fetch_pages` pulls this dict straight out of each slurped page by subscripting the fixed
-    `data.repository.pullRequest.reviewThreads` path — a mismatch there (GitHub renaming or
-    removing a field) raises `KeyError` immediately at the point of access, which is an
-    acceptable boundary failure for a query shape this script itself controls. Everything
-    variable — the node fields — is validated here.
-    """
+    """One page's `reviewThreads` connection, nested inside `_PullRequestThreadsPage`."""
 
     totalCount: int
     nodes: list[_ReviewThreadNode]
+
+
+class _PullRequestThreadsPage(_GitHubResponseModel):
+    """One page of `_UNRESOLVED_THREADS_QUERY`, already unwrapped from `data.repository.pullRequest`.
+
+    `_fetch_pages` pulls this dict straight out of each slurped page by subscripting the fixed
+    `data.repository.pullRequest` path — a mismatch there (GitHub renaming or removing a field)
+    raises `KeyError` immediately at the point of access, which is an acceptable boundary failure
+    for a query shape this script itself controls. Everything variable — `reviewThreads`' node
+    fields, plus `isDraft`/`mergeable`/`mergeStateStatus` — is validated here.
+
+    `mergeable` is one of `MERGEABLE`, `CONFLICTING`, `UNKNOWN`; `mergeStateStatus` is one of
+    `CLEAN`, `DIRTY`, `BLOCKED`, `BEHIND`, `UNSTABLE`, `DRAFT`, `HAS_HOOKS`, `UNKNOWN`. Both are
+    kept as plain strings rather than enums: GitHub can add a state at any time, and an
+    unrecognized one must reach the caller as data instead of failing validation on a PR that is
+    otherwise fine.
+    """
+
+    isDraft: bool
+    mergeable: str
+    mergeStateStatus: str
+    reviewThreads: _ReviewThreadsConnection
 
 
 class ReviewNode(_GitHubResponseModel):
@@ -170,7 +193,7 @@ class ReviewNode(_GitHubResponseModel):
 
 
 class _ReviewsConnection(_GitHubResponseModel):
-    """One page's `reviews` connection, already unwrapped — see `_ReviewThreadsConnection`."""
+    """One page's `reviews` connection, already unwrapped — see `_PullRequestThreadsPage`."""
 
     totalCount: int
     nodes: list[ReviewNode]
@@ -192,6 +215,36 @@ class UnresolvedThread(BaseModel):
     comments_truncated: bool
 
 
+class Reviewability(BaseModel):
+    """Whether this PR is in a state where reviews can happen at all.
+
+    A PR that is a draft or has merge conflicts receives no reviews — reviewers are not requested
+    for a draft, and review runs do not start on a conflicting branch. Without this, an empty
+    `unresolved` array reads as "nothing to do" when the truth is "nothing can happen until the
+    PR itself is fixed", the same misleading-empty-result trap `reviews_count` / `threads_count` /
+    `unresolved_count` already warn about together.
+
+    `blockers` is empty exactly when neither condition holds. Each entry is a plain sentence
+    naming the consequence, not just the GitHub state name, because the reader needs to know what
+    will not happen, not just what the API returned.
+
+    `mergeable: "UNKNOWN"` is deliberately **not** a blocker. GitHub computes mergeability in a
+    background job and returns `UNKNOWN` while it runs — precisely the moment just after a push,
+    which is exactly when this script tends to get run. Reporting a conflict there would be a
+    false alarm on every freshly-pushed PR; `UNKNOWN` is surfaced as data and left for the next
+    check (another `fetch`, or `watch`'s next poll) to resolve.
+
+    `mergeStateStatus` is reported as data but drives no blocker of its own — its `DRAFT` and
+    `DIRTY` values restate `is_draft` and `mergeable` respectively, and its remaining values
+    (`BLOCKED`, `BEHIND`, `UNSTABLE`, `HAS_HOOKS`) describe merge readiness, not reviewability.
+    """
+
+    is_draft: bool
+    mergeable: str
+    merge_state_status: str
+    blockers: list[str]
+
+
 class FetchResult(BaseModel):
     """Result of `fetch`: totals plus every currently-unresolved thread."""
 
@@ -200,6 +253,7 @@ class FetchResult(BaseModel):
     threads_count: int
     unresolved: list[UnresolvedThread]
     unresolved_count: int
+    reviewability: Reviewability
 
 
 class WatchResult(BaseModel):
@@ -269,8 +323,8 @@ def _run_gh(args: list[str], *, timeout: float | None = None) -> str:
     return result.stdout
 
 
-def _fetch_pages(owner: str, repo: str, pr: int, *, gh_timeout: float | None) -> list[_ReviewThreadsConnection]:
-    """Fetch and validate every paginated page of a PR's review threads.
+def _fetch_pages(owner: str, repo: str, pr: int, *, gh_timeout: float | None) -> list[_PullRequestThreadsPage]:
+    """Fetch and validate every paginated page of a PR's review threads and reviewability fields.
 
     Args:
         owner: Repository owner login.
@@ -279,7 +333,8 @@ def _fetch_pages(owner: str, repo: str, pr: int, *, gh_timeout: float | None) ->
         gh_timeout: Seconds to bound the underlying `gh` call to — see `_run_gh`.
 
     Returns:
-        One validated `reviewThreads` connection per page `gh api graphql --paginate` returned.
+        One validated page per page `gh api graphql --paginate` returned. Never empty: a real,
+        open pull request always has at least one page, even with zero threads.
     """
     raw = _run_gh(
         [
@@ -299,8 +354,7 @@ def _fetch_pages(owner: str, repo: str, pr: int, *, gh_timeout: float | None) ->
         timeout=gh_timeout,
     )
     return [
-        _ReviewThreadsConnection.model_validate(page["data"]["repository"]["pullRequest"]["reviewThreads"])
-        for page in json.loads(raw)
+        _PullRequestThreadsPage.model_validate(page["data"]["repository"]["pullRequest"]) for page in json.loads(raw)
     ]
 
 
@@ -382,6 +436,30 @@ def _gh_timeout_budget(deadline: float | None, gh_timeout: float | None) -> floa
     return max(0.0, deadline - time.monotonic())
 
 
+def _reviewability(page: _PullRequestThreadsPage) -> Reviewability:
+    """Derive whether this PR can be reviewed at all, and say what is stopping it if not.
+
+    Only two conditions produce a blocker, because only these two actually stop reviews from
+    happening: a draft PR does not get reviewers requested, and a conflicting one does not get
+    review runs. `mergeable: "UNKNOWN"` yields no blocker on purpose — see `Reviewability`.
+
+    Args:
+        page: The first page from `_fetch_pages`, carrying the PR-level `isDraft`/`mergeable`/
+            `mergeStateStatus` fields (identical on every page — see `_UNRESOLVED_THREADS_QUERY`).
+
+    Returns:
+        The three fields as reported, plus a plain-sentence blocker per condition present.
+    """
+    blockers: list[str] = []
+    if page.isDraft:
+        blockers.append("draft: reviewers are not requested until marked ready for review")
+    if page.mergeable == "CONFLICTING":
+        blockers.append("conflicting: reviews will not run until merge conflicts are resolved")
+    return Reviewability(
+        is_draft=page.isDraft, mergeable=page.mergeable, merge_state_status=page.mergeStateStatus, blockers=blockers
+    )
+
+
 def _build_fetch_result(
     owner: str, repo: str, pr: int, *, deadline: float | None = None, gh_timeout: float | None = None
 ) -> FetchResult:
@@ -400,11 +478,11 @@ def _build_fetch_result(
         gh_timeout: Per-call bound applied when `deadline` is `None`; `None` means no bound.
 
     Returns:
-        Totals plus every currently-unresolved thread.
+        Totals plus every currently-unresolved thread and the PR's own reviewability.
     """
     thread_pages = _fetch_pages(owner, repo, pr, gh_timeout=_gh_timeout_budget(deadline, gh_timeout))
     review_pages = _fetch_review_pages(owner, repo, pr, gh_timeout=_gh_timeout_budget(deadline, gh_timeout))
-    all_threads = [node for page in thread_pages for node in page.nodes]
+    all_threads = [node for page in thread_pages for node in page.reviewThreads.nodes]
     all_reviews = [node for page in review_pages for node in page.nodes]
     unresolved = [
         UnresolvedThread(
@@ -420,9 +498,10 @@ def _build_fetch_result(
     return FetchResult(
         reviews_count=review_pages[0].totalCount,
         reviews_with_body=[review for review in all_reviews if review.body.strip()],
-        threads_count=thread_pages[0].totalCount,
+        threads_count=thread_pages[0].reviewThreads.totalCount,
         unresolved=unresolved,
         unresolved_count=len(unresolved),
+        reviewability=_reviewability(thread_pages[0]),
     )
 
 
@@ -437,15 +516,17 @@ def fetch(
 ) -> None:
     """Fetch a PR's unresolved review threads, auto-paginated so none is silently truncated.
 
-    Prints compact JSON with `reviews_count`, `threads_count`, `unresolved`, and
-    `unresolved_count`. A `threads_count` of 0 means no reviews have landed yet — different from
+    Prints compact JSON with `reviews_count`, `threads_count`, `unresolved`, `unresolved_count`,
+    and `reviewability`. A `threads_count` of 0 means no reviews have landed yet — different from
     a nonzero `threads_count` with `unresolved_count: 0`, which means every thread found was
     already resolved. Never treat an empty `unresolved` array as "nothing to do" without checking
-    these counts first. Each unresolved thread carries its own `id` (for resolving) and each
-    comment's `databaseId` (for replying) — no separate lookup needed. A thread's
-    `comments_truncated: true` means that single thread has passed 100 comments in its own
-    back-and-forth (rare, but real content is missing) — page that thread's `comments` connection
-    directly before concluding anything about it.
+    these counts, and `reviewability.blockers`, first: a non-empty `blockers` means the empty
+    result is *expected* — a draft gets no reviewers requested, a conflicting branch gets no
+    review runs — and the fix belongs on the PR itself, not in the review queue. Each unresolved
+    thread carries its own `id` (for resolving) and each comment's `databaseId` (for replying) —
+    no separate lookup needed. A thread's `comments_truncated: true` means that single thread has
+    passed 100 comments in its own back-and-forth (rare, but real content is missing) — page that
+    thread's `comments` connection directly before concluding anything about it.
 
     Also includes `reviews_with_body`: reviews whose top-level summary text is non-empty (an
     approval note, or feedback given in the review body rather than as an inline comment) — these
@@ -493,7 +574,11 @@ def watch(
     miss activity between them. The receiving-pr-reviews SKILL.md documents this loop pattern.
 
     Prints the same compact JSON `fetch` prints, nested under `state`, plus `timed_out`,
-    `new_thread_ids`, and `new_reviews_with_body`.
+    `new_thread_ids`, and `new_reviews_with_body`. Check `state.reviewability.blockers` before
+    issuing another `watch` call after a `timed_out: true` result — waiting out another window for
+    reviews that cannot arrive (the PR is a draft, or conflicting) is pure waste, and the fix is on
+    the PR itself, not in another poll. `reviewability` is read fresh on the baseline and on every
+    re-poll, so it is always current on whichever result this call returns.
 
     `deadline` is the only cutoff. The loop polls while a full `interval_seconds` still fits
     before it and stops once less than that remains — the point past which `_gh_timeout_budget`

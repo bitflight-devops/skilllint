@@ -45,17 +45,32 @@ if TYPE_CHECKING:
 runner = CliRunner()
 
 
-def _thread_page(*, has_next_page: bool, nodes: list[dict[str, object]], total_count: int) -> dict[str, object]:
-    """Build one slurped `--paginate --slurp` page for the reviewThreads query."""
+def _thread_page(
+    *,
+    has_next_page: bool,
+    nodes: list[dict[str, object]],
+    total_count: int,
+    is_draft: bool = False,
+    mergeable: str = "MERGEABLE",
+    merge_state_status: str = "CLEAN",
+) -> dict[str, object]:
+    """Build one slurped `--paginate --slurp` page for the reviewThreads query.
+
+    `is_draft`/`mergeable`/`merge_state_status` default to a plain reviewable PR — only the
+    reviewability-focused tests below need to override them.
+    """
     return {
         "data": {
             "repository": {
                 "pullRequest": {
+                    "isDraft": is_draft,
+                    "mergeable": mergeable,
+                    "mergeStateStatus": merge_state_status,
                     "reviewThreads": {
                         "totalCount": total_count,
                         "pageInfo": {"hasNextPage": has_next_page, "endCursor": None},
                         "nodes": nodes,
-                    }
+                    },
                 }
             }
         }
@@ -77,6 +92,33 @@ def _reviews_page(*, nodes: list[dict[str, object]], total_count: int) -> dict[s
             }
         }
     }
+
+
+# Every `_UNRESOLVED_THREADS_QUERY` page now carries `isDraft`/`mergeable`/`mergeStateStatus`
+# alongside `reviewThreads`, and `FetchResult` requires `reviewability` — this pair of helpers
+# gives `watch`-focused tests a one-line reviewable, no-blockers baseline instead of repeating
+# the same clean `Reviewability` literal at every call site.
+def _clean_reviewability() -> dict[str, object]:
+    """A `Reviewability` payload with no blockers — a plain, non-draft, mergeable PR."""
+    return {"is_draft": False, "mergeable": "MERGEABLE", "merge_state_status": "CLEAN", "blockers": []}
+
+
+def _clean_fetch_result(**overrides: object) -> FetchResult:
+    """Build a baseline `FetchResult`: no threads, no reviews, no reviewability blockers.
+
+    `watch` tests that only care about thread/review diffing reuse this instead of repeating
+    every `FetchResult` field, so a future schema change updates one place, not every call site.
+    """
+    payload: dict[str, object] = {
+        "reviews_count": 0,
+        "reviews_with_body": [],
+        "threads_count": 0,
+        "unresolved": [],
+        "unresolved_count": 0,
+        "reviewability": _clean_reviewability(),
+    }
+    payload.update(overrides)
+    return FetchResult.model_validate(payload)
 
 
 def test_fetch_flattens_pages_filters_resolved_and_handles_null_author(mocker: MockerFixture) -> None:
@@ -177,13 +219,14 @@ def test_fetch_flattens_pages_filters_resolved_and_handles_null_author(mocker: M
 
 def test_watch_reports_new_thread_when_activity_appears(mocker: MockerFixture) -> None:
     """`watch` returns `timed_out: False` and the new thread id as soon as a poll finds one."""
-    baseline = FetchResult(reviews_count=0, reviews_with_body=[], threads_count=0, unresolved=[], unresolved_count=0)
+    baseline = _clean_fetch_result()
     updated = FetchResult.model_validate({
         "reviews_count": 0,
         "reviews_with_body": [],
         "threads_count": 1,
         "unresolved": [{"id": "T9", "path": "d.py", "comments": [], "comments_total": 0, "comments_truncated": False}],
         "unresolved_count": 1,
+        "reviewability": _clean_reviewability(),
     })
     mocker.patch.object(pr_review_threads, "_build_fetch_result", side_effect=[baseline, updated])
     mocker.patch.object(pr_review_threads.time, "sleep")
@@ -215,6 +258,7 @@ def test_watch_reports_edited_review_with_unchanged_id(mocker: MockerFixture) ->
         "threads_count": 0,
         "unresolved": [],
         "unresolved_count": 0,
+        "reviewability": _clean_reviewability(),
     })
     edited = FetchResult.model_validate({
         "reviews_count": 1,
@@ -222,6 +266,7 @@ def test_watch_reports_edited_review_with_unchanged_id(mocker: MockerFixture) ->
         "threads_count": 0,
         "unresolved": [],
         "unresolved_count": 0,
+        "reviewability": _clean_reviewability(),
     })
     mocker.patch.object(pr_review_threads, "_build_fetch_result", side_effect=[baseline, edited])
     mocker.patch.object(pr_review_threads.time, "sleep")
@@ -240,7 +285,7 @@ def test_watch_reports_edited_review_with_unchanged_id(mocker: MockerFixture) ->
 
 def test_watch_times_out_when_no_new_activity(mocker: MockerFixture) -> None:
     """`watch` returns `timed_out: True` when `timeout_seconds` elapses with nothing new."""
-    baseline = FetchResult(reviews_count=0, reviews_with_body=[], threads_count=0, unresolved=[], unresolved_count=0)
+    baseline = _clean_fetch_result()
     mocker.patch.object(pr_review_threads, "_build_fetch_result", return_value=baseline)
 
     result = runner.invoke(app, ["watch", "--pr", "3208", "--interval-seconds", "1", "--timeout-seconds", "0"])
@@ -261,7 +306,7 @@ def test_watch_stops_when_less_than_one_interval_remains(mocker: MockerFixture) 
     `--timeout-seconds 50` and `--interval-seconds 90` the very first sleep covers the whole
     window, so no poll is attempted and the baseline is reported as an honest `timed_out: true`.
     """
-    baseline = FetchResult(reviews_count=0, reviews_with_body=[], threads_count=0, unresolved=[], unresolved_count=0)
+    baseline = _clean_fetch_result()
     fetch_mock = mocker.patch.object(pr_review_threads, "_build_fetch_result", return_value=baseline)
     mocker.patch.object(pr_review_threads.time, "sleep")
     # 0.0 (deadline = 0.0 + 50), 0.0 (remaining = 50, which is <= the 90s interval → break).
@@ -281,13 +326,14 @@ def test_watch_survives_transient_gh_failure_mid_window(mocker: MockerFixture) -
     crash `watch` — it counts as no fresh data for that one poll, and the loop continues toward
     `deadline` on its own schedule rather than propagating the exception.
     """
-    baseline = FetchResult(reviews_count=0, reviews_with_body=[], threads_count=0, unresolved=[], unresolved_count=0)
+    baseline = _clean_fetch_result()
     updated = FetchResult.model_validate({
         "reviews_count": 0,
         "reviews_with_body": [],
         "threads_count": 1,
         "unresolved": [{"id": "T9", "path": "d.py", "comments": [], "comments_total": 0, "comments_truncated": False}],
         "unresolved_count": 1,
+        "reviewability": _clean_reviewability(),
     })
     mocker.patch.object(
         pr_review_threads,
@@ -316,7 +362,7 @@ def test_watch_fails_loudly_when_every_poll_fails(mocker: MockerFixture) -> None
     exception handler to tell a real failure from the window simply ending) followed by the
     window naturally expiring.
     """
-    baseline = FetchResult(reviews_count=0, reviews_with_body=[], threads_count=0, unresolved=[], unresolved_count=0)
+    baseline = _clean_fetch_result()
     mocker.patch.object(
         pr_review_threads,
         "_build_fetch_result",
@@ -351,7 +397,7 @@ def test_watch_treats_a_deadline_truncated_poll_as_an_honest_timeout(mocker: Moc
     non-zero on ordinary runs; classifying a failure that lands with time still on the clock as
     success would hide a genuine transient error. Only the clock distinguishes them.
     """
-    baseline = FetchResult(reviews_count=0, reviews_with_body=[], threads_count=0, unresolved=[], unresolved_count=0)
+    baseline = _clean_fetch_result()
     fetch_mock = mocker.patch.object(
         pr_review_threads,
         "_build_fetch_result",
@@ -386,6 +432,7 @@ def test_watch_reports_a_reply_to_an_already_known_thread(mocker: MockerFixture)
             {"id": "T1", "path": "a.py", "comments": [comment], "comments_total": 1, "comments_truncated": False}
         ],
         "unresolved_count": 1,
+        "reviewability": _clean_reviewability(),
     })
     replied = FetchResult.model_validate({
         "reviews_count": 0,
@@ -401,6 +448,7 @@ def test_watch_reports_a_reply_to_an_already_known_thread(mocker: MockerFixture)
             }
         ],
         "unresolved_count": 1,
+        "reviewability": _clean_reviewability(),
     })
     mocker.patch.object(pr_review_threads, "_build_fetch_result", side_effect=[baseline, replied])
     mocker.patch.object(pr_review_threads.time, "sleep")
@@ -435,6 +483,7 @@ def test_watch_reports_an_edit_to_an_existing_comment(mocker: MockerFixture) -> 
         "threads_count": 1,
         "unresolved": [thread | {"comments": [before]}],
         "unresolved_count": 1,
+        "reviewability": _clean_reviewability(),
     })
     edited = FetchResult.model_validate({
         "reviews_count": 0,
@@ -442,6 +491,7 @@ def test_watch_reports_an_edit_to_an_existing_comment(mocker: MockerFixture) -> 
         "threads_count": 1,
         "unresolved": [thread | {"comments": [after]}],
         "unresolved_count": 1,
+        "reviewability": _clean_reviewability(),
     })
     mocker.patch.object(pr_review_threads, "_build_fetch_result", side_effect=[baseline, edited])
     mocker.patch.object(pr_review_threads.time, "sleep")
@@ -462,7 +512,7 @@ def test_watch_fails_loudly_on_a_nonzero_gh_exit_at_the_deadline(mocker: MockerF
     shrinking budget; an authentication, rate-limit, API or GraphQL error cannot, so reporting
     `timed_out: true` from stale state would tell a caller the PR is clean when nothing was checked.
     """
-    baseline = FetchResult(reviews_count=0, reviews_with_body=[], threads_count=0, unresolved=[], unresolved_count=0)
+    baseline = _clean_fetch_result()
     mocker.patch.object(
         pr_review_threads, "_build_fetch_result", side_effect=[baseline, subprocess.CalledProcessError(1, ["gh"])]
     )
@@ -492,7 +542,7 @@ def test_watch_baseline_is_not_deadline_bounded(mocker: MockerFixture) -> None:
     producing the documented snapshot. The baseline takes the caller's `--gh-timeout-seconds`
     instead; only the polls race `deadline`.
     """
-    baseline = FetchResult(reviews_count=0, reviews_with_body=[], threads_count=0, unresolved=[], unresolved_count=0)
+    baseline = _clean_fetch_result()
     fetch_mock = mocker.patch.object(pr_review_threads, "_build_fetch_result", return_value=baseline)
 
     result = runner.invoke(app, ["watch", "--pr", "3208", "--timeout-seconds", "0"])
@@ -527,7 +577,7 @@ def test_watch_fails_loudly_when_only_final_poll_fails(mocker: MockerFixture) ->
     never actually observed; `watch` must still fail rather than report a `timed_out: true` built
     from that stale state.
     """
-    baseline = FetchResult(reviews_count=0, reviews_with_body=[], threads_count=0, unresolved=[], unresolved_count=0)
+    baseline = _clean_fetch_result()
     mocker.patch.object(
         pr_review_threads,
         "_build_fetch_result",
@@ -545,3 +595,81 @@ def test_watch_fails_loudly_when_only_final_poll_fails(mocker: MockerFixture) ->
     assert "the last of 2 poll(s) this window failed" in result.output
     with pytest.raises(json.JSONDecodeError):
         json.loads(result.output)
+
+
+def _reviewable_pages(
+    *, is_draft: bool = False, mergeable: str = "MERGEABLE", merge_state_status: str = "CLEAN"
+) -> tuple[str, str]:
+    """JSON for a `fetch` call against a PR with no threads or reviews, only reviewability varying."""
+    thread_pages = [
+        _thread_page(
+            total_count=0,
+            has_next_page=False,
+            nodes=[],
+            is_draft=is_draft,
+            mergeable=mergeable,
+            merge_state_status=merge_state_status,
+        )
+    ]
+    reviews_pages = [_reviews_page(total_count=0, nodes=[])]
+    return json.dumps(thread_pages), json.dumps(reviews_pages)
+
+
+def test_fetch_reports_draft_as_a_blocker(mocker: MockerFixture) -> None:
+    """A draft PR surfaces a `reviewability` blocker naming the consequence, not just the state."""
+    thread_json, reviews_json = _reviewable_pages(is_draft=True, merge_state_status="DRAFT")
+    mocker.patch.object(pr_review_threads, "_run_gh", side_effect=[thread_json, reviews_json])
+
+    result = runner.invoke(app, ["fetch", "--pr", "3208"])
+
+    assert result.exit_code == 0, result.output
+    reviewability = json.loads(result.output)["reviewability"]
+    assert reviewability["is_draft"] is True
+    assert reviewability["blockers"] == ["draft: reviewers are not requested until marked ready for review"]
+
+
+def test_fetch_reports_conflicting_as_a_blocker(mocker: MockerFixture) -> None:
+    """A conflicting PR surfaces a `reviewability` blocker naming the consequence."""
+    thread_json, reviews_json = _reviewable_pages(mergeable="CONFLICTING", merge_state_status="DIRTY")
+    mocker.patch.object(pr_review_threads, "_run_gh", side_effect=[thread_json, reviews_json])
+
+    result = runner.invoke(app, ["fetch", "--pr", "3208"])
+
+    assert result.exit_code == 0, result.output
+    reviewability = json.loads(result.output)["reviewability"]
+    assert reviewability["mergeable"] == "CONFLICTING"
+    assert reviewability["blockers"] == ["conflicting: reviews will not run until merge conflicts are resolved"]
+
+
+def test_fetch_treats_unknown_mergeable_as_no_blocker(mocker: MockerFixture) -> None:
+    """`mergeable: UNKNOWN` — GitHub still computing mergeability in the background — must never
+    be reported as a blocker; treating it as a conflict would false-alarm on every freshly-pushed
+    PR, which is exactly when this script is most likely to be run.
+    """
+    thread_json, reviews_json = _reviewable_pages(mergeable="UNKNOWN")
+    mocker.patch.object(pr_review_threads, "_run_gh", side_effect=[thread_json, reviews_json])
+
+    result = runner.invoke(app, ["fetch", "--pr", "3208"])
+
+    assert result.exit_code == 0, result.output
+    reviewability = json.loads(result.output)["reviewability"]
+    assert reviewability["mergeable"] == "UNKNOWN"
+    assert reviewability["blockers"] == []
+
+
+def test_fetch_reports_no_blockers_for_a_clean_reviewable_pr(mocker: MockerFixture) -> None:
+    """A non-draft, mergeable PR reports an empty `blockers` list — an empty result set really is
+    one, not a symptom of a blocked PR.
+    """
+    thread_json, reviews_json = _reviewable_pages()
+    mocker.patch.object(pr_review_threads, "_run_gh", side_effect=[thread_json, reviews_json])
+
+    result = runner.invoke(app, ["fetch", "--pr", "3208"])
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["reviewability"] == {
+        "is_draft": False,
+        "mergeable": "MERGEABLE",
+        "merge_state_status": "CLEAN",
+        "blockers": [],
+    }
