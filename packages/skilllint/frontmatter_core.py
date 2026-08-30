@@ -32,6 +32,7 @@ Public API:
     extract_frontmatter    -- parse the YAML frontmatter block out of file content
     get_frontmatter_model  -- map a file-type string to a Pydantic model class
     fix_skill_name_field   -- add/correct the 'name' field to match directory name
+    normalize_tools_value  -- parse a tools-declaring field value into a list of names
 
 Dependencies (provided by callers' PEP 723 environments):
   pydantic>=2.0.0
@@ -186,7 +187,13 @@ class AgentFrontmatter(BaseModel):
         None, alias="permissionMode"
     )
     max_turns: int | None = Field(None, alias="maxTurns")
-    skills: str | None = None
+    # sub-agents.md "Preload skills into subagents": a YAML list of skill names
+    # to preload, e.g. `skills:\n  - api-conventions`. Unlike `tools`, the spec's
+    # own example gives no inline-string form for this field, so the model must
+    # not coerce a list into a CSV string the way it does for tools fields.
+    # AG003 (rules/ag_series.py) reports the wrong-shape case with a sourced
+    # message; this field simply declares the documented shape.
+    skills: list[str] | None = None
     mcp_servers: list[Any] | dict[str, Any] | None = Field(None, alias="mcpServers")
     hooks: dict[str, Any] | None = None
     memory: Literal["user", "project", "local"] | None = None
@@ -194,7 +201,7 @@ class AgentFrontmatter(BaseModel):
     isolation: Literal["worktree"] | None = None
     color: str | None = None
 
-    @field_validator("skills", "tools", "disallowed_tools", mode="before")
+    @field_validator("tools", "disallowed_tools", mode="before")
     @classmethod
     def normalize_comma_separated(cls, v: object) -> str | None:
         """Convert YAML arrays to comma-separated strings.
@@ -312,3 +319,31 @@ def fix_skill_name_field(normalized_dict: dict[str, Any], file_path: Path, fixes
         normalized_dict["name"] = dir_name
 
     return normalized_dict
+
+
+def normalize_tools_value(value: object) -> list[str]:
+    """Normalize a tools-declaring frontmatter value into a list of tool names.
+
+    Handles the YAML list form and the inline string form. The inline form is
+    split on **both** whitespace and commas: the AgentSkills specification
+    describes `allowed-tools` as space-separated (agentskills.io/specification.md,
+    fetched 2026-08-22) while sub-agents.md's own `tools` examples use commas
+    (`tools: Read, Glob, Grep`), and nothing establishes that either separator
+    is an error for the other field. Parsing liberally is what lets a rule
+    *see* the entries regardless of which separator the author used; whether a
+    given separator is worth reporting is a separate, rule-specific question
+    this function does not answer.
+
+    Args:
+        value: The raw frontmatter value for a tools-declaring field
+            (`tools`, `disallowedTools`, or `allowed-tools`).
+
+    Returns:
+        List of tool name strings. Empty list when the value is absent,
+        blank, or an unrecognized shape (e.g. a dict).
+    """
+    if isinstance(value, list):
+        return [str(t) for t in value if t is not None]
+    if isinstance(value, str):
+        return [t for t in value.replace(",", " ").split() if t]
+    return []

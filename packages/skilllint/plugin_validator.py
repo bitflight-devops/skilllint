@@ -53,7 +53,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from ruamel.yaml import YAML, YAMLError
 from ruamel.yaml.scalarstring import DoubleQuotedScalarString
 
-import skilllint.rules  # ruff: ignore[unused-import] — ensures all 14 series modules register into RULE_REGISTRY
+import skilllint.rules  # ruff: ignore[unused-import] — ensures all 15 series modules register into RULE_REGISTRY
 from skilllint.adapters import PlatformAdapter, load_adapters, matches_file
 from skilllint.adapters.claude_code import ClaudeCodeAdapter
 from skilllint.cli_docs import docs_app
@@ -63,6 +63,7 @@ from skilllint.record_export import (
     make_recording_console as _make_recording_console,
 )
 from skilllint.rule_registry import rule_authority, rule_reference
+from skilllint.rules.ag_series import check_ag001, check_ag002, check_ag003
 from skilllint.rules.as_series import run_as_series
 from skilllint.rules.fm_series import check_fm001, check_fm004, check_fm007, check_fm010
 from skilllint.rules.hk_series import (
@@ -1311,6 +1312,46 @@ def _check_list_valued_tool_fields(
     warnings.extend(check_fm007(data, sentinel_path, "skill"))
 
 
+def _is_pydantic_shape_error_for_field(error: ErrorDetails, field: str) -> bool:
+    """Return True when a Pydantic error's location is exactly ``(field,)``.
+
+    Used to suppress the generic Pydantic-derived issue for a top-level field
+    that a dedicated AG rule reports instead, with a specific authority
+    citation the generic path cannot supply. A per-item error (e.g.
+    ``("skills", 0)`` for a bad element inside an otherwise-valid list) does
+    not match and is left to the generic path, since no AG rule covers it.
+
+    Args:
+        error: Pydantic ErrorDetails from ValidationError.errors().
+        field: Top-level field name to match against the error's location.
+
+    Returns:
+        True if the error's ``loc`` is the single-element tuple ``(field,)``.
+    """
+    loc = error.get("loc", ())
+    return tuple(str(x) for x in (loc if isinstance(loc, (list, tuple)) else (loc,))) == (field,)
+
+
+def _check_agent_tools_and_skills_fields(
+    data: dict[str, YamlValue], path: Path, errors: list[ValidationIssue], warnings: list[ValidationIssue]
+) -> None:
+    """Append AG001-AG003 issues for agent frontmatter (tools/disallowedTools/skills).
+
+    Only called for ``FileType.AGENT``. Reads the raw parsed dict so a
+    YAML-list ``tools``/``skills`` value is inspected before
+    ``AgentFrontmatter``'s own field-level CSV coercion of ``tools``/
+    ``disallowedTools``.
+
+    Args:
+        data: Parsed frontmatter dict.
+        path: Path to the agent file (AG002 uses it to discover MCP server config).
+        errors: Mutable list to append error issues to.
+        warnings: Mutable list to append warning issues to.
+    """
+    for issue in (*check_ag001(data), *check_ag002(data, path), *check_ag003(data)):
+        (errors if issue.severity == "error" else warnings).append(issue)
+
+
 def _check_name_field_format(
     data: dict[str, YamlValue],
     path: Path,
@@ -2075,6 +2116,10 @@ class FrontmatterValidator:
             # AS-series rules do not duplicate parser-owned findings.
         except ValidationError as e:
             for err in e.errors():
+                if file_type == FileType.AGENT and _is_pydantic_shape_error_for_field(err, "skills"):
+                    # AG003 reports this with sub-agents.md authority instead of
+                    # the generic Pydantic-derived FM005 message.
+                    continue
                 issue = _pydantic_error_to_validation_issue(err)
                 if issue.severity == "warning":
                     warnings.append(issue)
@@ -2085,6 +2130,8 @@ class FrontmatterValidator:
         _check_list_valued_tool_fields(data, errors, warnings)
         _check_name_field_format(data, path, file_type, errors, warnings)
         _check_skill_directory_name(path, file_type, errors)
+        if file_type == FileType.AGENT:
+            _check_agent_tools_and_skills_fields(data, path, errors, warnings)
 
         hooks_value = data.get("hooks")
         if isinstance(hooks_value, dict):
@@ -2208,9 +2255,13 @@ class FrontmatterValidator:
         fixes = list(colon_fixes)
         if file_type == FileType.SKILL and file_path is not None:
             normalized_dict = fix_skill_name_field(normalized_dict, file_path, fixes)
-        # Restore the original `skills` value so model_validate/model_dump coercion
-        # (list → CSV string via frontmatter_core) never rewrites the field.
-        if "skills" in original_data:
+        # SkillFrontmatter.skills is still `str | None` with list->CSV coercion
+        # (frontmatter_core.py) -- restore the original value here so --fix does
+        # not silently rewrite a skill's `skills:` field shape. AgentFrontmatter
+        # .skills is now itself `list[str] | None` (issue #132): model_dump()
+        # already preserves the list shape for agent files, so this restoration
+        # is no longer needed there and is scoped to FileType.SKILL only.
+        if file_type == FileType.SKILL and "skills" in original_data:
             normalized_dict["skills"] = original_data["skills"]
         tool_fields = {"tools", "disallowedTools", "allowed-tools"}
         for field_name in tool_fields:

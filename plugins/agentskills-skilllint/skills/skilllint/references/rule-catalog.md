@@ -111,6 +111,20 @@ Anthropic documents that **plugin** subagents do not support `hooks`, `mcpServer
 
 ---
 
+## AG — Agent Frontmatter Rules
+
+Validate `agents/*.md` frontmatter fields Claude Code's `sub-agents.md` defines, on every agent file regardless of scope (personal, project, or plugin) — unlike PA (above), which is plugin-scoped only. Authority: [Create custom subagents](https://code.claude.com/docs/en/sub-agents.md#available-tools).
+
+| Rule | Severity | Auto-fix | Description |
+|------|----------|----------|-------------|
+| AG001 | error | no | Every entry in `tools` is an unscoped wildcard (e.g. `mcp__*`, bare `*`) that names no server — the subagent fails to launch |
+| AG002 | error / warning | no | MCP tool name in `tools` or `disallowedTools` has a case mismatch with a discovered server (error) or references a server not found in any discovered config (warning) |
+| AG003 | error | no | `skills` is not a YAML list — its only documented shape is a list of skill names to preload |
+
+**Ported from AS007/AS008:** AG001 and AG002 replace the AgentSkills-family checks that used to read an agent's `tools` field before PR #108 scoped the AS family to `SKILL.md` only. AS008 continues to validate `allowed-tools` on `SKILL.md` under agentskills.io authority; AG002 is a separate rule validating `tools`/`disallowedTools` on agent files under sub-agents.md authority.
+
+---
+
 ## HK — Hook Rules
 
 Validate `hooks.json` and inline hook configurations.
