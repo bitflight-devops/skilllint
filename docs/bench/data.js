@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788061640170,
+  "lastUpdate": 1788062913041,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -834,6 +834,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 69.118,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "f1f324315fe1fc40e0815bf180f2621cfc7fb567",
+          "message": "refactor(rules): complete all 25 stub rule functions; validators become thin wrappers (#119)\n\n* refactor(rules): complete the check_* rule functions; validators become wrappers\n\nDetection for eight rule series moves out of the validator classes in\nplugin_validator.py and into the `check_*` functions in\npackages/skilllint/rules/*_series.py. Each validator keeps only what is\ngenuinely a validator concern -- reading the file, packaging issues into a\nValidationResult, and any auto-fix that mutates the filesystem -- and delegates\ndetection to the rule that owns the code and its documentation.\n\nSquashed from:\n\n- refactor(sl): complete check_sl001; establish the rule-migration pattern\n- refactor(nr): complete check_nr001/check_nr002; thin NamespaceReferenceValidator\n- refactor(lk): complete check_lk001; move link extraction into rules\n- refactor(pl): complete check_pl001-check_pl006; thin PluginStructureValidator\n- refactor(hk): complete check_hk001-check_hk005; HookValidator becomes a wrapper\n- refactor(pd): complete check_pd001-pd003; thin the validator\n- refactor(tc): complete check_tc001; MarkdownTokenCounter becomes a wrapper\n- refactor(pr): complete check_pr001-check_pr005; thin PluginRegistrationValidator\n- fix(rules): repair integration damage from merging eight parallel refactors\n- chore(skills): add receiving-pr-reviews and rebase skills, adapted for this repo\n- build: exclude vendored skills from ruff and from ty\n- fix: address Codex review on PR #119\n\nSquashed because the branch was invalidated by four separate merges to main\nwhile it was open; replaying fourteen commits meant resolving the same files\nagainst each of them in turn.\n\nCarried in from the review pass:\n\nhooks.json now enters through a typed boundary. `skilllint.rules` is not a\nboundary package, so decoding untrusted JSON there and narrowing it with\nisinstance checks violated docs/TYPING_POLICY.md 4-6. The decode lives in\n`skilllint/boundary/hooks_json_ingest.py`, which validates strictly with\nPydantic and returns a concrete `dict[str, JsonValue]` or a `HooksJsonDefect`.\nValidation stays shallow on purpose: HK002/HK003 exist to report on the nested\nhook groups, so validating them here would leave those rules nothing to say.\n\nIn the vendored receiving-pr-reviews script: GitHub response models inherit a\n`strict=True` base so producer-shape mismatches are rejected at ingress rather\nthan coerced; the unsourced `_MIN_POLL_BUDGET_SECONDS = 5.0` is deleted in\nfavour of `deadline` as the only cutoff, with a poll that fails at or past the\ndeadline classified as the window ending rather than an unconfirmed tail; the\n`watch` baseline diff keys on each thread's comment identity so a reply to a\nknown thread is detected; and `--interval-seconds` takes `min=1`.\n\nThe rebase skill now runs `git rebase <target> <branch>` instead of rebasing\nwhatever is checked out. `testpaths` gains `.agents/skills/*/scripts` so\nvendored-skill tests are collected in place, keeping that tree byte-identical\nto upstream.\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01QJeBLNA9ybmQvv5REMDkrc\n\n* fix: address second Codex pass on the vendored skills\n\nFour P2 findings, all against `.agents/skills/`.\n\n`_GH_TIMEOUT_SECONDS = 30` is deleted. `gh api --paginate` fetches every page\nsequentially inside one subprocess, so that cap covered a whole pagination run\non an arbitrarily large PR over an arbitrarily slow link -- a number this\nrepository has no source for. The bound is now caller-derived: `fetch` and\n`watch` expose `--gh-timeout-seconds` (unbounded by default), and `watch`\nadditionally bounds each poll by its own `--timeout-seconds` deadline.\n\n`watch`'s mandatory baseline fetch is no longer deadline-bounded. With\n`--timeout-seconds 0` the deadline is already spent, so bounding the baseline by\nit floored the `gh` timeout and raised `TimeoutExpired` instead of producing the\ndocumented immediate snapshot. `--timeout-seconds` is also constrained to >= 0.\n\nThe receiving-pr-reviews SKILL.md gotchas promised a reserved final poll near\n`deadline`, which the previous commit removed along with the unsourced margin.\nCorrected to state what the loop actually does -- the last observed state can be\nup to one interval stale, and the step 7 loop is what covers the gap -- so an\norchestrating agent is not told a window was checked when it was not. The\nactivity-diff gotcha is corrected too: threads are compared by comment identity,\nnot by id, and reviews carry an id.\n\nThe rebase skill's `git rebase <target> <branch>` fails with `fatal: '<branch>'\nis already used by worktree at ...` when another worktree holds the branch --\nthe same multi-worktree scenario the surrounding text describes. Step 5 now says\nto locate the owning worktree with `git worktree list` and run the rebase there,\nand warns against freeing the branch by disturbing that worktree.\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01QJeBLNA9ybmQvv5REMDkrc\n\n---------\n\nCo-authored-by: Claude Opus 5 <noreply@anthropic.com>",
+          "timestamp": "2026-08-30T04:05:29Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/f1f324315fe1fc40e0815bf180f2621cfc7fb567"
+        },
+        "date": 1788062912475,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 14801.467,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 15262.235,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 16140.835,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 65.587,
             "unit": "files/s"
           }
         ]
