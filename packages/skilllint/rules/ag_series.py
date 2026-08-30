@@ -31,7 +31,6 @@ plugin_validator at module level.
 
 from __future__ import annotations
 
-import re
 from typing import TYPE_CHECKING, Literal
 
 from skilllint.frontmatter_core import normalize_tools_value
@@ -57,10 +56,17 @@ _SUBAGENTS_URL = "https://code.claude.com/docs/en/sub-agents"
 # entry resolves.
 _AVAILABLE_TOOLS_URL = f"{_SUBAGENTS_URL}#available-tools"
 
-# Source: the "Available tools" section above. The documented wildcard shape
-# is `mcp__<server>__*`, where <server> is a non-empty run of
-# underscore-separated segments containing no `*`.
-_MCP_SERVER_GRANT_RE = re.compile(r"^mcp__[^*_]+(?:_[^*_]+)*__\*$")
+# Source: the "Available tools" section above states two concrete facts about
+# `mcp__*`-shaped entries: (1) the only documented resolving wildcard is
+# `mcp__<server>__*` with a non-empty, real server name -- `mcp__*` matches
+# neither that nor the bare `mcp__<server>` grant, so it names no server; and
+# (2) `mcp__*` has a *different*, defined meaning in `disallowedTools` only
+# ("also removes every MCP tool from any server"), which the same paragraph
+# withholds from `tools`. No other wildcard-bearing form (e.g. a bare `*`, or
+# a non-mcp token like `Bash(git:*)`) is established by this page to fail;
+# treating "undocumented" as "provably unresolvable" would be an invented
+# constraint, so only this exact literal is treated as fatal.
+_UNRESOLVABLE_WILDCARD_TOOLS: frozenset[str] = frozenset({"mcp__*"})
 
 # Fields the "Supported frontmatter fields" table defines for MCP tool
 # grants/denials on an agent file.
@@ -106,35 +112,44 @@ def _make_issue(
 def check_ag001(frontmatter: dict) -> list[ValidationIssue]:
     """## AG001 — `tools` field resolves to no tool
 
-    Every entry in the agent's `tools` field is an unscoped wildcard that
-    names no MCP server. A *server-scoped* grant such as `mcp__Ref__*` is
-    supported and NOT reported here — Claude Code resolves it to every tool
-    that server exposes, identically to the bare `mcp__Ref` form. An
-    *unscoped* wildcard (bare `*`, or `mcp__*` naming no server) has no
-    documented meaning in this field.
+    Every entry in the agent's `tools` field is the literal string `mcp__*`,
+    which names no MCP server. A *server-scoped* grant such as `mcp__Ref__*`
+    is supported and NOT reported here — Claude Code resolves it to every
+    tool that server exposes, identically to the bare `mcp__Ref` form.
 
-    This only fires when **every** entry is provably unresolvable. A single
-    unscoped wildcard alongside an ordinary tool name (`Read`, `mcp__Ref__*`)
+    This rule is deliberately narrow: only the exact literal `mcp__*` is
+    treated as unresolvable. No other wildcard-bearing token — a bare `*`, or
+    a non-MCP form like `Bash(git:*)` — is established by sub-agents.md to
+    fail; the absence of a documented *resolving* meaning for a token is not
+    proof it is *invalid*, and asserting otherwise would be an unsourced
+    constraint (see the AS007 rule #108 deleted for the same reason).
+
+    This only fires when **every** entry in `tools` is exactly `mcp__*`. A
+    single `mcp__*` alongside an ordinary tool name (`Read`, `mcp__Ref__*`)
     is not reported: skilllint has no registry of live tool names, so it
     cannot prove the sibling entry fails to resolve too.
 
     **Source:** sub-agents.md, "Available tools" — "When nothing in the
     `tools` list resolves to a tool ... Claude Code usually refuses to launch
     the subagent and the Agent tool returns an error naming the unresolved
-    entries." Same section: "`mcp__<server>` or `mcp__<server>__*` grants ...
-    every tool from the named server."
+    entries." Same section, same paragraph: "`mcp__<server>` or
+    `mcp__<server>__*` grants or removes every tool from the named server. In
+    `disallowedTools`, `mcp__*` also removes every MCP tool from any server."
+    `mcp__*` is therefore defined *only* for `disallowedTools`; in `tools` it
+    matches neither documented grant pattern (a real server name is required)
+    and so names no server there.
 
-    **Fix:** Replace each wildcard with a server-scoped grant (e.g.
-    `mcp__Ref__*`) or the exact tool names, or remove `tools` entirely to
-    inherit the default set.
+    **Fix:** Replace `mcp__*` with a server-scoped grant (e.g. `mcp__Ref__*`)
+    or the exact tool names, or remove `tools` entirely to inherit the
+    default set.
 
     Args:
         frontmatter: Raw parsed agent frontmatter dict (pre-Pydantic).
 
     Returns:
-        One error issue per unscoped wildcard entry when every entry in
-        `tools` is unresolvable; empty list otherwise, including when
-        `tools` is absent, blank, or an empty list.
+        One error issue per `mcp__*` entry when every entry in `tools` is
+        `mcp__*`; empty list otherwise, including when `tools` is absent,
+        blank, or an empty list.
 
     <!-- examples: AG001 -->
     """
@@ -142,10 +157,10 @@ def check_ag001(frontmatter: dict) -> list[ValidationIssue]:
     if not tools:
         return []
 
-    unscoped = [t for t in tools if "*" in t and not _MCP_SERVER_GRANT_RE.match(t)]
+    unscoped = [t for t in tools if t in _UNRESOLVABLE_WILDCARD_TOOLS]
     if not unscoped or len(unscoped) != len(tools):
-        # Not fatal: either no wildcard is present, or at least one entry is
-        # not a provable-unresolvable wildcard and may resolve to a real tool.
+        # Not fatal: either no unresolvable wildcard is present, or at least
+        # one entry is not one and may resolve to a real tool.
         return []
 
     return [
@@ -228,7 +243,8 @@ def check_ag002(frontmatter: dict, path: Path) -> list[ValidationIssue]:
     for field_name, tools in field_tools.items():
         for tool_name in tools:
             analysis = analyze_mcp_tool_reference(tool_name, known_servers, plugin_server_map)
-            if analysis is None or analysis.status == "exact":
+            if analysis is None or analysis.status in {"exact", "unscoped"}:
+                # "unscoped" (mcp__*) is AG001's diagnostic, not this rule's.
                 continue
             if analysis.status == "case-mismatch":
                 canonical = analysis.canonical_server

@@ -34,7 +34,7 @@ class McpReferenceAnalysis:
 
     reference: str
     server_name: str
-    status: Literal["exact", "case-mismatch", "unknown"]
+    status: Literal["exact", "case-mismatch", "unknown", "unscoped"]
     canonical_server: str | None = None
     corrected_reference: str | None = None
     replacement_source: str | None = None
@@ -151,6 +151,29 @@ def _collect_servers_from_ancestry(file_path: pathlib.Path) -> set[str]:
     return servers
 
 
+def _is_plugin_packaged_agent(file_path: pathlib.Path) -> bool:
+    """Return True when *file_path* is a plugin's own ``agents/*.md`` file.
+
+    Mirrors PA001's definition of a plugin-packaged agent
+    (``PluginAgentFrontmatterValidator`` in ``plugin_validator.py``: a direct
+    child of ``<plugin_root>/agents/``). ``pa_series.py`` documents that
+    Claude Code ignores ``mcpServers`` in such a file's own frontmatter when
+    loading it from a plugin, so that field must not seed server discovery.
+
+    Args:
+        file_path: Path to the agent or skill file.
+
+    Returns:
+        True if *file_path* is a direct child of a plugin's ``agents/`` directory.
+    """
+    from skilllint.plugin_validator import find_plugin_dir  # noqa: PLC0415
+
+    plugin_dir = find_plugin_dir(file_path)
+    if plugin_dir is None:
+        return False
+    return file_path.parent == plugin_dir / "agents"
+
+
 def _collect_servers_from_frontmatter(file_path: pathlib.Path) -> set[str]:
     """Extract MCP server names declared inline in the agent/skill frontmatter.
 
@@ -159,8 +182,13 @@ def _collect_servers_from_frontmatter(file_path: pathlib.Path) -> set[str]:
 
     Returns:
         Set of MCP server names from the file's own ``mcpServers`` frontmatter
-        key; empty set on parse failure or when the key is absent.
+        key; empty set on parse failure, when the key is absent, or when
+        *file_path* is a plugin-packaged agent (see ``_is_plugin_packaged_agent``)
+        whose inline ``mcpServers`` the runtime ignores.
     """
+    if _is_plugin_packaged_agent(file_path):
+        return set()
+
     from skilllint.frontmatter_core import extract_frontmatter  # noqa: PLC0415
     from skilllint.plugin_validator import safe_load_yaml_with_colon_fix  # noqa: PLC0415
 
@@ -179,18 +207,18 @@ def _collect_servers_from_frontmatter(file_path: pathlib.Path) -> set[str]:
     return set()
 
 
-def resolve_plugin_namespaced_server(raw_segment: str, plugin_server_map: dict[str, set[str]]) -> tuple[str, str]:
+def resolve_plugin_namespaced_server(
+    raw_segment: str, plugin_server_map: dict[str, set[str]]
+) -> tuple[str, str, frozenset[str] | None]:
     """Resolve the actual server name from a raw mcp__ segment, handling plugin-namespaced tools.
 
     Claude Code registers plugin MCP servers using:
         mcp__plugin_{plugin-name}_{server-name}__{tool-name}
 
     When the middle segment starts with ``plugin_``, this function strips the
-    ``plugin_{plugin-name}_`` prefix to recover ``{server-name}``, then validates
-    that the recovered name matches a server declared in that plugin's
-    ``mcpServers``.  If the plugin name cannot be identified or the server is
-    not found in the matched plugin, the full raw segment is returned unchanged
-    so that normal discovery fallback handles it.
+    ``plugin_{plugin-name}_`` prefix to recover ``{server-name}``. If the
+    plugin name cannot be identified, the full raw segment is returned
+    unchanged so the caller's normal (global) discovery fallback handles it.
 
     Args:
         raw_segment: The ``parts[1]`` segment from splitting the tool name on
@@ -200,15 +228,22 @@ def resolve_plugin_namespaced_server(raw_segment: str, plugin_server_map: dict[s
             produced by ``collect_plugin_names_from_ancestry``.
 
     Returns:
-        A ``(server_name, prefix)`` tuple where ``server_name`` is the resolved
-        server name (stripped of the plugin prefix when applicable) and
-        ``prefix`` is the ``plugin_{plugin-name}_`` prefix string that was
-        removed (empty string for user-level tools).  The prefix is needed so
-        callers can reconstruct the full tool name for error messages.
+        A ``(server_name, prefix, plugin_servers)`` tuple. ``server_name`` is
+        the resolved server name (stripped of the plugin prefix when
+        applicable); ``prefix`` is the ``plugin_{plugin-name}_`` prefix string
+        that was removed (empty string for user-level tools, needed so
+        callers can reconstruct the full tool name for error messages).
+        ``plugin_servers`` is the identified plugin's *own* server set when a
+        known plugin namespace was matched, or ``None`` for a user-level
+        reference or an unrecognized namespace. Callers must resolve
+        membership and casing against ``plugin_servers`` (when not ``None``)
+        instead of the global known-servers set: a same-named server exposed
+        by a *different* plugin or by project-level config must not produce a
+        false accept for a namespace this plugin does not itself declare.
     """
     plugin_pfx = "plugin_"
     if not raw_segment.startswith(plugin_pfx):
-        return raw_segment, ""
+        return raw_segment, "", None
 
     # raw_segment = "plugin_{plugin-name}_{server-name}"
     # We must identify which plugin name to strip.  Try each known plugin name
@@ -220,17 +255,36 @@ def resolve_plugin_namespaced_server(raw_segment: str, plugin_server_map: dict[s
         candidate_prefix = plugin_name + "_"
         if after_plugin.startswith(candidate_prefix):
             server_name = after_plugin[len(candidate_prefix) :]
-            plugin_servers: set[str] = plugin_server_map[plugin_name]
             stripped_prefix = plugin_pfx + candidate_prefix
-            if server_name in plugin_servers:
-                # Exact match in this plugin's mcpServers — resolved
-                return server_name, stripped_prefix
-            # Plugin name matched but server not in its mcpServers.
-            # Still strip the prefix so case-fold lookup can find it.
-            return server_name, stripped_prefix
+            # Always scoped to this plugin's own servers, matched or not: the
+            # caller must never fall back to the global set for a namespace
+            # this plugin claims, or a same-named server from elsewhere
+            # would silently resolve it.
+            return server_name, stripped_prefix, frozenset(plugin_server_map[plugin_name])
 
-    # Could not identify plugin name — return raw segment for fallback handling
-    return raw_segment, ""
+    # Could not identify plugin name — return raw segment for global fallback handling
+    return raw_segment, "", None
+
+
+def _split_mcp_reference(reference: str) -> tuple[str, str | None] | None:
+    """Split an MCP tool reference into its server segment and optional suffix.
+
+    Args:
+        reference: Authored tool or bare server-grant name.
+
+    Returns:
+        ``(raw_segment, suffix)`` for a well-formed ``mcp__<segment>[__<suffix>]``
+        reference, or ``None`` when *reference* is not an MCP name or its
+        server segment is empty.
+    """
+    if not reference.startswith("mcp__"):
+        return None
+    parts = reference.split("__", 2)
+    raw_segment = parts[1]
+    if not raw_segment:
+        return None
+    suffix = parts[2] if len(parts) > 2 else None  # noqa: PLR2004
+    return raw_segment, suffix
 
 
 def analyze_mcp_tool_reference(
@@ -238,10 +292,16 @@ def analyze_mcp_tool_reference(
 ) -> McpReferenceAnalysis | None:
     """Classify a tool reference against discovered MCP server names.
 
-    Non-MCP names, empty/malformed server segments, unscoped wildcards, and
-    references to externally-installed plugin namespaces are outside the
-    casing rules' scope and return ``None``. All other MCP references are
-    classified as an exact match, case mismatch, or unknown server.
+    Non-MCP names, empty server segments, and references to
+    externally-installed plugin namespaces are outside the casing rules'
+    scope and return ``None``. An unscoped wildcard server segment
+    (``mcp__*``) is classified as ``"unscoped"`` rather than skipped here:
+    whether that is worth reporting is a per-caller decision. AS008
+    (``SKILL.md``) has no separate "resolves to nothing" rule and must still
+    flag it, as it did before this module existed; AG002 (agent files) skips
+    it, because AG001 already owns that diagnostic there. All other MCP
+    references are classified as an exact match, case mismatch, or unknown
+    server.
 
     Args:
         reference: Authored tool or bare server-grant name.
@@ -253,21 +313,24 @@ def analyze_mcp_tool_reference(
         Immutable analysis data, or ``None`` when casing rules should skip the
         reference.
     """
-    if not reference.startswith("mcp__"):
+    split = _split_mcp_reference(reference)
+    if split is None:
         return None
+    raw_segment, suffix = split
 
-    parts = reference.split("__", 2)
-    raw_segment = parts[1]
-    suffix = parts[2] if len(parts) > 2 else None  # noqa: PLR2004
-    if not raw_segment or "*" in raw_segment:
-        return None
+    if "*" in raw_segment:
+        return McpReferenceAnalysis(reference=reference, server_name=raw_segment, status="unscoped")
 
-    server_name, plugin_prefix = resolve_plugin_namespaced_server(raw_segment, plugin_server_map)
+    server_name, plugin_prefix, plugin_servers = resolve_plugin_namespaced_server(raw_segment, plugin_server_map)
     original_prefix = f"mcp__{plugin_prefix}{server_name}"
-    if server_name in known_servers:
+    # A recognized plugin namespace is scoped to that plugin's own servers
+    # only -- never the global set, or a same-named server exposed by a
+    # different plugin or by project config would false-accept this reference.
+    scope = plugin_servers if plugin_servers is not None else known_servers
+    if server_name in scope:
         return McpReferenceAnalysis(reference=reference, server_name=server_name, status="exact")
 
-    lower_to_canonical = {known.lower(): known for known in known_servers}
+    lower_to_canonical = {known.lower(): known for known in scope}
     canonical_server = lower_to_canonical.get(server_name.lower())
     if canonical_server is None:
         if raw_segment.startswith("plugin_") and not plugin_prefix:

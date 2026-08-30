@@ -137,15 +137,39 @@ class TestCheckAg001:
         """Concrete tool names never trigger AG001."""
         assert check_ag001({"tools": ["Read", "Grep", "Bash"]}) == []
 
-    def test_bare_star_is_fatal(self) -> None:
-        """`tools: "*"` names no server and is the only entry — fatal."""
-        issues = check_ag001({"tools": "*"})
-        assert len(issues) == 1
-        assert issues[0].code == "AG001"
-        assert issues[0].severity == "error"
+    def test_bare_star_is_not_provably_fatal(self) -> None:
+        """`tools: "*"` (no `mcp__` prefix) is not sourced to fail -- do not flag it.
+
+        Corrects the PR #147 review finding (thread PRRT_kwDORXxKvc6dgksB):
+        sub-agents.md establishes failure only for the literal `mcp__*`. A
+        bare `*` has no stated meaning in `tools` either way, so treating its
+        absence of documented meaning as proof of invalidity would be the
+        same unsourced-constraint mistake #108 deleted AS007 for.
+        """
+        assert check_ag001({"tools": "*"}) == []
+
+    def test_non_mcp_wildcard_form_is_not_provably_fatal(self) -> None:
+        """A non-MCP wildcard-bearing token is not sourced to fail either.
+
+        Regression test for PR #147 review thread PRRT_kwDORXxKvc6dgksB: the
+        prior implementation flagged ANY entry containing `*` that wasn't the
+        one documented resolving pattern (`mcp__<server>__*`), which would
+        incorrectly fire on a parenthesised specifier like `Bash(git:*)` --
+        explicitly called out in issue #109's own investigation as neither
+        established to grant nor restrict, and "not established" is not
+        "established to fail".
+        """
+        assert check_ag001({"tools": ["Bash(git:*)"]}) == []
 
     def test_mcp_star_is_fatal(self) -> None:
-        """`tools: mcp__*` — the concrete case from issue #109 — is fatal."""
+        """`tools: mcp__*` — the concrete case from issue #109 — is fatal.
+
+        Sourced from sub-agents.md, "Available tools": `mcp__*` is defined
+        only for `disallowedTools` ("removes every MCP tool from any
+        server"); in the `tools` allow-list it matches neither documented
+        grant pattern (`mcp__<server>` / `mcp__<server>__*`, both of which
+        require a real server name), so it names no server there.
+        """
         issues = check_ag001({"tools": ["mcp__*"]})
         assert len(issues) == 1
         assert issues[0].code == "AG001"
@@ -247,6 +271,58 @@ class TestCheckAg002:
         agent_md = tmp_path / "agents" / "a.md"
         agent_md.parent.mkdir(parents=True)
         assert check_ag002({"tools": ["mcp__*"]}, agent_md) == []
+
+    def test_plugin_recognized_but_server_not_declared_is_unknown(self, tmp_path: Path) -> None:
+        """A same-named server from a different plugin/project must not false-accept.
+
+        Regression test for PR #147 review thread PRRT_kwDORXxKvc6dgksF: plugin
+        "myplugin" is recognized (it has a plugin.json) but does not itself
+        declare "ServerX" in its own mcpServers. A *different*, unrelated
+        server sharing that name at project level must not let
+        `mcp__plugin_myplugin_ServerX__...` resolve as exact -- resolution
+        must be scoped to the matched plugin's own server set.
+        """
+        plugin_dir = tmp_path / "myplugin"
+        (plugin_dir / ".claude-plugin").mkdir(parents=True)
+        (plugin_dir / ".claude-plugin" / "plugin.json").write_text(
+            json.dumps({"name": "myplugin", "mcpServers": {"OtherServer": {}}}), encoding="utf-8"
+        )
+        _write_mcp_json(tmp_path, "ServerX")
+        agent_md = plugin_dir / "agents" / "a.md"
+        agent_md.parent.mkdir(parents=True)
+        agent_md.write_text("---\nname: a\ndescription: d\n---\n\nBody.\n", encoding="utf-8")
+
+        issues = check_ag002({"tools": ["mcp__plugin_myplugin_ServerX__search"]}, agent_md)
+
+        assert len(issues) == 1, f"Expected the unmatched plugin-local server to warn, got: {issues}"
+        assert issues[0].code == "AG002"
+        assert issues[0].severity == "warning"
+
+    def test_plugin_agent_own_inline_mcp_servers_excluded_from_discovery(self, tmp_path: Path) -> None:
+        """A plugin agent's own `mcpServers` is ignored at load -- AG002 must not trust it.
+
+        Regression test for PR #147 review thread PRRT_kwDORXxKvc6dgksH: per
+        pa_series.py's documented policy, Claude Code ignores inline
+        `mcpServers` in a plugin-packaged agent's own frontmatter. An agent
+        whose only declaration of a server is that ignored field must still
+        be flagged as referencing an unconfigured server.
+        """
+        plugin_dir = tmp_path / "my-plugin"
+        (plugin_dir / ".claude-plugin").mkdir(parents=True)
+        (plugin_dir / ".claude-plugin" / "plugin.json").write_text(json.dumps({"name": "my-plugin"}), encoding="utf-8")
+        agents_dir = plugin_dir / "agents"
+        agents_dir.mkdir(parents=True)
+        agent_md = agents_dir / "a.md"
+        agent_md.write_text(
+            "---\nname: a\ndescription: d\nmcpServers:\n  Ref:\n    command: x\ntools: mcp__Ref__read\n---\n\nBody.\n",
+            encoding="utf-8",
+        )
+
+        issues = check_ag002({"tools": ["mcp__Ref__read"]}, agent_md)
+
+        assert len(issues) == 1, f"Expected the ignored inline mcpServers to not configure 'Ref', got: {issues}"
+        assert issues[0].code == "AG002"
+        assert issues[0].severity == "warning"
 
     def test_reads_disallowed_tools_field_too(self, tmp_path: Path) -> None:
         _write_mcp_json(tmp_path, "Ref")
