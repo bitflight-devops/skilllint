@@ -2411,7 +2411,10 @@ class NameFormatValidator:
         data["name"] = fixed_name
         end_match = re.search(r"\n---\s*\n", content[3:])
         body = content[end_match.end() + 3 :] if end_match else ""
-        new_content = f"---\n{_dump_yaml(data)}{body}"
+        # `body` starts after the closing delimiter, so the delimiter has to be
+        # written back explicitly — omitting it left the file with no closing
+        # `---`, which FM003 then reported as missing frontmatter.
+        new_content = f"---\n{_dump_yaml(data)}---\n{body}"
         try:
             path.write_text(new_content, encoding="utf-8")
         except OSError:
@@ -3690,7 +3693,7 @@ def _get_validators_for_path(path: Path) -> list[Validator]:
     return validators
 
 
-def _get_fixers_for_path(path: Path) -> list[Validator]:
+def _get_fixers_for_path(validators: list[Validator], path: Path) -> list[Validator]:
     """Return validators to invoke for ``--fix`` on the given path.
 
     A validator that reports a rule and a validator that repairs it need not be
@@ -3700,13 +3703,17 @@ def _get_fixers_for_path(path: Path) -> list[Validator]:
     renaming a mismatched skill directory. It is therefore appended here as a
     fix-only participant and deliberately kept out of the reporting pipeline.
 
+    The reporting instances are reused rather than rebuilt: ``FrontmatterValidator``
+    carries FM009 info from ``fix()`` to the following ``validate()`` on
+    ``_pending_fm009_info``, and a fresh instance would drop it.
+
     Args:
+        validators: Reporting validators already built for this path.
         path: Path to fix.
 
     Returns:
-        List of validator instances whose ``fix()`` should run for this path.
+        ``validators`` plus any fix-only validator that applies to this path.
     """
-    validators = _get_validators_for_path(path)
     if not validators or FileType.detect_file_type(path) not in _NAME_BEARING_FILE_TYPES:
         return validators
     return [*validators, NameFormatValidator()]
@@ -3852,7 +3859,7 @@ def validate_single_path(
             _logger.debug("Skipping auto-fix for fixture file: %s", path)
         else:
             fixes_applied: list[str] = []
-            for validator in _get_fixers_for_path(path):
+            for validator in _get_fixers_for_path(validators, path):
                 if validator.can_fix():
                     try:
                         validator_fixes = validator.fix(path)

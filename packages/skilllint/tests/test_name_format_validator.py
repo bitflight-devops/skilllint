@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from skilllint.plugin_validator import NameFormatValidator
+from skilllint.plugin_validator import NameFormatValidator, extract_frontmatter
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -54,6 +54,32 @@ description: Test skill
         fixed_skill_md = tmp_path / "test-skill" / "SKILL.md"
         content = fixed_skill_md.read_text()
         assert "name: test-skill" in content or 'name: "test-skill"' in content
+
+    def test_fix_preserves_closing_frontmatter_delimiter(self, tmp_path: Path) -> None:
+        """Test fix() writes back the closing --- delimiter.
+
+        Tests: NameFormatValidator.fix() does not corrupt the frontmatter block
+        How: Fix a skill with a body, then re-parse the frontmatter
+        Why: The rewrite drops the closing delimiter unless it is re-added, which
+             turned every repaired file into an FM003 "no frontmatter" error
+        """
+        skill_dir = tmp_path / "Test-Skill"
+        skill_dir.mkdir()
+        skill_md = skill_dir / "SKILL.md"
+        skill_md.write_text("""---
+name: Test-Skill
+description: Use when testing that the closing delimiter survives a name fix.
+---
+
+# Body content
+""")
+
+        assert NameFormatValidator().fix(skill_md) != []
+
+        content = (tmp_path / "test-skill" / "SKILL.md").read_text()
+        frontmatter, _start, _end = extract_frontmatter(content)
+        assert frontmatter is not None, f"Closing '---' was lost, got: {content!r}"
+        assert "# Body content" in content
 
 
 class TestValidNames:

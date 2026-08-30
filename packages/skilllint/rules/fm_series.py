@@ -44,11 +44,19 @@ _CONSECUTIVE_HYPHENS_RE = re.compile(r"--")
 # Source: sub-agents.md — max 64 chars implied by same pattern constraint
 _MAX_NAME_LENGTH = 64
 
-# Frontmatter fields that declare a tool allow/deny list.
-# Source: skills.md — `allowed-tools`; sub-agents.md — `tools`, `disallowedTools`.
-# Named so that the provenance registry can load the field set as a symbol
-# rather than describe it in prose.
-_TOOL_FIELD_NAMES: tuple[str, ...] = ("tools", "allowed-tools", "disallowedTools")
+# Tool allow/deny field defined by the AgentSkills specification.
+# Source: packages/skilllint/schemas/agentskills_io/v1.json — the schema declares
+# `allowed-tools` and no other tool field. Named separately from the full set so
+# the provenance registry can load exactly the fields this authority defines.
+_AGENTSKILLS_TOOL_FIELD_NAMES: tuple[str, ...] = ("allowed-tools",)
+
+# Tool allow/deny fields Claude Code adds on top of the specification.
+# Source: sub-agents.md — agent frontmatter declares `tools` and `disallowedTools`.
+# Provider-specific, so not drift-checkable against the AgentSkills schema.
+_CLAUDE_CODE_TOOL_FIELD_NAMES: tuple[str, ...] = ("tools", "disallowedTools")
+
+# Every field FM007 inspects, across both sources.
+_TOOL_FIELD_NAMES: tuple[str, ...] = _AGENTSKILLS_TOOL_FIELD_NAMES + _CLAUDE_CODE_TOOL_FIELD_NAMES
 
 
 def _make_issue(

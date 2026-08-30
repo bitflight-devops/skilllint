@@ -87,7 +87,7 @@
     "FM007.tool_field_names": {
       "rule_code": "FM007",
       "claim_name": "tool_field_names",
-      "description": "Valid field names for tool allow/deny lists in frontmatter (allowed-tools, tools)",
+      "description": "Tool allow/deny field names the AgentSkills specification defines for frontmatter",
       "claim_type": "field_set",
       "authority": {
         "vendor_file": "packages/skilllint/schemas/agentskills_io/v1.json",
@@ -95,7 +95,7 @@
         "authority_url": "https://agentskills.io/specification"
       },
       "extraction": {
-        "prompt_template": "Extract all property names from the JSON schema that relate to tool allow/deny lists (e.g., allowed-tools, tools). Return a JSON array of field name strings. {{section}}",
+        "prompt_template": "Extract all property names from the JSON schema that relate to tool allow/deny lists (e.g., allowed-tools). Return a JSON array of field name strings. {{section}}",
         "output_schema": {
           "type": "array"
         },
@@ -103,7 +103,7 @@
       },
       "assertion_location": {
         "file": "packages/skilllint/rules/fm_series.py",
-        "symbol": "_TOOL_FIELD_NAMES",
+        "symbol": "_AGENTSKILLS_TOOL_FIELD_NAMES",
         "source_type": "python_constant"
       },
       "x-audited": {
