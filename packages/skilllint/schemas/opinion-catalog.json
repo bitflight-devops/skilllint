@@ -21,16 +21,6 @@
         "packages/skilllint/token_counter.py line 44: TOKEN_ERROR_THRESHOLD: int = 8800"
       ]
     },
-    "SK004": {
-      "rule_code": "SK004",
-      "description": "Skill description too short (minimum 20 characters)",
-      "rationale": "The 20-character minimum description length is a quality heuristic, not a spec requirement. The agentskills.io schema sets minLength=1 for description; the 20-char threshold is a lint opinion for description quality.",
-      "constraint": "_MIN_DESCRIPTION_LENGTH = 20 (characters)",
-      "references": [
-        "packages/skilllint/rules/sk_series.py line 72: _MIN_DESCRIPTION_LENGTH = 20",
-        "packages/skilllint/schemas/agentskills_io/v1.json: description minLength = 1 (spec minimum)"
-      ]
-    },
     "SK005": {
       "rule_code": "SK005",
       "description": "Skill description must contain at least one trigger phrase (e.g., 'use when', 'use this', 'trigger', 'activate')",
@@ -67,6 +57,26 @@
       "references": [
         "packages/skilllint/rules/fm_series.py: _CLAUDE_CODE_TOOL_FIELD_NAMES",
         "packages/skilllint/schemas/claude_code/v1.json: declares `tools`, does not declare `disallowedTools`"
+      ]
+    },
+    "HK003.valid_hook_types": {
+      "rule_code": "HK003",
+      "description": "Recognized hook type values: agent, command, http, prompt",
+      "rationale": "docs/design-rule-provenance-registry.md records that no vendor file enumerates this set: \"Vendor hook files use 'command' and 'http' but no file enumerates the complete valid set.\" Treating the hook-development page as authoritative would attribute 'agent' and 'prompt' to a source that does not list them, so the enumeration is recorded as an opinion until a vendor document defines it.",
+      "constraint": "VALID_HOOK_TYPES = frozenset({\"command\", \"http\", \"prompt\", \"agent\"})",
+      "references": [
+        "packages/skilllint/plugin_validator.py: HookValidator.VALID_HOOK_TYPES",
+        "docs/design-rule-provenance-registry.md: HK003 VALID_HOOK_TYPES has no vendor source"
+      ]
+    },
+    "SK004.min_description_length": {
+      "rule_code": "SK004",
+      "description": "Skill description shorter than the 20-character minimum",
+      "rationale": "The 20-character minimum description length is a quality heuristic, not a spec requirement. The agentskills.io schema sets minLength=1 for description; the 20-char threshold is a lint opinion for description quality.",
+      "constraint": "_MIN_DESCRIPTION_LENGTH = 20 (characters); the 1024 maximum is schema-backed (see provenance registry SK004.max_description_length)",
+      "references": [
+        "packages/skilllint/rules/sk_series.py line 72: _MIN_DESCRIPTION_LENGTH = 20",
+        "packages/skilllint/schemas/agentskills_io/v1.json: description minLength = 1 (spec minimum)"
       ]
     }
   }

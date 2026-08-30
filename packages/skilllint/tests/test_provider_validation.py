@@ -112,13 +112,20 @@ class TestProviderValidationRouting:
 def _assert_authority(violation: dict) -> None:
     """Assert a violation dict carries populated authority provenance.
 
+    ``reference`` is asserted only when the rule declares one. A rule serving
+    several file types registers ``origin`` alone, because no single vendor page
+    covers every finding it emits; its per-claim URLs live in
+    ``schemas/provenance-registry.json``.
+
     Args:
         violation: Violation dict emitted by validate_file().
     """
     assert "authority" in violation, f"Expected 'authority' key in violation, got: {violation}"
     authority = violation["authority"]
     assert authority.get("origin"), f"Expected non-empty 'origin' in authority, got: {authority}"
-    assert authority.get("reference"), f"Expected non-empty 'reference' in authority, got: {authority}"
+    assert set(authority) <= {"origin", "reference"}, f"Unexpected authority keys: {authority}"
+    if "reference" in authority:
+        assert authority["reference"], f"Expected non-empty 'reference' when declared, got: {authority}"
 
 
 class TestAuthorityProvenance:
@@ -172,14 +179,21 @@ Body content.
                 f"Rule {rule_id} has wrong origin: {entry.authority.origin}"
             )
 
-    def test_authority_reference_is_url(self) -> None:
-        """Authority reference field should be a URL path for rules that have one."""
-        # FM010 has a reference URL
-        entry = RULE_REGISTRY.get("FM010")
-        assert entry is not None
-        assert entry.authority is not None
-        assert entry.authority.reference is not None
-        assert entry.authority.reference.startswith("http"), f"Expected reference URL, got: {entry.authority.reference}"
+    def test_declared_authority_references_are_resolvable(self) -> None:
+        """Every declared authority reference is an absolute URL or a rooted path.
+
+        ``iter_authority_urls`` joins a rooted path onto its origin, so those two
+        forms are the only ones that resolve. A rule may declare no reference at
+        all — FM001 and FM010 serve several file types whose frontmatter is
+        defined by different vendor pages, so neither names one.
+        """
+        for rule_id, entry in RULE_REGISTRY.items():
+            if entry.authority is None or entry.authority.reference is None:
+                continue
+            reference = entry.authority.reference
+            assert reference.startswith(("http://", "https://", "/")), (
+                f"Rule {rule_id} reference is neither an absolute URL nor a rooted path: {reference!r}"
+            )
 
 
 # ---------------------------------------------------------------------------

@@ -43,7 +43,9 @@ An enumerated set of valid values. The assertion is "this set of strings is the 
 }
 ```
 
-### HK003.valid_hook_types
+### HK003.valid_hook_types (NOT SHIPPED AS A CLAIM)
+
+Kept here as a worked `enum_set` example. See the note below it.
 
 ```json
 {
@@ -79,6 +81,19 @@ An enumerated set of valid values. The assertion is "this set of strings is the 
   }
 }
 ```
+
+`packages/skilllint/schemas/provenance-registry.json` does **not** ship this
+claim. Line 11 of `design-rule-provenance-registry.md` already says why: "no
+file enumerates the complete valid set". The enforced set is `{command, http,
+prompt, agent}`, and the hook-development section lists `command` and `http`
+only, so a comparison against it would either mismatch on every run or attribute
+`prompt` and `agent` to a page that does not mention them. HK003 is recorded in
+`opinion-catalog.json` instead, and moves to a claim if a vendor document ever
+enumerates the set.
+
+The shape above is still the right shape for an `enum_set` claim — that is why
+it is kept. The lesson is that an `enum_set` claim needs a source that
+enumerates the *whole* set, not one that happens to mention some members.
 
 ### FM007.tool_field_names
 

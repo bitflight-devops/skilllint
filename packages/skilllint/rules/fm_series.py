@@ -106,7 +106,12 @@ def _make_issue(
     severity="warning",  # default severity; FM001 is file-type-aware (see function body)
     category="frontmatter",
     platforms=["agentskills"],
-    authority={"origin": "anthropic.com", "reference": _AGENTS_SPEC_URL},
+    # `reference` omitted: this rule serves skills, agents and commands, whose
+    # frontmatter is defined by different vendor pages, so no single URL is
+    # correct for every finding it emits. The per-context sources stay in the
+    # docstring that `skilllint rule <CODE>` renders, and claim-level provenance
+    # lives in schemas/provenance-registry.json.
+    authority={"origin": "anthropic.com"},
 )
 def check_fm001(frontmatter: dict, path: Path, file_type: str) -> list[ValidationIssue]:
     """## FM001 — Missing required field
@@ -482,7 +487,12 @@ def check_fm009(frontmatter: dict, path: Path, file_type: str) -> list[Validatio
     severity="error",
     category="frontmatter",
     platforms=["agentskills"],
-    authority={"origin": "anthropic.com", "reference": _SKILLS_SPEC_URL},
+    # `reference` omitted: this rule serves skills, agents and commands, whose
+    # frontmatter is defined by different vendor pages, so no single URL is
+    # correct for every finding it emits. The per-context sources stay in the
+    # docstring that `skilllint rule <CODE>` renders, and claim-level provenance
+    # lives in schemas/provenance-registry.json.
+    authority={"origin": "anthropic.com"},
 )
 def check_fm010(frontmatter: dict, path: Path, file_type: str) -> list[ValidationIssue]:
     """## FM010 — Name field does not match directory name or violates naming pattern

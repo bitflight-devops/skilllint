@@ -57,33 +57,6 @@
         "source": ".claude/vendor/claude_code/plugins/plugin-dev/skills/hook-development/SKILL.md"
       }
     },
-    "HK003.valid_hook_types": {
-      "rule_code": "HK003",
-      "claim_name": "valid_hook_types",
-      "description": "Recognized hook type values (command, prompt) in Claude Code hooks configuration",
-      "claim_type": "enum_set",
-      "authority": {
-        "vendor_file": ".claude/vendor/claude_code/plugins/plugin-dev/skills/hook-development/SKILL.md",
-        "anchor_selector": "#hook-types",
-        "authority_url": "https://docs.claude.com/en/docs/claude-code/hooks"
-      },
-      "extraction": {
-        "prompt_template": "Extract all recognized hook 'type' values from this vendor documentation. Return a JSON array of type strings. {{section}}",
-        "output_schema": {
-          "type": "array"
-        },
-        "post_processing": "lowercase, sort, unique"
-      },
-      "assertion_location": {
-        "file": "packages/skilllint/plugin_validator.py",
-        "symbol": "HookValidator.VALID_HOOK_TYPES",
-        "source_type": "python_constant"
-      },
-      "x-audited": {
-        "date": "2026-03-23",
-        "source": ".claude/vendor/claude_code/plugins/plugin-dev/skills/hook-development/SKILL.md"
-      }
-    },
     "FM007.tool_field_names": {
       "rule_code": "FM007",
       "claim_name": "tool_field_names",
@@ -108,6 +81,33 @@
       },
       "x-audited": {
         "date": "2026-03-14",
+        "source": "packages/skilllint/schemas/agentskills_io/v1.json"
+      }
+    },
+    "SK004.max_description_length": {
+      "rule_code": "SK004",
+      "claim_name": "max_description_length",
+      "description": "Maximum character length for the skill description field (1024 characters)",
+      "claim_type": "scalar",
+      "authority": {
+        "vendor_file": "packages/skilllint/schemas/agentskills_io/v1.json",
+        "anchor_selector": null,
+        "authority_url": "https://agentskills.io/specification"
+      },
+      "extraction": {
+        "prompt_template": "Extract the maxLength value for the 'description' property from the JSON schema. Return an integer. {{section}}",
+        "output_schema": {
+          "type": "integer"
+        },
+        "post_processing": null
+      },
+      "assertion_location": {
+        "file": "packages/skilllint/limits.py",
+        "symbol": "DESCRIPTION_MAX_LENGTH",
+        "source_type": "python_constant"
+      },
+      "x-audited": {
+        "date": "2026-08-30",
         "source": "packages/skilllint/schemas/agentskills_io/v1.json"
       }
     }
