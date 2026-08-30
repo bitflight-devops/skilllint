@@ -7,6 +7,16 @@
 #   "pytest",
 #   "pytest-mock",
 # ]
+# [tool.ty.environment]
+# # ty 0.0.75 treats any file carrying PEP 723 inline script metadata as an
+# # isolated single-file script and ignores [tool.ty.environment].extra-paths
+# # from pyproject.toml entirely, so this table (not the one in pyproject.toml)
+# # is what ty actually reads for this file. Relative extra-paths declared here
+# # resolve relative to this script's own directory, not the invocation cwd or
+# # the project root -- "." is therefore this directory, which is where the
+# # sibling pr_review_threads module lives. Verified empirically; see the ty
+# # skill-mode finding recorded alongside this fix.
+# extra-paths = ["."]
 # ///
 """Tests for pr_review_threads.py.
 
