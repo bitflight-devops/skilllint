@@ -82,7 +82,7 @@ it passing is not evidence.
 
 ## Changing dependencies
 
-`uv remove` then `uv add` — never hand-edit a version string.
+`scripts/uvu <uv-add-args> <package>...` — never hand-edit a version string.
 
 ## Running skilllint during development
 

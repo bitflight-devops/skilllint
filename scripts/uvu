@@ -1,0 +1,9 @@
+#!/usr/bin/env sh
+# Update dependencies to their current release: remove, then re-add, so the
+# pyproject floor and uv.lock move together. Args are passed to both calls.
+#
+#   scripts/uvu --group dev ruff ty
+set -eu
+[ $# -gt 0 ] || { echo "usage: $0 [uv-add-args] <package>..." >&2; exit 2; }
+uv remove "$@"
+uv add "$@"
