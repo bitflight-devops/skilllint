@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788082033813,
+  "lastUpdate": 1788091112076,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -1002,6 +1002,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 85.894,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "e1d7dc13902234b796472b73b6e93bf0cbc9a9a2",
+          "message": "feat(rules): add AG series for agent frontmatter (tools/skills) (#147)\n\n* feat(rules): add AG series for agent frontmatter (tools/skills)\n\nCloses the gap left by PR #108 scoping the AS family to SKILL.md only:\nagents/*.md tools and skills fields had no validation at all.\n\n- AG001: every entry in an agent's `tools` field is a provably-unresolvable\n  wildcard (e.g. `tools: mcp__*`) -- ports AS007's deleted logic, authority\n  moved from agentskills.io to sub-agents.md#available-tools.\n- AG002: MCP server-name casing in `tools`/`disallowedTools` -- ports AS008's\n  discovery logic (extracted into rules/_mcp_tool_discovery.py, now shared\n  with AS008 on SKILL.md's allowed-tools) to agent files.\n- AG003: `skills` must be a YAML list, per sub-agents.md's own example --\n  the field FM008 used to check before being deleted in #105 for running on\n  the wrong file type.\n\nAlso fixes the model these rules depend on (#132):\nAgentFrontmatter.skills was `str | None` with list->CSV coercion,\ncontradicting the YAML-list shape sub-agents.md documents. It is now\n`list[str] | None`. The now-unnecessary --fix workaround that restored the\noriginal `skills` value to defeat that coercion is scoped to FileType.SKILL\nonly (SkillFrontmatter.skills still coerces, unaffected by this change).\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01QJeBLNA9ybmQvv5REMDkrc\n\n* fix(agent): align skills validation with runtime\n\n* fix(rules): narrow AG001 wildcard scope, fix AG002 discovery false-accepts\n\nAddresses four Codex review threads on PR #147:\n\n- AG001 (P1, thread PRRT_kwDORXxKvc6dgksB): only the literal `mcp__*` is\n  sourced to fail per sub-agents.md (\"Available tools\" -- `mcp__*` is\n  defined only for `disallowedTools`; in `tools` it matches neither\n  documented grant pattern). The prior regex flagged any unrecognized\n  wildcard-bearing token as fatal by default (e.g. `Bash(git:*)`), which is\n  the exact \"absence of documented meaning as proof of invalidity\" mistake\n  #108 deleted AS007 for. Narrowed to an exact-literal check; bare `*` is\n  also no longer flagged since neither is sourced.\n\n- Shared MCP analyzer (P2, thread PRRT_kwDORXxKvc6dgksD): the wildcard skip\n  lived in analyze_mcp_tool_reference itself, silently losing AS008's\n  \"unknown server\" diagnostic for `allowed-tools: mcp__*` on SKILL.md (a\n  regression from the pre-PR behavior). The analyzer now returns a\n  distinguishable \"unscoped\" status; AS008 reports it like any unknown\n  server (restoring prior behavior), AG002 skips it (AG001 owns that\n  diagnostic for agent files).\n\n- Plugin-namespaced resolution (P2, thread PRRT_kwDORXxKvc6dgksF):\n  resolve_plugin_namespaced_server returned a server name whose membership\n  the caller then checked against the *global* known-servers set, so a\n  same-named server from a different plugin or project config could\n  false-accept a namespaced reference the matched plugin does not itself\n  declare. It now also returns that plugin's own server set, and the\n  analyzer resolves membership/casing against it instead of the global set.\n\n- Plugin-agent frontmatter discovery (P2, thread PRRT_kwDORXxKvc6dgksH): a\n  plugin-packaged agent's own `mcpServers` field was feeding server\n  discovery, even though pa_series.py documents that Claude Code ignores\n  that field when loading an agent from a plugin. Excluded via a new\n  _is_plugin_packaged_agent check mirroring PA001's own definition.\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01QJeBLNA9ybmQvv5REMDkrc\n\n---------\n\nCo-authored-by: Claude Opus 5 <noreply@anthropic.com>",
+          "timestamp": "2026-08-30T11:55:52Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/e1d7dc13902234b796472b73b6e93bf0cbc9a9a2"
+        },
+        "date": 1788091111293,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 9905.586,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 10567.344,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 11756.041,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 94.726,
             "unit": "files/s"
           }
         ]
