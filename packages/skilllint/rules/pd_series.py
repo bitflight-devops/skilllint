@@ -3,13 +3,14 @@
 Each function is decorated with @skilllint_rule and returns a list of
 ValidationIssue objects.
 
-PD001, PD002, and PD003 are emitted by ``ProgressiveDisclosureValidator`` in
-``plugin_validator.py`` after checking whether ``references/``, ``examples/``,
-and ``scripts/`` directories exist under the skill directory.  The validator
-functions registered here are **registration-only stubs** — they exist to make
-rule metadata available via ``RULE_REGISTRY`` (and therefore via
-``skilllint rule PDxxx``) without duplicating the detection logic that requires
-live filesystem path checks.
+PD001, PD002, and PD003 detection lives here.  ``ProgressiveDisclosureValidator``
+in ``plugin_validator.py`` is a thin wrapper that calls the three rule functions
+in order and packages their issues into a ``ValidationResult``; it retains
+``can_fix``/``fix``, which are validator concerns rather than rule concerns.
+
+Detection needs filesystem access, not frontmatter, so each rule takes only the
+path it inspects.  Signatures across the rules package state the input the rule
+actually reads rather than a uniform frontmatter triple.
 
 Rule IDs and default severities:
     +-------+-----------------------------------------------+-----------+
@@ -20,21 +21,86 @@ Rule IDs and default severities:
     | PD003 | No scripts/ directory found                   | info      |
     +-------+-----------------------------------------------+-----------+
 
-Import note: ValidationIssue is deferred inside each function to break the
+Import note: ValidationIssue is deferred inside ``_make_issue`` to break the
 circular import: plugin_validator imports rules/, so rules/ cannot import
 plugin_validator at module level.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
-from skilllint.rule_registry import skilllint_rule
+from skilllint.rule_registry import rule_reference, skilllint_rule
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     from skilllint.plugin_validator import ValidationIssue
+
+# ---------------------------------------------------------------------------
+# Spec sources
+# ---------------------------------------------------------------------------
+
+
+def _make_issue(
+    *, field: str, severity: Literal["error", "warning", "info"], message: str, code: str, suggestion: str | None = None
+) -> ValidationIssue:
+    """Construct a ValidationIssue for a PD rule.
+
+    Args:
+        field: Issue field label.
+        severity: Issue severity.
+        message: Human-readable description.
+        code: Rule code (e.g., "PD001").
+        suggestion: Optional organisation hint.
+
+    Returns:
+        A frozen ValidationIssue instance.
+    """
+    # Deferred import to break the circular dependency: plugin_validator
+    # imports rules/, so rules/ cannot import plugin_validator at module level.
+    from skilllint.plugin_validator import ValidationIssue  # noqa: PLC0415
+
+    return ValidationIssue(
+        field=field, severity=severity, message=message, code=code, docs_url=rule_reference(code), suggestion=suggestion
+    )
+
+
+def _check_disclosure_dir(path: Path, dir_name: str, code: str) -> list[ValidationIssue]:
+    """Report *code* when *dir_name* is missing from a skill directory.
+
+    Shared by PD001-PD003 so the three rules cannot drift on how they locate
+    the skill directory or decide a path is out of scope.
+
+    Args:
+        path: Skill directory, or a file inside it (a file resolves to its parent).
+        dir_name: Progressive disclosure directory to look for.
+        code: Rule code to emit when the directory is absent.
+
+    Returns:
+        A single info issue when the directory is missing; empty when it exists
+        or when the resolved directory is not a skill directory (no SKILL.md).
+    """
+    skill_dir = path.parent if path.is_file() else path
+
+    # Not a skill directory - skip validation
+    if not (skill_dir / "SKILL.md").exists():
+        return []
+
+    if (skill_dir / dir_name).exists():
+        # No info message needed when directory exists (only report missing directories)
+        return []
+
+    return [
+        _make_issue(
+            field="progressive-disclosure",
+            severity="info",
+            message=f"No {dir_name}/ directory found (consider adding for documentation)",
+            code=code,
+            suggestion=f"Create {dir_name}/ directory to organize additional content",
+        )
+    ]
+
 
 # ---------------------------------------------------------------------------
 # PD001 — No references/ directory found
@@ -48,7 +114,7 @@ if TYPE_CHECKING:
     platforms=["agentskills"],
     authority={"origin": "github.com/jamie-bitflight/claude_skills"},
 )
-def check_pd001(frontmatter: dict[str, object], path: Path, file_type: str) -> list[ValidationIssue]:
+def check_pd001(path: Path) -> list[ValidationIssue]:
     """## PD001 — No references/ directory found
 
     The skill directory does not contain a ``references/`` subdirectory.
@@ -61,7 +127,7 @@ def check_pd001(frontmatter: dict[str, object], path: Path, file_type: str) -> l
     content organisation.
 
     **Source:** ``ProgressiveDisclosureValidator`` in ``plugin_validator.py`` —
-    checks for the presence of ``references/`` under the skill directory.
+    calls this rule, which checks for the presence of ``references/`` under the skill directory.
 
     **Fix:** Create a ``references/`` directory and populate it with supporting
     documentation:
@@ -74,15 +140,17 @@ def check_pd001(frontmatter: dict[str, object], path: Path, file_type: str) -> l
         external-links.md
     ```
 
+    Args:
+        path: Skill directory, or a file inside it (a file resolves to its
+            parent directory).
+
     Returns:
-        Always an empty list.  PD001 is emitted by
-        ``ProgressiveDisclosureValidator`` in ``plugin_validator.py`` after
-        checking directory existence on the filesystem; this function exists
-        for rule metadata registration only.
+        A single info issue when ``references/`` is missing; empty when it exists or
+        when the resolved directory is not a skill directory.
 
     <!-- examples: PD001 -->
     """
-    return []
+    return _check_disclosure_dir(path, "references", "PD001")
 
 
 # ---------------------------------------------------------------------------
@@ -97,7 +165,7 @@ def check_pd001(frontmatter: dict[str, object], path: Path, file_type: str) -> l
     platforms=["agentskills"],
     authority={"origin": "github.com/jamie-bitflight/claude_skills"},
 )
-def check_pd002(frontmatter: dict[str, object], path: Path, file_type: str) -> list[ValidationIssue]:
+def check_pd002(path: Path) -> list[ValidationIssue]:
     """## PD002 — No examples/ directory found
 
     The skill directory does not contain an ``examples/`` subdirectory.
@@ -110,7 +178,7 @@ def check_pd002(frontmatter: dict[str, object], path: Path, file_type: str) -> l
     content organisation.
 
     **Source:** ``ProgressiveDisclosureValidator`` in ``plugin_validator.py`` —
-    checks for the presence of ``examples/`` under the skill directory.
+    calls this rule, which checks for the presence of ``examples/`` under the skill directory.
 
     **Fix:** Create an ``examples/`` directory and populate it with usage
     samples:
@@ -123,15 +191,17 @@ def check_pd002(frontmatter: dict[str, object], path: Path, file_type: str) -> l
         advanced-usage.md
     ```
 
+    Args:
+        path: Skill directory, or a file inside it (a file resolves to its
+            parent directory).
+
     Returns:
-        Always an empty list.  PD002 is emitted by
-        ``ProgressiveDisclosureValidator`` in ``plugin_validator.py`` after
-        checking directory existence on the filesystem; this function exists
-        for rule metadata registration only.
+        A single info issue when ``examples/`` is missing; empty when it exists or
+        when the resolved directory is not a skill directory.
 
     <!-- examples: PD002 -->
     """
-    return []
+    return _check_disclosure_dir(path, "examples", "PD002")
 
 
 # ---------------------------------------------------------------------------
@@ -146,7 +216,7 @@ def check_pd002(frontmatter: dict[str, object], path: Path, file_type: str) -> l
     platforms=["agentskills"],
     authority={"origin": "github.com/jamie-bitflight/claude_skills"},
 )
-def check_pd003(frontmatter: dict[str, object], path: Path, file_type: str) -> list[ValidationIssue]:
+def check_pd003(path: Path) -> list[ValidationIssue]:
     """## PD003 — No scripts/ directory found
 
     The skill directory does not contain a ``scripts/`` subdirectory.
@@ -158,7 +228,7 @@ def check_pd003(frontmatter: dict[str, object], path: Path, file_type: str) -> l
     content organisation.
 
     **Source:** ``ProgressiveDisclosureValidator`` in ``plugin_validator.py`` —
-    checks for the presence of ``scripts/`` under the skill directory.
+    calls this rule, which checks for the presence of ``scripts/`` under the skill directory.
 
     **Fix:** Create a ``scripts/`` directory and populate it with helper
     scripts:
@@ -171,15 +241,17 @@ def check_pd003(frontmatter: dict[str, object], path: Path, file_type: str) -> l
         run-example.py
     ```
 
+    Args:
+        path: Skill directory, or a file inside it (a file resolves to its
+            parent directory).
+
     Returns:
-        Always an empty list.  PD003 is emitted by
-        ``ProgressiveDisclosureValidator`` in ``plugin_validator.py`` after
-        checking directory existence on the filesystem; this function exists
-        for rule metadata registration only.
+        A single info issue when ``scripts/`` is missing; empty when it exists or
+        when the resolved directory is not a skill directory.
 
     <!-- examples: PD003 -->
     """
-    return []
+    return _check_disclosure_dir(path, "scripts", "PD003")
 
 
 __all__ = ["check_pd001", "check_pd002", "check_pd003"]

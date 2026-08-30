@@ -3,15 +3,14 @@
 Each function is decorated with @skilllint_rule and returns a list of
 ValidationIssue objects.
 
-SL001 is emitted by ``SymlinkTargetValidator`` in ``plugin_validator.py``.
-Detection requires filesystem access (reading symlink targets via
-``Path.readlink()`` / ``os.readlink()``, scanning directory trees for
-symlinks, and checking whether cleaned targets resolve to existing paths).
-None of that information is available from frontmatter alone, so the
-validator function registered here is a **registration-only stub** — it
-exists to make rule metadata available via ``RULE_REGISTRY`` (and therefore
-via ``skilllint rule SL001``) without duplicating the detection logic that
-belongs in the filesystem-owning ``SymlinkTargetValidator`` class.
+SL001 detection lives here. ``SymlinkTargetValidator`` in
+``plugin_validator.py`` is a thin wrapper that calls ``check_sl001`` and
+packages the result; it retains the auto-fix, which mutates the filesystem
+and is a validator concern rather than a rule concern.
+
+Detection needs filesystem access, not frontmatter, so ``check_sl001`` takes
+the path it inspects. Signatures across the rules package state the input the
+rule actually reads rather than a uniform frontmatter triple.
 
 Rule IDs and default severities:
     +-------+-----------------------------------------------------------+-----------+
@@ -27,14 +26,76 @@ plugin_validator at module level.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import os
+from pathlib import Path
+from typing import TYPE_CHECKING, Literal
 
-from skilllint.rule_registry import skilllint_rule
+from skilllint.rule_registry import rule_reference, skilllint_rule
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from skilllint.plugin_validator import ValidationIssue
+
+# ---------------------------------------------------------------------------
+# Spec sources
+# ---------------------------------------------------------------------------
+
+
+def iter_symlinks(path: Path) -> list[Path]:
+    """Return every symlink at or under *path*.
+
+    When *path* is itself a symlink, returns ``[path]``. When *path* is a
+    directory, returns all symlinks found by ``os.walk``, which does not
+    follow symlinks by default.
+
+    Shared with ``SymlinkTargetValidator.fix``, so detection and repair always
+    agree on which symlinks are in scope.
+
+    Args:
+        path: Starting path to search for symlinks.
+
+    Returns:
+        List of symlink paths found.
+    """
+    symlinks: list[Path] = []
+
+    if path.is_symlink():
+        symlinks.append(path)
+        return symlinks
+
+    if path.is_dir():
+        for root, dirs, files in os.walk(path, followlinks=False):
+            root_path = Path(root)
+            for name in dirs + files:
+                candidate = root_path / name
+                if candidate.is_symlink():
+                    symlinks.append(candidate)
+
+    return symlinks
+
+
+def _make_issue(
+    *, field: str, severity: Literal["error", "warning", "info"], message: str, code: str, suggestion: str | None = None
+) -> ValidationIssue:
+    """Construct a ValidationIssue for an SL rule.
+
+    Args:
+        field: The symlink path the issue concerns.
+        severity: Issue severity.
+        message: Human-readable description.
+        code: Rule code (e.g. "SL001").
+        suggestion: Optional repair hint.
+
+    Returns:
+        A frozen ValidationIssue instance.
+    """
+    # Deferred import to break the circular dependency: plugin_validator
+    # imports rules/, so rules/ cannot import plugin_validator at module level.
+    from skilllint.plugin_validator import ValidationIssue  # noqa: PLC0415
+
+    return ValidationIssue(
+        field=field, severity=severity, message=message, code=code, docs_url=rule_reference(code), suggestion=suggestion
+    )
+
 
 # ---------------------------------------------------------------------------
 # SL001 — Symlink target has trailing whitespace/newlines
@@ -48,7 +109,7 @@ if TYPE_CHECKING:
     platforms=["agentskills"],
     authority={"origin": "github.com/jamie-bitflight/claude_skills"},
 )
-def check_sl001(frontmatter: dict[str, object], path: Path, file_type: str) -> list[ValidationIssue]:
+def check_sl001(path: Path) -> list[ValidationIssue]:
     r"""## SL001 — Symlink target has trailing whitespace or newlines
 
     A symlink within the validated path has a target string that contains
@@ -83,17 +144,46 @@ def check_sl001(frontmatter: dict[str, object], path: Path, file_type: str) -> l
     existing path.  Symlinks whose cleaned target does not exist are left
     untouched and reported as unfixable.
 
+    Args:
+        path: File or directory to inspect. A file that is itself a symlink is
+            checked directly; a directory is scanned recursively.
+
     Returns:
-        Always an empty list.  SL001 is emitted by ``SymlinkTargetValidator``
-        in ``plugin_validator.py`` after reading symlink targets from the
-        filesystem; this function exists for rule metadata registration only.
+        One issue per symlink whose target has trailing whitespace; empty when
+        every symlink target is clean or the path contains no symlinks.
 
     <!-- examples: SL001 -->
     """
-    # Detection requires reading symlink targets from the filesystem via
-    # Path.readlink() and scanning directory trees for symlinks.
-    # Owned by SymlinkTargetValidator in plugin_validator.py.
-    return []
+    issues: list[ValidationIssue] = []
+
+    for symlink_path in iter_symlinks(path):
+        try:
+            raw_target = str(Path(symlink_path).readlink())
+        except OSError:
+            continue
+
+        if raw_target != raw_target.rstrip():
+            clean_target = raw_target.rstrip()
+            issues.append(
+                _make_issue(
+                    field=str(symlink_path),
+                    severity="error",
+                    message=(
+                        f"Symlink target has trailing whitespace: "
+                        f"{symlink_path!s} -> {raw_target!r} "
+                        f"(should be {clean_target!r})"
+                    ),
+                    code="SL001",
+                    suggestion=(
+                        "Run with --fix to strip trailing whitespace and recreate the symlink, "
+                        'or run: python3 -c "'
+                        f"import os; p='{symlink_path}'; t=os.readlink(p).rstrip(); "
+                        'os.remove(p); os.symlink(t, p)"'
+                    ),
+                )
+            )
+
+    return issues
 
 
-__all__ = ["check_sl001"]
+__all__ = ["check_sl001", "iter_symlinks"]

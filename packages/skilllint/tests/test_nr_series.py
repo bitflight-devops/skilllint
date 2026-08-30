@@ -11,7 +11,6 @@ traversal limitations" section this rule actually enforces.
 
 from __future__ import annotations
 
-from skilllint.plugin_validator import NamespaceReferenceValidator
 from skilllint.rule_registry import RULE_REGISTRY
 
 
@@ -37,8 +36,3 @@ class TestNR002Authority:
         """The fabricated agentskills.io/specification.md citation must be gone."""
         entry = RULE_REGISTRY["NR002"]
         assert "agentskills.io/specification" not in entry.docstring
-
-    def test_validator_method_docstring_does_not_cite_agentskills_specification(self) -> None:
-        """The real detection method's docstring must not carry the fabricated citation either."""
-        doc = NamespaceReferenceValidator._check_nr002_traversal.__doc__ or ""
-        assert "agentskills.io/specification" not in doc
