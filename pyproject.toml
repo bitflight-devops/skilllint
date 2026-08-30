@@ -224,6 +224,15 @@ ignore = [
     "Q001",    # Remove bad quotes
     "Q002",    # Remove bad quotes
     "Q003",    # Remove bad quotes
+    "RUF105",  # noqa-comments (new in ruff 0.16): prefers `# ruff: ignore[...]` over `# noqa`.
+               # Its autofix silently drops the suppression + rationale on
+               # packages/skilllint/boundary/plugin_agent_pa001_ingest.py:114, and the
+               # `# noqa` form is the portable one. Migrate deliberately, not via a dep bump.
+               # see: https://docs.astral.sh/ruff/rules/noqa-comments/
+    "RUF201",  # rule-codes-in-selectors (new in ruff 0.16): wants rule names instead of codes
+               # in this file's own selectors. skilllint reports rule codes as its public
+               # identifiers, so codes + doc-URL comments are the deliberate convention here.
+               # see: https://docs.astral.sh/ruff/rules/rule-codes-in-selectors/
     "S310",
     "S404",    # subprocess possibly insecure - still need to use subprocess though
     "S603",    # subprocess without shell=True

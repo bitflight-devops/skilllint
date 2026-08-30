@@ -58,11 +58,11 @@
    from skilllint.plugin_validator import validate_file
 
    adapters = {a.id(): a for a in load_adapters()}
-   path = Path('packages/skilllint/tests/fixtures/claude_code/invalid-skill/SKILL.md')
-   violations = validate_file(path, adapters, platform_override='claude_code')
-   
-   as001 = [v for v in violations if v.get('code') == 'AS001'][0]
-   print('Authority:', as001.get('authority'))
+   path = Path("packages/skilllint/tests/fixtures/claude_code/invalid-skill/SKILL.md")
+   violations = validate_file(path, adapters, platform_override="claude_code")
+
+   as001 = [v for v in violations if v.get("code") == "AS001"][0]
+   print("Authority:", as001.get("authority"))
    ```
 2. **Expected:** Output shows `{'origin': 'agentskills.io', 'reference': '/specification#skill-naming'}`
 

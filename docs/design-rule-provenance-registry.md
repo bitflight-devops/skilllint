@@ -215,10 +215,10 @@ from marko import Markdown
 from marko.md_renderer import MarkdownRenderer
 
 # Parsing instance: GFM for tables, TOC for slug generation
-parser = Markdown(extensions=['gfm', 'toc'])
+parser = Markdown(extensions=["gfm", "toc"])
 
 # Rendering instance: serialize subtrees back to markdown
-renderer = Markdown(extensions=['gfm'], renderer=MarkdownRenderer)
+renderer = Markdown(extensions=["gfm"], renderer=MarkdownRenderer)
 ```
 
 ### Anchor matching

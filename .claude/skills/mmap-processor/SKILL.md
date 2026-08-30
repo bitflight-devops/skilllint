@@ -19,7 +19,8 @@ When writing Python code to read or search files, follow these mandatory rules:
 import mmap
 import os
 
-def read_to_delimiter(file_path: str, delimiter: bytes = b'\n') -> bytes:
+
+def read_to_delimiter(file_path: str, delimiter: bytes = b"\n") -> bytes:
     if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
         return b""
     with open(file_path, "rb") as f:

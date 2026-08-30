@@ -163,15 +163,13 @@ mkdir -p packages/skilllint/adapters/<new_provider>/
 # packages/skilllint/adapters/new_provider/adapter.py
 from pathlib import Path, PurePath
 
+
 class NewProviderAdapter:
     def id(self) -> str:
         return "new_provider"
 
     def path_patterns(self) -> list[str]:
-        return [
-            "**/.new_provider/**/*.md",
-            "**/new-provider.yaml",
-        ]
+        return ["**/.new_provider/**/*.md", "**/new-provider.yaml"]
 
     def applicable_rules(self) -> set[str]:
         return {"AS"}  # AS-series rules apply
@@ -215,9 +213,9 @@ When a provider directory lacks a `plugin.json` manifest, skilllint uses structu
 
 ```python
 class ScanDiscoveryMode(StrEnum):
-    MANIFEST = "manifest"   # plugin.json explicitly enumerates components
-    AUTO = "auto"           # plugin.json exists but omits component arrays
-    STRUCTURE = "structure" # provider directories without manifest
+    MANIFEST = "manifest"  # plugin.json explicitly enumerates components
+    AUTO = "auto"  # plugin.json exists but omits component arrays
+    STRUCTURE = "structure"  # provider directories without manifest
 ```
 
 To add a new provider directory name for structure-based discovery, update `PROVIDER_DIR_NAMES` in `scan_runtime.py`:
@@ -269,7 +267,7 @@ After creating a new lint validator, register it in `packages/skilllint/plugin_v
 ```python
 VALIDATOR_OWNERSHIP: dict[str, ValidatorOwnership] = {
     # ... existing entries ...
-    "MyNewValidator": ValidatorOwnership.LINT,
+    "MyNewValidator": ValidatorOwnership.LINT
 }
 ```
 
@@ -280,7 +278,7 @@ Also register applicable constraint scopes:
 ```python
 VALIDATOR_CONSTRAINT_SCOPES: dict[str, set[str]] = {
     # ... existing entries ...
-    "MyNewValidator": {"shared", "provider_specific"},
+    "MyNewValidator": {"shared", "provider_specific"}
 }
 ```
 
@@ -317,8 +315,8 @@ The `authority` dict has a standard shape:
 
 ```python
 authority = {
-    "origin": "agentskills.io",          # Required: the authoritative source
-    "reference": "/specification#skill-naming"  # Optional: path/anchor within source
+    "origin": "agentskills.io",  # Required: the authoritative source
+    "reference": "/specification#skill-naming",  # Optional: path/anchor within source
 }
 ```
 
@@ -362,8 +360,7 @@ Pass the `authority` kwarg to `@skilllint_rule`:
     category="skill",
     authority={"origin": "agentskills.io", "reference": "/specification#skill-naming"},
 )
-def _check_as001(name: str | None) -> dict | None:
-    ...
+def _check_as001(name: str | None) -> dict | None: ...
 ```
 
 The decorator converts this to a `RuleAuthority` dataclass (defined in `packages/skilllint/rule_registry.py`):
@@ -371,7 +368,7 @@ The decorator converts this to a `RuleAuthority` dataclass (defined in `packages
 ```python
 @dataclass
 class RuleAuthority:
-    origin: str              # e.g., "agent-skills.io", "anthropic.com"
+    origin: str  # e.g., "agent-skills.io", "anthropic.com"
     reference: str | None = None  # URL or doc path
 ```
 
@@ -385,7 +382,7 @@ def _make_violation(code: str, severity: str, message: str, fix: str | None = No
         "code": code,
         "severity": severity,
         "message": message,
-        "authority": _get_rule_authority(code)  # Looked up from registry
+        "authority": _get_rule_authority(code),  # Looked up from registry
     }
 ```
 
