@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788059692836,
+  "lastUpdate": 1788060928909,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -750,6 +750,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 64.057,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "988ac985dedbb89c497a3e82368555c4c0d7df1d",
+          "message": "refactor(rules): route rule references through rule_reference, drop dead RuleEntry.fn (#103)\n\nEvery rules/*_series.py module carried a private `_docs_url(code)` wrapper.\n#108 reduced each of them to a one-line pass-through to\n`rule_registry.rule_reference`, leaving eight of the twelve with no call\nsites at all (#123). Delete all twelve and point the live call sites at\n`rule_reference` directly — it is already imported at module level and needs\nno deferred import to dodge the plugin_validator circular dependency. Where\nthat left an empty \"Spec sources\" banner, remove the banner too.\n\n`generate_docs_url` promised a bare code string in its docstring but not in\nits signature; widen the annotation to `ErrorCode | str` so the two agree.\nThat is what lets a rule module emit a finding for a code with no ErrorCode\nmember.\n\n`RuleEntry.fn` had no readers — the decorator stored the function and nothing\never retrieved it. Remove the field, its `Any` import, and the\n`arbitrary_types_allowed` config that existed only to carry it. Callers in\nthe test suite passed `fn=` into a model whose default `extra=\"ignore\"` would\nhave swallowed it silently, so drop those kwargs and the stub functions that\nexisted only to fill them.\n\nRefs #41\nCloses #123\n\n\nClaude-Session: https://claude.ai/code/session_01QJeBLNA9ybmQvv5REMDkrc\n\nCo-authored-by: Claude Opus 5 <noreply@anthropic.com>",
+          "timestamp": "2026-08-30T03:32:17Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/988ac985dedbb89c497a3e82368555c4c0d7df1d"
+        },
+        "date": 1788060928313,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 14796.093,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 15510.991,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 16610.426,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 64.535,
             "unit": "files/s"
           }
         ]
