@@ -71,8 +71,8 @@ dev = [
     "pytest-xdist>=3.8.0",
     "pytest>=9.0.2",
     "rich>=14.3.3",
-    "ruff>=0.16.2",
-    "ty>=0.0.69",
+    "ruff>=0.16.5",
+    "ty>=0.0.75",
 ]
 
 [tool.hatch.build.targets.sdist]
