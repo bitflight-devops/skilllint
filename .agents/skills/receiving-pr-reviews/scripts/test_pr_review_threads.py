@@ -14,8 +14,8 @@
 # # is what ty actually reads for this file. Relative extra-paths declared here
 # # resolve relative to this script's own directory, not the invocation cwd or
 # # the project root -- "." is therefore this directory, which is where the
-# # sibling pr_review_threads module lives. Verified empirically; see the ty
-# # skill-mode finding recorded alongside this fix.
+# # sibling pr_review_threads module lives. Verified empirically against ty
+# # 0.0.75, from both the repo root and a nested cwd.
 # extra-paths = ["."]
 # ///
 """Tests for pr_review_threads.py.

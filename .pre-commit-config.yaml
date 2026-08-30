@@ -126,8 +126,9 @@ repos:
         # a caller-specific CLI flag here, the sibling-module search path for
         # test_pr_review_threads.py's `import pr_review_threads` is declared in
         # that script's own [tool.ty.environment] inline-metadata table, so it
-        # travels with the file for every caller (this hook, direct `ty check`,
-        # CI) instead of only this one.
+        # travels with the file for every caller (this hook, or any direct
+        # `ty check`) instead of only this one. CI type-checks `packages/`
+        # only, so this hook is the sole gate for these scripts.
         entry: uv run -q ty check
         language: system
         types: [python]
