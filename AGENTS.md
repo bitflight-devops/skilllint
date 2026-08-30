@@ -65,11 +65,10 @@ Before declaring success, confirm:
 
 ```sh
 uv remove --group <group> <pkg>...
-uv add    --group <group> <pkg>...   # floors and uv.lock move together
+uv add    --group <group> <pkg>...
 ```
 
-Never hand-edit a version string; never `uv tool install`. `uv add` regenerates
-`uv.lock`; a hand edit does not. Commit the lock with the change.
+Never hand-edit a version string; never `uv tool install`.
 
 ## Running skilllint during development
 
