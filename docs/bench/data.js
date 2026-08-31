@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788099942163,
+  "lastUpdate": 1788147099492,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -1170,6 +1170,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 108.444,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "6ce225a9ba2c199b3362365c36a99f4f18ef64e3",
+          "message": "feat(receiving-pr-reviews): add a checks command for PR CI status (#167)\n\nAn agent following this skill had no way to ask whether a PR's checks were\ngreen, so it hand-wrote polling loops instead — one with a glob that never\nmatched, one with an unsatisfiable jq filter, and one with no sleep at all,\nwhich exhausted GitHub's secondary rate limit while the primary buckets still\nread 5000/5000. Separately, a PR that appeared stalled for 30+ minutes was\nactually conflicting: GitHub runs no workflows on a conflicting PR, and the\nexisting `reviewability` signal that said so was discarded by a caller piping\nthe output through a field extractor.\n\n`checks --pr N` prints one compact object: `status` (passed / failed / pending\n/ none — a pending run and a green run are different values), `required_only`,\n`total`, the `failed` and `pending` check names, `contexts_truncated`, and the\nsame `reviewability` object `fetch` already reports, so `none` on a draft or\nconflicting PR is distinguishable from a repository with no CI. With\n`--timeout-seconds` it polls on the existing 90s interval and stops early when\n`reviewability.blockers` says no check can start.\n\nWhich checks gate the merge comes from GitHub's own\n`isRequired(pullRequestNumber:)` on the head commit's rollup — computed\nserver-side from the branch protection rule or ruleset covering the base\nbranch — rather than a hardcoded check-name list, and without the admin\npermission the branch-protection REST endpoint needs. Grading follows\nGitHub's documented rule that a required check must be successful, skipped, or\nneutral.\n\n\nClaude-Session: https://claude.ai/code/session_01QJeBLNA9ybmQvv5REMDkrc\n\nCo-authored-by: Claude Opus 5 <noreply@anthropic.com>",
+          "timestamp": "2026-08-31T03:28:57Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/6ce225a9ba2c199b3362365c36a99f4f18ef64e3"
+        },
+        "date": 1788147098878,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 11070.197,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 11642.426,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 12533.589,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 85.979,
             "unit": "files/s"
           }
         ]
