@@ -3,8 +3,10 @@
 Every function here shells out to `gh` (GitHub CLI) rather than talking to the GitHub API
 directly, relying on `gh`'s own authentication. `build_fetch_result` is the one function the CLI
 layer (`pr_review_threads.py`) calls directly — it composes the seven independent `gh` calls below
-into one `FetchResult` snapshot, fresh every time it runs. `run_gh` is exported too: the CLI
-layer's `reply`/`resolve` commands call it directly for their own single-shot `gh` invocations.
+into one `FetchResult` snapshot, fresh every time it runs. `build_checks_result` is its
+counterpart for CI state — two `gh` calls composed into one `ChecksResult`. `run_gh` is
+exported too: the CLI layer's `reply`/`resolve` commands call it directly for their own
+single-shot `gh` invocations.
 """
 
 from __future__ import annotations
@@ -15,8 +17,13 @@ import shutil
 import subprocess
 import time
 from datetime import datetime
+from typing import Literal
 
 from pr_review_models import (
+    CheckContext,
+    CheckContextsConnection,
+    CheckRunContext,
+    ChecksResult,
     FetchResult,
     ForcePushEvent,
     IssueComment,
@@ -106,6 +113,44 @@ query($o: String!, $r: String!, $pr: Int!) {
 }
 """
 
+# `isRequired(pullRequestNumber:)` is GitHub's own server-side answer to "does this check gate
+# merging this PR", computed from whatever branch protection rule or ruleset covers the base
+# branch. Asking for it here is what keeps `_verdict` free of a hardcoded check-name list, and it
+# needs none of the admin permission the branch-protection REST endpoint requires. Verified against
+# this repository's own API (2026-08-31): PR #166 returns `isRequired: true` for exactly the six
+# contexts this repo's branch protection requires, and `false` for the eight it does not.
+#
+# `statusCheckRollup` is null on a head commit with no checks at all, and `contexts` is a
+# connection — `_fetch_check_contexts` surfaces its `hasNextPage` as `contexts_truncated` rather
+# than paginating, so a caller is told when a verdict is incomplete instead of being handed a
+# silently partial one.
+_CHECKS_QUERY = """
+query($o: String!, $r: String!, $pr: Int!) {
+  repository(owner: $o, name: $r) {
+    pullRequest(number: $pr) {
+      commits(last: 1) {
+        nodes {
+          commit {
+            statusCheckRollup {
+              contexts(first: 100) {
+                totalCount
+                pageInfo { hasNextPage }
+                nodes {
+                  __typename
+                  ... on CheckRun { name status conclusion isRequired(pullRequestNumber: $pr) }
+                  ... on StatusContext { context state isRequired(pullRequestNumber: $pr) }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+"""
+
+
 # Absolute `gh` path, resolved once at import time — ruff's start-process-with-partial-path (S607)
 # requires a resolved path rather than a bare command name. Falls back to the literal "gh" when
 # `shutil.which` can't find it, so a missing binary still surfaces as a normal FileNotFoundError
@@ -119,6 +164,18 @@ _GH = shutil.which("gh") or "gh"
 # This repository has no source for that number (CLAUDE.md, "No invented constraints"), so `fetch`
 # and `watch` expose `--gh-timeout-seconds` instead, unbounded by default, and `watch` additionally
 # bounds each *poll* by its own `--timeout-seconds` deadline, which the caller chose.
+
+# GitHub: "Required status checks must have a `successful`, `skipped`, or `neutral` status before
+# collaborators can make changes to a protected branch."
+# https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches
+# (cached under .claude/vendor/sources/, accessed 2026-08-31). That one sentence is the only source
+# for both sets below: a check run's conclusion satisfies a required check iff it is one of these
+# three, and a commit status satisfies it iff it is `SUCCESS`.
+_PASSING_CHECK_CONCLUSIONS = frozenset({"SUCCESS", "SKIPPED", "NEUTRAL"})
+# A commit status that has not reached a verdict yet, as opposed to one that reached a failing one:
+# `EXPECTED` is a status GitHub knows to expect but has not received, `PENDING` one still running.
+_UNFINISHED_STATUS_STATES = frozenset({"EXPECTED", "PENDING"})
+
 
 _ISSUE_COMMENT_ADAPTER: TypeAdapter[list[IssueComment]] = TypeAdapter(list[IssueComment])
 _REACTION_ADAPTER: TypeAdapter[list[Reaction]] = TypeAdapter(list[Reaction])
@@ -678,5 +735,124 @@ def build_fetch_result(
         unresolved=unresolved,
         unresolved_count=len(unresolved),
         codex_approved=codex_approved,
+        reviewability=_reviewability(head_state),
+    )
+
+
+def _fetch_check_contexts(
+    owner: str, repo: str, pr: int, *, gh_timeout: float | None
+) -> CheckContextsConnection | None:
+    """Fetch the checks reported against the PR's head commit, or `None` if it has none at all.
+
+    Reads the head commit through GraphQL's `commits(last: 1)` for the same reason
+    `_fetch_head_state` does — the REST commits endpoint's documented 250-commit cap makes its last
+    element unreliable as "the current head" — and asks GitHub itself which of the resulting checks
+    are required for this PR (see `_CHECKS_QUERY`).
+
+    Args:
+        owner: Repository owner login.
+        repo: Repository name.
+        pr: Pull request number.
+        gh_timeout: Seconds to bound the underlying `gh` call to, or `None` for no bound — see
+            `run_gh`.
+
+    Returns:
+        The head commit's `statusCheckRollup.contexts` connection, or `None` when the commit has no
+        rollup at all — GitHub returns a null `statusCheckRollup` when nothing has ever reported a
+        check or status against it.
+
+    Raises:
+        IndexError: the PR has no commits at all — see `_fetch_head_state`.
+    """
+    raw = run_gh(
+        ["api", "graphql", "-f", f"query={_CHECKS_QUERY}", "-f", f"o={owner}", "-f", f"r={repo}", "-F", f"pr={pr}"],
+        timeout=gh_timeout,
+    )
+    commit = json.loads(raw)["data"]["repository"]["pullRequest"]["commits"]["nodes"][-1]["commit"]
+    rollup = commit["statusCheckRollup"]
+    if rollup is None:
+        return None
+    return CheckContextsConnection.model_validate(rollup["contexts"])
+
+
+def _check_outcome(context: CheckContext) -> Literal["passed", "failed", "pending"]:
+    """Grade one check against the rule GitHub applies to a required check.
+
+    A check run is graded in two steps because GitHub splits its lifecycle from its verdict: it is
+    unfinished until `status` reaches `COMPLETED`, and only then does its `conclusion` decide.
+    A `COMPLETED` run whose conclusion is not one of the three GitHub accepts — including a value
+    this script has never seen — is `"failed"`: it has finished, and it does not satisfy the rule.
+    A commit status carries a single `state` instead, so it is graded in one step.
+
+    Args:
+        context: One check run or commit status from the head commit's rollup.
+
+    Returns:
+        `"passed"`, `"failed"`, or `"pending"` — see `_PASSING_CHECK_CONCLUSIONS` for the source of
+        the passing set.
+    """
+    if isinstance(context, CheckRunContext):
+        if context.status != "COMPLETED":
+            return "pending"
+        return "passed" if context.conclusion in _PASSING_CHECK_CONCLUSIONS else "failed"
+    if context.state in _UNFINISHED_STATUS_STATES:
+        return "pending"
+    return "passed" if context.state == "SUCCESS" else "failed"
+
+
+def build_checks_result(
+    owner: str, repo: str, pr: int, *, deadline: float | None = None, gh_timeout: float | None = None
+) -> ChecksResult:
+    """Fetch and assemble one PR's CI verdict, plus whether the PR can run checks at all.
+
+    Makes two `gh` calls, each bounded by `gh_timeout_budget(deadline)` exactly as
+    `build_fetch_result`'s seven are: the head commit's check rollup, and the PR head state that
+    `_reviewability` reads. The second call exists so a `none` verdict is never ambiguous — a draft
+    or conflicting PR gets no workflow runs, and the same `reviewability` object `fetch` already
+    reports says so rather than a second, parallel signal invented here.
+
+    Only the checks GitHub marks required for this PR are graded when any is marked required: a
+    failing check that does not gate the merge is not a failure of the PR. When none is marked
+    required there is no smaller set to grade, so every reported check is, and `required_only` says
+    which of the two happened.
+
+    Args:
+        owner: Repository owner login.
+        repo: Repository name.
+        pr: Pull request number.
+        deadline: A `time.monotonic()` timestamp the caller wants both `gh` invocations to respect
+            — see `gh_timeout_budget`. `None` means no deadline.
+        gh_timeout: Per-call bound applied when `deadline` is `None`; `None` means no bound.
+
+    Returns:
+        The verdict over the graded checks, the names of any that failed or are still running, and
+        the PR's reviewability.
+    """
+    contexts_connection = _fetch_check_contexts(owner, repo, pr, gh_timeout=gh_timeout_budget(deadline, gh_timeout))
+    head_state = _fetch_head_state(owner, repo, pr, gh_timeout=gh_timeout_budget(deadline, gh_timeout))
+    reported = contexts_connection.nodes if contexts_connection is not None else []
+    required = [context for context in reported if context.isRequired]
+    graded = required or reported
+    # A list of pairs rather than a dict: two workflows may report a check of the same name, and a
+    # dict would silently drop one of them from the verdict.
+    outcomes = [(context.name, _check_outcome(context)) for context in graded]
+    failed = [name for name, outcome in outcomes if outcome == "failed"]
+    pending = [name for name, outcome in outcomes if outcome == "pending"]
+    status: Literal["passed", "failed", "pending", "none"]
+    if not graded:
+        status = "none"
+    elif failed:
+        status = "failed"
+    elif pending:
+        status = "pending"
+    else:
+        status = "passed"
+    return ChecksResult(
+        status=status,
+        required_only=bool(required),
+        total=len(graded),
+        failed=failed,
+        pending=pending,
+        contexts_truncated=contexts_connection is not None and contexts_connection.pageInfo.hasNextPage,
         reviewability=_reviewability(head_state),
     )

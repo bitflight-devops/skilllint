@@ -16,15 +16,17 @@ unresponded review (auto-paginated, filtered before it reaches an agent's contex
 review comment, and resolving a review thread. Every operation shells out to `gh` (GitHub CLI)
 rather than talking to the GitHub API directly, relying on `gh`'s own authentication. A fourth
 command, `watch`, blocks this process on an internal polling loop so a caller never needs a
-separate resumption mechanism to re-check a PR later.
+separate resumption mechanism to re-check a PR later. A fifth, `checks`, reports whether the PR's
+required CI checks have passed, and can wait on the same bounded schedule for a still-running one.
 
-`fetch`'s I/O and `FetchResult`/`WatchResult` assembly live in `pr_review_gh.py`; the data
-contracts live in `pr_review_models.py`. This module is the CLI presentation layer: it parses
-arguments, drives `watch`'s polling loop, and prints results.
+`fetch`'s and `checks`'s I/O and their `FetchResult`/`WatchResult`/`ChecksResult` assembly live in
+`pr_review_gh.py`; the data contracts live in `pr_review_models.py`. This module is the CLI
+presentation layer: it parses arguments, drives the polling loops, and prints results.
 
 Usage:
     uv run pr_review_threads.py fetch --pr 3208
     uv run pr_review_threads.py watch --pr 3208
+    uv run pr_review_threads.py checks --pr 3208
     uv run pr_review_threads.py reply --pr 3208 --comment-id 123456 --body "Fixed in abc123."
     uv run pr_review_threads.py resolve --thread-id PRRT_kwDO...
 """
@@ -36,11 +38,11 @@ import time
 from typing import Annotated
 
 import typer
-from pr_review_gh import RESOLVE_THREAD_MUTATION, build_fetch_result, detect_repo_identity, run_gh
+from pr_review_gh import RESOLVE_THREAD_MUTATION, build_checks_result, build_fetch_result, detect_repo_identity, run_gh
 from pr_review_models import WatchResult
 from pydantic import ValidationError
 
-app = typer.Typer(help="GitHub PR review-thread operations (fetch/watch/reply/resolve) via gh.")
+app = typer.Typer(help="GitHub PR review operations (fetch/watch/checks/reply/resolve) via gh.")
 
 # Anthropic's raw prompt-cache API defaults to a 5-minute TTL in every billing mode; a 1-hour TTL
 # is opt-in only (https://platform.claude.com/docs/en/build-with-claude/prompt-caching, accessed
@@ -49,7 +51,8 @@ app = typer.Typer(help="GitHub PR review-thread operations (fetch/watch/reply/re
 # sessions stay on the 5-minute default throughout. Sizing `watch`'s defaults to the 5-minute
 # floor keeps one call's turn cached under every billing mode. Cover a longer watching window by
 # looping `watch` calls (receiving-pr-reviews SKILL.md step 7), not by raising `--timeout-seconds`.
-_DEFAULT_WATCH_INTERVAL_SECONDS = 90
+# `checks` polls on the same interval, for the same reason.
+_DEFAULT_POLL_INTERVAL_SECONDS = 90
 # 270 is deliberately under the 5-minute prompt-cache TTL (every Claude billing mode) — a
 # watch call blocking this long still returns before the caller's context falls out of cache.
 _DEFAULT_WATCH_TIMEOUT_SECONDS = 270
@@ -170,7 +173,7 @@ def watch(
     github: GithubOption = None,
     interval_seconds: Annotated[
         int, typer.Option(min=1, help="Seconds to sleep between polls. Must be positive.")
-    ] = _DEFAULT_WATCH_INTERVAL_SECONDS,
+    ] = _DEFAULT_POLL_INTERVAL_SECONDS,
     timeout_seconds: Annotated[
         int,
         typer.Option(
@@ -289,6 +292,72 @@ def watch(
         raise typer.Exit(code=1)
     result = WatchResult(timed_out=not current.has_outstanding_work(), state=current)
     typer.echo(result.model_dump_json())
+
+
+@app.command()
+def checks(
+    pr: Annotated[int, typer.Option(help="Pull request number.")],
+    *,
+    github: GithubOption = None,
+    interval_seconds: Annotated[
+        int, typer.Option(min=1, help="Seconds to sleep between polls while checks are still running.")
+    ] = _DEFAULT_POLL_INTERVAL_SECONDS,
+    timeout_seconds: Annotated[
+        int,
+        typer.Option(
+            min=0,
+            help="Wait up to this many seconds for a still-running result to settle. 0 (the default) takes one snapshot.",
+        ),
+    ] = 0,
+    gh_timeout_seconds: Annotated[
+        float | None,
+        typer.Option(
+            min=0,
+            help="Seconds to bound the first `gh` calls to. Unbounded by default; polls are bounded by --timeout-seconds.",
+        ),
+    ] = None,
+) -> None:
+    """Report whether the PR's required CI checks have passed, optionally waiting for them.
+
+    Prints compact JSON: `status` (`passed` / `failed` / `pending` / `none`), `required_only`,
+    `total`, the `failed` and `pending` check names, `contexts_truncated`, and the same
+    `reviewability` object `fetch` reports. Read the whole thing — it is small on purpose. In
+    particular `status: "none"` on a PR with `reviewability.blockers` means checks *cannot start*
+    (GitHub runs no workflows on a draft or a conflicting PR), not that the repository has no CI,
+    which is otherwise indistinguishable and is why a PR can appear to stall indefinitely.
+
+    With `--timeout-seconds 0` (the default) this is a single snapshot. Given a timeout it polls,
+    sleeping `--interval-seconds` between attempts, and returns as soon as `status` is anything but
+    `pending` — or when the window ends, in which case `status` is still `pending` and the caller
+    can issue another call. A `pending` result and a `passed` result are distinct values, so a
+    caller can never mistake one for the other.
+
+    Waiting stops immediately when `reviewability.blockers` is non-empty: no check can start, so
+    there is nothing for the window to observe. Use `--interval-seconds`/`--timeout-seconds` rather
+    than an ad-hoc shell polling loop — an unpaced loop exhausts GitHub's secondary rate limit long
+    before the primary quota shows any sign of it.
+
+    A `gh` failure mid-wait propagates and exits non-zero rather than being retried inline: unlike
+    `watch`, this command is short and re-running it costs one snapshot.
+    """
+    deadline = time.monotonic() + timeout_seconds
+    owner, repo = _owner_repo(github, gh_timeout=gh_timeout_seconds)
+    # The first fetch is not deadline-bounded, for the same reason as `watch`'s: with
+    # `--timeout-seconds 0` the deadline is already spent, and bounding it would starve the
+    # documented immediate snapshot into a `TimeoutExpired`.
+    current = build_checks_result(owner, repo, pr, gh_timeout=gh_timeout_seconds)
+    while current.status == "pending" and not current.reviewability.blockers:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        time.sleep(min(interval_seconds, remaining))
+        if remaining <= interval_seconds:
+            # That sleep consumed the rest of the window; `gh_timeout_budget` would bound the poll
+            # to nothing. Report the last state fetched rather than spawn a doomed call — same
+            # cutoff, and same rationale, as `watch`.
+            break
+        current = build_checks_result(owner, repo, pr, deadline=deadline, gh_timeout=gh_timeout_seconds)
+    typer.echo(current.model_dump_json())
 
 
 @app.command()

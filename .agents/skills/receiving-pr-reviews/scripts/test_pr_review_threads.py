@@ -44,7 +44,7 @@ import json
 import subprocess
 import time
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import pr_review_gh
 import pr_review_models
@@ -1324,3 +1324,308 @@ def test_watch_fails_loudly_when_only_final_poll_fails(mocker: MockerFixture) ->
     assert "the last of 2 poll(s) this window failed" in result.output
     with pytest.raises(json.JSONDecodeError):
         json.loads(result.output)
+
+
+# --- checks: verdict over the checks GitHub marks required ------------------------------------
+
+
+def _check_run(
+    name: str, *, status: str = "COMPLETED", conclusion: str | None = "SUCCESS", required: bool = True
+) -> dict[str, object]:
+    """One `CheckRun` node as the checks query returns it."""
+    return {"__typename": "CheckRun", "name": name, "status": status, "conclusion": conclusion, "isRequired": required}
+
+
+def _status_context(name: str, *, state: str = "SUCCESS", required: bool = True) -> dict[str, object]:
+    """One `StatusContext` node as the checks query returns it — `context`, not `name`."""
+    return {"__typename": "StatusContext", "context": name, "state": state, "isRequired": required}
+
+
+def _checks_raw(nodes: list[dict[str, object]] | None, *, has_next_page: bool = False) -> str:
+    """The checks query's raw response. `nodes=None` is a head commit with no rollup at all."""
+    rollup = (
+        None
+        if nodes is None
+        else {"contexts": {"totalCount": len(nodes), "pageInfo": {"hasNextPage": has_next_page}, "nodes": nodes}}
+    )
+    return json.dumps({
+        "data": {"repository": {"pullRequest": {"commits": {"nodes": [{"commit": {"statusCheckRollup": rollup}}]}}}}
+    })
+
+
+def _head_state_raw(*, is_draft: bool = False, mergeable: str = "MERGEABLE", merge_state_status: str = "CLEAN") -> str:
+    """The head-state query's raw response, defaulting to a reviewable PR."""
+    return json.dumps({
+        "data": {
+            "repository": {
+                "pullRequest": {
+                    "isDraft": is_draft,
+                    "mergeable": mergeable,
+                    "mergeStateStatus": merge_state_status,
+                    "commits": {"nodes": [{"commit": {"committedDate": "2026-01-01T12:00:00Z"}}]},
+                }
+            }
+        }
+    })
+
+
+def _invoke_checks(mocker: MockerFixture, checks_raw: str, head_state_raw: str) -> dict[str, object]:
+    """Run `checks` against one canned pair of `gh` responses and return the parsed JSON."""
+    mocker.patch.object(pr_review_gh, "run_gh", side_effect=[checks_raw, head_state_raw])
+    result = runner.invoke(app, ["checks", "--pr", "3208"])
+    assert result.exit_code == 0, result.output
+    parsed: dict[str, object] = json.loads(result.output)
+    return parsed
+
+
+def test_checks_passes_when_every_required_check_succeeded(mocker: MockerFixture) -> None:
+    """A failing check that does not gate the merge must not turn the verdict red.
+
+    Two required checks succeeded and one non-required check failed — GitHub would let this PR
+    merge, so `status` is `passed` and the non-required failure is not listed.
+    """
+    data = _invoke_checks(
+        mocker,
+        _checks_raw([
+            _check_run("Tests"),
+            _status_context("CodeRabbit"),
+            _check_run("Release Benchmark", conclusion="FAILURE", required=False),
+        ]),
+        _head_state_raw(),
+    )
+
+    assert data["status"] == "passed"
+    assert data["required_only"] is True
+    assert data["total"] == 2
+    assert data["failed"] == []
+    assert data["pending"] == []
+    assert data["contexts_truncated"] is False
+    assert data["reviewability"] == {
+        "is_draft": False,
+        "mergeable": "MERGEABLE",
+        "merge_state_status": "CLEAN",
+        "blockers": [],
+    }
+
+
+def test_checks_reports_a_failed_required_check_by_name(mocker: MockerFixture) -> None:
+    """One failing required check makes the verdict `failed`, and names it."""
+    data = _invoke_checks(
+        mocker, _checks_raw([_check_run("Tests", conclusion="FAILURE"), _check_run("Prek hooks")]), _head_state_raw()
+    )
+
+    assert data["status"] == "failed"
+    assert data["failed"] == ["Tests"]
+
+
+def test_checks_pending_and_passed_are_distinct_states(mocker: MockerFixture) -> None:
+    """A required check still running reports `pending`, never `passed`, and is named."""
+    data = _invoke_checks(
+        mocker,
+        _checks_raw([_check_run("Tests"), _check_run("Prek hooks", status="IN_PROGRESS", conclusion=None)]),
+        _head_state_raw(),
+    )
+
+    assert data["status"] == "pending"
+    assert data["pending"] == ["Prek hooks"]
+    assert data["failed"] == []
+
+
+def test_checks_failure_outranks_a_still_running_check(mocker: MockerFixture) -> None:
+    """A failed required check is terminal even while another is still running."""
+    data = _invoke_checks(
+        mocker,
+        _checks_raw([
+            _check_run("Tests", conclusion="FAILURE"),
+            _check_run("Prek hooks", status="QUEUED", conclusion=None),
+        ]),
+        _head_state_raw(),
+    )
+
+    assert data["status"] == "failed"
+    assert data["pending"] == ["Prek hooks"]
+
+
+def test_checks_grades_every_check_when_none_is_marked_required(mocker: MockerFixture) -> None:
+    """With no branch protection marking anything required, every reported check is graded."""
+    data = _invoke_checks(
+        mocker,
+        _checks_raw([_check_run("Tests", conclusion="FAILURE", required=False), _check_run("Lint", required=False)]),
+        _head_state_raw(),
+    )
+
+    assert data["status"] == "failed"
+    assert data["required_only"] is False
+    assert data["total"] == 2
+
+
+def test_checks_reports_none_when_the_head_commit_has_no_rollup(mocker: MockerFixture) -> None:
+    """A head commit nothing has ever reported against yields `none`, not `passed`."""
+    data = _invoke_checks(mocker, _checks_raw(None), _head_state_raw())
+
+    assert data["status"] == "none"
+    assert data["total"] == 0
+    assert data["required_only"] is False
+
+
+def test_checks_explains_an_empty_verdict_on_a_conflicting_pr(mocker: MockerFixture) -> None:
+    """`none` on a conflicting PR carries the blocker saying checks cannot start at all.
+
+    This is the case that otherwise looks like a repository with no CI, and the reason a PR can
+    appear to stall indefinitely: GitHub runs no workflows while the branch conflicts.
+    """
+    data = _invoke_checks(mocker, _checks_raw(None), _head_state_raw(mergeable="CONFLICTING"))
+
+    assert data["status"] == "none"
+    reviewability = data["reviewability"]
+    assert isinstance(reviewability, dict)
+    assert reviewability["blockers"] == ["conflicting: reviews will not run until the merge conflicts are resolved"]
+
+
+def test_checks_flags_a_truncated_context_page(mocker: MockerFixture) -> None:
+    """More than one page of checks means the verdict is incomplete, and says so."""
+    data = _invoke_checks(mocker, _checks_raw([_check_run("Tests")], has_next_page=True), _head_state_raw())
+
+    assert data["contexts_truncated"] is True
+
+
+def test_checks_keeps_both_checks_that_share_a_name(mocker: MockerFixture) -> None:
+    """Two workflows reporting the same check name are graded separately, not collapsed."""
+    data = _invoke_checks(
+        mocker, _checks_raw([_check_run("Tests", conclusion="FAILURE"), _check_run("Tests")]), _head_state_raw()
+    )
+
+    assert data["total"] == 2
+    assert data["failed"] == ["Tests"]
+
+
+@pytest.mark.parametrize(
+    ("node", "expected"),
+    [
+        (_check_run("c", conclusion="SUCCESS"), "passed"),
+        (_check_run("c", conclusion="SKIPPED"), "passed"),
+        (_check_run("c", conclusion="NEUTRAL"), "passed"),
+        (_check_run("c", conclusion="FAILURE"), "failed"),
+        (_check_run("c", conclusion="TIMED_OUT"), "failed"),
+        (_check_run("c", conclusion="CANCELLED"), "failed"),
+        (_check_run("c", conclusion="ACTION_REQUIRED"), "failed"),
+        (_check_run("c", conclusion="A_CONCLUSION_THIS_SCRIPT_HAS_NEVER_SEEN"), "failed"),
+        (_check_run("c", status="QUEUED", conclusion=None), "pending"),
+        (_check_run("c", status="IN_PROGRESS", conclusion=None), "pending"),
+        (_check_run("c", status="WAITING", conclusion=None), "pending"),
+        (_status_context("c", state="SUCCESS"), "passed"),
+        (_status_context("c", state="PENDING"), "pending"),
+        (_status_context("c", state="EXPECTED"), "pending"),
+        (_status_context("c", state="ERROR"), "failed"),
+        (_status_context("c", state="FAILURE"), "failed"),
+    ],
+)
+def test_check_outcome_grades_against_githubs_required_check_rule(node: dict[str, object], expected: str) -> None:
+    """Only `SUCCESS`/`SKIPPED`/`NEUTRAL` (and a status's `SUCCESS`) satisfy a required check.
+
+    A completed run with any other conclusion — including one this script does not recognize — has
+    finished without satisfying the rule, so it is `failed` rather than optimistically `passed`.
+    """
+    context = pr_review_models.CheckContextsConnection.model_validate({
+        "totalCount": 1,
+        "pageInfo": {"hasNextPage": False},
+        "nodes": [node],
+    }).nodes[0]
+
+    assert pr_review_gh._check_outcome(context) == expected
+
+
+def test_check_contexts_reject_an_unknown_node_type() -> None:
+    """A rollup node that is neither shape fails validation loudly rather than being guessed at."""
+    with pytest.raises(ValidationError):
+        pr_review_models.CheckContextsConnection.model_validate({
+            "totalCount": 1,
+            "pageInfo": {"hasNextPage": False},
+            "nodes": [{"__typename": "SomethingElse", "name": "c", "isRequired": True}],
+        })
+
+
+# --- checks: the bounded wait ------------------------------------------------------------------
+
+
+# `ChecksResult.status`'s own value set, named once so the wait-loop tests can be parametrized over
+# it without widening to `str` and needing a type-checker suppression at the constructor.
+_CheckStatus = Literal["passed", "failed", "pending", "none"]
+
+
+def _checks_result(status: _CheckStatus, *, blockers: list[str] | None = None) -> pr_review_models.ChecksResult:
+    """Build a minimal `ChecksResult` for the wait-loop tests."""
+    return pr_review_models.ChecksResult(
+        status=status,
+        required_only=True,
+        total=1,
+        failed=[],
+        pending=[],
+        contexts_truncated=False,
+        reviewability=Reviewability(
+            is_draft=bool(blockers), mergeable="MERGEABLE", merge_state_status="CLEAN", blockers=blockers or []
+        ),
+    )
+
+
+@pytest.mark.parametrize("status", ["passed", "failed", "none"])
+def test_checks_returns_without_sleeping_once_settled(status: _CheckStatus, mocker: MockerFixture) -> None:
+    """Any non-pending verdict ends the wait immediately — there is nothing left to wait for."""
+    build_mock = mocker.patch.object(pr_review_threads, "build_checks_result", return_value=_checks_result(status))
+    sleep_mock = mocker.patch.object(pr_review_threads.time, "sleep")
+
+    result = runner.invoke(app, ["checks", "--pr", "3208", "--interval-seconds", "1", "--timeout-seconds", "40"])
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["status"] == status
+    build_mock.assert_called_once()
+    sleep_mock.assert_not_called()
+
+
+def test_checks_waits_until_a_running_check_settles(mocker: MockerFixture) -> None:
+    """A pending verdict is re-polled, with a real sleep between attempts, until it settles."""
+    mocker.patch.object(
+        pr_review_threads, "build_checks_result", side_effect=[_checks_result("pending"), _checks_result("passed")]
+    )
+    sleep_mock = mocker.patch.object(pr_review_threads.time, "sleep")
+
+    # As in `test_watch_polls_until_thread_becomes_unresolved`: timeout must exceed interval, since
+    # the loop stops once less than one interval remains and mocked sleep consumes no wall clock.
+    result = runner.invoke(app, ["checks", "--pr", "3208", "--interval-seconds", "1", "--timeout-seconds", "40"])
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["status"] == "passed"
+    sleep_mock.assert_called_once_with(1)
+
+
+def test_checks_reports_still_pending_when_the_window_ends(mocker: MockerFixture) -> None:
+    """A window that ends with checks still running reports `pending` — never `passed`."""
+    mocker.patch.object(pr_review_threads, "build_checks_result", return_value=_checks_result("pending"))
+
+    result = runner.invoke(app, ["checks", "--pr", "3208", "--interval-seconds", "1", "--timeout-seconds", "0"])
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["status"] == "pending"
+
+
+def test_checks_stops_waiting_when_the_pr_cannot_run_checks(mocker: MockerFixture) -> None:
+    """A blocked PR ends the wait at once: no check can start, so no window can observe one."""
+    build_mock = mocker.patch.object(
+        pr_review_threads,
+        "build_checks_result",
+        return_value=_checks_result("pending", blockers=["draft: reviewers are not requested until the PR is ready"]),
+    )
+    sleep_mock = mocker.patch.object(pr_review_threads.time, "sleep")
+
+    result = runner.invoke(app, ["checks", "--pr", "3208", "--interval-seconds", "1", "--timeout-seconds", "40"])
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["status"] == "pending"
+    build_mock.assert_called_once()
+    sleep_mock.assert_not_called()
+
+
+def test_checks_rejects_a_non_positive_interval() -> None:
+    result = runner.invoke(app, ["checks", "--pr", "3208", "--interval-seconds", "0"])
+
+    assert result.exit_code != 0
