@@ -195,6 +195,9 @@ def _state(
         ],
         unresolved_count=unresolved_count,
         codex_approved=codex_approved,
+        codex_approval_stale=False,
+        codex_approved_at=_OLD_COMMIT_DATE if codex_approved else None,
+        latest_revision_at=_OLD_COMMIT_DATE,
         reviewability=Reviewability(is_draft=False, mergeable="MERGEABLE", merge_state_status="CLEAN", blockers=[]),
     )
 
@@ -681,6 +684,87 @@ def test_build_fetch_result_codex_approved_false_when_reaction_predates_head_com
     result = build_fetch_result("o", "r", 1)
 
     assert result.codex_approved is False
+
+
+def _codex_only_fetch(mocker: MockerFixture, reactions: list[Reaction], *, commit_date: datetime) -> FetchResult:
+    """Run `build_fetch_result` with only the reaction stream and head date varying."""
+    mocker.patch.object(pr_review_gh, "_fetch_pages", return_value=_empty_threads())
+    mocker.patch.object(pr_review_gh, "_fetch_review_pages", return_value=[_reviews_conn([])])
+    mocker.patch.object(pr_review_gh, "_fetch_issue_comments", return_value=[])
+    mocker.patch.object(pr_review_gh, "_fetch_pr_reactions", return_value=reactions)
+    _patch_identity_and_commit_date(mocker, commit_date=commit_date)
+    return build_fetch_result("o", "r", 1)
+
+
+def test_build_fetch_result_reports_a_stale_codex_approval_distinctly_from_no_approval(mocker: MockerFixture) -> None:
+    """ "Codex approved an older revision" and "Codex never approved" are different answers.
+
+    Both are `codex_approved: False`, and they call for opposite actions: a stale approval means a
+    push invalidated it and a fresh review has to be *requested*, while no approval at all means
+    one is still coming and the caller should keep waiting. Collapsing the two into one boolean is
+    what made the real observation on Jamie-BitFlight/mkapidocs#26 unreadable — a `+1` at
+    `03:37:24Z` against a head committed at `03:40:38Z`, correctly not current, reported
+    identically to a PR Codex had never looked at.
+
+    `codex_approved_at` and `latest_revision_at` carry the evidence so a caller can say by how much.
+    """
+    approved_at = datetime(2026, 1, 1, tzinfo=UTC)
+    head_committed_at = datetime(2026, 1, 2, tzinfo=UTC)
+    reaction = Reaction(content="+1", user=Author(login="chatgpt-codex-connector[bot]"), created_at=approved_at)
+
+    stale = _codex_only_fetch(mocker, [reaction], commit_date=head_committed_at)
+
+    assert stale.codex_approved is False
+    assert stale.codex_approval_stale is True
+    assert stale.codex_approved_at == approved_at
+    assert stale.latest_revision_at == head_committed_at
+
+
+def test_build_fetch_result_reports_no_codex_approval_as_neither_current_nor_stale(mocker: MockerFixture) -> None:
+    """A PR Codex has never reacted to is `False` on both flags, with no approval timestamp."""
+    never = _codex_only_fetch(mocker, [], commit_date=datetime(2026, 1, 2, tzinfo=UTC))
+
+    assert never.codex_approved is False
+    assert never.codex_approval_stale is False
+    assert never.codex_approved_at is None
+
+
+def test_build_fetch_result_current_codex_approval_is_not_also_stale(mocker: MockerFixture) -> None:
+    """The two flags are mutually exclusive: an approval that is current is never also stale."""
+    reaction = Reaction(
+        content="+1", user=Author(login="chatgpt-codex-connector[bot]"), created_at=datetime(2026, 1, 2, tzinfo=UTC)
+    )
+
+    current = _codex_only_fetch(mocker, [reaction], commit_date=datetime(2026, 1, 1, tzinfo=UTC))
+
+    assert current.codex_approved is True
+    assert current.codex_approval_stale is False
+
+
+def test_build_fetch_result_reads_the_latest_codex_reaction_when_several_exist(mocker: MockerFixture) -> None:
+    """Across revisions a PR accumulates several `+1`s; only the most recent can still apply."""
+    reactions = [
+        Reaction(content="+1", user=Author(login="chatgpt-codex-connector[bot]"), created_at=day)
+        for day in (datetime(2026, 1, 1, tzinfo=UTC), datetime(2026, 1, 3, tzinfo=UTC))
+    ]
+
+    result = _codex_only_fetch(mocker, reactions, commit_date=datetime(2026, 1, 2, tzinfo=UTC))
+
+    assert result.codex_approved is True
+    assert result.codex_approved_at == datetime(2026, 1, 3, tzinfo=UTC)
+
+
+def test_a_stale_codex_approval_is_not_outstanding_work() -> None:
+    """`watch` must not treat a stale approval as a reason to return.
+
+    `has_outstanding_work` keys on `codex_approved` alone, and that is deliberate: a stale approval
+    is not a signal that arrived, it is one that expired. Returning on it would make `watch` exit
+    immediately and forever on any PR whose approval a push invalidated.
+    """
+    state = _state()
+    stale = state.model_copy(update={"codex_approval_stale": True, "codex_approved_at": _OLD_COMMIT_DATE})
+
+    assert stale.has_outstanding_work() is False
 
 
 def test_build_fetch_result_codex_approved_false_when_reaction_predates_reused_commit_force_push(

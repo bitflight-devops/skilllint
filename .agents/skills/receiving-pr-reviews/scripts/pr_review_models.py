@@ -455,6 +455,24 @@ class FetchResult(BaseModel):
     Every field here is derived from a single fresh set of `gh` calls (see
     `pr_review_gh.build_fetch_result`) — none of it is a diff against an earlier call's result,
     so reading any of these fields never depends on what call came before this one.
+
+    Codex's approval is reported as three fields rather than one, because a single boolean
+    collapses two states that call for opposite actions. Codex approves by leaving a `+1` reaction
+    on the PR, and that reaction approves the revision that existed when it landed — a later push
+    does not remove it, so the reaction alone would keep reading as approval indefinitely:
+
+    - `codex_approved` — a Codex `+1` is present **and** it postdates the current revision. The
+      approval applies to what is on the branch right now. Unchanged in meaning; this is the field
+      `has_outstanding_work` and the receiving-pr-reviews skill already read.
+    - `codex_approval_stale` — a Codex `+1` is present but predates the current revision. A push
+      landed after Codex approved, so the approval covers code that is no longer there and a fresh
+      review has to be requested. Distinct from *no* approval at all, where both booleans are
+      `False` and the answer is to keep waiting. The two are mutually exclusive by construction.
+    - `codex_approved_at` / `latest_revision_at` — the evidence behind the verdict: when the `+1`
+      landed (`None` when Codex has never reacted) and when the current revision came into being
+      (`pr_review_gh._latest_revision_at`: the later of the head commit's date and the most recent
+      force-push, since neither is sufficient alone). A caller reporting *why* an approval is stale
+      needs both, and both are already computed to decide the booleans.
     """
 
     reviews_count: int
@@ -464,6 +482,9 @@ class FetchResult(BaseModel):
     unresolved: list[UnresolvedThread]
     unresolved_count: int
     codex_approved: bool
+    codex_approval_stale: bool
+    codex_approved_at: datetime | None
+    latest_revision_at: datetime
     reviewability: Reviewability
 
     def has_outstanding_work(self) -> bool:

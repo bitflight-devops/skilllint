@@ -642,6 +642,26 @@ def _is_codex_thumbs_up(reaction: Reaction) -> bool:
     )
 
 
+def _latest_codex_approval_at(reactions: list[Reaction]) -> datetime | None:
+    """The timestamp of Codex's most recent approval reaction on the PR, if it has left one.
+
+    Separated from the "is it still current" comparison in `build_fetch_result` because those are
+    two independent questions, and collapsing them into a single boolean is what made a push that
+    invalidated an approval indistinguishable from Codex never having looked at the PR — opposite
+    situations calling for opposite actions.
+
+    `max` rather than "any": a PR accumulates a reaction per revision Codex approves, and they are
+    never removed, so only the most recent one can possibly still apply to what is on the branch.
+
+    Args:
+        reactions: Every reaction on the PR itself, from `_fetch_pr_reactions`.
+
+    Returns:
+        When Codex last left its "+1", or `None` if it never has.
+    """
+    return max((reaction.created_at for reaction in reactions if _is_codex_thumbs_up(reaction)), default=None)
+
+
 def gh_timeout_budget(deadline: float | None, gh_timeout: float | None) -> float | None:
     """Choose the timeout for one `gh` call.
 
@@ -703,6 +723,13 @@ def build_fetch_result(
     including a force-push that resets the branch back onto a pre-existing commit object whose own
     embedded date predates the reaction.
 
+    A reaction that fails only that timestamp test is reported as `codex_approval_stale` rather
+    than being silently folded into `codex_approved: False`: Codex did approve, but a later push
+    replaced the code it approved, so the caller has to re-request a review instead of waiting for
+    one. `codex_approved_at` and `latest_revision_at` carry the two timestamps the verdict was
+    computed from, so a caller can say *how* stale rather than only *that* it is — see
+    `FetchResult`.
+
     Args:
         owner: Repository owner login.
         repo: Repository name.
@@ -713,7 +740,8 @@ def build_fetch_result(
 
     Returns:
         Totals plus every currently-unresolved thread, every unresponded review, and whether
-        Codex's approval reaction is present right now for the current revision.
+        Codex's approval reaction is present right now for the current revision, for an older one,
+        or not at all.
     """
     thread_pages = _fetch_pages(owner, repo, pr, gh_timeout=gh_timeout_budget(deadline, gh_timeout))
     review_pages = _fetch_review_pages(owner, repo, pr, gh_timeout=gh_timeout_budget(deadline, gh_timeout))
@@ -744,9 +772,7 @@ def build_fetch_result(
         comment for comment in issue_comments if comment.user is not None and comment.user.login == authenticated_login
     ]
     unresponded_reviews = _unresponded_reviews(reviews_with_body, own_comments)
-    codex_approved = any(
-        _is_codex_thumbs_up(reaction) and reaction.created_at >= latest_revision_at for reaction in reactions
-    )
+    codex_approved_at = _latest_codex_approval_at(reactions)
 
     return FetchResult(
         reviews_count=review_pages[0].totalCount,
@@ -755,7 +781,13 @@ def build_fetch_result(
         threads_count=thread_pages[0].totalCount,
         unresolved=unresolved,
         unresolved_count=len(unresolved),
-        codex_approved=codex_approved,
+        # Present and at/after the current revision vs. present and before it: two conditions over
+        # the same timestamp, written out rather than derived from each other so the mutual
+        # exclusion `FetchResult` documents is visible here instead of inferred.
+        codex_approved=codex_approved_at is not None and codex_approved_at >= latest_revision_at,
+        codex_approval_stale=codex_approved_at is not None and codex_approved_at < latest_revision_at,
+        codex_approved_at=codex_approved_at,
+        latest_revision_at=latest_revision_at,
         reviewability=_reviewability(head_state),
     )
 

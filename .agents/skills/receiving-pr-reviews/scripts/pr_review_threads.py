@@ -160,8 +160,14 @@ def fetch(
     thread at all and would otherwise be invisible even when `unresolved_count` is 0.
     `unresponded_reviews` narrows that to the ones nothing has been posted on the PR about since —
     see `pr_review_gh.build_fetch_result` for exactly how that is derived; treat each as
-    actionable input. `codex_approved` is `True` when Codex's thumbs-up reaction is currently
-    present on the PR.
+    actionable input.
+
+    `codex_approved` is `True` when Codex's thumbs-up reaction is present *and* postdates the
+    current revision. When it is `False`, read `codex_approval_stale` before concluding anything:
+    `True` there means Codex did approve but a later push replaced the code it approved, so a fresh
+    review has to be requested rather than waited for. Both `False` means Codex has not reacted at
+    all. `codex_approved_at` and `latest_revision_at` are the two timestamps that verdict was
+    computed from.
 
     `reviewability.blockers` is non-empty when the PR itself is why nothing is outstanding: a draft
     gets no reviewers requested and a conflicting branch gets no review runs, so an empty

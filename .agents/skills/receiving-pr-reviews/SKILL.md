@@ -50,6 +50,8 @@ description: Work through every unresolved review thread on a PR to completion �
 
    `timed_out: false` means `state.unresolved_count > 0`, `state.unresponded_reviews` is non-empty, or `state.codex_approved` is `true` — restart this skill from step 1 against whichever is true. `timed_out: true` means none of the three were true inside that one call's window, not that watching is done — issue another `watch` immediately to keep covering the window you intend to watch. Stop once one of the three conditions is met, or once the intended window is covered. `codex_approved: true` on its own, with `unresolved_count: 0` and `unresponded_reviews: []`, is a completion signal — do not re-enter step 1 for it.
 
+   A `codex_approved: false` is two different situations, and `state.codex_approval_stale` is what separates them. `false` there means Codex has not reacted at all: keep watching. `true` means Codex approved an earlier revision and your own push since then invalidated it — no further reaction is coming on its own, so stop watching and re-request a review (`gh pr comment`, or re-request Codex however this repo triggers it) instead of waiting out more windows. `state.codex_approved_at` and `state.latest_revision_at` are the timestamps behind that call, and quoting both is what makes the re-request self-explanatory.
+
 </workflow>
 
 <gotchas>
