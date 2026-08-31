@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788147099492,
+  "lastUpdate": 1788163538794,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -1212,6 +1212,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 85.979,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "575b51782edecd3492a2e492db98967283a67dbb",
+          "message": "fix(pr-reviews): make `checks` wait through the states it was returning on (#172)\n\n* fix(pr-reviews): make `checks` wait through the states it was returning on\n\nThree defects Codex raised on PR #167, four minutes after it merged.\n\n`status: \"none\"` was never polled. The loop continued only on `\"pending\"`,\nbut a just-pushed head commit reports a null `statusCheckRollup` until\nGitHub registers the workflow runs the push triggered, which grades as\n`\"none\"` — so `checks --timeout-seconds 270` returned that first snapshot\ninstantly, at exactly the moment SKILL.md step 3 tells the reader to run\nit. A `\"none\"` now gets one re-poll of grace. That bound introduces no\nduration of its own: the wait is one `--interval-seconds`, the unit the\ncaller already chose, so a repository with genuinely no CI settles after\none extra interval instead of spinning out the whole window.\n\nThe draft blocker short-circuited the wait, on a claim that is false for\nworkflows. Any non-empty `reviewability.blockers` ended the loop, citing\n\"reviewers are not requested until the PR is marked ready\" — a statement\nabout reviews. GitHub does run workflows on a draft PR unless a workflow\nopts out, and this repository's own `test.yml` and `benchmark.yml` trigger\non a bare `pull_request` with no `types:` filter and no draft guard. Only\nthe conflicting blocker stops CI, and `checks_blocked` is now the one\nplace that distinction is made. The false claim is corrected in the\n`checks` docstring and in SKILL.md, where both said GitHub runs no\nworkflow on a draft or a conflicting PR; only the conflicting half is true.\n\nThe verdict and the reviewability came from two unlinked head reads.\n`_CHECKS_QUERY` and `_HEAD_STATE_QUERY` each ran their own\n`commits(last: 1)`, neither selected `oid` and nothing compared them, so a\npush landing between the two calls produced a result pairing one head's\nrollup with another head's PR state. They are now one query over one\n`pullRequest` snapshot — following the reasoning the comment above\n`_HEAD_STATE_QUERY` already made — which removes the race outright and\ncosts `checks` one fewer `gh` call than comparing two `oid`s would.\n\nEach defect has a test that fails before the fix and passes after.\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01QJeBLNA9ybmQvv5REMDkrc\n\n* feat(pr-reviews): tell a stale Codex approval from no approval at all\n\nA review sweep reported `codex_approved: false` on a PR whose Codex 👍 was\nplainly present, and diagnosed it as the login match missing the `[bot]`\nsuffix. That diagnosis is wrong: `_CODEX_REACTOR_LOGINS` already holds both\nspellings, the lookup is lowercased, and a test already asserts it. The\nobservation was real, though. On Jamie-BitFlight/mkapidocs#26 the reaction\nlanded at 03:37:24Z and the head commit `d546671` was committed at\n03:40:38Z, so a push invalidated the approval three minutes later and the\nstaleness rule correctly refused to report it as current.\n\nThe defect is that the answer was unreadable, not that it was wrong. One\nboolean collapsed two situations calling for opposite actions: \"Codex has\nnot looked yet\" means keep waiting, \"Codex approved code that is no longer\non the branch\" means stop waiting and re-request a review. `fetch` now\nreports `codex_approval_stale` alongside `codex_approved` — mutually\nexclusive by construction — plus `codex_approved_at` and\n`latest_revision_at`, the two timestamps the verdict was computed from, so\na caller can say how stale rather than only that it is.\n\n`has_outstanding_work` deliberately still keys on `codex_approved` alone: a\nstale approval is a signal that expired, not one that arrived, and\nreturning on it would make `watch` exit immediately and forever on any PR\nwhose approval a push invalidated. A test pins that.\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01QJeBLNA9ybmQvv5REMDkrc\n\n---------\n\nCo-authored-by: Claude Opus 5 <noreply@anthropic.com>",
+          "timestamp": "2026-08-31T08:02:50Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/575b51782edecd3492a2e492db98967283a67dbb"
+        },
+        "date": 1788163537149,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 9717.918,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 10287.647,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 11421.973,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 97.301,
             "unit": "files/s"
           }
         ]
