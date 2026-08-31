@@ -35,7 +35,7 @@ jobs:
     if: github.event_name != 'release'
     steps:
       - name: Checkout compare ref
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.compare_ref || github.sha }}
           fetch-depth: 0
@@ -139,7 +139,7 @@ jobs:
 
       - name: Checkout base ref
         if: steps.base_ref_io.outputs.ref != ''
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
         with:
           ref: ${{ steps.base_ref_io.outputs.ref }}
           fetch-depth: 0
@@ -215,7 +215,7 @@ jobs:
     if: github.event_name != 'release'
     steps:
       - name: Checkout compare ref
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.compare_ref || github.sha }}
 
@@ -290,7 +290,7 @@ jobs:
 
       - name: Checkout base ref for CPU comparison
         if: steps.base_ref_cpu.outputs.ref != ''
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
         with:
           ref: ${{ steps.base_ref_cpu.outputs.ref }}
           fetch-depth: 0
@@ -328,7 +328,7 @@ jobs:
     needs: [benchmark-io, benchmark-cpu]
     if: github.event_name == 'pull_request'
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
       - name: Download IO compare results
         uses: actions/download-artifact@v8.0.1
@@ -387,7 +387,7 @@ jobs:
     if: github.event_name == 'release'
     steps:
       - name: Checkout release tag
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
         with:
           ref: ${{ github.ref }}
           fetch-depth: 0
@@ -441,7 +441,7 @@ jobs:
 
       - name: Checkout base ref for comparison
         if: steps.base_ref.outputs.tag != ''
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
         with:
           ref: ${{ steps.base_ref.outputs.tag }}
           fetch-depth: 0
