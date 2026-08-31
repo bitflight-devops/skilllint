@@ -78,7 +78,7 @@ jobs:
         run: uv sync --locked
 
       - name: Lint code
-        run: uv run --locked ruff check --output-format=github
+        run: uv run --locked ruff check --no-fix --output-format=github
         continue-on-error: false
 
   typecheck-ty:
