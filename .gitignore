@@ -1,4 +1,5 @@
 .worktrees
+.hermes/
 .venv/
 __pycache__/
 *.pyc

@@ -18,6 +18,8 @@ The rules above govern changes. These govern statements — in a reply, an issue
 - **A subagent's characterization is not evidence.** It is a claim with the same standing as your own. Check the artifact it describes before repeating it or building on it.
 - **Contradicting evidence stops the work.** An empty grep, a truncated capture, a result that disagrees with the plan already in flight — resolve it before continuing. These are the cheapest signals available and the easiest to walk past.
 - **An unverified claim that reaches an issue, a commit, or a comment becomes a premise.** Later readers cannot distinguish it from a checked fact and will cite it as one. Correcting the claim later does not retract the work built on it — revisit that too.
+- **A working tree is not the repository.** Read committed state — `git show <ref>:<path>` — before describing what a repository contains. A checkout can hold another session's uncommitted work, and reading it reports that work as the repo's own.
+- **Absence of a config is not absence of a tool, and presence is not use.** A disabled stanza reads as presence to grep while meaning the opposite; a tool can also be configured in a file that names it nowhere. Check where the tool is actually resolved from — the lockfile, the hook, the CI step.
 
 ## While Editing
 
