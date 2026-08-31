@@ -158,7 +158,6 @@ exclude = [
     # Deliberately-broken fixtures -- must never be linted or fixed.
     "packages/skilllint/tests/fixtures/providers/*/failing-examples/*",
 ]
-fix = true
 line-length = 120
 src = [".github", "packages", "scripts", "tests"]
 target-version = "py311"
