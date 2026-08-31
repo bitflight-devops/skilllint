@@ -11,12 +11,16 @@ documents and what a caller already parses.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 __all__ = [
     "Author",
+    "CheckContext",
+    "CheckContextsConnection",
+    "CheckRunContext",
+    "ChecksResult",
     "CommentNode",
     "FetchResult",
     "ForcePushEvent",
@@ -28,6 +32,7 @@ __all__ = [
     "RepoIdentity",
     "ReviewNode",
     "Reviewability",
+    "StatusContextNode",
     "UnresolvedThread",
     "WatchResult",
 ]
@@ -262,6 +267,71 @@ class PullRequestHeadState(GitHubResponseModel):
     commits: HeadCommitsConnection
 
 
+class CheckRunContext(GitHubResponseModel):
+    """One CI check run on the PR's head commit, in the shape GitHub's GraphQL API returns it.
+
+    A check run is what a GitHub Actions job (or any Checks API app) reports. `status` is the
+    run's lifecycle state — `COMPLETED` once it has finished, and one of `REQUESTED`, `QUEUED`,
+    `WAITING`, `PENDING`, `IN_PROGRESS` while it has not — and `conclusion` is its verdict, `None`
+    until it completes. Both stay plain strings rather than enums for the same reason
+    `PullRequestHeadState.mergeable` does: GitHub can add a state at any time, and an unrecognized
+    one must reach the caller as data instead of failing validation.
+
+    `isRequired` is GitHub's own answer to "does this check gate merging this PR", computed
+    server-side from whatever branch protection rule or ruleset applies to the PR's base branch —
+    so `pr_review_gh._verdict` never needs a hardcoded list of check names, and never needs the
+    admin-only branch-protection REST endpoint.
+
+    `typename` carries GraphQL's `__typename` under a Python-legal name so
+    `pr_review_gh._check_outcome` can tell a check run from a commit status: the two live in the
+    same `contexts` connection and grade differently.
+    """
+
+    typename: Literal["CheckRun"] = Field(alias="__typename")
+    name: str
+    status: str
+    conclusion: str | None
+    isRequired: bool
+
+
+class StatusContextNode(GitHubResponseModel):
+    """One commit status on the PR's head commit, in the shape GitHub's GraphQL API returns it.
+
+    The older, pre-Checks-API mechanism: an external service posts a state against the commit.
+    `state` is one of `EXPECTED`, `PENDING`, `SUCCESS`, `ERROR`, `FAILURE` — a single field, with
+    no separate lifecycle/verdict split, which is exactly why this is a separate model from
+    `CheckRunContext` rather than the same one with optional fields.
+
+    `name` is populated from GraphQL's `context` field (the status's own name) so both members of
+    the `CheckContext` union expose the one field `ChecksResult` reports.
+    """
+
+    typename: Literal["StatusContext"] = Field(alias="__typename")
+    name: str = Field(alias="context")
+    state: str
+    isRequired: bool
+
+
+# Discriminated on `__typename` rather than tried in order: GitHub tells us which shape each node
+# is, so a node that matches neither must fail validation loudly instead of silently landing in
+# whichever member happens to accept it.
+CheckContext = Annotated[CheckRunContext | StatusContextNode, Field(discriminator="typename")]
+
+
+class CheckContextsConnection(GitHubResponseModel):
+    """The `statusCheckRollup.contexts` connection on the PR's head commit.
+
+    `pr_review_gh._fetch_check_contexts` subscripts the fixed
+    `data.repository.pullRequest.commits.nodes[-1].commit.statusCheckRollup` path out of the
+    response before validating this — same boundary handling, and same rationale, as
+    `ReviewThreadsConnection`.
+    """
+
+    totalCount: int
+    pageInfo: PageInfo
+    nodes: list[CheckContext]
+
+
 class Reviewability(BaseModel):
     """Whether this PR is in a state where reviews can happen at all.
 
@@ -290,6 +360,46 @@ class Reviewability(BaseModel):
     mergeable: str
     merge_state_status: str
     blockers: list[str]
+
+
+class ChecksResult(BaseModel):
+    """Result of `checks`: one verdict on the PR's CI, plus why it may not be able to run at all.
+
+    `status` is the whole answer, and the four values are deliberately distinct so a pending run
+    and a green run can never be confused:
+
+    - `passed` — every check the verdict covers has finished successfully.
+    - `failed` — at least one has finished unsuccessfully. Terminal until a new push.
+    - `pending` — none failed, but at least one has not finished yet.
+    - `none` — the PR's head commit reports no checks at all.
+
+    `required_only` says what "the checks the verdict covers" means: `True` when at least one check
+    is marked required for this PR (only those are graded — a failing non-required check never
+    blocks the merge, so it must not read as `failed`), `False` when none is, in which case every
+    reported check is graded because there is no smaller set to grade.
+
+    `failed` and `pending` name the graded checks in those states; a passing check is a name the
+    caller does not need, so `total` reports how many the verdict covers instead of listing them.
+    `contexts_truncated` is `True` when the head commit reports more than one page of checks and
+    this verdict is therefore incomplete — the same honest-truncation signal as
+    `UnresolvedThread.comments_truncated`.
+
+    `reviewability` is the *same* `Reviewability` `FetchResult` carries, derived from the same
+    helper: a draft or conflicting PR gets no workflow runs at all, so `none` there means "checks
+    cannot start", not "this repository has no CI". Read `status` and `reviewability.blockers`
+    together — that pairing is the entire reason both are in one small object.
+
+    Assembled by `pr_review_gh.build_checks_result` from already-validated values, so it is an
+    output shape rather than an ingress one — see `GitHubResponseModel`.
+    """
+
+    status: Literal["passed", "failed", "pending", "none"]
+    required_only: bool
+    total: int
+    failed: list[str]
+    pending: list[str]
+    contexts_truncated: bool
+    reviewability: Reviewability
 
 
 class ForcePushEvent(GitHubResponseModel):

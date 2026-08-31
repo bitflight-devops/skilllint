@@ -19,6 +19,14 @@ description: Work through every unresolved review thread on a PR to completion �
 
 2. For each unresolved thread or unresponded review: read it, validate the claim locally, assess against the change goal and repository instructions.
 3. Implement, commit, and push a fix only when it improves the product — push before replying, so the SHA named in the reply is inspectable and resolving the thread never outruns what is actually on the remote.
+
+   Confirm that push's CI with `checks` rather than hand-writing a polling loop:
+
+   ```bash
+   uv run ./.agents/skills/receiving-pr-reviews/scripts/pr_review_threads.py checks --pr <N> [--timeout-seconds 270]
+   ```
+
+   `status` is `passed`, `failed`, `pending`, or `none` — `pending` is not green. Without `--timeout-seconds` this is one snapshot; with it, the command sleeps `--interval-seconds` between polls and returns as soon as the verdict settles. Read the whole object rather than extracting one field: `none` alongside a non-empty `reviewability.blockers` means checks *cannot* start — GitHub runs no workflow on a draft or conflicting PR — which is what an apparently stalled PR usually is, and no amount of waiting will change it.
 4. Reply on that thread with the disposition — conclusion, evidence, commit SHA, or why no change was warranted:
 
    ```bash
@@ -44,10 +52,11 @@ description: Work through every unresolved review thread on a PR to completion �
 
 <gotchas>
 
-- `fetch`/`watch`/`reply` detect this checkout's own repository via `gh repo view`; pass `--github owner/repo` to target a different one, or when detection fails.
+- `fetch`/`watch`/`checks`/`reply` detect this checkout's own repository via `gh repo view`; pass `--github owner/repo` to target a different one, or when detection fails.
 - `--gh-timeout-seconds` is unbounded by default on `fetch` and `watch`. One snapshot is seven sequential `gh api` calls, some of them paginating a large PR, so choose a bound against your own network. Inside `watch` it applies to the first fetch only; each poll is bounded by the time left before `--timeout-seconds`.
 - `reply`'s `--comment-id` is a comment's `databaseId` and `resolve`'s `--thread-id` is a thread's `id` — both come straight from step 1's output. When a thread already has more than one comment, pass the *first* comment's `databaseId`: `comments` is in creation order, and GitHub rejects a reply targeted at another reply.
 - A `reviews_with_body`/`unresponded_reviews` entry is not a thread, so it cannot be replied to or resolved through this script. Address it and post the response on the PR itself per step 6.
+- `checks` grades only the checks GitHub marks required for the PR whenever any is (`required_only: true`), so a red non-required check never reads as `failed`. `contexts_truncated: true` means the head commit reports more than one page of checks and the verdict is incomplete.
 - `watch`'s defaults — a 90-second poll interval, a 270-second timeout per call — stay under the 5-minute prompt-cache TTL floor that applies in every Claude billing mode. Cover a longer window by looping calls, not by raising `--timeout-seconds`.
 - `watch` stops polling once less than one interval remains before its deadline, so its last observed state can be up to one interval stale. The next call's own first fetch covers that stretch.
 - Every check inside `watch` is a fresh `gh` snapshot with no baseline, so a call whose first fetch already has outstanding work returns immediately. Calling `watch` right after a `resolve` or a plain `fetch` is safe.
