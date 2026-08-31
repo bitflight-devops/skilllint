@@ -150,5 +150,23 @@ repos:
 # Configuration for specific hooks
 default_language_version:
   python: python3
+  # prek downloads its own Node toolchain and prefers it over the one on PATH.
+  # The version it selects (26.8.1, measured 2026-08-31) cannot start on macOS
+  # 12.7.6 at all: `~/.cache/prek/tools/node/26.8.1/bin/node --version` aborts
+  # with `dyld: Symbol not found: (__ZNSt3__122__libcpp_verbose_abortEPKcz)`,
+  # because that libc++ predates the symbol. Every node hook -- oxlint, oxfmt,
+  # markdownlint-cli2 -- then fails at install time.
+  #
+  # `node: system` does NOT fix this. It stops prek downloading a toolchain but
+  # not preferring one already downloaded ("Automatic installation is disabled
+  # (language_version: system)"). Deleting the toolchain is not durable either:
+  # prek re-downloaded 26.8.1 within the hour, on the next hook rev bump.
+  # Pinning a version prek can resolve from PATH is what survives.
+  #
+  # 24.16.0 is the Node already on PATH here, so prek resolves it instead of
+  # downloading. Source: `node --version`. Verified on a GitHub runner -- the
+  # Prek hooks job passes oxlint, oxfmt and markdownlint-cli2 with this pin.
+  # Raise it to any version both prek can resolve and CI provides.
+  node: 24.16.0
 
 exclude: ^(\.?plan(ning)?/|\.claude/backlog/|\.claude/get-shit-done|\.claude/hooks/gsd-.*|\.gsd/|packages/skilllint/tests/fixtures/providers/.*/failing-examples/)
