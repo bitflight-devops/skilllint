@@ -38,8 +38,15 @@ import time
 from typing import Annotated
 
 import typer
-from pr_review_gh import RESOLVE_THREAD_MUTATION, build_checks_result, build_fetch_result, detect_repo_identity, run_gh
-from pr_review_models import WatchResult
+from pr_review_gh import (
+    RESOLVE_THREAD_MUTATION,
+    build_checks_result,
+    build_fetch_result,
+    checks_blocked,
+    detect_repo_identity,
+    run_gh,
+)
+from pr_review_models import ChecksResult, WatchResult
 from pydantic import ValidationError
 
 app = typer.Typer(help="GitHub PR review operations (fetch/watch/checks/reply/resolve) via gh.")
@@ -159,7 +166,8 @@ def fetch(
     `reviewability.blockers` is non-empty when the PR itself is why nothing is outstanding: a draft
     gets no reviewers requested and a conflicting branch gets no review runs, so an empty
     `unresolved` array there means "nothing can happen yet", not "nothing to do". Read it before
-    concluding a PR is clean. An empty `blockers` means reviews can proceed.
+    concluding a PR is clean. An empty `blockers` means reviews can proceed. It is about *reviews*
+    — only the conflicting half of it also stops CI, which is what `checks` reads.
     """
     owner, repo = _owner_repo(github, gh_timeout=gh_timeout_seconds)
     result = build_fetch_result(owner, repo, pr, gh_timeout=gh_timeout_seconds)
@@ -294,6 +302,44 @@ def watch(
     typer.echo(result.model_dump_json())
 
 
+def _checks_unsettled(current: ChecksResult, *, none_grace_spent: bool) -> bool:
+    """Whether `checks` should keep polling, given the snapshot it just took.
+
+    Two of the four verdicts are terminal: `passed` and `failed` cannot change without a new push,
+    which this call is not waiting for. The other two are not, and they are not the same kind of
+    unsettled:
+
+    - `pending` is proof that a check context exists on the head commit and has not finished. It
+      polls for the caller's whole window — there is a real answer coming.
+    - `none` is ambiguous. GitHub returns a null `statusCheckRollup` both for a head commit whose
+      workflow runs it has not registered yet — the state in the seconds right after the push that
+      the receiving-pr-reviews skill tells the reader to run `checks` after — and for a repository
+      with no CI at all. Returning that first snapshot as final made `--timeout-seconds` a no-op
+      exactly when it was needed most.
+
+    A `none` therefore gets exactly one re-poll of grace. That bound introduces no duration of its
+    own: the wait is one `--interval-seconds`, the unit the caller already chose as "how long
+    between observations", and the caller's `--timeout-seconds` still caps it. One observation
+    after a wait is the least that can tell the two cases apart — a registration gap has closed
+    into a real verdict by then, while a repository with no CI still reports `none` and settles
+    there instead of spinning out the whole window on an answer that will never change.
+
+    Args:
+        current: The most recent snapshot taken.
+        none_grace_spent: Whether a re-poll starting from a `none` has already been taken.
+
+    Returns:
+        `True` when another poll could still change the verdict.
+    """
+    if checks_blocked(current.reviewability):
+        # Only the conflicting blocker stops CI; a draft PR still runs workflows. See
+        # `pr_review_gh.checks_blocked` for why the two halves of `blockers` are not interchangeable.
+        return False
+    if current.status == "pending":
+        return True
+    return current.status == "none" and not none_grace_spent
+
+
 @app.command()
 def checks(
     pr: Annotated[int, typer.Option(help="Pull request number.")],
@@ -322,20 +368,26 @@ def checks(
     Prints compact JSON: `status` (`passed` / `failed` / `pending` / `none`), `required_only`,
     `total`, the `failed` and `pending` check names, `contexts_truncated`, and the same
     `reviewability` object `fetch` reports. Read the whole thing — it is small on purpose. In
-    particular `status: "none"` on a PR with `reviewability.blockers` means checks *cannot start*
-    (GitHub runs no workflows on a draft or a conflicting PR), not that the repository has no CI,
-    which is otherwise indistinguishable and is why a PR can appear to stall indefinitely.
+    particular `status: "none"` on a PR whose `reviewability.mergeable` is `CONFLICTING` means
+    checks *cannot start*, not that the repository has no CI, which is otherwise indistinguishable
+    and is why a PR can appear to stall indefinitely.
 
     With `--timeout-seconds 0` (the default) this is a single snapshot. Given a timeout it polls,
-    sleeping `--interval-seconds` between attempts, and returns as soon as `status` is anything but
-    `pending` — or when the window ends, in which case `status` is still `pending` and the caller
-    can issue another call. A `pending` result and a `passed` result are distinct values, so a
-    caller can never mistake one for the other.
+    sleeping `--interval-seconds` between attempts, and returns as soon as the verdict can no
+    longer change — or when the window ends, in which case `status` is whatever the last poll saw
+    and the caller can issue another call. `pending` and `passed` are distinct values, so a caller
+    can never mistake one for the other.
 
-    Waiting stops immediately when `reviewability.blockers` is non-empty: no check can start, so
-    there is nothing for the window to observe. Use `--interval-seconds`/`--timeout-seconds` rather
-    than an ad-hoc shell polling loop — an unpaced loop exhausts GitHub's secondary rate limit long
-    before the primary quota shows any sign of it.
+    A `pending` result polls for the whole window; a `none` gets exactly one re-poll before it is
+    reported, because GitHub returns the same empty rollup for "the push's workflow runs are not
+    registered yet" and for "this repository has no CI" — see `_checks_unsettled`.
+
+    Waiting stops immediately on a *conflicting* PR: GitHub builds no merge ref for it, so no
+    workflow runs and there is nothing for the window to observe. A **draft** PR is not a reason to
+    stop — `pull_request` fires on drafts unless a workflow opts out, and this repository's own
+    workflows do not (`pr_review_gh.checks_blocked`). Use `--interval-seconds`/`--timeout-seconds`
+    rather than an ad-hoc shell polling loop — an unpaced loop exhausts GitHub's secondary rate
+    limit long before the primary quota shows any sign of it.
 
     A `gh` failure mid-wait propagates and exits non-zero rather than being retried inline: unlike
     `watch`, this command is short and re-running it costs one snapshot.
@@ -346,7 +398,10 @@ def checks(
     # `--timeout-seconds 0` the deadline is already spent, and bounding it would starve the
     # documented immediate snapshot into a `TimeoutExpired`.
     current = build_checks_result(owner, repo, pr, gh_timeout=gh_timeout_seconds)
-    while current.status == "pending" and not current.reviewability.blockers:
+    # `none` is polled at most once — see `_checks_unsettled`. Set before each re-poll that starts
+    # from a `none`, so the grace is spent by taking it rather than by any clock of its own.
+    none_grace_spent = False
+    while _checks_unsettled(current, none_grace_spent=none_grace_spent):
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             break
@@ -356,6 +411,7 @@ def checks(
             # to nothing. Report the last state fetched rather than spawn a doomed call — same
             # cutoff, and same rationale, as `watch`.
             break
+        none_grace_spent = none_grace_spent or current.status == "none"
         current = build_checks_result(owner, repo, pr, deadline=deadline, gh_timeout=gh_timeout_seconds)
     typer.echo(current.model_dump_json())
 

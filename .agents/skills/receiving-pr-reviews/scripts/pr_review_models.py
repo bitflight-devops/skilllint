@@ -24,7 +24,7 @@ __all__ = [
     "CommentNode",
     "FetchResult",
     "ForcePushEvent",
-    "GitHubCommitDate",
+    "HeadCommit",
     "HeadCommitNode",
     "IssueComment",
     "PullRequestHeadState",
@@ -32,6 +32,7 @@ __all__ = [
     "RepoIdentity",
     "ReviewNode",
     "Reviewability",
+    "StatusCheckRollup",
     "StatusContextNode",
     "UnresolvedThread",
     "WatchResult",
@@ -220,53 +221,6 @@ class Reaction(GitHubResponseModel):
     created_at: GitHubTimestamp
 
 
-class GitHubCommitDate(GitHubResponseModel):
-    """The `committedDate` field of a GraphQL `Commit` object."""
-
-    committedDate: GitHubTimestamp
-
-
-class HeadCommitNode(GitHubResponseModel):
-    """One commit from GraphQL's `pullRequest.commits(last: 1)` connection.
-
-    Requesting `last: 1` asks the server directly for the tail element — GraphQL's connection
-    pagination has no equivalent of the REST `/pulls/{pr}/commits` endpoint's documented 250-commit
-    hard cap, which made that endpoint's last-paginated-element unreliable as "the current head" on
-    a PR with more commits than the cap (see `pr_review_gh._fetch_latest_commit_date`).
-    """
-
-    commit: GitHubCommitDate
-
-
-class HeadCommitsConnection(GitHubResponseModel):
-    """The `commits(last: 1)` connection nested inside `PullRequestHeadState`."""
-
-    nodes: list[HeadCommitNode]
-
-
-class PullRequestHeadState(GitHubResponseModel):
-    """The PR-level fields `pr_review_gh._fetch_head_state` reads in one GraphQL query.
-
-    All four live on the same `pullRequest` object, so they cost one round trip together: the head
-    commit's date (for `codex_approved`'s staleness check) plus the three fields that say whether
-    this PR can be reviewed at all.
-
-    `mergeable` is `MERGEABLE`, `CONFLICTING`, or `UNKNOWN`; `mergeStateStatus` is one of `CLEAN`,
-    `DIRTY`, `BLOCKED`, `BEHIND`, `UNSTABLE`, `DRAFT`, `HAS_HOOKS`, or `UNKNOWN`. Both are kept as
-    plain strings rather than enums: GitHub can add a state at any time, and an unrecognized one
-    must reach the caller as data instead of failing validation on a PR that is otherwise fine.
-    Strict against that string type, though — `strict=True` via `GitHubResponseModel` means a
-    number or a null arriving where a state name belongs is rejected rather than stringified, and
-    `isDraft` must be a real boolean rather than `"false"`. None of the three is a timestamp, so
-    none needs the `GitHubTimestamp` relaxation.
-    """
-
-    isDraft: bool
-    mergeable: str
-    mergeStateStatus: str
-    commits: HeadCommitsConnection
-
-
 class CheckRunContext(GitHubResponseModel):
     """One CI check run on the PR's head commit, in the shape GitHub's GraphQL API returns it.
 
@@ -321,15 +275,91 @@ CheckContext = Annotated[CheckRunContext | StatusContextNode, Field(discriminato
 class CheckContextsConnection(GitHubResponseModel):
     """The `statusCheckRollup.contexts` connection on the PR's head commit.
 
-    `pr_review_gh._fetch_check_contexts` subscripts the fixed
-    `data.repository.pullRequest.commits.nodes[-1].commit.statusCheckRollup` path out of the
-    response before validating this — same boundary handling, and same rationale, as
-    `ReviewThreadsConnection`.
+    `pr_review_gh._fetch_check_contexts` used to subscript this out of its own response; it now
+    arrives already nested under `HeadCommit.statusCheckRollup`, validated in one pass with the
+    rest of the head state.
+
+    `pageInfo.hasNextPage` is surfaced to the caller as `ChecksResult.contexts_truncated` rather
+    than paginated, so a verdict computed over one page announces that it is incomplete instead of
+    being handed over as if it were whole.
     """
 
     totalCount: int
     pageInfo: PageInfo
     nodes: list[CheckContext]
+
+
+class StatusCheckRollup(GitHubResponseModel):
+    """The head commit's `statusCheckRollup`, GitHub's aggregate of everything reported on it.
+
+    Exists as its own model only because GitHub returns the whole rollup as null — not an empty
+    `contexts` connection — when nothing has ever reported against the commit. `HeadCommit` types
+    it `| None` so that null is ingested as the distinct state it is.
+    """
+
+    contexts: CheckContextsConnection
+
+
+class HeadCommit(GitHubResponseModel):
+    """The PR head commit's own fields: when it was committed, and what CI has reported on it.
+
+    Both are read in one query (see `pr_review_gh._HEAD_STATE_QUERY`). `committedDate` dates the
+    current revision for `codex_approved`'s staleness check; `statusCheckRollup` is what `checks`
+    grades. GitHub returns a null `statusCheckRollup` when nothing has ever reported a check or a
+    status against this commit — including the window right after a push, before GitHub has
+    registered the workflow runs the push triggers, which is why `checks` treats an empty verdict
+    as provisional rather than final (see `pr_review_threads.checks`).
+    """
+
+    committedDate: GitHubTimestamp
+    statusCheckRollup: StatusCheckRollup | None
+
+
+class HeadCommitNode(GitHubResponseModel):
+    """One commit from GraphQL's `pullRequest.commits(last: 1)` connection.
+
+    Requesting `last: 1` asks the server directly for the tail element — GraphQL's connection
+    pagination has no equivalent of the REST `/pulls/{pr}/commits` endpoint's documented 250-commit
+    hard cap, which made that endpoint's last-paginated-element unreliable as "the current head" on
+    a PR with more commits than the cap (see `pr_review_gh._fetch_head_state`).
+    """
+
+    commit: HeadCommit
+
+
+class HeadCommitsConnection(GitHubResponseModel):
+    """The `commits(last: 1)` connection nested inside `PullRequestHeadState`."""
+
+    nodes: list[HeadCommitNode]
+
+
+class PullRequestHeadState(GitHubResponseModel):
+    """Everything `pr_review_gh._fetch_head_state` reads about a PR, in one GraphQL query.
+
+    All of it lives on the same `pullRequest` object, so it costs one round trip together: the
+    three fields that say whether this PR can be reviewed at all, plus the head commit carrying
+    both its date (for `codex_approved`'s staleness check) and its check rollup (for `checks`).
+
+    Folding the rollup in here is what makes a `checks` verdict internally consistent. It used to
+    come from a second query with its own `commits(last: 1)`, and neither query selected `oid`, so
+    a push landing between the two produced a result pairing one head's checks with another head's
+    PR state. One query over one `pullRequest` snapshot cannot do that, and it costs `checks` one
+    fewer `gh` call than comparing two `oid`s would.
+
+    `mergeable` is `MERGEABLE`, `CONFLICTING`, or `UNKNOWN`; `mergeStateStatus` is one of `CLEAN`,
+    `DIRTY`, `BLOCKED`, `BEHIND`, `UNSTABLE`, `DRAFT`, `HAS_HOOKS`, or `UNKNOWN`. Both are kept as
+    plain strings rather than enums: GitHub can add a state at any time, and an unrecognized one
+    must reach the caller as data instead of failing validation on a PR that is otherwise fine.
+    Strict against that string type, though — `strict=True` via `GitHubResponseModel` means a
+    number or a null arriving where a state name belongs is rejected rather than stringified, and
+    `isDraft` must be a real boolean rather than `"false"`. Neither is a timestamp, so neither
+    needs the `GitHubTimestamp` relaxation.
+    """
+
+    isDraft: bool
+    mergeable: str
+    mergeStateStatus: str
+    commits: HeadCommitsConnection
 
 
 class Reviewability(BaseModel):
@@ -371,7 +401,11 @@ class ChecksResult(BaseModel):
     - `passed` — every check the verdict covers has finished successfully.
     - `failed` — at least one has finished unsuccessfully. Terminal until a new push.
     - `pending` — none failed, but at least one has not finished yet.
-    - `none` — the PR's head commit reports no checks at all.
+    - `none` — the PR's head commit reports no checks at all. Ambiguous on its own: GitHub returns
+      the same empty rollup in the seconds after a push, before it has registered the workflow
+      runs that push triggered, as it does for a repository with no CI whatsoever. `checks`
+      resolves that ambiguity by re-polling a `none` once rather than by reading it as final —
+      see `pr_review_threads.checks`.
 
     `required_only` says what "the checks the verdict covers" means: `True` when at least one check
     is marked required for this PR (only those are graded — a failing non-required check never
@@ -385,9 +419,10 @@ class ChecksResult(BaseModel):
     `UnresolvedThread.comments_truncated`.
 
     `reviewability` is the *same* `Reviewability` `FetchResult` carries, derived from the same
-    helper: a draft or conflicting PR gets no workflow runs at all, so `none` there means "checks
-    cannot start", not "this repository has no CI". Read `status` and `reviewability.blockers`
-    together — that pairing is the entire reason both are in one small object.
+    helper — but only one of its two blockers bears on CI. A conflicting PR gets no workflow runs,
+    so `none` alongside `mergeable: "CONFLICTING"` means "checks cannot start", not "this
+    repository has no CI". A *draft* PR does run workflows, so a draft blocker says nothing about
+    checks at all; `pr_review_gh.checks_blocked` is the one place that distinction is made.
 
     Assembled by `pr_review_gh.build_checks_result` from already-validated values, so it is an
     output shape rather than an ingress one — see `GitHubResponseModel`.

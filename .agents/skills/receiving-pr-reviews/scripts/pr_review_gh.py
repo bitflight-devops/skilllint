@@ -21,7 +21,6 @@ from typing import Literal
 
 from pr_review_models import (
     CheckContext,
-    CheckContextsConnection,
     CheckRunContext,
     ChecksResult,
     FetchResult,
@@ -93,11 +92,30 @@ query($o: String!, $r: String!, $pr: Int!) {
 }
 """
 
-# `isDraft`/`mergeable`/`mergeStateStatus` are selected alongside the head commit rather than in a
-# query of their own: they live on the same `pullRequest` object, so asking for them here costs no
-# extra round trip, and `build_fetch_result` is already seven sequential `gh` calls deep. Verified
-# against this repository's own API (2026-08-30) that `mergeStateStatus` needs no preview `Accept`
-# header on `gh api graphql`.
+# One query for every PR-level field this script reads off the head: the three reviewability
+# fields, the head commit's date, and its check rollup. They all live on the same `pullRequest`
+# object, so asking for them together costs one round trip instead of two, and `build_fetch_result`
+# is already seven sequential `gh` calls deep.
+#
+# The rollup used to be fetched by a second query with its own `commits(last: 1)`. Neither query
+# selected `oid` and nothing compared them, so a push landing between the two calls produced a
+# `ChecksResult` pairing one head's checks with a different head's PR state. Selecting both from a
+# single `pullRequest` snapshot removes the race outright — cheaper than selecting `oid` in two
+# queries and comparing, and it deletes a `gh` call from `checks` rather than adding a retry.
+#
+# `isRequired(pullRequestNumber:)` is GitHub's own server-side answer to "does this check gate
+# merging this PR", computed from whatever branch protection rule or ruleset covers the base
+# branch. Asking for it here is what keeps `build_checks_result` free of a hardcoded check-name
+# list, and it needs none of the admin permission the branch-protection REST endpoint requires.
+# Verified against this repository's own API (2026-08-31): PR #166 returns `isRequired: true` for
+# exactly the six contexts this repo's branch protection requires, and `false` for the eight it
+# does not. Verified the same day that `mergeStateStatus` needs no preview `Accept` header on
+# `gh api graphql`.
+#
+# `statusCheckRollup` is null on a head commit with no checks at all, and `contexts` is a
+# connection — `build_checks_result` surfaces its `hasNextPage` as `contexts_truncated` rather
+# than paginating, so a caller is told when a verdict is incomplete instead of being handed a
+# silently partial one.
 _HEAD_STATE_QUERY = """
 query($o: String!, $r: String!, $pr: Int!) {
   repository(owner: $o, name: $r) {
@@ -106,31 +124,9 @@ query($o: String!, $r: String!, $pr: Int!) {
       mergeable
       mergeStateStatus
       commits(last: 1) {
-        nodes { commit { committedDate } }
-      }
-    }
-  }
-}
-"""
-
-# `isRequired(pullRequestNumber:)` is GitHub's own server-side answer to "does this check gate
-# merging this PR", computed from whatever branch protection rule or ruleset covers the base
-# branch. Asking for it here is what keeps `_verdict` free of a hardcoded check-name list, and it
-# needs none of the admin permission the branch-protection REST endpoint requires. Verified against
-# this repository's own API (2026-08-31): PR #166 returns `isRequired: true` for exactly the six
-# contexts this repo's branch protection requires, and `false` for the eight it does not.
-#
-# `statusCheckRollup` is null on a head commit with no checks at all, and `contexts` is a
-# connection — `_fetch_check_contexts` surfaces its `hasNextPage` as `contexts_truncated` rather
-# than paginating, so a caller is told when a verdict is incomplete instead of being handed a
-# silently partial one.
-_CHECKS_QUERY = """
-query($o: String!, $r: String!, $pr: Int!) {
-  repository(owner: $o, name: $r) {
-    pullRequest(number: $pr) {
-      commits(last: 1) {
         nodes {
           commit {
+            committedDate
             statusCheckRollup {
               contexts(first: 100) {
                 totalCount
@@ -480,6 +476,31 @@ def _reviewability(head_state: PullRequestHeadState) -> Reviewability:
     )
 
 
+def checks_blocked(reviewability: Reviewability) -> bool:
+    """Whether the PR's own state stops CI from running at all.
+
+    Only one of `Reviewability`'s two blockers does. A conflicting PR has no mergeable state for
+    GitHub to build `refs/pull/N/merge` from, so a `pull_request`-triggered workflow has nothing to
+    check out and no run is created — waiting on such a PR observes nothing, forever.
+
+    A **draft** PR does not stop workflows. `pull_request` fires on a draft for its default
+    activity types; a workflow skips drafts only when it opts out itself, by filtering
+    `types: [ready_for_review]` or guarding on `github.event.pull_request.draft`. This repository's
+    own `.github/workflows/test.yml` and `benchmark.yml` do neither — both trigger on a bare
+    `pull_request` with no `types:` filter and no draft guard (verified 2026-08-31) — so their runs
+    do start on a draft PR. The draft blocker is about *reviewers*, who are not requested until the
+    PR is marked ready, which is what `fetch` reads `blockers` for. Treating it as a checks blocker
+    made `checks` return the first snapshot instantly on every draft PR.
+
+    Args:
+        reviewability: The PR state derived by `_reviewability`.
+
+    Returns:
+        `True` when no check can start until the PR itself is fixed.
+    """
+    return reviewability.mergeable == "CONFLICTING"
+
+
 def _fetch_latest_force_push_at(owner: str, repo: str, pr: int, *, gh_timeout: float | None) -> datetime | None:
     """Fetch the timestamp of the PR's most recent force-push, if it has ever had one.
 
@@ -739,42 +760,6 @@ def build_fetch_result(
     )
 
 
-def _fetch_check_contexts(
-    owner: str, repo: str, pr: int, *, gh_timeout: float | None
-) -> CheckContextsConnection | None:
-    """Fetch the checks reported against the PR's head commit, or `None` if it has none at all.
-
-    Reads the head commit through GraphQL's `commits(last: 1)` for the same reason
-    `_fetch_head_state` does — the REST commits endpoint's documented 250-commit cap makes its last
-    element unreliable as "the current head" — and asks GitHub itself which of the resulting checks
-    are required for this PR (see `_CHECKS_QUERY`).
-
-    Args:
-        owner: Repository owner login.
-        repo: Repository name.
-        pr: Pull request number.
-        gh_timeout: Seconds to bound the underlying `gh` call to, or `None` for no bound — see
-            `run_gh`.
-
-    Returns:
-        The head commit's `statusCheckRollup.contexts` connection, or `None` when the commit has no
-        rollup at all — GitHub returns a null `statusCheckRollup` when nothing has ever reported a
-        check or status against it.
-
-    Raises:
-        IndexError: the PR has no commits at all — see `_fetch_head_state`.
-    """
-    raw = run_gh(
-        ["api", "graphql", "-f", f"query={_CHECKS_QUERY}", "-f", f"o={owner}", "-f", f"r={repo}", "-F", f"pr={pr}"],
-        timeout=gh_timeout,
-    )
-    commit = json.loads(raw)["data"]["repository"]["pullRequest"]["commits"]["nodes"][-1]["commit"]
-    rollup = commit["statusCheckRollup"]
-    if rollup is None:
-        return None
-    return CheckContextsConnection.model_validate(rollup["contexts"])
-
-
 def _check_outcome(context: CheckContext) -> Literal["passed", "failed", "pending"]:
     """Grade one check against the rule GitHub applies to a required check.
 
@@ -805,11 +790,11 @@ def build_checks_result(
 ) -> ChecksResult:
     """Fetch and assemble one PR's CI verdict, plus whether the PR can run checks at all.
 
-    Makes two `gh` calls, each bounded by `gh_timeout_budget(deadline)` exactly as
-    `build_fetch_result`'s seven are: the head commit's check rollup, and the PR head state that
-    `_reviewability` reads. The second call exists so a `none` verdict is never ambiguous — a draft
-    or conflicting PR gets no workflow runs, and the same `reviewability` object `fetch` already
-    reports says so rather than a second, parallel signal invented here.
+    Makes one `gh` call, bounded by `gh_timeout_budget(deadline)` exactly as
+    `build_fetch_result`'s seven are. The head commit's check rollup and the PR-level fields
+    `_reviewability` reads come out of the same `pullRequest` snapshot, so the verdict and the
+    state explaining it can never describe two different heads — see `_HEAD_STATE_QUERY` for the
+    race that split queries allowed.
 
     Only the checks GitHub marks required for this PR are graded when any is marked required: a
     failing check that does not gate the merge is not a failure of the PR. When none is marked
@@ -828,9 +813,9 @@ def build_checks_result(
         The verdict over the graded checks, the names of any that failed or are still running, and
         the PR's reviewability.
     """
-    contexts_connection = _fetch_check_contexts(owner, repo, pr, gh_timeout=gh_timeout_budget(deadline, gh_timeout))
     head_state = _fetch_head_state(owner, repo, pr, gh_timeout=gh_timeout_budget(deadline, gh_timeout))
-    reported = contexts_connection.nodes if contexts_connection is not None else []
+    rollup = head_state.commits.nodes[-1].commit.statusCheckRollup
+    reported = rollup.contexts.nodes if rollup is not None else []
     required = [context for context in reported if context.isRequired]
     graded = required or reported
     # A list of pairs rather than a dict: two workflows may report a check of the same name, and a
@@ -853,6 +838,6 @@ def build_checks_result(
         total=len(graded),
         failed=failed,
         pending=pending,
-        contexts_truncated=contexts_connection is not None and contexts_connection.pageInfo.hasNextPage,
+        contexts_truncated=rollup is not None and rollup.contexts.pageInfo.hasNextPage,
         reviewability=_reviewability(head_state),
     )

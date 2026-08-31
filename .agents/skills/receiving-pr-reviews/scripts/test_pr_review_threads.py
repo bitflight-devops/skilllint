@@ -53,6 +53,7 @@ import pytest
 from pr_review_gh import _is_codex_thumbs_up, build_fetch_result
 from pr_review_models import (
     Author,
+    ChecksResult,
     FetchResult,
     IssueComment,
     PullRequestHeadState,
@@ -164,13 +165,18 @@ def _head_state(
     is_draft: bool = False,
     mergeable: str = "MERGEABLE",
     merge_state_status: str = "CLEAN",
+    rollup: dict[str, object] | None = None,
 ) -> PullRequestHeadState:
-    """Build a `PullRequestHeadState`, defaulting to a reviewable (non-draft, conflict-free) PR."""
+    """Build a `PullRequestHeadState`, defaulting to a reviewable (non-draft, conflict-free) PR.
+
+    `rollup` defaults to `None` — a head commit nothing has reported a check against, which is
+    what every test outside the `checks` section is indifferent to.
+    """
     return PullRequestHeadState.model_validate({
         "isDraft": is_draft,
         "mergeable": mergeable,
         "mergeStateStatus": merge_state_status,
-        "commits": {"nodes": [{"commit": {"committedDate": commit_date}}]},
+        "commits": {"nodes": [{"commit": {"committedDate": commit_date, "statusCheckRollup": rollup}}]},
     })
 
 
@@ -337,7 +343,9 @@ def test_fetch_flattens_pages_filters_resolved_and_derives_new_fields(mocker: Mo
                     "isDraft": False,
                     "mergeable": "MERGEABLE",
                     "mergeStateStatus": "CLEAN",
-                    "commits": {"nodes": [{"commit": {"committedDate": "2026-01-01T12:00:00Z"}}]},
+                    "commits": {
+                        "nodes": [{"commit": {"committedDate": "2026-01-01T12:00:00Z", "statusCheckRollup": None}}]
+                    },
                 }
             }
         }
@@ -741,7 +749,9 @@ def test_fetch_head_state_reads_commit_date_via_graphql_last_one(mocker: MockerF
                     "isDraft": False,
                     "mergeable": "MERGEABLE",
                     "mergeStateStatus": "CLEAN",
-                    "commits": {"nodes": [{"commit": {"committedDate": "2026-01-06T00:00:00Z"}}]},
+                    "commits": {
+                        "nodes": [{"commit": {"committedDate": "2026-01-06T00:00:00Z", "statusCheckRollup": None}}]
+                    },
                 }
             }
         }
@@ -850,11 +860,12 @@ def test_ingress_models_still_parse_github_iso_timestamps() -> None:
     strictness on exactly those fields and nothing else — so an unparseable value is still
     rejected, while the other forms a lax `datetime` accepts (a Unix epoch number) remain accepted.
     """
-    assert pr_review_models.GitHubCommitDate.model_validate({"committedDate": "2026-01-06T00:00:00Z"}) == (
-        pr_review_models.GitHubCommitDate(committedDate=datetime(2026, 1, 6, tzinfo=UTC))
+    payload = {"committedDate": "2026-01-06T00:00:00Z", "statusCheckRollup": None}
+    assert pr_review_models.HeadCommit.model_validate(payload) == (
+        pr_review_models.HeadCommit(committedDate=datetime(2026, 1, 6, tzinfo=UTC), statusCheckRollup=None)
     )
     with pytest.raises(ValidationError):
-        pr_review_models.GitHubCommitDate.model_validate({"committedDate": "not-a-timestamp"})
+        pr_review_models.HeadCommit.model_validate({"committedDate": "not-a-timestamp", "statusCheckRollup": None})
 
 
 def test_internal_result_models_are_not_strict() -> None:
@@ -1341,20 +1352,25 @@ def _status_context(name: str, *, state: str = "SUCCESS", required: bool = True)
     return {"__typename": "StatusContext", "context": name, "state": state, "isRequired": required}
 
 
-def _checks_raw(nodes: list[dict[str, object]] | None, *, has_next_page: bool = False) -> str:
-    """The checks query's raw response. `nodes=None` is a head commit with no rollup at all."""
+def _checks_raw(
+    nodes: list[dict[str, object]] | None,
+    *,
+    has_next_page: bool = False,
+    is_draft: bool = False,
+    mergeable: str = "MERGEABLE",
+    merge_state_status: str = "CLEAN",
+) -> str:
+    """The head-state query's raw response, defaulting to a reviewable PR.
+
+    One response, not two: the check rollup and the PR-level reviewability fields come out of the
+    same `pullRequest` snapshot (see `pr_review_gh._HEAD_STATE_QUERY`). `nodes=None` is a head
+    commit with no rollup at all.
+    """
     rollup = (
         None
         if nodes is None
         else {"contexts": {"totalCount": len(nodes), "pageInfo": {"hasNextPage": has_next_page}, "nodes": nodes}}
     )
-    return json.dumps({
-        "data": {"repository": {"pullRequest": {"commits": {"nodes": [{"commit": {"statusCheckRollup": rollup}}]}}}}
-    })
-
-
-def _head_state_raw(*, is_draft: bool = False, mergeable: str = "MERGEABLE", merge_state_status: str = "CLEAN") -> str:
-    """The head-state query's raw response, defaulting to a reviewable PR."""
     return json.dumps({
         "data": {
             "repository": {
@@ -1362,20 +1378,44 @@ def _head_state_raw(*, is_draft: bool = False, mergeable: str = "MERGEABLE", mer
                     "isDraft": is_draft,
                     "mergeable": mergeable,
                     "mergeStateStatus": merge_state_status,
-                    "commits": {"nodes": [{"commit": {"committedDate": "2026-01-01T12:00:00Z"}}]},
+                    "commits": {
+                        "nodes": [{"commit": {"committedDate": "2026-01-01T12:00:00Z", "statusCheckRollup": rollup}}]
+                    },
                 }
             }
         }
     })
 
 
-def _invoke_checks(mocker: MockerFixture, checks_raw: str, head_state_raw: str) -> dict[str, object]:
-    """Run `checks` against one canned pair of `gh` responses and return the parsed JSON."""
-    mocker.patch.object(pr_review_gh, "run_gh", side_effect=[checks_raw, head_state_raw])
+def _invoke_checks(mocker: MockerFixture, checks_raw: str) -> dict[str, object]:
+    """Run `checks` against one canned `gh` response and return the parsed JSON."""
+    mocker.patch.object(pr_review_gh, "run_gh", side_effect=[checks_raw])
     result = runner.invoke(app, ["checks", "--pr", "3208"])
     assert result.exit_code == 0, result.output
     parsed: dict[str, object] = json.loads(result.output)
     return parsed
+
+
+def test_checks_reads_the_verdict_and_the_pr_state_from_one_head_snapshot(mocker: MockerFixture) -> None:
+    """The rollup and the reviewability come from a single `gh` call over one head commit.
+
+    Regression coverage for a Codex review on PR #167: the rollup and the PR state were fetched by
+    two back-to-back queries, each with its own `commits(last: 1)`, neither selecting `oid` and
+    nothing comparing them — a push landing between the two produced a `ChecksResult` pairing one
+    head's checks with a different head's PR state. `side_effect` holds exactly one response, so a
+    second `gh` call would raise `StopIteration` rather than pass quietly.
+    """
+    run_gh_mock = mocker.patch.object(
+        pr_review_gh, "run_gh", side_effect=[_checks_raw([_check_run("Tests")], mergeable="CONFLICTING")]
+    )
+
+    result = runner.invoke(app, ["checks", "--pr", "3208"])
+
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    run_gh_mock.assert_called_once()
+    assert data["status"] == "passed"
+    assert data["reviewability"]["mergeable"] == "CONFLICTING"
 
 
 def test_checks_passes_when_every_required_check_succeeded(mocker: MockerFixture) -> None:
@@ -1391,7 +1431,6 @@ def test_checks_passes_when_every_required_check_succeeded(mocker: MockerFixture
             _status_context("CodeRabbit"),
             _check_run("Release Benchmark", conclusion="FAILURE", required=False),
         ]),
-        _head_state_raw(),
     )
 
     assert data["status"] == "passed"
@@ -1410,9 +1449,7 @@ def test_checks_passes_when_every_required_check_succeeded(mocker: MockerFixture
 
 def test_checks_reports_a_failed_required_check_by_name(mocker: MockerFixture) -> None:
     """One failing required check makes the verdict `failed`, and names it."""
-    data = _invoke_checks(
-        mocker, _checks_raw([_check_run("Tests", conclusion="FAILURE"), _check_run("Prek hooks")]), _head_state_raw()
-    )
+    data = _invoke_checks(mocker, _checks_raw([_check_run("Tests", conclusion="FAILURE"), _check_run("Prek hooks")]))
 
     assert data["status"] == "failed"
     assert data["failed"] == ["Tests"]
@@ -1421,9 +1458,7 @@ def test_checks_reports_a_failed_required_check_by_name(mocker: MockerFixture) -
 def test_checks_pending_and_passed_are_distinct_states(mocker: MockerFixture) -> None:
     """A required check still running reports `pending`, never `passed`, and is named."""
     data = _invoke_checks(
-        mocker,
-        _checks_raw([_check_run("Tests"), _check_run("Prek hooks", status="IN_PROGRESS", conclusion=None)]),
-        _head_state_raw(),
+        mocker, _checks_raw([_check_run("Tests"), _check_run("Prek hooks", status="IN_PROGRESS", conclusion=None)])
     )
 
     assert data["status"] == "pending"
@@ -1439,7 +1474,6 @@ def test_checks_failure_outranks_a_still_running_check(mocker: MockerFixture) ->
             _check_run("Tests", conclusion="FAILURE"),
             _check_run("Prek hooks", status="QUEUED", conclusion=None),
         ]),
-        _head_state_raw(),
     )
 
     assert data["status"] == "failed"
@@ -1451,7 +1485,6 @@ def test_checks_grades_every_check_when_none_is_marked_required(mocker: MockerFi
     data = _invoke_checks(
         mocker,
         _checks_raw([_check_run("Tests", conclusion="FAILURE", required=False), _check_run("Lint", required=False)]),
-        _head_state_raw(),
     )
 
     assert data["status"] == "failed"
@@ -1461,7 +1494,7 @@ def test_checks_grades_every_check_when_none_is_marked_required(mocker: MockerFi
 
 def test_checks_reports_none_when_the_head_commit_has_no_rollup(mocker: MockerFixture) -> None:
     """A head commit nothing has ever reported against yields `none`, not `passed`."""
-    data = _invoke_checks(mocker, _checks_raw(None), _head_state_raw())
+    data = _invoke_checks(mocker, _checks_raw(None))
 
     assert data["status"] == "none"
     assert data["total"] == 0
@@ -1474,7 +1507,7 @@ def test_checks_explains_an_empty_verdict_on_a_conflicting_pr(mocker: MockerFixt
     This is the case that otherwise looks like a repository with no CI, and the reason a PR can
     appear to stall indefinitely: GitHub runs no workflows while the branch conflicts.
     """
-    data = _invoke_checks(mocker, _checks_raw(None), _head_state_raw(mergeable="CONFLICTING"))
+    data = _invoke_checks(mocker, _checks_raw(None, mergeable="CONFLICTING"))
 
     assert data["status"] == "none"
     reviewability = data["reviewability"]
@@ -1484,16 +1517,14 @@ def test_checks_explains_an_empty_verdict_on_a_conflicting_pr(mocker: MockerFixt
 
 def test_checks_flags_a_truncated_context_page(mocker: MockerFixture) -> None:
     """More than one page of checks means the verdict is incomplete, and says so."""
-    data = _invoke_checks(mocker, _checks_raw([_check_run("Tests")], has_next_page=True), _head_state_raw())
+    data = _invoke_checks(mocker, _checks_raw([_check_run("Tests")], has_next_page=True))
 
     assert data["contexts_truncated"] is True
 
 
 def test_checks_keeps_both_checks_that_share_a_name(mocker: MockerFixture) -> None:
     """Two workflows reporting the same check name are graded separately, not collapsed."""
-    data = _invoke_checks(
-        mocker, _checks_raw([_check_run("Tests", conclusion="FAILURE"), _check_run("Tests")]), _head_state_raw()
-    )
+    data = _invoke_checks(mocker, _checks_raw([_check_run("Tests", conclusion="FAILURE"), _check_run("Tests")]))
 
     assert data["total"] == 2
     assert data["failed"] == ["Tests"]
@@ -1553,24 +1584,32 @@ def test_check_contexts_reject_an_unknown_node_type() -> None:
 _CheckStatus = Literal["passed", "failed", "pending", "none"]
 
 
-def _checks_result(status: _CheckStatus, *, blockers: list[str] | None = None) -> pr_review_models.ChecksResult:
-    """Build a minimal `ChecksResult` for the wait-loop tests."""
-    return pr_review_models.ChecksResult(
+def _checks_result(status: _CheckStatus, *, is_draft: bool = False, mergeable: str = "MERGEABLE") -> ChecksResult:
+    """Build a minimal `ChecksResult` for the wait-loop tests.
+
+    `reviewability` is derived by the real `pr_review_gh._reviewability` rather than hand-built, so
+    a test asking for a draft or a conflicting PR gets exactly the blocker sentences production
+    would produce for it — which is the whole point of the tests below that distinguish the two.
+    """
+    return ChecksResult(
         status=status,
         required_only=True,
         total=1,
         failed=[],
         pending=[],
         contexts_truncated=False,
-        reviewability=Reviewability(
-            is_draft=bool(blockers), mergeable="MERGEABLE", merge_state_status="CLEAN", blockers=blockers or []
-        ),
+        reviewability=pr_review_gh._reviewability(_head_state(is_draft=is_draft, mergeable=mergeable)),
     )
 
 
-@pytest.mark.parametrize("status", ["passed", "failed", "none"])
+@pytest.mark.parametrize("status", ["passed", "failed"])
 def test_checks_returns_without_sleeping_once_settled(status: _CheckStatus, mocker: MockerFixture) -> None:
-    """Any non-pending verdict ends the wait immediately — there is nothing left to wait for."""
+    """A terminal verdict ends the wait immediately — neither can change without a new push.
+
+    `none` is deliberately not in this list: it is not terminal on sight, because GitHub reports it
+    both for a repository with no CI and for a head commit whose workflow runs it has not
+    registered yet. See `test_checks_polls_a_none_verdict_through_the_registration_gap`.
+    """
     build_mock = mocker.patch.object(pr_review_threads, "build_checks_result", return_value=_checks_result(status))
     sleep_mock = mocker.patch.object(pr_review_threads.time, "sleep")
 
@@ -1608,12 +1647,79 @@ def test_checks_reports_still_pending_when_the_window_ends(mocker: MockerFixture
     assert json.loads(result.output)["status"] == "pending"
 
 
-def test_checks_stops_waiting_when_the_pr_cannot_run_checks(mocker: MockerFixture) -> None:
-    """A blocked PR ends the wait at once: no check can start, so no window can observe one."""
-    build_mock = mocker.patch.object(
+def test_checks_polls_a_none_verdict_through_the_registration_gap(mocker: MockerFixture) -> None:
+    """`none` right after a push is polled, not returned as the answer.
+
+    Regression coverage for a Codex review on PR #167. The head commit of a just-pushed branch
+    reports a null `statusCheckRollup` until GitHub registers the workflow runs the push triggered,
+    which `build_checks_result` grades as `none`. The loop only continued on `pending`, so
+    `checks --timeout-seconds 270` returned that first snapshot instantly — indistinguishable from
+    a repository with no CI at all, at exactly the moment SKILL.md step 3 tells the reader to run
+    this command.
+    """
+    mocker.patch.object(
         pr_review_threads,
         "build_checks_result",
-        return_value=_checks_result("pending", blockers=["draft: reviewers are not requested until the PR is ready"]),
+        side_effect=[_checks_result("none"), _checks_result("pending"), _checks_result("passed")],
+    )
+    sleep_mock = mocker.patch.object(pr_review_threads.time, "sleep")
+
+    result = runner.invoke(app, ["checks", "--pr", "3208", "--interval-seconds", "1", "--timeout-seconds", "40"])
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["status"] == "passed"
+    assert sleep_mock.call_count == 2
+
+
+def test_checks_settles_a_persistent_none_after_one_grace_poll(mocker: MockerFixture) -> None:
+    """A repository with no CI costs one extra interval, not the caller's whole window.
+
+    The counterpart to `test_checks_polls_a_none_verdict_through_the_registration_gap`: `none` is
+    polled once, and a second `none` is the answer. Two `build_checks_result` calls against a
+    40-second window with a 1-second interval — a loop that kept polling `none` for the window
+    would make many more.
+    """
+    build_mock = mocker.patch.object(pr_review_threads, "build_checks_result", return_value=_checks_result("none"))
+    sleep_mock = mocker.patch.object(pr_review_threads.time, "sleep")
+
+    result = runner.invoke(app, ["checks", "--pr", "3208", "--interval-seconds", "1", "--timeout-seconds", "40"])
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["status"] == "none"
+    assert build_mock.call_count == 2
+    assert sleep_mock.call_count == 1
+
+
+def test_checks_keeps_waiting_on_a_draft_pr(mocker: MockerFixture) -> None:
+    """A draft blocker does not stop the wait: GitHub does run workflows on a draft PR.
+
+    Regression coverage for a Codex review on PR #167. Any non-empty `reviewability.blockers` used
+    to short-circuit the loop, on the strength of a claim about *reviewers* not being requested for
+    a draft. Workflows are a different mechanism: `pull_request` fires on a draft for its default
+    activity types, and this repository's own `.github/workflows/test.yml` and `benchmark.yml`
+    trigger on a bare `pull_request` with no `types:` filter and no draft guard (verified against
+    the workflow files, 2026-08-31). A `pending` verdict is itself proof a check context exists.
+    """
+    mocker.patch.object(
+        pr_review_threads,
+        "build_checks_result",
+        side_effect=[_checks_result("pending", is_draft=True), _checks_result("passed", is_draft=True)],
+    )
+    sleep_mock = mocker.patch.object(pr_review_threads.time, "sleep")
+
+    result = runner.invoke(app, ["checks", "--pr", "3208", "--interval-seconds", "1", "--timeout-seconds", "40"])
+
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    assert data["status"] == "passed"
+    assert data["reviewability"]["blockers"] != []
+    sleep_mock.assert_called_once_with(1)
+
+
+def test_checks_stops_waiting_on_a_conflicting_pr(mocker: MockerFixture) -> None:
+    """A conflicting PR ends the wait at once: GitHub builds no merge ref, so no workflow runs."""
+    build_mock = mocker.patch.object(
+        pr_review_threads, "build_checks_result", return_value=_checks_result("pending", mergeable="CONFLICTING")
     )
     sleep_mock = mocker.patch.object(pr_review_threads.time, "sleep")
 
@@ -1623,6 +1729,28 @@ def test_checks_stops_waiting_when_the_pr_cannot_run_checks(mocker: MockerFixtur
     assert json.loads(result.output)["status"] == "pending"
     build_mock.assert_called_once()
     sleep_mock.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("is_draft", "mergeable", "expected"),
+    [
+        (False, "MERGEABLE", False),
+        (True, "MERGEABLE", False),
+        (False, "CONFLICTING", True),
+        (True, "CONFLICTING", True),
+        (False, "UNKNOWN", False),
+    ],
+    ids=["clean", "draft-only", "conflicting-only", "both", "mergeability-not-computed-yet"],
+)
+def test_checks_blocked_only_counts_the_conflicting_blocker(is_draft: bool, mergeable: str, expected: bool) -> None:
+    """`blockers` is not one undifferentiated list: only conflict stops CI, draft stops reviewers.
+
+    `UNKNOWN` is not a conflict — GitHub computes mergeability in a background job, and that is
+    precisely the state just after a push, when `checks` is most likely to be called.
+    """
+    reviewability = pr_review_gh._reviewability(_head_state(is_draft=is_draft, mergeable=mergeable))
+
+    assert pr_review_gh.checks_blocked(reviewability) is expected
 
 
 def test_checks_rejects_a_non_positive_interval() -> None:

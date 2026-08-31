@@ -26,7 +26,9 @@ description: Work through every unresolved review thread on a PR to completion �
    uv run ./.agents/skills/receiving-pr-reviews/scripts/pr_review_threads.py checks --pr <N> [--timeout-seconds 270]
    ```
 
-   `status` is `passed`, `failed`, `pending`, or `none` — `pending` is not green. Without `--timeout-seconds` this is one snapshot; with it, the command sleeps `--interval-seconds` between polls and returns as soon as the verdict settles. Read the whole object rather than extracting one field: `none` alongside a non-empty `reviewability.blockers` means checks *cannot* start — GitHub runs no workflow on a draft or conflicting PR — which is what an apparently stalled PR usually is, and no amount of waiting will change it.
+   `status` is `passed`, `failed`, `pending`, or `none` — `pending` is not green. Without `--timeout-seconds` this is one snapshot; with it, the command sleeps `--interval-seconds` between polls and returns as soon as the verdict settles. Read the whole object rather than extracting one field: `none` alongside `reviewability.mergeable: "CONFLICTING"` means checks *cannot* start — GitHub builds no merge ref for a conflicting PR, so no workflow runs — which is what an apparently stalled PR usually is, and no amount of waiting will change it. A **draft** PR is not that case: workflows do run on drafts unless a workflow opts out, so a draft blocker in `reviewability.blockers` says nothing about CI and `checks` keeps waiting through it.
+
+   A bare `none` right after a push is not yet an answer — GitHub returns the same empty result before it has registered the push's workflow runs as it does for a repo with no CI. `checks` re-polls a `none` once to tell them apart, so pass `--timeout-seconds` when you have just pushed rather than reading the first snapshot as final.
 4. Reply on that thread with the disposition — conclusion, evidence, commit SHA, or why no change was warranted:
 
    ```bash
