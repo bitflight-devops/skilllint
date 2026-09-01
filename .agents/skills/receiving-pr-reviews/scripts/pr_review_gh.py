@@ -727,8 +727,16 @@ def _fetch_concurrently(
     Returns:
         All seven calls' results, gathered in a fixed field order so a failure raises the same
         call's exception a sequential run would have raised first.
+
+    A failing call is reported the moment its own `.result()` raises -- it does not wait for
+    still-running siblings. `executor.shutdown()` always runs with `wait=False`: on the success
+    path every future is already done by the time its `.result()` returns, so `wait=False` costs
+    nothing; on a failure path it is what stops the pool from blocking the exception behind
+    whichever sibling call happens to be slowest (the old `with ThreadPoolExecutor(...) as
+    executor:` form called the default `shutdown(wait=True)` on exit, which did exactly that).
     """
-    with ThreadPoolExecutor(max_workers=7) as executor:
+    executor = ThreadPoolExecutor(max_workers=7)
+    try:
         thread_pages_future = executor.submit(
             _fetch_pages, owner, repo, pr, gh_timeout=gh_timeout_budget(deadline, gh_timeout)
         )
@@ -760,6 +768,11 @@ def _fetch_concurrently(
             head_state=head_state_future.result(),
             latest_force_push_at=latest_force_push_at_future.result(),
         )
+    finally:
+        # `cancel_futures=True` drops any of the seven not yet started (none, in practice, since
+        # `max_workers=7` covers all seven submissions at once); `wait=False` is what keeps a
+        # raised exception from waiting on the rest -- see the docstring above.
+        executor.shutdown(wait=False, cancel_futures=True)
 
 
 def build_fetch_result(

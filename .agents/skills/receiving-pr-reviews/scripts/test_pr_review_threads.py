@@ -408,6 +408,42 @@ def test_fetch_flattens_pages_filters_resolved_and_derives_new_fields(mocker: Mo
     }
 
 
+# --- _fetch_concurrently: fail-fast on one call while a sibling is still running ----------------
+
+
+def test_fetch_concurrently_fails_fast_without_waiting_for_slow_sibling(mocker: MockerFixture) -> None:
+    """A failing `gh` call must surface promptly even while a sibling call is still running.
+
+    Regression test for the old `with ThreadPoolExecutor(...) as executor:` form: its `__exit__`
+    called the default `shutdown(wait=True)`, which blocked the whole function until every
+    submitted future finished -- including ones nothing had asked for the result of yet -- before
+    the original failure was ever reported. `_fetch_pr_reactions` is field 4 in `_ConcurrentFetch`'s
+    fixed evaluation order and raises immediately; `_fetch_head_state` is field 6 (later, so its
+    own `.result()` is never reached) and sleeps far longer than this test's budget. A correct
+    fix reports the exception without waiting on that sleep.
+    """
+    slow_seconds = 2.0
+    mocker.patch.object(pr_review_gh, "_fetch_pages", return_value=_empty_threads())
+    mocker.patch.object(pr_review_gh, "_fetch_review_pages", return_value=[_reviews_conn([])])
+    mocker.patch.object(pr_review_gh, "_fetch_issue_comments", return_value=[])
+    mocker.patch.object(pr_review_gh, "_fetch_pr_reactions", side_effect=subprocess.CalledProcessError(1, ["gh"]))
+    mocker.patch.object(pr_review_gh, "_fetch_authenticated_login", return_value=_AGENT_LOGIN)
+
+    def _slow_head_state(*args: object, **kwargs: object) -> PullRequestHeadState:
+        time.sleep(slow_seconds)
+        return _head_state(_OLD_COMMIT_DATE)
+
+    mocker.patch.object(pr_review_gh, "_fetch_head_state", side_effect=_slow_head_state)
+    mocker.patch.object(pr_review_gh, "_fetch_latest_force_push_at", return_value=None)
+
+    started = time.monotonic()
+    with pytest.raises(subprocess.CalledProcessError):
+        pr_review_gh._fetch_concurrently("o", "r", 1, deadline=None, gh_timeout=None)
+    elapsed = time.monotonic() - started
+
+    assert elapsed < slow_seconds / 2
+
+
 # --- build_fetch_result: unresponded_reviews / codex_approved unit matrix ----------------------
 
 

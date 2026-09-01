@@ -3332,9 +3332,10 @@ class HookValidator:
         HK001 is terminal: an unreadable file, invalid JSON, or a missing /
         non-object top-level ``hooks`` key leaves nothing for the remaining
         rules to inspect.  Otherwise HK002/HK003 check the structure and
-        HK004/HK005 check the referenced scripts.  All issues share one list so
-        that missing-script warnings surface in the same result as structural
-        errors.
+        HK004/HK005 check the referenced scripts.  HK004 (missing script) is
+        a hard error and goes to ``errors``; HK005 (non-executable script) is
+        a warning and goes to ``warnings``.  ``passed`` reflects ``errors``
+        only, so HK005 findings alone do not fail validation.
 
         Args:
             path: Path to hooks.json
