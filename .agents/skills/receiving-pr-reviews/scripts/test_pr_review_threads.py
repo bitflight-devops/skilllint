@@ -355,19 +355,32 @@ def test_fetch_flattens_pages_filters_resolved_and_derives_new_fields(mocker: Mo
     })
     # No `HeadRefForcePushedEvent` has ever landed on this PR — an empty `timelineItems.nodes`.
     force_push_raw = json.dumps({"data": {"repository": {"pullRequest": {"timelineItems": {"nodes": []}}}}})
-    mocker.patch.object(
-        pr_review_gh,
-        "run_gh",
-        side_effect=[
-            json.dumps(thread_pages),
-            json.dumps(reviews_pages),
-            issue_comments_raw,
-            reactions_raw,
-            _AGENT_LOGIN,
-            head_state_raw,
-            force_push_raw,
-        ],
-    )
+
+    def _run_gh_by_args(args: list[str], *, timeout: float | None = None) -> str:
+        """Route each `run_gh` call to its scripted response by *which* call it is, not by call
+        order — `build_fetch_result`'s seven `gh` calls run concurrently on a thread pool, so
+        nothing guarantees they reach this mock in submission order the way a positional
+        `side_effect` list would require.
+        """
+        query = next((arg for arg in args if arg.startswith("query=")), None)
+        if query == f"query={pr_review_gh._UNRESOLVED_THREADS_QUERY}":
+            return json.dumps(thread_pages)
+        if query == f"query={pr_review_gh._REVIEWS_QUERY}":
+            return json.dumps(reviews_pages)
+        if query == f"query={pr_review_gh._HEAD_STATE_QUERY}":
+            return head_state_raw
+        if query == f"query={pr_review_gh._LATEST_FORCE_PUSH_QUERY}":
+            return force_push_raw
+        if any(arg.endswith("/comments") for arg in args):
+            return issue_comments_raw
+        if any(arg.endswith("/reactions") for arg in args):
+            return reactions_raw
+        if args[:2] == ["api", "user"]:
+            return _AGENT_LOGIN
+        message = f"unexpected run_gh call in test: {args}"
+        raise AssertionError(message)
+
+    mocker.patch.object(pr_review_gh, "run_gh", side_effect=_run_gh_by_args)
 
     result = runner.invoke(app, ["fetch", "--pr", "3208"])
 
@@ -1016,6 +1029,25 @@ def test_fetch_exits_nonzero_and_names_github_flag_when_detection_fails(mocker: 
     principle rules out silently guessing an identity here).
     """
     mocker.patch.object(pr_review_threads, "detect_repo_identity", side_effect=subprocess.CalledProcessError(1, ["gh"]))
+    fetch_mock = mocker.patch.object(pr_review_threads, "build_fetch_result")
+
+    result = runner.invoke(app, ["fetch", "--pr", "3208"])
+
+    assert result.exit_code != 0
+    assert "--github" in result.output
+    fetch_mock.assert_not_called()
+
+
+def test_fetch_exits_nonzero_and_names_github_flag_when_detection_times_out(mocker: MockerFixture) -> None:
+    """A `gh repo view` that exceeds `--gh-timeout-seconds` is handled the same as any other detection failure.
+
+    `detect_repo_identity` bounds its `gh` call with `gh_timeout` and raises `subprocess.TimeoutExpired` when it's
+    exceeded — that exception must stop the command with the same `--github` guidance as any other detection
+    failure, not propagate as an unhandled exception.
+    """
+    mocker.patch.object(
+        pr_review_threads, "detect_repo_identity", side_effect=subprocess.TimeoutExpired(cmd=["gh"], timeout=30)
+    )
     fetch_mock = mocker.patch.object(pr_review_threads, "build_fetch_result")
 
     result = runner.invoke(app, ["fetch", "--pr", "3208"])

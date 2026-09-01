@@ -14,6 +14,7 @@ Entry points:
 
 from __future__ import annotations
 
+import functools
 import json
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
@@ -72,6 +73,11 @@ def _extract_mcp_server_keys(data: dict[str, object]) -> set[str]:
     return set()
 
 
+# ponytail: global process-lifetime cache; fine for a linter CLI invocation.
+# Paths don't mutate mid-run, so re-walking the same ancestry for every
+# skill/agent file in a large plugin is pure waste (see AGENTS.md efficiency
+# review: same root plugin.json/.mcp.json re-read/re-parsed per file).
+@functools.cache
 def collect_plugin_names_from_ancestry(file_path: pathlib.Path) -> dict[str, set[str]]:
     """Walk upward from *file_path* collecting plugin names from plugin.json files.
 
@@ -114,6 +120,11 @@ def collect_plugin_names_from_ancestry(file_path: pathlib.Path) -> dict[str, set
     return plugin_server_map
 
 
+# ponytail: global process-lifetime cache; fine for a linter CLI invocation.
+# Ancestor plugin.json/.mcp.json are never touched by --fix (which only
+# rewrites the file being checked), so a stale-cache read is not possible
+# for a same-path re-validation pass within one process.
+@functools.cache
 def _collect_servers_from_ancestry(file_path: pathlib.Path) -> set[str]:
     """Walk upward from *file_path* collecting MCP server names from config files.
 
@@ -174,6 +185,12 @@ def _is_plugin_packaged_agent(file_path: pathlib.Path) -> bool:
     return file_path.parent == plugin_dir / "agents"
 
 
+# ponytail: global process-lifetime cache; fine for a linter CLI invocation.
+# Safe for a --fix revalidation pass on the same path: no fixer in this
+# codebase writes the mcpServers frontmatter key (grep confirmed), so the
+# file's own mcpServers value cannot change between the pre-fix and
+# post-fix validation calls this memoizes across.
+@functools.cache
 def _collect_servers_from_frontmatter(file_path: pathlib.Path) -> set[str]:
     """Extract MCP server names declared inline in the agent/skill frontmatter.
 

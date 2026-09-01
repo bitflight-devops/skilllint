@@ -19,6 +19,7 @@ Severities:
 
 from __future__ import annotations
 
+import functools
 import logging
 from typing import TYPE_CHECKING
 
@@ -334,6 +335,11 @@ def _check_as006(path: pathlib.Path) -> dict | None:
     )
 
 
+# ponytail: global process-lifetime cache; fine for a linter CLI invocation.
+# Ancestor plugin.json is never touched by --fix (which only rewrites the
+# file being checked), so a stale-cache read is not possible for a
+# same-path re-validation pass within one process.
+@functools.cache
 def _find_plugin_json_in_ancestry(path: pathlib.Path) -> bool:
     """Return True if any ancestor directory contains a .claude-plugin/plugin.json file.
 

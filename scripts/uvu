@@ -8,5 +8,5 @@ set -eu
     echo "usage: $0 [uv-add-args] <package>..." >&2
     exit 2
 }
-uv remove "$@"
+uv remove "$@" || true
 uv add "$@"

@@ -21,7 +21,7 @@ export default async function postCoverageSummary({ github, context }) {
   });
 
   const existing = comments.data.find(
-    (c) => c.user.type === 'Bot' && c.body.includes('📊 Test Coverage'),
+    (c) => c.user?.type === 'Bot' && c.body.includes('📊 Test Coverage'),
   );
 
   const body =

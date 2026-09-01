@@ -30,11 +30,11 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
 import msgspec
 
-from skilllint.rule_registry import rule_reference, skilllint_rule
+from skilllint.rule_registry import _make_issue, skilllint_rule
 
 if TYPE_CHECKING:
     from skilllint.plugin_validator import ValidationIssue
@@ -55,30 +55,6 @@ if TYPE_CHECKING:
 # which says nothing about traversal, boundaries, escaping, or symlinks —
 # verified via `grep -ci` returning 0 for those terms against the cached spec.)
 _NR002_PATH_TRAVERSAL_URL = "https://code.claude.com/docs/en/plugins-reference.md#path-traversal-limitations"
-
-
-def _make_issue(
-    *, field: str, severity: Literal["error", "warning", "info"], message: str, code: str, suggestion: str | None = None
-) -> ValidationIssue:
-    """Construct a ValidationIssue for an NR rule.
-
-    Args:
-        field: Issue field label ("namespace-reference" for reference findings).
-        severity: Issue severity.
-        message: Human-readable description.
-        code: Rule code (e.g., "NR001").
-        suggestion: Optional repair hint.
-
-    Returns:
-        A frozen ValidationIssue instance.
-    """
-    # Deferred import to break the circular dependency: plugin_validator
-    # imports rules/, so rules/ cannot import plugin_validator at module level.
-    from skilllint.plugin_validator import ValidationIssue  # noqa: PLC0415
-
-    return ValidationIssue(
-        field=field, severity=severity, message=message, code=code, docs_url=rule_reference(code), suggestion=suggestion
-    )
 
 
 # ---------------------------------------------------------------------------
