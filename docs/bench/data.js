@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788163538794,
+  "lastUpdate": 1788249106745,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -1254,6 +1254,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 97.301,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "1e37b4a6c8a2ab9e144bfa4f4a5778e5c94ee028",
+          "message": "fix: address top code-review findings from this week's changes (#174)\n\n* fix: address top code-review findings from this week's changes\n\n- Apply frontmatter-exemption check to the --fix path so exempt files\n  (e.g. AGENTS.md) aren't rewritten\n- Split HK005 warnings from errors so warning-only issues don't flip\n  passed=False\n- Guard scripts/uvu's `uv remove` so a new (undeclared) dependency\n  doesn't abort `set -eu` before `uv add` runs\n- Catch subprocess.TimeoutExpired in pr_review_threads._owner_repo\n- Null-guard c.user in post_coverage_summary.mjs for deleted accounts\n- Fix pr_series path normalization (.removeprefix over .lstrip) for\n  paths like ../shared/cmd.md\n- Consolidate the duplicated _make_issue helper across the *_series\n  rule modules into rule_registry.py\n- Cache repeated ancestor-directory plugin.json/.mcp.json walks with\n  functools.cache\n- Parallelize pr_review_gh.py's independent gh calls via\n  ThreadPoolExecutor\n\nVerified: uv run prek run --all-files and uv run pytest both pass\n(1488 passed, 10 skipped, 86.36% coverage).\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01XXp48LEDndUtAWJe1nDtgd\n\n* fix: address PR review feedback on hook docstring and concurrent fetch\n\n- HookValidator.validate() docstring described HK004/HK005 as sharing\n  one list; the implementation already splits HK004 (hard error) into\n  errors and HK005 (warning) into warnings, with passed driven by\n  errors only. Update the docstring to match.\n- _fetch_concurrently used `with ThreadPoolExecutor(...) as executor:`,\n  whose __exit__ calls shutdown(wait=True) and blocked a failing gh\n  call's exception behind any still-running sibling call. Replace with\n  an explicit try/finally that shuts the pool down with\n  wait=False, cancel_futures=True, so a failure surfaces without\n  waiting on stragglers. Add a regression test exercising the fail-fast\n  path.\n\nAddresses PR #174 review feedback.\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01XXp48LEDndUtAWJe1nDtgd\n\n---------\n\nCo-authored-by: Claude Sonnet 5 <noreply@anthropic.com>",
+          "timestamp": "2026-09-01T07:48:55Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/1e37b4a6c8a2ab9e144bfa4f4a5778e5c94ee028"
+        },
+        "date": 1788249105924,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 12208.102,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 12748.647,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 13704.44,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 78.518,
             "unit": "files/s"
           }
         ]
