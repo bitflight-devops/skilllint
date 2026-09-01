@@ -34,6 +34,8 @@ from pydantic import BaseModel, Field
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from skilllint.plugin_validator import ValidationIssue
+
 _logger = logging.getLogger(__name__)
 
 
@@ -52,6 +54,33 @@ def rule_reference(code: str) -> str:
         The ``skilllint rule <CODE>`` invocation for that rule.
     """
     return f"skilllint rule {str(code).upper()}"
+
+
+def _make_issue(
+    *, field: str, severity: Literal["error", "warning", "info"], message: str, code: str, suggestion: str | None = None
+) -> ValidationIssue:
+    """Construct a ValidationIssue for a rule.
+
+    Shared across the rules/*.py series modules to avoid duplicating the same
+    construction across files.
+
+    Args:
+        field: Issue field label (meaning varies by rule series).
+        severity: Issue severity.
+        message: Human-readable description.
+        code: Rule code (e.g. "FM001").
+        suggestion: Optional repair hint.
+
+    Returns:
+        A frozen ValidationIssue instance.
+    """
+    # Deferred import to break the circular dependency: plugin_validator
+    # imports rules/, so rules/ cannot import plugin_validator at module level.
+    from skilllint.plugin_validator import ValidationIssue  # noqa: PLC0415
+
+    return ValidationIssue(
+        field=field, severity=severity, message=message, code=code, docs_url=rule_reference(code), suggestion=suggestion
+    )
 
 
 class RuleAuthority(BaseModel):

@@ -109,10 +109,11 @@ class TestValidateCommandScriptReferences:
 
         validator = HookValidator()
         errors: list = []
+        warnings: list = []
         entries: list[dict[str, YamlValue]] = [{"type": "command", "command": "./hook.sh"}]
-        validator._validate_command_script_references(entries, tmp_path, errors)
+        validator._validate_command_script_references(entries, tmp_path, errors, warnings)
 
-        hk_codes = [e.code for e in errors]
+        hk_codes = [e.code for e in errors] + [e.code for e in warnings]
         assert "HK004" not in hk_codes
         assert "HK005" not in hk_codes
 
@@ -125,8 +126,9 @@ class TestValidateCommandScriptReferences:
         """
         validator = HookValidator()
         errors: list = []
+        warnings: list = []
         entries: list[dict[str, YamlValue]] = [{"type": "command", "command": "./nonexistent.sh"}]
-        validator._validate_command_script_references(entries, tmp_path, errors)
+        validator._validate_command_script_references(entries, tmp_path, errors, warnings)
 
         hk_codes = [e.code for e in errors]
         assert "HK004" in hk_codes
@@ -147,11 +149,13 @@ class TestValidateCommandScriptReferences:
 
         validator = HookValidator()
         errors: list = []
+        warnings: list = []
         entries: list[dict[str, YamlValue]] = [{"type": "command", "command": "./hook.sh"}]
-        validator._validate_command_script_references(entries, tmp_path, errors)
+        validator._validate_command_script_references(entries, tmp_path, errors, warnings)
 
-        hk_codes = [e.code for e in errors]
+        hk_codes = [e.code for e in warnings]
         assert "HK005" in hk_codes
+        assert "HK005" not in [e.code for e in errors]
 
     def test_shell_command_ignored(self, tmp_path: Path) -> None:
         """Test that bare shell commands are not validated as file paths.
@@ -162,10 +166,12 @@ class TestValidateCommandScriptReferences:
         """
         validator = HookValidator()
         errors: list = []
+        warnings: list = []
         entries: list[dict[str, YamlValue]] = [{"type": "command", "command": "echo hello"}]
-        validator._validate_command_script_references(entries, tmp_path, errors)
+        validator._validate_command_script_references(entries, tmp_path, errors, warnings)
 
         assert len(errors) == 0
+        assert len(warnings) == 0
 
     def test_plugin_root_variable(self, tmp_path: Path) -> None:
         """Test ${CLAUDE_PLUGIN_ROOT} variable resolution.
@@ -190,10 +196,11 @@ class TestValidateCommandScriptReferences:
 
         validator = HookValidator()
         errors: list = []
+        warnings: list = []
         entries: list[dict[str, YamlValue]] = [{"type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/scripts/hook.sh"}]
-        validator._validate_command_script_references(entries, hooks_dir, errors)
+        validator._validate_command_script_references(entries, hooks_dir, errors, warnings)
 
-        hk_codes = [e.code for e in errors]
+        hk_codes = [e.code for e in errors] + [e.code for e in warnings]
         assert "HK004" not in hk_codes
         assert "HK005" not in hk_codes
 
@@ -216,9 +223,10 @@ class TestHookScriptReferencesInHooksDict:
 
         validator = HookValidator()
         errors: list = []
-        validator.validate_hook_script_references_in_hooks_dict(hooks_dict, tmp_path, errors)
+        warnings: list = []
+        validator.validate_hook_script_references_in_hooks_dict(hooks_dict, tmp_path, errors, warnings)
 
-        hk_codes = [e.code for e in errors]
+        hk_codes = [e.code for e in errors] + [e.code for e in warnings]
         assert "HK004" not in hk_codes
         assert "HK005" not in hk_codes
 
@@ -235,7 +243,8 @@ class TestHookScriptReferencesInHooksDict:
 
         validator = HookValidator()
         errors: list = []
-        validator.validate_hook_script_references_in_hooks_dict(hooks_dict, tmp_path, errors)
+        warnings: list = []
+        validator.validate_hook_script_references_in_hooks_dict(hooks_dict, tmp_path, errors, warnings)
 
         hk_codes = [e.code for e in errors]
         assert "HK004" in hk_codes
@@ -253,9 +262,11 @@ class TestHookScriptReferencesInHooksDict:
 
         validator = HookValidator()
         errors: list = []
-        validator.validate_hook_script_references_in_hooks_dict(hooks_dict, tmp_path, errors)
+        warnings: list = []
+        validator.validate_hook_script_references_in_hooks_dict(hooks_dict, tmp_path, errors, warnings)
 
         assert len(errors) == 0
+        assert len(warnings) == 0
 
 
 class TestFrontmatterHooksIntegration:

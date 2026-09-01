@@ -31,10 +31,10 @@ plugin_validator at module level.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
 from skilllint.frontmatter_core import normalize_tools_value
-from skilllint.rule_registry import rule_reference, skilllint_rule
+from skilllint.rule_registry import _make_issue, skilllint_rule
 from skilllint.rules._mcp_tool_discovery import (
     analyze_mcp_tool_reference,
     collect_plugin_names_from_ancestry,
@@ -71,30 +71,6 @@ _UNRESOLVABLE_WILDCARD_TOOLS: frozenset[str] = frozenset({"mcp__*"})
 # Fields the "Supported frontmatter fields" table defines for MCP tool
 # grants/denials on an agent file.
 _AGENT_TOOL_FIELD_NAMES: tuple[str, ...] = ("tools", "disallowedTools")
-
-
-def _make_issue(
-    *, field: str, severity: Literal["error", "warning", "info"], message: str, code: str, suggestion: str | None = None
-) -> ValidationIssue:
-    """Construct a ValidationIssue for an AG rule.
-
-    Args:
-        field: Frontmatter field name (``tools``, ``disallowedTools``, or ``skills``).
-        severity: Issue severity.
-        message: Human-readable description.
-        code: Rule code (e.g. "AG001").
-        suggestion: Optional repair hint.
-
-    Returns:
-        A frozen ValidationIssue instance.
-    """
-    # Deferred import to break the circular dependency: plugin_validator
-    # imports rules/, so rules/ cannot import plugin_validator at module level.
-    from skilllint.plugin_validator import ValidationIssue  # noqa: PLC0415
-
-    return ValidationIssue(
-        field=field, severity=severity, message=message, code=code, docs_url=rule_reference(code), suggestion=suggestion
-    )
 
 
 # ---------------------------------------------------------------------------

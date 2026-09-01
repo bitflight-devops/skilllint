@@ -2117,7 +2117,7 @@ class FrontmatterValidator:
 
         hooks_value = data.get("hooks")
         if isinstance(hooks_value, dict):
-            HookValidator().validate_hook_script_references_in_hooks_dict(hooks_value, path.parent, errors)
+            HookValidator().validate_hook_script_references_in_hooks_dict(hooks_value, path.parent, errors, warnings)
 
     def can_fix(self) -> bool:
         """Check if validator supports auto-fixing.
@@ -3332,9 +3332,10 @@ class HookValidator:
         HK001 is terminal: an unreadable file, invalid JSON, or a missing /
         non-object top-level ``hooks`` key leaves nothing for the remaining
         rules to inspect.  Otherwise HK002/HK003 check the structure and
-        HK004/HK005 check the referenced scripts.  All issues share one list so
-        that missing-script warnings surface in the same result as structural
-        errors.
+        HK004/HK005 check the referenced scripts.  HK004 (missing script) is
+        a hard error and goes to ``errors``; HK005 (non-executable script) is
+        a warning and goes to ``warnings``.  ``passed`` reflects ``errors``
+        only, so HK005 findings alone do not fail validation.
 
         Args:
             path: Path to hooks.json
@@ -3346,11 +3347,12 @@ class HookValidator:
         if hooks_obj is None:
             return ValidationResult(passed=False, errors=errors, warnings=[], info=[])
 
+        warnings: list[ValidationIssue] = []
         errors.extend(check_hk002(hooks_obj))
         errors.extend(check_hk003(hooks_obj))
-        self.validate_hook_script_references_in_hooks_dict(hooks_obj, path.parent, errors)
+        self.validate_hook_script_references_in_hooks_dict(hooks_obj, path.parent, errors, warnings)
 
-        return ValidationResult(passed=not errors, errors=errors, warnings=[], info=[])
+        return ValidationResult(passed=not errors, errors=errors, warnings=warnings, info=[])
 
     def can_fix(self) -> bool:
         """Check if validator supports auto-fixing.
@@ -3439,20 +3441,30 @@ class HookValidator:
         return find_hook_plugin_dir(base_dir)
 
     def _validate_command_script_references(
-        self, hook_entries: Iterable[object], base_dir: Path, errors: list[ValidationIssue]
+        self,
+        hook_entries: Iterable[object],
+        base_dir: Path,
+        errors: list[ValidationIssue],
+        warnings: list[ValidationIssue],
     ) -> None:
         """Check that file-path ``command`` values in hook entries exist and are executable.
 
         Args:
             hook_entries: List of hook entry dicts to inspect.
             base_dir: Directory to use as the resolution base for relative paths.
-            errors: List to append HK004 errors and HK005 warnings to.
+            errors: List to append HK004 (error-severity) issues to.
+            warnings: List to append HK005 (warning-severity) issues to.
         """
         errors.extend(check_hk004(hook_entries, base_dir))
-        errors.extend(check_hk005(hook_entries, base_dir))
+        for issue in check_hk005(hook_entries, base_dir):
+            (errors if issue.severity == "error" else warnings).append(issue)
 
     def validate_hook_script_references_in_hooks_dict(
-        self, hooks_dict: Mapping[str, YamlValue], base_dir: Path, errors: list[ValidationIssue]
+        self,
+        hooks_dict: Mapping[str, YamlValue],
+        base_dir: Path,
+        errors: list[ValidationIssue],
+        warnings: list[ValidationIssue],
     ) -> None:
         """Validate command file-path references in a hooks configuration dict.
 
@@ -3463,10 +3475,11 @@ class HookValidator:
         Args:
             hooks_dict: Hooks configuration mapping event types to groups.
             base_dir: Directory used as base for resolving relative script paths.
-            errors: List to append HK004 errors and HK005 warnings to.
+            errors: List to append HK004 (error-severity) issues to.
+            warnings: List to append HK005 (warning-severity) issues to.
         """
         for entry in iter_hook_entries(hooks_dict):
-            self._validate_command_script_references([entry], base_dir, errors)
+            self._validate_command_script_references([entry], base_dir, errors, warnings)
 
 
 # ============================================================================
@@ -3742,6 +3755,8 @@ def _get_fixers_for_path(validators: list[Validator], path: Path) -> list[Valida
         ``validators`` plus any fix-only validator that applies to this path.
     """
     if not validators or FileType.detect_file_type(path) not in _NAME_BEARING_FILE_TYPES:
+        return validators
+    if _frontmatter_requirement(path) == _FrontmatterRequirement.EXEMPT:
         return validators
     return [*validators, NameFormatValidator()]
 

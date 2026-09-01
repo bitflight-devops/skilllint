@@ -118,15 +118,15 @@ def _owner_repo(github: str | None, *, gh_timeout: float | None) -> tuple[str, s
 
     Raises:
         typer.Exit: Autodetection was attempted (no `--github` given) and failed -- `gh` is
-            missing, unauthenticated, or this checkout has no GitHub remote `gh` recognizes.
-            Exits with code 1; nothing else is printed to stdout.
+            missing, unauthenticated, timed out, or this checkout has no GitHub remote `gh`
+            recognizes. Exits with code 1; nothing else is printed to stdout.
     """
     if github is not None:
         owner, repo = github.split("/", 1)
         return owner, repo
     try:
         return detect_repo_identity(gh_timeout=gh_timeout)
-    except (FileNotFoundError, subprocess.CalledProcessError, ValidationError) as exc:
+    except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired, ValidationError) as exc:
         typer.echo(
             f"Could not detect this checkout's GitHub repository via `gh repo view` ({exc}). "
             "Pass --github owner/repo to specify it explicitly.",

@@ -16,8 +16,9 @@ import re
 import shutil
 import subprocess
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
-from typing import Literal
+from typing import Literal, NamedTuple
 
 from pr_review_models import (
     CheckContext,
@@ -95,7 +96,7 @@ query($o: String!, $r: String!, $pr: Int!) {
 # One query for every PR-level field this script reads off the head: the three reviewability
 # fields, the head commit's date, and its check rollup. They all live on the same `pullRequest`
 # object, so asking for them together costs one round trip instead of two, and `build_fetch_result`
-# is already seven sequential `gh` calls deep.
+# already makes seven `gh` calls per snapshot.
 #
 # The rollup used to be fetched by a second query with its own `commits(last: 1)`. Neither query
 # selected `oid` and nothing compared them, so a push landing between the two calls produced a
@@ -668,9 +669,10 @@ def gh_timeout_budget(deadline: float | None, gh_timeout: float | None) -> float
     `deadline` is `None` for a plain `fetch` and for `watch`'s mandatory first fetch: neither has a
     window to respect, so the caller's `--gh-timeout-seconds` applies unchanged (`None` = no
     bound). `watch` passes its own `deadline` for each *poll*, so all seven of
-    `build_fetch_result`'s `gh` calls are bounded by whatever is actually left, re-measured between
-    them, rather than by a fixed reservation subtracted from every poll regardless of how fast
-    GitHub responds.
+    `build_fetch_result`'s `gh` calls -- issued concurrently, so each is budgeted from
+    approximately the same moment rather than from a progressively later one -- are bounded by
+    whatever is actually left in that poll's window, rather than by a fixed reservation subtracted
+    from every poll regardless of how fast GitHub responds.
 
     Args:
         deadline: A `time.monotonic()` timestamp to respect, or `None` for no deadline.
@@ -684,6 +686,95 @@ def gh_timeout_budget(deadline: float | None, gh_timeout: float | None) -> float
     return max(0.0, deadline - time.monotonic())
 
 
+class _ConcurrentFetch(NamedTuple):
+    """The typed result of `_fetch_concurrently`'s seven independent `gh` calls.
+
+    A plain tuple (or a list gathered in a loop) would force every element to the same union type
+    under static type checking, since nothing about a bare sequence records which position held
+    which call's result. A `NamedTuple` keeps each field's own type -- `list[ReviewThreadsConnection]`
+    for `thread_pages`, `str` for `authenticated_login`, and so on -- exactly as if each had been
+    assigned from its own sequential call, which is what `build_fetch_result` used to do before
+    these seven moved onto a thread pool.
+    """
+
+    thread_pages: list[ReviewThreadsConnection]
+    review_pages: list[ReviewsConnection]
+    issue_comments: list[IssueComment]
+    reactions: list[Reaction]
+    authenticated_login: str
+    head_state: PullRequestHeadState
+    latest_force_push_at: datetime | None
+
+
+def _fetch_concurrently(
+    owner: str, repo: str, pr: int, *, deadline: float | None, gh_timeout: float | None
+) -> _ConcurrentFetch:
+    """Run `build_fetch_result`'s seven independent `gh` calls on a thread pool and gather them.
+
+    Split out of `build_fetch_result` itself so the pool's bookkeeping (one `Future` per call)
+    stays local to this function instead of adding seven more names to a function already busy
+    assembling the result. Each call is a blocking `subprocess` invocation, not native async I/O,
+    hence a thread pool rather than asyncio -- and none of the seven consumes another's output, so
+    there is no reason to pay the sum of seven round-trip latencies instead of the max.
+
+    Args:
+        owner: Repository owner login.
+        repo: Repository name.
+        pr: Pull request number.
+        deadline: A `time.monotonic()` timestamp each call should respect — see `gh_timeout_budget`.
+        gh_timeout: Per-call bound applied when `deadline` is `None`.
+
+    Returns:
+        All seven calls' results, gathered in a fixed field order so a failure raises the same
+        call's exception a sequential run would have raised first.
+
+    A failing call is reported the moment its own `.result()` raises -- it does not wait for
+    still-running siblings. `executor.shutdown()` always runs with `wait=False`: on the success
+    path every future is already done by the time its `.result()` returns, so `wait=False` costs
+    nothing; on a failure path it is what stops the pool from blocking the exception behind
+    whichever sibling call happens to be slowest (the old `with ThreadPoolExecutor(...) as
+    executor:` form called the default `shutdown(wait=True)` on exit, which did exactly that).
+    """
+    executor = ThreadPoolExecutor(max_workers=7)
+    try:
+        thread_pages_future = executor.submit(
+            _fetch_pages, owner, repo, pr, gh_timeout=gh_timeout_budget(deadline, gh_timeout)
+        )
+        review_pages_future = executor.submit(
+            _fetch_review_pages, owner, repo, pr, gh_timeout=gh_timeout_budget(deadline, gh_timeout)
+        )
+        issue_comments_future = executor.submit(
+            _fetch_issue_comments, owner, repo, pr, gh_timeout=gh_timeout_budget(deadline, gh_timeout)
+        )
+        reactions_future = executor.submit(
+            _fetch_pr_reactions, owner, repo, pr, gh_timeout=gh_timeout_budget(deadline, gh_timeout)
+        )
+        authenticated_login_future = executor.submit(
+            _fetch_authenticated_login, gh_timeout=gh_timeout_budget(deadline, gh_timeout)
+        )
+        head_state_future = executor.submit(
+            _fetch_head_state, owner, repo, pr, gh_timeout=gh_timeout_budget(deadline, gh_timeout)
+        )
+        latest_force_push_at_future = executor.submit(
+            _fetch_latest_force_push_at, owner, repo, pr, gh_timeout=gh_timeout_budget(deadline, gh_timeout)
+        )
+
+        return _ConcurrentFetch(
+            thread_pages=thread_pages_future.result(),
+            review_pages=review_pages_future.result(),
+            issue_comments=issue_comments_future.result(),
+            reactions=reactions_future.result(),
+            authenticated_login=authenticated_login_future.result(),
+            head_state=head_state_future.result(),
+            latest_force_push_at=latest_force_push_at_future.result(),
+        )
+    finally:
+        # `cancel_futures=True` drops any of the seven not yet started (none, in practice, since
+        # `max_workers=7` covers all seven submissions at once); `wait=False` is what keeps a
+        # raised exception from waiting on the rest -- see the docstring above.
+        executor.shutdown(wait=False, cancel_futures=True)
+
+
 def build_fetch_result(
     owner: str, repo: str, pr: int, *, deadline: float | None = None, gh_timeout: float | None = None
 ) -> FetchResult:
@@ -691,7 +782,10 @@ def build_fetch_result(
 
     Shared by `fetch` (prints the result once, `deadline=None`) and `watch` (calls this repeatedly
     on a polling interval, passing its own deadline) so both subcommands assemble a `FetchResult`
-    identically. Makes seven `gh` calls, each independently bounded by `gh_timeout_budget(deadline)`:
+    identically. Makes seven `gh` calls concurrently (a thread pool, since each is a blocking
+    `subprocess` call rather than native async I/O) -- none consumes another's output, so there is
+    no reason to pay the sum of seven round-trip latencies instead of the max. Each is
+    independently bounded by `gh_timeout_budget(deadline)`:
     the paginated review-threads query, the paginated reviews query, every PR-level issue comment
     (for `unresponded_reviews`), every reaction on the PR itself (for `codex_approved`), the
     currently-authenticated `gh` identity (also for `unresponded_reviews`), and the PR's head
@@ -743,19 +837,11 @@ def build_fetch_result(
         Codex's approval reaction is present right now for the current revision, for an older one,
         or not at all.
     """
-    thread_pages = _fetch_pages(owner, repo, pr, gh_timeout=gh_timeout_budget(deadline, gh_timeout))
-    review_pages = _fetch_review_pages(owner, repo, pr, gh_timeout=gh_timeout_budget(deadline, gh_timeout))
-    issue_comments = _fetch_issue_comments(owner, repo, pr, gh_timeout=gh_timeout_budget(deadline, gh_timeout))
-    reactions = _fetch_pr_reactions(owner, repo, pr, gh_timeout=gh_timeout_budget(deadline, gh_timeout))
-    authenticated_login = _fetch_authenticated_login(gh_timeout=gh_timeout_budget(deadline, gh_timeout))
-    head_state = _fetch_head_state(owner, repo, pr, gh_timeout=gh_timeout_budget(deadline, gh_timeout))
-    latest_force_push_at = _fetch_latest_force_push_at(
-        owner, repo, pr, gh_timeout=gh_timeout_budget(deadline, gh_timeout)
-    )
-    latest_revision_at = _latest_revision_at(head_state, latest_force_push_at)
+    fetched = _fetch_concurrently(owner, repo, pr, deadline=deadline, gh_timeout=gh_timeout)
+    latest_revision_at = _latest_revision_at(fetched.head_state, fetched.latest_force_push_at)
 
-    all_threads = [node for page in thread_pages for node in page.nodes]
-    all_reviews = [node for page in review_pages for node in page.nodes]
+    all_threads = [node for page in fetched.thread_pages for node in page.nodes]
+    all_reviews = [node for page in fetched.review_pages for node in page.nodes]
     unresolved = [
         UnresolvedThread(
             id=node.id,
@@ -769,16 +855,18 @@ def build_fetch_result(
     reviews_with_body = [review for review in all_reviews if review.body.strip()]
 
     own_comments = [
-        comment for comment in issue_comments if comment.user is not None and comment.user.login == authenticated_login
+        comment
+        for comment in fetched.issue_comments
+        if comment.user is not None and comment.user.login == fetched.authenticated_login
     ]
     unresponded_reviews = _unresponded_reviews(reviews_with_body, own_comments)
-    codex_approved_at = _latest_codex_approval_at(reactions)
+    codex_approved_at = _latest_codex_approval_at(fetched.reactions)
 
     return FetchResult(
-        reviews_count=review_pages[0].totalCount,
+        reviews_count=fetched.review_pages[0].totalCount,
         reviews_with_body=reviews_with_body,
         unresponded_reviews=unresponded_reviews,
-        threads_count=thread_pages[0].totalCount,
+        threads_count=fetched.thread_pages[0].totalCount,
         unresolved=unresolved,
         unresolved_count=len(unresolved),
         # Present and at/after the current revision vs. present and before it: two conditions over
@@ -788,7 +876,7 @@ def build_fetch_result(
         codex_approval_stale=codex_approved_at is not None and codex_approved_at < latest_revision_at,
         codex_approved_at=codex_approved_at,
         latest_revision_at=latest_revision_at,
-        reviewability=_reviewability(head_state),
+        reviewability=_reviewability(fetched.head_state),
     )
 
 

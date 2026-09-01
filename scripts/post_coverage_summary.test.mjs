@@ -93,6 +93,25 @@ describe('postCoverageSummary', () => {
   );
 
   it(
+    'creates comment when an existing comment has a null user (deleted account)',
+    withTempCoverageDir(async () => {
+      writeFileSync('coverage-reports/coverage.xml', `<coverage line-rate="0.85"/>`);
+
+      const gh = mockGithub();
+      gh._state.comments.push({
+        id: 1,
+        user: null,
+        body: '## 📊 Test Coverage Report\n\n**Coverage:** 50.00%\n\n...',
+      });
+
+      await postCoverageSummary({ github: gh, context: mockContext() });
+
+      assert.equal(gh._state.created.body.includes('85.00%'), true);
+      assert.equal(gh._state.updated, null);
+    }),
+  );
+
+  it(
     'returns N/A when line-rate attribute missing',
     withTempCoverageDir(async () => {
       writeFileSync('coverage-reports/coverage.xml', `<coverage branch-rate="0.5"/>`);
