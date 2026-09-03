@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788249106745,
+  "lastUpdate": 1788409766115,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -1296,6 +1296,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 78.518,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "stack@bitflight.io"
+          },
+          "committer": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "stack@bitflight.io"
+          },
+          "id": "3c8d8d1a00fa8fdaef932c024fb1e3b46d7e408a",
+          "message": "feat(receiving-pr-reviews): add GitHub MCP fallback path\n\nDocument the lightweight GitHub-MCP-tool fallback for when the bundled\n`gh`-based helper isn't usable, mirroring the addition made in\nskill-lapidary and claude_skills.",
+          "timestamp": "2026-09-03T04:26:49Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/3c8d8d1a00fa8fdaef932c024fb1e3b46d7e408a"
+        },
+        "date": 1788409765191,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 7976.07,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 8542.773,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 9578.903,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 117.175,
             "unit": "files/s"
           }
         ]
