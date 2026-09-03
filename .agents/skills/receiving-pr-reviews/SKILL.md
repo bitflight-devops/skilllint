@@ -13,6 +13,8 @@ description: Work through every unresolved review thread on a PR to completion �
    uv run ./.agents/skills/receiving-pr-reviews/scripts/pr_review_threads.py fetch --pr <N>
    ```
 
+   If the helper cannot use `gh` and GitHub MCP tools are available, use the lightweight [GitHub MCP fallback](./references/github-mcp-fallback.md) for this workflow instead. Do not install or reconfigure `gh` merely to avoid the fallback, and do not run both paths for the same snapshot.
+
    Read `reviews_count`, `threads_count`, `unresolved_count` and `reviewability.blockers` together — never treat an empty `unresolved` array on its own as "nothing to do". A `threads_count` of 0 means no *inline* thread landed, not that no review landed: a top-level approval or `COMMENTED` review surfaces only through `reviews_with_body`. A non-empty `blockers` means the empty result set is expected and the fix is on the PR itself — undraft it, resolve the conflicts — not in the review queue.
 
    `reviews_with_body` is every review whose feedback lives in the review's own summary text rather than an inline comment. `unresponded_reviews` narrows that to the ones this run has not answered yet; treat every entry as actionable input. A thread's `comments_truncated: true` means that one thread has passed 100 comments — page its `comments` connection directly before concluding anything about it. For `codex_approved`, see step 7.
