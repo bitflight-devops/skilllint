@@ -1,12 +1,5 @@
 """CU-series Cursor .mdc frontmatter validation rules (CU001-CU002).
 
-Each function is decorated with @skilllint_rule and returns a list of
-ValidationIssue objects. The validator logic was previously inlined in
-packages/skilllint/adapters/cursor/adapter.py as raw dict construction,
-bypassing @skilllint_rule registration entirely. This module lifts that
-logic into the registry so CU001 and CU002 are discoverable via
-``skilllint rule CU001`` and appear in RULE_REGISTRY.
-
 Architectural note — adapter-backed series:
     CU is one of two rule series (the other is CX) where detection was
     originally owned by a platform adapter rather than the core validator.
@@ -22,10 +15,6 @@ Rule IDs and default severities:
     | CU001 | Required field missing from .mdc frontmatter              | error     |
     | CU002 | Unknown field in .mdc frontmatter                         | error     |
     +-------+-----------------------------------------------------------+-----------+
-
-Import note: ValidationIssue is deferred inside each function to break the
-circular import: plugin_validator imports rules/, so rules/ cannot import
-plugin_validator at module level.
 """
 
 from __future__ import annotations
@@ -146,8 +135,6 @@ def check_cu002(frontmatter: dict[str, object], mdc_schema: dict[str, object]) -
 
     <!-- examples: CU002 -->
     """
-    # Deferred import to break circular dependency:
-    # plugin_validator imports rules/, so rules/ cannot import plugin_validator at module level.
     from skilllint.plugin_validator import ValidationIssue  # noqa: PLC0415
 
     additional_properties: object = mdc_schema.get("additionalProperties", True)

@@ -1,8 +1,7 @@
 """SK-series skill quality rules (SK004-SK009).
 
-Each function is decorated with @skilllint_rule and returns a list of
-ValidationIssue objects. Functions receive the parsed frontmatter dict,
-the file path, and additional keyword arguments as needed.
+Functions receive the parsed frontmatter dict, the file path, and
+additional keyword arguments as needed.
 
 Rule IDs and default severities:
     +-------+-----------------------------------------------------------+-----------+
@@ -15,10 +14,6 @@ Rule IDs and default severities:
     | SK008 | Skill directory name violates naming convention           | error     |
     | SK009 | Plugin uses manual skill selection (informational)        | info      |
     +-------+-----------------------------------------------------------+-----------+
-
-Import note: ValidationIssue is deferred inside each function to break the
-circular import: plugin_validator imports rules/, so rules/ cannot import
-plugin_validator at module level.
 """
 
 from __future__ import annotations
@@ -190,8 +185,6 @@ def check_sk005(frontmatter: dict[str, object], path: Path, file_type: str) -> l
 
     <!-- examples: SK005 -->
     """
-    # Deferred import to break circular dependency:
-    # plugin_validator imports rules/, so rules/ cannot import plugin_validator at module level.
     from skilllint.plugin_validator import ValidationIssue  # noqa: PLC0415
 
     if file_type != "skill":

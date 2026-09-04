@@ -1,8 +1,5 @@
 """LK-series internal link rules (LK001).
 
-Each function is decorated with @skilllint_rule and returns a list of
-ValidationIssue objects.
-
 LK001 detection lives here.  ``InternalLinkValidator`` in
 ``plugin_validator.py`` is a thin wrapper that reads the file and calls the
 rule function, packaging its issues into a ``ValidationResult``.
@@ -29,10 +26,6 @@ with no ``./`` prefix. LK002 fired on both specs' own examples and had no
 sourced justification. The real ``./``-prefix requirement upstream
 applies to ``plugin.json`` manifest path fields, a different thing
 already covered by PL004.
-
-Import note: ValidationIssue is deferred inside each function to break the
-circular import: plugin_validator imports rules/, so rules/ cannot import
-plugin_validator at module level.
 """
 
 from __future__ import annotations

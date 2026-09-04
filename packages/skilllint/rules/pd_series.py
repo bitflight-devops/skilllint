@@ -1,16 +1,12 @@
 """PD-series progressive disclosure rules (PD001-PD003).
 
-Each function is decorated with @skilllint_rule and returns a list of
-ValidationIssue objects.
-
 PD001, PD002, and PD003 detection lives here.  ``ProgressiveDisclosureValidator``
 in ``plugin_validator.py`` is a thin wrapper that calls the three rule functions
 in order and packages their issues into a ``ValidationResult``; it retains
 ``can_fix``/``fix``, which are validator concerns rather than rule concerns.
 
 Detection needs filesystem access, not frontmatter, so each rule takes only the
-path it inspects.  Signatures across the rules package state the input the rule
-actually reads rather than a uniform frontmatter triple.
+path it inspects.
 
 Rule IDs and default severities:
     +-------+-----------------------------------------------+-----------+

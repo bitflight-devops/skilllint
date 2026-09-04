@@ -1,8 +1,5 @@
 """HK-series hooks validation rules (HK001-HK005).
 
-Each function is decorated with @skilllint_rule and returns a list of
-ValidationIssue objects.
-
 HK001-HK005 detection lives here.  ``HookValidator`` in ``plugin_validator.py``
 is a thin wrapper that calls these functions and packages the result; it
 retains the auto-fix, which mutates the filesystem and is a validator concern

@@ -1,12 +1,5 @@
 """CX-series Codex platform file validation rules (CX001-CX002).
 
-Each function is decorated with @skilllint_rule and returns a list of
-ValidationIssue objects. The validator logic was previously inlined in
-packages/skilllint/adapters/codex/adapter.py as raw dict construction,
-bypassing @skilllint_rule registration entirely. This module lifts that
-logic into the registry so CX001 and CX002 are discoverable via
-``skilllint rule CX001`` and appear in RULE_REGISTRY.
-
 Architectural note — adapter-backed series:
     CX is one of two rule series (the other is CU) where detection was
     originally owned by a platform adapter rather than the core validator.
@@ -17,9 +10,7 @@ Architectural note — adapter-backed series:
 
     Unlike CU (which validates frontmatter dicts), CX validates raw file
     content strings: CX001 checks AGENTS.md non-emptiness and CX002 checks
-    prefix_rule() field names in .rules files. The entry point therefore
-    accepts ``content: str`` and an optional ``schema: dict[str, object]``
-    rather than a frontmatter dict.
+    prefix_rule() field names in .rules files.
 
 Rule IDs and default severities:
     +-------+-----------------------------------------------------------+-----------+
@@ -28,10 +19,6 @@ Rule IDs and default severities:
     | CX001 | AGENTS.md content is empty                                | error     |
     | CX002 | Unknown field in prefix_rule() block                      | error     |
     +-------+-----------------------------------------------------------+-----------+
-
-Import note: ValidationIssue is deferred inside each function to break the
-circular import: plugin_validator imports rules/, so rules/ cannot import
-plugin_validator at module level.
 """
 
 from __future__ import annotations
@@ -156,8 +143,6 @@ def check_cx002(content: str, schema: dict[str, object]) -> list[ValidationIssue
 
     <!-- examples: CX002 -->
     """
-    # Deferred import to break circular dependency:
-    # plugin_validator imports rules/, so rules/ cannot import plugin_validator at module level.
     from skilllint.plugin_validator import ValidationIssue  # noqa: PLC0415
 
     fields_val: object = schema.get("fields", {})

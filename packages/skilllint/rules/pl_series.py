@@ -1,8 +1,5 @@
 """PL-series plugin structure rules (PL001-PL006).
 
-Each function is decorated with @skilllint_rule and returns a list of
-ValidationIssue objects.
-
 PL001-PL006 detection lives here.  ``PluginStructureValidator`` in
 ``plugin_validator.py`` is a thin wrapper: it locates the plugin directory,
 runs the ``claude plugin validate`` subprocess, calls these rule functions,

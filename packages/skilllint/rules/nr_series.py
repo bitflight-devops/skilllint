@@ -1,8 +1,5 @@
 """NR-series namespace reference validation rules (NR001-NR002).
 
-Each function is decorated with @skilllint_rule and returns a list of
-ValidationIssue objects.
-
 NR001 and NR002 detection lives here.  ``NamespaceReferenceValidator`` in
 ``plugin_validator.py`` is a thin wrapper that reads the file and packages the
 results into a ``ValidationResult``; it retains only the unreadable-file case
@@ -10,8 +7,7 @@ results into a ``ValidationResult``; it retains only the unreadable-file case
 ``fix`` pair.
 
 Detection needs the markdown body plus filesystem access, not frontmatter, so
-both rules take ``(content, path)``.  Signatures across the rules package state
-the input the rule actually reads rather than a uniform frontmatter triple.
+both rules take ``(content, path)``.
 
 Rule IDs and default severities:
     +-------+-----------------------------------------------------------+-----------+

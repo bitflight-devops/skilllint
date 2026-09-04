@@ -1,4 +1,17 @@
-"""skilllint rule modules."""
+"""skilllint rule modules.
+
+Each series module registers its rule functions with ``@skilllint_rule``
+(see ``skilllint.rule_registry.skilllint_rule`` for the decorator contract).
+Signatures are not a uniform frontmatter triple: each function's parameters
+state the input its rule actually reads (frontmatter dict, file content,
+a filesystem path, a parsed manifest, ...), which varies by what the rule
+needs to detect.
+
+Import note: ``rules/`` functions that need ``ValidationIssue`` (and other
+``plugin_validator`` symbols) import them inside the function body rather
+than at module level, because ``plugin_validator`` imports ``rules/`` —
+a module-level import the other way would be circular.
+"""
 
 from __future__ import annotations
 

@@ -1,16 +1,12 @@
 """TC-series token count rules (TC001).
 
-Each function is decorated with @skilllint_rule and returns a list of
-ValidationIssue objects.
-
 TC001 detection lives here.  ``MarkdownTokenCounter`` in ``plugin_validator.py``
 is a thin wrapper: it reads the file (reporting FM002 when the read fails, which
 is an FM-series concern rather than a TC one) and hands the content to
 ``check_tc001``.
 
 TC001 measures content, not frontmatter fields, so ``check_tc001`` takes the
-file content.  Signatures across the rules package state the input the rule
-actually reads rather than a uniform frontmatter triple.
+file content.
 
 General token-counting infrastructure — ``count_tokens``, the threshold
 constants, and ``count_file_tokens`` — stays in ``skilllint.token_counter`` and
@@ -23,10 +19,6 @@ Rule IDs and default severities:
     +-------+-----------------------------------------------------------+-----------+
     | TC001 | Token count info (total, frontmatter, body)               | info      |
     +-------+-----------------------------------------------------------+-----------+
-
-Import note: ValidationIssue is deferred inside each function to break the
-circular import: plugin_validator imports rules/, so rules/ cannot import
-plugin_validator at module level.
 """
 
 from __future__ import annotations

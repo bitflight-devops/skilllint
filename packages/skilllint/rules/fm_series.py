@@ -1,18 +1,13 @@
 """FM-series frontmatter validation rules (FM001-FM010).
 
-Each function is decorated with @skilllint_rule and returns a list of
-ValidationIssue objects. Functions receive the parsed frontmatter dict,
-the file path, and the detected file type string.
+Functions receive the parsed frontmatter dict, the file path, and the
+detected file type string.
 
 Severities:
     "error"   — FM002, FM003, FM005, FM006; FM010 when the name pattern is invalid
     "warning" — FM001 (skills), FM004, FM007; FM010 when skill name mismatches parent directory
     "error"   — FM001 (agents)
     "info"    — FM009
-
-Import note: ValidationIssue and generate_docs_url are deferred inside each
-function to break the circular import: plugin_validator imports rules/, so
-rules/ cannot import plugin_validator at module level.
 """
 
 from __future__ import annotations

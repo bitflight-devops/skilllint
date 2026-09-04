@@ -1,16 +1,12 @@
 """SL-series symlink validation rules (SL001).
 
-Each function is decorated with @skilllint_rule and returns a list of
-ValidationIssue objects.
-
 SL001 detection lives here. ``SymlinkTargetValidator`` in
 ``plugin_validator.py`` is a thin wrapper that calls ``check_sl001`` and
 packages the result; it retains the auto-fix, which mutates the filesystem
 and is a validator concern rather than a rule concern.
 
 Detection needs filesystem access, not frontmatter, so ``check_sl001`` takes
-the path it inspects. Signatures across the rules package state the input the
-rule actually reads rather than a uniform frontmatter triple.
+the path it inspects.
 
 Rule IDs and default severities:
     +-------+-----------------------------------------------------------+-----------+
