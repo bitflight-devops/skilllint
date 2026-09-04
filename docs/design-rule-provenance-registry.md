@@ -6,9 +6,9 @@ skilllint's rule catalogue is not fixed to the FM, HK, AS, and PA families -- ru
 
 This disconnection causes staleness. Concrete examples from the provenance audit:
 
-- **HK002 `VALID_EVENT_TYPES`**: The hardcoded frozenset contains 21 event names. Vendor documentation in `.claude/vendor/` only lists 9 of them. The remaining 12 (PermissionRequest, PostToolUseFailure, StopFailure, TeammateIdle, TaskCompleted, InstructionsLoaded, ConfigChange, WorktreeCreate, WorktreeRemove, PostCompact, Elicitation, ElicitationResult) exist only in the hardcoded constant with no traceable vendor source.
+- **HK002 `VALID_EVENT_TYPES`**: The hardcoded frozenset contained 21 event names. Vendor documentation cached at the time only listed 9 of them; the remaining 12 appeared to exist only in the hardcoded constant with no traceable vendor source. **Resolved:** a fresher capture of `code.claude.com/docs/en/hooks.md` enumerates the complete set as level-3 headings — 31 names, a strict superset of the 22 then enforced. HK002 is now a shipped `provenance-registry.json` claim (`HK002.valid_event_types`); see [registry-schema-examples.md](./registry-schema-examples.md).
 
-- **HK003 `VALID_HOOK_TYPES`**: The hardcoded frozenset `{"command", "http", "prompt", "agent"}` has no vendor source defining this enumeration. Vendor hook files use `"command"` and `"http"` but no file enumerates the complete valid set.
+- **HK003 `VALID_HOOK_TYPES`**: The hardcoded frozenset `{"command", "http", "prompt", "agent"}` appeared to have no vendor source defining the enumeration; the vendor hook files available at the time used `"command"` and `"http"` but no file enumerated the complete valid set. **Resolved:** the same fresher `hooks.md` capture's "Common fields" table enumerates all five values, including `mcp_tool`, which the code was missing. HK003 is now a shipped claim (`HK003.valid_hook_types`); see [registry-schema-examples.md](./registry-schema-examples.md).
 
 - **FM007 tool field names**: The set `{"tools", "disallowedTools", "allowed-tools"}` is hardcoded. `disallowedTools` does not appear in any schema file.
 
