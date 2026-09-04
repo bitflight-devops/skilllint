@@ -252,7 +252,7 @@ def load_hooks_object(path: Path) -> tuple[dict[str, JsonValue] | None, list[Val
     severity="error",
     category="hook",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
+    authority={"origin": "code.claude.com", "reference": "https://code.claude.com/docs/en/hooks.md#configuration"},
 )
 def check_hk001(path: Path) -> list[ValidationIssue]:
     """## HK001 — Invalid hooks.json structure
@@ -318,7 +318,7 @@ def check_hk001(path: Path) -> list[ValidationIssue]:
     severity="error",
     category="hook",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
+    authority={"origin": "code.claude.com", "reference": "https://code.claude.com/docs/en/hooks.md#hook-events"},
 )
 def check_hk002(hooks_config: Mapping[str, JsonValue]) -> list[ValidationIssue]:
     """## HK002 — Invalid event type in hooks.json
@@ -455,7 +455,7 @@ def _check_hook_group(group: JsonValue, event_type: str, group_idx: int) -> list
     severity="error",
     category="hook",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
+    authority={"origin": "code.claude.com", "reference": "https://code.claude.com/docs/en/hooks.md#common-fields"},
 )
 def check_hk003(hooks_config: Mapping[str, JsonValue]) -> list[ValidationIssue]:
     """## HK003 — Invalid hook entry structure
@@ -534,12 +534,21 @@ def check_hk003(hooks_config: Mapping[str, JsonValue]) -> list[ValidationIssue]:
 # ---------------------------------------------------------------------------
 
 
+# Opinion-catalog anchor for HK004 (packages/skilllint/schemas/opinion-catalog.json):
+# a referenced hook script missing from disk is always reported as an error.
+# This flag does not affect behaviour; it exists only so
+# test_provenance_registry_locators.py has a resolvable Python symbol to
+# check, matching every other opinion-catalog row's assertion_location.
+HK004_MISSING_SCRIPT_IS_ERROR: bool = True
+
+
 @skilllint_rule(
     "HK004",
     severity="error",
     category="hook",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
+    # No authority: opinion-catalog.json records this constraint as a lint
+    # opinion with no upstream source, so violations must not carry a vendor origin.
 )
 def check_hk004(hook_entries: Iterable[object], base_dir: Path) -> list[ValidationIssue]:
     """## HK004 — Hook script referenced but not found
@@ -597,7 +606,10 @@ def check_hk004(hook_entries: Iterable[object], base_dir: Path) -> list[Validati
     severity="warning",
     category="hook",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
+    authority={
+        "origin": "code.claude.com",
+        "reference": "https://code.claude.com/docs/en/plugins-reference.md#hook-troubleshooting",
+    },
 )
 def check_hk005(hook_entries: Iterable[object], base_dir: Path) -> list[ValidationIssue]:
     """## HK005 — Hook script exists but is not executable
@@ -673,6 +685,7 @@ def check_hk005(hook_entries: Iterable[object], base_dir: Path) -> list[Validati
 
 
 __all__ = [
+    "HK004_MISSING_SCRIPT_IS_ERROR",
     "VALID_EVENT_TYPES",
     "VALID_HOOK_TYPES",
     "check_hk001",
