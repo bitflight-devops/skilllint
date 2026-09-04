@@ -1,0 +1,73 @@
+name: Claim Drift Check
+
+# Runs scripts/refresh_claim_values.py against the two provenance claims that
+# cite an external vendor document (HK002, HK003 -- see
+# docs/design-rule-provenance-registry.md). Opens a PR when upstream moved.
+#
+# Does not run on every PR: the claims it checks change on Claude Code's own
+# release cadence, not this repo's, and every check makes a live network
+# fetch of code.claude.com/docs/en/hooks.md.
+
+on:
+  schedule:
+    - cron: "17 6 * * 1" # Mondays 06:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  refresh-claims:
+    name: Refresh vendor-backed claims
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      # force=True in the script always attempts a live fetch, so this cache
+      # is resilience against a transient network failure mid-run (falls back
+      # to CacheStatus.STALE), not a fetch-avoidance optimization. A key that
+      # rotates weekly keeps it from growing unbounded while still surviving
+      # the common case of two runs in the same week.
+      - name: Restore vendor doc cache
+        uses: actions/cache@v4
+        with:
+          path: .claude/vendor/sources
+          key: vendor-docs-${{ github.run_id }}
+          restore-keys: |
+            vendor-docs-
+
+      - name: Refresh claim values
+        id: refresh
+        run: |
+          set +e
+          uv run --locked python scripts/refresh_claim_values.py
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Fail on unfetchable claim
+        if: steps.refresh.outputs.exit_code == '2'
+        run: |
+          echo "::error::A claim's vendor document could not be fetched and no cache exists."
+          exit 1
+
+      - name: Open PR for drift
+        if: steps.refresh.outputs.exit_code == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+        run: bash scripts/open_drift_pr.sh
