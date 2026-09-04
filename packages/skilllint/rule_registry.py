@@ -31,6 +31,8 @@ from urllib.parse import urljoin
 
 from pydantic import BaseModel, Field
 
+from skilllint.rules._constants import RuleCategory, RulePlatform
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -99,8 +101,8 @@ class RuleEntry(BaseModel):
 
     id: Annotated[str, Field(pattern=r"^[A-Z]{2}\d{3}$")]
     severity: Literal["error", "warning", "info"]
-    category: str  # "frontmatter", "skill", "plugin", "hook", etc.
-    platforms: list[str]  # ["agentskills"] = all platforms, or specific like ["claude-code"]
+    category: RuleCategory
+    platforms: list[RulePlatform]  # ["agentskills"] = all platforms, or specific like ["claude-code"]
     docstring: str
     authority: RuleAuthority | None = None
 
@@ -120,8 +122,8 @@ def skilllint_rule(
     rule_id: str,
     *,
     severity: Literal["error", "warning", "info"],
-    category: str,
-    platforms: list[str] | None = None,
+    category: RuleCategory,
+    platforms: list[RulePlatform] | None = None,
     authority: dict | None = None,
 ) -> Callable[[Callable], Callable]:
     """Decorator to register a validator function as a rule.

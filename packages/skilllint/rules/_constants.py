@@ -2,6 +2,32 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
+# Live value space of RuleEntry.category, grepped from every @skilllint_rule(...)
+# call site in packages/skilllint/rules/*_series.py (issue #41 item 3). Adding a
+# new category requires adding it here first, or Pydantic rejects the
+# registration at import time.
+RuleCategory = Literal[
+    "agent",
+    "codex",
+    "cursor",
+    "frontmatter",
+    "hook",
+    "link",
+    "namespace-reference",
+    "plugin",
+    "plugin-registration",
+    "progressive-disclosure",
+    "skill",
+    "symlink",
+    "token-count",
+]
+
+# Live value space of RuleEntry.platforms elements, including sites that omit
+# platforms= and take the @skilllint_rule decorator's ["agentskills"] default.
+RulePlatform = Literal["agentskills", "claude-code", "codex", "cursor"]
+
 # Full set of expected series prefixes: the 14 series from P038 plus the AG
 # agent-frontmatter series added for issue #132.
 # CM001 is scoped out — reserved, no validator logic (P038 architect spec §9).

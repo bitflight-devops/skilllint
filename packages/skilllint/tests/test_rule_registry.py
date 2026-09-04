@@ -14,7 +14,7 @@ def _entry(rule_id: str, reference: str | None, origin: str = "example.test") ->
     return RuleEntry(
         id=rule_id,
         severity="info",
-        category="test",
+        category="skill",
         platforms=["agentskills"],
         docstring=f"Rule {rule_id}",
         authority=authority,

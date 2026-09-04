@@ -38,7 +38,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from io import StringIO
 from pathlib import Path, PurePath
-from typing import TYPE_CHECKING, Annotated, Literal, NoReturn, Protocol, TypeAlias, cast
+from typing import TYPE_CHECKING, Annotated, Literal, NoReturn, Protocol, TypeAlias, cast, get_args
 
 # YAML/JSON at the edge: dict, list, or JSON-serializable scalars. More specific than Any.
 YamlValue: TypeAlias = dict[str, "YamlValue"] | list["YamlValue"] | str | int | float | bool | None
@@ -4640,7 +4640,10 @@ from rich.table import Table as _Table
 
 from skilllint.fixture_loader import FIXTURES_ROOT as _FIXTURES_ROOT, discover_fixtures as _discover_fixtures
 from skilllint.rule_registry import get_rule as _get_rule, list_rules as _list_rules
+from skilllint.rules._constants import RuleCategory
 from skilllint.rules.pa_series import PluginAgentFrontmatterValidator
+
+_VALID_RULE_CATEGORIES = get_args(RuleCategory)
 
 
 def _make_rule_console(*, record: bool = False) -> _Console:
@@ -4695,6 +4698,9 @@ def rules_cmd(
     record: Annotated[Path | None, typer.Option("--record", help="Record terminal output to SVG or HTML file")] = None,
 ) -> None:
     """List all available validation rules."""
+    if category is not None and category not in _VALID_RULE_CATEGORIES:
+        valid = ", ".join(_VALID_RULE_CATEGORIES)
+        raise typer.BadParameter(f"Invalid category {category!r}. Valid categories: {valid}", param_hint="--category")
     console = _make_rule_console(record=record is not None)
     _show_rules_list(platform=platform, category=category, severity=severity, console=console)
     console.print("\n[dim]Run [bold]skilllint rule [yellow]RULE_ID[/yellow][/bold] for details.[/dim]")
