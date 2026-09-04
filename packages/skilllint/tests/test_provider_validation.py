@@ -433,6 +433,36 @@ Body content.
 
         _assert_authority(fm010[0])
 
+    def test_cli_json_output_includes_ag001_authority(self, tmp_path: pathlib.Path) -> None:
+        """JSON output format includes authority field for an AG-series violation (#153).
+
+        #132's own checklist named JSON/text reporters as in scope for the AG
+        series; the only existing JSON-output authority test used an FM rule.
+        Same pattern as test_cli_json_output_includes_authority, against
+        AG001's mcp__* case instead.
+        """
+        agent_dir = tmp_path / "agents"
+        agent_dir.mkdir()
+        agent_file = agent_dir / "broken.md"
+        agent_file.write_text(
+            """---
+name: broken
+description: Agent with an unscoped MCP wildcard.
+tools: mcp__*
+---
+
+Body content.
+"""
+        )
+
+        adapters = {a.id(): a for a in load_adapters()}
+        violations = validate_file(agent_file, adapters, platform_override="claude_code")
+
+        ag001 = [v for v in violations if v.get("code") == "AG001"]
+        assert len(ag001) == 1, f"Expected exactly one AG001 violation, got: {violations}"
+
+        _assert_authority(ag001[0])
+
 
 # ---------------------------------------------------------------------------
 # Shared SKILL.md checks for adapters that skip the frontmatter pipeline
