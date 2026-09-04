@@ -155,6 +155,8 @@ Each entry maps a **claim** (a specific assertion made by a rule) to its authori
     "source_type": "python_constant | schema_json_field | schema_json_enum"
   },
 
+  "expected_value": "the value the resolved symbol must currently hold -- a scalar, an array of strings for a set/field_set claim, or a regex pattern string for a pattern claim. Checked by packages/skilllint/tests/test_provenance_registry_locators.py, which normalizes set/list/tuple values order-independently and compiled patterns by their .pattern string before comparing. Required on every claim (#146) -- a locator that only resolves, without asserting a value, does not catch the code drifting away from what the claim describes.",
+
   "x-audited": {
     "date": "string -- ISO 8601 date of last successful verification",
     "source": "string -- vendor file path used in last verification"
@@ -182,11 +184,18 @@ Rules with no upstream authority -- pure lint-style opinions -- go in a separate
       "description": "string -- what the rule enforces",
       "rationale": "string -- why this is a lint opinion rather than a spec requirement",
       "constraint": "string -- the specific check (e.g., regex pattern, field check)",
-      "references": ["string -- any supporting context, not authoritative"]
+      "references": ["string -- prose pointer to where the constraint lives; must not include a line number, since that is exactly the fact assertion_location now tracks (#146)"],
+      "assertion_location": "same shape as the claim entry field above -- an opinion still names a resolvable Python symbol, it just has no vendor authority behind it",
+      "expected_value": "same meaning as the claim entry field above"
     }
   }
 }
 ```
+
+`assertion_location` and `expected_value` are checked by the same test as the
+provenance registry's (`test_provenance_registry_locators.py`), which iterates
+both files' entries through one loop -- an opinion is "no vendor source", not
+"no verifiable claim", so it gets the same locator+value guard.
 
 ### Rules classified as opinions (from provenance audit)
 

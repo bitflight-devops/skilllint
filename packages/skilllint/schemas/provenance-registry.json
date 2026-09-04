@@ -25,6 +25,7 @@
         "symbol": "_MAX_NAME_LENGTH",
         "source_type": "python_constant"
       },
+      "expected_value": 64,
       "x-audited": {
         "date": "2026-03-14",
         "source": "packages/skilllint/schemas/agentskills_io/v1.json"
@@ -52,6 +53,7 @@
         "symbol": "_AGENTSKILLS_TOOL_FIELD_NAMES",
         "source_type": "python_constant"
       },
+      "expected_value": ["allowed-tools"],
       "x-audited": {
         "date": "2026-03-14",
         "source": "packages/skilllint/schemas/agentskills_io/v1.json"
@@ -79,6 +81,7 @@
         "symbol": "DESCRIPTION_MAX_LENGTH",
         "source_type": "python_constant"
       },
+      "expected_value": 1024,
       "x-audited": {
         "date": "2026-08-30",
         "source": "packages/skilllint/schemas/agentskills_io/v1.json"
