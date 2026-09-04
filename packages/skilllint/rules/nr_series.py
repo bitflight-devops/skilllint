@@ -68,45 +68,6 @@ TASK_AGENT_PATTERN = r'Task\(agent[=:]\s*"([^"]+):([^"]+)"'
 AT_AGENT_PATTERN = r"@([a-z0-9-]+):([a-z0-9-]+)"
 SLASH_COMMAND_PATTERN = r"(?<!\w)/([a-z0-9-]+):([a-z0-9-]+)"
 
-# Built-in agent types that should be skipped (not plugin agents)
-BUILTIN_AGENTS: frozenset[str] = frozenset({
-    "Explore",
-    "general-purpose",
-    "Plan",
-    "Bash",
-    "context-gathering",
-    "code-review",
-    "code-refactorer-agent",
-    "system-architect",
-    "comprehensive-researcher",
-    "technical-researcher",
-    "trace-protocol-investigator",
-    "doc-freshness-guardian",
-    "documentation-expert",
-    "test-architect",
-    "live-api-integration-tester",
-    "subagent-generator",
-    "github-project-manager",
-    "metadata-vault-manager",
-    "doc-drift-auditor",
-    "service-documentation",
-    "backlog-item-groomer",
-    "plugin-assessor",
-    "skill-refactorer-agent",
-    "contextual-ai-documentation-optimizer",
-    "plugin-docs-writer",
-    "logging",
-    "context-refinement",
-    "qa-devops-lead",
-    "embedded-dev-specialist",
-    "c-systems-programmer",
-    "statusline-setup",
-    "linting-root-cause-resolver",
-    "python-cli-architect",
-    "python-portable-script",
-    "python-code-reviewer",
-})
-
 
 def _extract_body(content: str) -> str:
     """Extract file body content after YAML frontmatter.
@@ -248,23 +209,16 @@ def _scoped_references(content: str, path: Path) -> tuple[list[tuple[str, str, s
 
 
 def _is_skipped(plugin: str, name: str) -> bool:
-    """Return True when a reference is exempt from both NR rules.
+    """Return True when a reference is a template placeholder, exempt from both NR rules.
 
     Args:
         plugin: Namespace prefix component.
         name: Target name component.
 
     Returns:
-        True for template placeholders and for built-in agent names on
-        unqualified references.
+        True for template placeholders (containing ``{`` or ``}``).
     """
-    # Skip template placeholders containing { or }
-    if "{" in plugin or "}" in plugin or "{" in name or "}" in name:
-        return True
-
-    # Skip built-in agent names only for unqualified refs. When a plugin
-    # prefix is present, always run NR002 traversal + NR001 resolution.
-    return not plugin and name in BUILTIN_AGENTS
+    return "{" in plugin or "}" in plugin or "{" in name or "}" in name
 
 
 # ---------------------------------------------------------------------------
@@ -690,4 +644,4 @@ def check_nr002(content: str, path: Path) -> list[ValidationIssue]:
     return issues
 
 
-__all__ = ["BUILTIN_AGENTS", "check_nr001", "check_nr002"]
+__all__ = ["check_nr001", "check_nr002"]

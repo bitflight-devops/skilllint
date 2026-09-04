@@ -3,7 +3,11 @@
 Tests:
 - Valid skill/agent/command references resolve correctly
 - All 5 reference pattern types detected and validated
-- Built-in agent names skipped (BUILTIN_AGENTS frozenset)
+- A namespaced reference always runs NR001 resolution, even when its plugin
+  prefix happens to match a Claude Code built-in agent name (#112: the
+  BUILTIN_AGENTS exemption this used to test was dead code -- every extraction
+  regex requires a non-empty plugin prefix, so its unqualified-reference guard
+  could never fire -- and was deleted rather than fixed)
 - Missing plugin directory detected (NR001)
 - Broken references where plugin dir exists but file missing (NR001)
 - Edge cases: no body, no frontmatter, frontmatter-only
@@ -481,15 +485,14 @@ class TestSlashCommandPattern:
 
 
 class TestBuiltinAgentSkip:
-    """Test built-in agent exemption semantics.
+    """Test that a built-in-sounding name is never exempted from NR001.
 
-    The BUILTIN_AGENTS allowlist exempts only unqualified references — i.e.
-    bare agent names without a plugin prefix. Namespaced references of the
-    form ``prefix:name`` always go through NR001 resolution, even when
-    ``prefix`` or ``name`` happens to match a built-in agent identifier.
-    A well-formed namespaced reference with a builtin-sounding plugin prefix
-    is treated as a plugin reference and must resolve to a real plugin
-    directory on disk.
+    There is no unqualified-reference exemption: every reference pattern
+    requires a ``prefix:name`` form, so a namespaced reference always goes
+    through NR001 resolution, even when ``prefix`` or ``name`` happens to
+    match a Claude Code built-in agent identifier. A well-formed namespaced
+    reference with a builtin-sounding plugin prefix is treated as a plugin
+    reference and must resolve to a real plugin directory on disk.
     """
 
     @pytest.mark.parametrize("builtin_name", ["general-purpose", "context-gathering", "code-review"])
@@ -498,7 +501,7 @@ class TestBuiltinAgentSkip:
     ) -> None:
         """@builtin:name is a namespaced ref and is NOT exempted from NR001.
 
-        Tests: tightened BUILTIN_AGENTS check (``not plugin and name in ...``)
+        Tests: no unqualified-name exemption exists for a builtin-sounding prefix
         How: Write @builtin-name:something reference, validate
         Why: Namespaced refs always run NR001 resolution regardless of whether
             the plugin prefix happens to look like a builtin agent identifier.
@@ -519,10 +522,10 @@ class TestBuiltinAgentSkip:
     ) -> None:
         """Task(agent="builtin:name") is a namespaced ref and is NOT exempted.
 
-        Tests: tightened BUILTIN_AGENTS check inside agent ref_type handling
+        Tests: no unqualified-name exemption exists for the agent ref_type
         How: Write Task(agent="builtin:name") reference, validate
-        Why: Namespaced refs must run NR001 resolution; the exemption only
-            applies to unqualified refs where no plugin prefix is present.
+        Why: Namespaced refs always run NR001 resolution; no unqualified form
+            (a name with no plugin prefix) can even be produced by extraction.
         """
         plugins_root = _make_plugins_root(tmp_path)
         body = f'Delegate Task(agent="{builtin_name}:worker") to handle.\n'
@@ -535,11 +538,11 @@ class TestBuiltinAgentSkip:
         assert len(nr001_errors) >= 1
 
     def test_non_builtin_agent_not_skipped(self, tmp_path: Path) -> None:
-        """Test non-built-in agents are not skipped and produce NR001 when missing.
+        """Test a real plugin reference is not skipped and produces NR001 when missing.
 
-        Tests: BUILTIN_AGENTS does not suppress real plugin references
+        Tests: an ordinary namespaced reference resolves through NR001 normally
         How: Write @custom-plugin:agent reference, validate without creating target
-        Why: Only built-in agents should be exempt
+        Why: No name is exempt from resolution — see the class docstring
         """
         plugins_root = _make_plugins_root(tmp_path)
         body = "Use @custom-plugin:my-agent for this task.\n"
