@@ -10,14 +10,14 @@ Validate YAML frontmatter in SKILL.md, agent .md, and command .md files.
 
 | Rule | Severity | Auto-fix | Description |
 |------|----------|----------|-------------|
-| FM001 | error | no | Frontmatter block is missing entirely |
+| FM001 | warning | no | Frontmatter block is missing entirely |
 | FM002 | error | no | Frontmatter is not valid YAML |
 | FM003 | error | no | Required frontmatter field is missing (e.g. `name` per agentskills spec) |
-| FM004 | error | **yes** | `description` uses a YAML multiline block scalar (`` >- ``, `` \| ``, `` \|- ``); Claude Code skill indexer reads this as literal `>-`. Use a single-line string. |
-| FM005 | error | no | `name` field contains invalid characters (must be lowercase letters, numbers, hyphens only; max 64 chars) |
-| FM006 | error | no | `description` exceeds 1024 characters |
-| FM007 | error | **yes** | `tools`, `allowed-tools`, or `disallowedTools` is a YAML array instead of a comma-separated string |
-| FM009 | error | **yes** | Unquoted colon in `description` or other string field causes YAML parse failure |
+| FM004 | warning | **yes** | `description` uses a YAML multiline block scalar (`` >- ``, `` \| ``, `` \|- ``); Claude Code skill indexer reads this as literal `>-`. Use a single-line string. |
+| FM005 | error | no | A frontmatter field has the wrong data type (e.g. a boolean field given a string value) |
+| FM006 | error | no | A frontmatter field holds a value outside its closed enum (e.g. an invalid `effort` or `permissionMode`) |
+| FM007 | warning | **yes** | `tools`, `allowed-tools`, or `disallowedTools` is a YAML array instead of a comma-separated string |
+| FM009 | info | **yes** | Unquoted colon in `description` or other string field causes YAML parse failure |
 | FM010 | error | **yes** | Skill `name` syntax, length, pattern, and directory equality |
 
 ---
@@ -32,8 +32,8 @@ Validate skill name, description quality, and token budget.
 | SK005 | warning | no | Skill description lacks trigger phrases ("Use when...", keywords); Claude may not auto-invoke |
 | SK006 | warning | no | Skill body is large (over `TOKEN_WARNING_THRESHOLD` tokens); consider splitting |
 | SK007 | error | no | Skill body exceeds token limit (`TOKEN_ERROR_THRESHOLD`); must be split into sub-skills |
-| SK008 | info | no | Skill has no `argument-hint` but appears to accept arguments based on `$ARGUMENTS` usage |
-| SK009 | info | no | Token count report (informational; always emitted with `--verbose`) |
+| SK008 | error | no | Skill directory name violates the naming convention (lowercase, digits, hyphens; must match `name`) |
+| SK009 | info | no | `plugin.json` lists `skills` explicitly, so Claude Code uses manual selection instead of auto-discovery |
 
 **Token limit fix (SK006/SK007):** Move large sections to `skills/<name>/references/<file>.md` and add a link from SKILL.md. Thresholds are `TOKEN_WARNING_THRESHOLD` (warning) and `TOKEN_ERROR_THRESHOLD` (error) — body text only, frontmatter excluded. Run `skilllint rules` to see current values.
 
@@ -77,9 +77,9 @@ Validate the `references/` directory structure for progressive disclosure.
 
 | Rule | Severity | Auto-fix | Description |
 |------|----------|----------|-------------|
-| PD001 | warning | no | Large skill (approaching SK006 token threshold) has no `references/` directory; consider adding one |
-| PD002 | warning | no | `references/` directory exists but is not linked from SKILL.md |
-| PD003 | info | no | Files in `references/` are never referenced in SKILL.md |
+| PD001 | info | no | Skill directory has no `references/` subdirectory for supporting documentation |
+| PD002 | info | no | Skill directory has no `examples/` subdirectory for usage samples |
+| PD003 | info | no | Skill directory has no `scripts/` subdirectory for helper scripts |
 
 ---
 
@@ -133,7 +133,7 @@ Validate `hooks.json` and inline hook configurations.
 | HK001 | error | no | `hooks.json` is not valid JSON |
 | HK002 | error | no | Hook event name is not a recognized Claude Code event |
 | HK003 | error | no | Hook `type` is not one of: `command`, `prompt`, `agent` |
-| HK004 | warning | no | Hook script path does not exist on disk |
+| HK004 | error | no | Hook script path does not exist on disk |
 | HK005 | warning | no | Hook script is not executable (`chmod +x` required) |
 
 ---
@@ -144,8 +144,8 @@ Validate namespace-qualified skill references (e.g. `plugin-name:skill-name`).
 
 | Rule | Severity | Auto-fix | Description |
 |------|----------|----------|-------------|
-| NR001 | warning | no | Namespace reference uses a plugin name that is not installed |
-| NR002 | warning | no | Namespace reference attempts path traversal or uses disallowed path segments (e.g., `..`, `/`, `\`) within the plugin prefix or target name |
+| NR001 | error | no | Namespace reference uses a plugin name that is not installed |
+| NR002 | error | no | Namespace reference attempts path traversal or uses disallowed path segments (e.g., `..`, `/`, `\`) within the plugin prefix or target name |
 
 ---
 
@@ -153,7 +153,7 @@ Validate namespace-qualified skill references (e.g. `plugin-name:skill-name`).
 
 | Rule | Severity | Auto-fix | Description |
 |------|----------|----------|-------------|
-| SL001 | warning | **yes** | Symlink target has trailing whitespace or newline characters |
+| SL001 | error | **yes** | Symlink target has trailing whitespace or newline characters |
 
 ---
 

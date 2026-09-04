@@ -196,7 +196,7 @@ def check_fm002(frontmatter: dict, path: Path, file_type: str) -> list[Validatio
 
     Returns:
         Always an empty list. FM002 is emitted by the YAML parsing layer in
-        FrontmatterValidator before frontmatter is available; this function
+        `FrontmatterValidator` before frontmatter is available; this function
         exists for rule metadata registration only.
 
     <!-- examples: FM002 -->
@@ -231,7 +231,7 @@ def check_fm003(frontmatter: dict, path: Path, file_type: str) -> list[Validatio
 
     Returns:
         Always an empty list. FM003 is emitted by
-        FrontmatterValidator._extract_frontmatter() before frontmatter content
+        `FrontmatterValidator._extract_frontmatter` before frontmatter content
         is available; this function exists for rule metadata registration only.
 
     <!-- examples: FM003 -->
@@ -331,7 +331,7 @@ def check_fm005(frontmatter: dict, path: Path, file_type: str) -> list[Validatio
 
     Returns:
         Always an empty list. FM005 is emitted by the Pydantic validation
-        layer (_pydantic_error_to_validation_issue) from ValidationError
+        layer, `_pydantic_error_to_validation_issue`, from ValidationError
         details; this function exists for rule metadata registration only.
 
     <!-- examples: FM005 -->
@@ -371,7 +371,7 @@ def check_fm006(frontmatter: dict, path: Path, file_type: str) -> list[Validatio
 
     Returns:
         Always an empty list. FM006 is emitted by
-        _pydantic_error_to_validation_issue when a Literal constraint fails;
+        `_pydantic_error_to_validation_issue` when a Literal constraint fails;
         this function exists for rule metadata registration only.
 
     <!-- examples: FM006 -->
@@ -469,10 +469,10 @@ def check_fm009(frontmatter: dict, path: Path, file_type: str) -> list[Validatio
     ```
 
     Returns:
-        Always an empty list. FM009 is emitted by
-        ``_fm009_recovery_warnings()`` on a check-only run and by
-        ``_queue_fm009_info()`` after auto-fix; this function exists for rule
-        metadata registration only.
+        Always an empty list. FM009 is emitted by `_fm009_recovery_warnings`
+        on a check-only run and by ``FrontmatterValidator._queue_fm009_info``
+        after auto-fix; this function exists for rule metadata registration
+        only.
 
     <!-- examples: FM009 -->
     """
