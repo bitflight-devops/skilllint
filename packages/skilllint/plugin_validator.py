@@ -1715,10 +1715,11 @@ class AsSeriesValidator:
     """
 
     def validate(self, path: Path, policy: ValidationPolicy | None = None) -> ValidationResult:
-        """Run AS-series checks on a skill or agent file.
+        """Run AS-series checks on a skill file.
 
         Args:
-            path: Path to a SKILL.md or agent .md file.
+            path: Path to a SKILL.md file. Only ``FileType.SKILL`` reaches
+                this validator; see the class docstring for why.
             policy: Optional resolved per-plugin policy.
 
         Returns:
