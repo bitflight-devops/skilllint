@@ -28,6 +28,12 @@ dist/
 .gsd/auto.lock
 .gsd/metrics.json
 .gsd/STATE.md
+
+# GSD installer run-local bookkeeping (per-machine, per-update-run state)
+.claude/gsd-install-state.json
+.claude/gsd-local-patches/
+.claude/gsd-migration-journal/
+.claude/gsd-pristine/
 .DS_Store
 Thumbs.db
 *.swp

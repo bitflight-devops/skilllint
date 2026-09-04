@@ -6,9 +6,14 @@ allowed-tools:
   - Read
   - Bash
   - Write
-  - Task
+  - Agent
   - AskUserQuestion
+requires: [config, phase, plan-phase]
 ---
+<runtime_note>
+**Copilot (VS Code):** Use `vscode_askquestions` wherever this workflow calls `AskUserQuestion`. They are equivalent — `vscode_askquestions` is the VS Code Copilot implementation of the same interactive question API.
+</runtime_note>
+
 <context>
 **Flags:**
 - `--auto` — Automatic mode. After config questions, runs research → requirements → roadmap without further interaction. Expects idea document via @ reference.
@@ -37,6 +42,6 @@ Initialize a new project through unified flow: questioning → research (optiona
 </execution_context>
 
 <process>
-Execute the new-project workflow from @./.claude/get-shit-done/workflows/new-project.md end-to-end.
+Execute end-to-end.
 Preserve all workflow gates (validation, approvals, commits, routing).
 </process>

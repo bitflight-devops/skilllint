@@ -9,8 +9,9 @@ allowed-tools:
   - Bash
   - Glob
   - Grep
-  - Task
+  - Agent
   - AskUserQuestion
+requires: [phase]
 ---
 <objective>
 Audit Nyquist validation coverage for a completed phase. Three states:
@@ -30,6 +31,6 @@ Phase: $ARGUMENTS — optional, defaults to last completed phase.
 </context>
 
 <process>
-Execute @./.claude/get-shit-done/workflows/validate-phase.md.
+Execute end-to-end.
 Preserve all workflow gates.
 </process>

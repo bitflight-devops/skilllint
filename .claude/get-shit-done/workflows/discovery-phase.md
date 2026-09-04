@@ -4,7 +4,7 @@ Produces DISCOVERY.md (for Level 2-3) that informs PLAN.md creation.
 
 Called from plan-phase.md's mandatory_discovery step with a depth parameter.
 
-NOTE: For comprehensive ecosystem research ("how do experts build this"), use /gsd:research-phase instead, which produces RESEARCH.md.
+NOTE: For comprehensive ecosystem research ("how do experts build this"), use /gsd:plan-phase --research-phase instead, which produces RESEARCH.md.
 </purpose>
 
 <depth_levels>
@@ -214,6 +214,8 @@ Write `.planning/phases/XX-name/DISCOVERY.md`:
 After creating DISCOVERY.md, check confidence level.
 
 If confidence is LOW:
+
+**Text mode (`workflow.text_mode: true` in config or `--text` flag):** Set `TEXT_MODE=true` if `--text` is present in `$ARGUMENTS` OR `text_mode` from init JSON is `true`. When TEXT_MODE is active, replace every `AskUserQuestion` call with a plain-text numbered list and ask the user to type their choice number. This is required for non-Claude runtimes (OpenAI Codex, Gemini CLI, etc.) where `AskUserQuestion` is not available.
 Use AskUserQuestion:
 
 - header: "Low Conf."
