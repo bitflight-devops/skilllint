@@ -51,7 +51,9 @@ def _run_once(module: str) -> float:
     """
     code = f"import time; t = time.perf_counter(); import {module}; print(time.perf_counter() - t)"
     result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True, timeout=30)
-    return float(result.stdout.strip())
+    # Only the last line is the timing print; anything printed earlier during
+    # import (e.g. a future warning) must not break parsing.
+    return float(result.stdout.strip().splitlines()[-1])
 
 
 def run_benchmark(runs: int = 3) -> dict[str, float | int]:
@@ -114,6 +116,8 @@ def main() -> None:
         help="Number of subprocess measurement repetitions per module (default: 3)",
     )
     args = parser.parse_args()
+    if args.runs < 1:
+        parser.error("--runs must be >= 1")
     output_path: Path | None = args.output
 
     result = run_benchmark(runs=args.runs)
