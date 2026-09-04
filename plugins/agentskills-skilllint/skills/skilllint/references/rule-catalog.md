@@ -20,8 +20,6 @@ Validate YAML frontmatter in SKILL.md, agent .md, and command .md files.
 | FM009 | error | **yes** | Unquoted colon in `description` or other string field causes YAML parse failure |
 | FM010 | error | **yes** | Skill `name` syntax, length, pattern, and directory equality |
 
-**Common FM fix:** Run `skilllint check --fix <path>` — FM004, FM007, FM009, FM010 are all auto-fixable.
-
 ---
 
 ## SK — Skill Quality Rules
@@ -44,7 +42,6 @@ Validate skill name, description quality, and token budget.
 ## AS — AgentSkills Open Standard Rules
 
 Cross-platform compliance with the [agentskills.io](https://agentskills.io) specification.
-Use `skilllint check --filter <ID> --verbose <path>` to see detailed output for any AS rule.
 
 | Rule | Severity | Auto-fix | Description |
 |------|----------|----------|-------------|
@@ -53,10 +50,10 @@ Use `skilllint check --filter <ID> --verbose <path>` to see detailed output for 
 | AS008 | warning | no | MCP tool name casing does not match the referenced server (case is significant) |
 | AS009 | warning | no | Nested skill will not be auto-discovered — skills must be direct children of `skills/` |
 
-**Retired:** AS002–AS005 folded into the FM series (`name` syntax and directory
-equality into FM010, `description` presence into FM001, unquoted colons into
-FM009, body token budget into SK006/SK007). AS007 was deleted outright — see
-`docs/registry-schema-examples.md`.
+**Retired:** AS002–AS005 are folded into the FM series (`name` syntax and
+directory equality into FM010, `description` presence into FM001, unquoted
+colons into FM009, body token budget into SK006/SK007). AS007 was deleted
+outright, with no replacement — see `docs/registry-schema-examples.md`.
 
 **Full detail:** Use `skilllint check --filter <ID> --verbose <path>` (e.g. `skilllint check --filter AS006 --verbose <path>`) to see detailed output for any AS rule.
 
@@ -97,7 +94,7 @@ Validate `plugin.json` structure.
 | PL003 | error | no | Required `name` field is missing from `plugin.json` |
 | PL004 | error | no | A path in `plugin.json` does not start with `./` |
 | PL005 | error | no | Referenced file in `plugin.json` does not exist |
-| PL006 | error | no | `marketplace.json` has an unrecognized top-level key; see [Claude Code marketplace schema](https://code.claude.com/docs/en/plugin-marketplaces.md#marketplace-schema) for the documented root keys (no auto-fix; skilllint#114) |
+| PL006 | error | no | `marketplace.json` has an unrecognized top-level key; see [Claude Code marketplace schema](https://code.claude.com/docs/en/plugin-marketplaces.md#marketplace-schema) for the documented root keys (skilllint#114) |
 
 ---
 
@@ -123,7 +120,7 @@ Validate Claude Code `agents/*.md` frontmatter on every Claude agent file regard
 
 **AG003 file-loader contract:** Omitted, null, empty-string, and empty-list values are clean. A scalar string and a sequence containing only strings are also clean and normalize to a string list. Other scalar or mapping values are discarded and warn once; a sequence containing any non-string member passes its strings through runtime normalization, discards the rest, and warns once. This rule follows the Markdown agent loader verified in [Claude Code 2.1.251](https://www.npmjs.com/package/@anthropic-ai/claude-code/v/2.1.251), not the separate strict `--agents` / Agent SDK input, and it neither requires YAML-list syntax nor auto-fixes the authored shape.
 
-**Ported from AS007/AS008:** AG001 and AG002 replace the AgentSkills-family checks that used to read an agent's `tools` field before PR #108 scoped the AS family to `SKILL.md` only. AS008 continues to validate `allowed-tools` on `SKILL.md` under agentskills.io authority; AG002 is a separate rule validating `tools`/`disallowedTools` on agent files under sub-agents.md authority.
+**Scope vs. AS008:** AG001 and AG002 validate an agent's `tools` field. AS008 is a separate rule that validates only `allowed-tools` on `SKILL.md` under agentskills.io authority; AG002 validates `tools`/`disallowedTools` on agent files under sub-agents.md authority.
 
 ---
 

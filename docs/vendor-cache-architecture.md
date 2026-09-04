@@ -12,7 +12,7 @@ When an agent needs to reference external documentation during a task, there are
 
 **Approach 1: Fetch in real-time via WebFetch or MCP URL-reading tools**
 
-The agent calls a tool that fetches the URL and returns the content directly into context. This sounds efficient until you observe what happens in practice:
+The agent calls a tool that fetches the URL and returns the content directly into context. In practice:
 
 - **Information loss through paraphrasing** — URL-reading tools typically pipe content through an AI summarization layer, which loses fidelity. The agent receives a paraphrased version, not the original text. Over multiple queries across a session, this compounds: a paraphrase of a paraphrase.
 - **No persistence** — the same documentation page is re-fetched multiple times across different agent invocations, consuming bandwidth and wall-clock time.
@@ -63,8 +63,6 @@ This is an optimization to avoid accumulating duplicate files when vendor docume
 
 The cached file exists but is older than the TTL. A network fetch is attempted and fails due to a network error (connection timeout, DNS failure, HTTP 5xx error). The stale cached file is served anyway, with a warning printed to stderr.
 
-This is the core of the offline-first strategy: stale data beats no data.
-
 **NEW**
 
 No cached file exists. A network fetch is attempted. The fetch succeeds, and a new timestamped file is written.
@@ -73,15 +71,7 @@ Example: first time the page is ever cached.
 
 ## The Offline-First Contract
 
-Only one failure mode is hard: no cache exists **and** the network is unavailable. In this case, the function raises `NoCacheError`.
-
-All other combinations gracefully degrade:
-
-- Cache exists, fresh → serve cache, skip network
-- Cache exists, stale, network OK → serve refreshed cache
-- Cache exists, stale, network down → serve stale cache (warning)
-- Cache missing, network OK → fetch and cache
-- Cache missing, network down → raise error
+Only one failure mode is hard: no cache exists **and** the network is unavailable. In this case, the function raises `NoCacheError`. Every other combination of the five cache states above degrades gracefully instead of failing.
 
 This contract prioritizes availability over freshness. A 6-hour-old cached page is acceptable and better than a network timeout.
 
@@ -125,7 +115,7 @@ Invoked by agents during task execution via `skilllint docs fetch URL` (or `uv r
 
 - Fetches a single documentation page by URL
 - Derives a filesystem-safe page name from the URL path
-- Stores the page in `.claude/vendor/sources/{page-name}-{timestamp}.md`
+- Stores the page under `.claude/vendor/sources/` (naming pattern below)
 - Returns the file path to stdout so the agent can read it with the Read tool
 
 **Design:**
@@ -178,7 +168,10 @@ The `derive_page_name()` function implements the naming algorithm:
 
 - Timestamps sort lexicographically, enabling the `find_latest()` function to locate the most recent file with a simple max() comparison
 - Page names are human-readable, so `.claude/vendor/sources/` remains navigable in a file browser
-- Granularity is minutes, not seconds, keeping filenames readable while avoiding sub-minute refetch scenarios
+
+(Timestamp granularity is discussed under Trade-Offs below.)
+
+`derive_page_name()` is not validated ahead of the fetch, so a malformed URL can produce an empty or unintelligible page name. The fetch itself fails with a 404 or similar HTTP error, and `NoCacheError` is raised if no cache exists for that URL.
 
 ## Sidecar Metadata Model
 
@@ -268,7 +261,7 @@ Both are normalized and compared, enabling agents to query by either format. The
 
 ## TTL and Freshness: The 4-Hour Default
 
-The default cache TTL is 4 hours. This value was chosen to balance several factors:
+The default cache TTL is 4 hours, balancing several factors:
 
 - **Captures a work session** — most agent tasks complete within a few hours. A 4-hour TTL means agents are unlikely to re-fetch pages during a single session.
 - **Reflects documentation change frequency** — vendor documentation changes infrequently during business hours. A 6-hour-old page is still valid 99% of the time.
@@ -343,39 +336,6 @@ Filenames use `YYYY-MM-DD-HHMM` format, with one-minute granularity. Sub-minute 
 - Simultaneous fetches within the same minute are rare enough not to require nanosecond precision
 - The performance difference between sub-second and sub-minute granularity is not meaningful for documentation
 
-## Failure Modes and Error Handling
-
-### Network Unavailable, No Cache
-
-```
-skilllint docs fetch https://docs.anthropic.com/en/docs/claude-code/settings.md
-# → NoCacheError (exit 1)
-```
-
-This is the only hard failure. When offline and the page has never been cached, work cannot proceed.
-
-### Network Unavailable, Cache Exists
-
-```
-skilllint docs fetch https://docs.anthropic.com/en/docs/claude-code/settings.md
-# → Serving stale cache from 6 hours ago
-# → STALE status (exit 0 with warning to stderr)
-```
-
-The agent receives the file path and can proceed.
-
-### Network OK, Content Changed
-
-The new content is fetched, written to a new timestamped file, and the sidecar is written alongside it. The old file remains.
-
-### Network OK, Content Unchanged
-
-The sidecar's `fetched_at` timestamp is updated (the file is "touched"), but no new markdown file is written.
-
-### Malformed or Unparseable URL
-
-`derive_page_name()` may produce an empty or unintelligible page name from a malformed URL. This is not validated before fetching. The fetch itself will fail (404 or similar HTTP error), and `NoCacheError` is raised if no cache exists.
-
 ## Integration Points
 
 ### Agents Using the Cache
@@ -390,7 +350,7 @@ An agent that needs to reference vendor documentation follows this flow:
 
 ### CI and Hooks
 
-The `scripts/fetch_platform_docs.py` script is invoked at session start via a pre-commit hook. If drift is detected, a report is written and the hook exits with code 2, signaling that schema updates may be needed.
+When the `scripts/fetch_platform_docs.py` pre-commit hook (see Bulk Vendor Sync above) detects drift, it exits with code 2, signaling that schema updates may be needed.
 
 ### Verification and Auditing
 
@@ -405,5 +365,3 @@ The vendor documentation cache is a layered system designed to:
 3. **Support agents efficiently** — section-level extraction avoids loading entire pages
 4. **Provide auditability** — sidecar metadata and file accumulation create an audit trail
 5. **Keep complexity low** — shared utilities, atomic file operations, no custom locking
-
-The design separates concerns: bulk sync handles predefined platforms and drift detection; on-demand fetch handles dynamic URLs; agents read from disk with optional section extraction. The shared I/O foundation ensures consistency across all three.

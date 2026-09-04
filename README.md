@@ -90,9 +90,9 @@ Use `bitflight-devops/skilllint` as a GitHub Action to validate skills, plugins,
 ```yaml
 - uses: bitflight-devops/skilllint@v1.7.0
   with:
-    paths: "plugins/"          # paths to validate (default: ".")
-    platform: "claude-code"   # restrict to one platform (optional)
-    show-summary: "true"      # show summary panel (default: true)
+    paths: "plugins/"
+    platform: "claude-code"
+    show-summary: "true"
 ```
 
 ### Full input reference
@@ -206,7 +206,7 @@ skilllint check --platform claude-code plugins/my-plugin
 
 | Code | Category | Description |
 |---|---|---|
-| FM001–FM010 | Frontmatter | Required fields, valid values, schema compliance (FM008 removed) |
+| FM001–FM007, FM009–FM010 | Frontmatter | Required fields, valid values, schema compliance |
 | SK004–SK009 | Skill | Description quality, token limits, complexity, internal links |
 | AS001, AS006, AS008–AS009 | AgentSkills | SKILL.md conformance with the AgentSkills open standard |
 | LK001 | Links | Broken internal markdown link detection |

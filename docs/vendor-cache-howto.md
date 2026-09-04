@@ -60,7 +60,6 @@ Read(file_path="/home/user/.claude/vendor/sources/hooks-2025-03-24-1430.md")
 ```
 
 **Notes**:
-- Page names are filesystem-safe names derived from URLs. For `https://code.claude.com/docs/en/hooks.md`, the page name is `hooks`.
 - Multiple cached versions may exist with different timestamps. `latest` returns the most recent.
 - Exit code 1 if no cached file exists for that page name.
 
@@ -141,9 +140,6 @@ stderr (status):
 - If content is identical: the sidecar metadata is updated; status is `UNCHANGED`.
 - If network is down even with `--force`: the stale cache is served (status `STALE`).
 
-**Notes**:
-- Use `--force` when you need to ensure you have the absolute latest version of a document.
-
 
 ## Recipe 5: Adjust the cache freshness window (TTL)
 
@@ -212,7 +208,7 @@ The file has been edited or corrupted. Decide: discard it and re-fetch, or keep 
   No .meta.json sidecar found — cannot verify this file.
 ```
 
-No metadata sidecar exists. This can happen if the file was cached before the sidecar system was implemented, or if the sidecar was manually deleted. Re-fetch the file to generate a fresh sidecar.
+No metadata sidecar exists for this file — it was manually deleted, or the file was placed here without going through `skilllint docs fetch`. Re-fetch the file to generate a fresh sidecar.
 
 **What to do for each outcome**:
 - **INTACT**: Continue using the file normally.
@@ -333,10 +329,6 @@ except NoCacheError as exc:
 
 Raised when no cache exists and the network is unavailable.
 
-**Notes**:
-- Useful for CLI tools that need to fetch and process documentation programmatically.
-- The API mirrors the CLI commands; use whichever fits your workflow.
-
 
 ## Recipe 9: Use the standalone script (outside skilllint)
 
@@ -367,13 +359,7 @@ uv run --script scripts/fetch_doc_source.py verify FILE
 uv run --script scripts/fetch_doc_source.py latest PAGE_NAME
 ```
 
-**When to use the standalone script**:
-- Before `skilllint` is installed
-- In CI pipelines that don't have the CLI available
-- When scripting document capture as part of a larger workflow
-
 **Notes**:
 - `scripts/fetch_doc_source.py` is a PEP 723 standalone script.
 - It has `[tool.uv.sources]` configured to use the local skilllint package.
-- Same commands, same behavior, same cache location as `skilllint docs`.
 - Requires `uv` to be installed.

@@ -36,7 +36,6 @@ The rules above govern changes. These govern statements — in a reply, an issue
 - Do not generalize success from one test, harness, environment, or consumer.
 - Prefer tests that demonstrate required behavior over implementation-detail tests.
 - Verify relevant regression, compatibility, static-analysis, and runtime checks.
-- Every changed line should be traceable to the requested outcome.
 
 ## Before Commit
 
@@ -160,8 +159,7 @@ Stale cache is served when the network is unavailable (`STALE` status, warning t
 
 ### Agent instructions
 
-1. Run `skilllint docs fetch URL` to cache the page. The file path is printed to stdout.
-2. Use the Read tool on that file path. For large files, run `skilllint docs sections FILE` first to find the right section, then `skilllint docs section FILE HEADING` to extract just that part.
+Run `docs fetch` (above), then Read the file path it prints — never WebFetch or an MCP URL-reading tool. For large files, narrow with `docs sections` and `docs section` first.
 
 ### Relationship to `fetch_platform_docs.py`
 
@@ -243,7 +241,7 @@ External input is ingested only through explicit boundaries (`packages/skilllint
 
 ## No invented constraints
 
-A numeric limit without a source is a hallucination. Every threshold, max length, timeout, or cap must have an origin.
+Every numeric constant — threshold, max length, timeout, cap — must have a source: a spec URL, a config value, a library default, or a comment explaining the reasoning. A numeric limit without one is invented, not derived.
 
 **Invented constraint (bad):**
 ```python
@@ -251,7 +249,7 @@ if len(summary) > 60:
     summary = summary[:57] + "..."
 ```
 
-Where does 60 come from? No spec, no comment, no justification. This is made up.
+Where does 60 come from? No spec, no comment, no justification.
 
 **Sourced constraint (good):**
 ```python
@@ -260,15 +258,7 @@ Where does 60 come from? No spec, no comment, no justification. This is made up.
 MAX_SKILL_NAME_LENGTH = 64
 ```
 
-**Rules:**
-
-1. **Every numeric constant must have a source** — a spec URL, a config value, a library default, or a comment explaining the reasoning.
-
-2. **Check if the library already handles it** — Rich tables auto-size columns. Requests has timeouts. Don't reinvent limits the tool already provides.
-
-3. **If there's no source, there's no constraint** — don't invent a "reasonable" threshold. Either find the spec or remove the limit.
-
-**Why this matters:** Invented constraints are a leading indicator of hallucination. The model makes up something plausible-sounding but baseless. Catching these prevents subtle bugs and documents the actual requirements.
+Check whether the library already handles it before adding a limit — Rich tables auto-size columns, Requests has timeouts. If there's no source, find the spec or remove the limit.
 
 ## Diagnostic discipline
 
