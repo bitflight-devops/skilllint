@@ -15,16 +15,15 @@ non-empty code string.
 This module asserts the same invariant set for both series:
     1. CU001/CU002/CX001/CX002 are registered in ``RULE_REGISTRY``.
     2. Their ``platforms`` metadata matches the single owning adapter.
-    3. The Cursor adapter's ``validate()`` returns ``list[dict]`` (the
-       unchanged external contract).
-    4. No raw-dict ``ValidationIssue(...)`` construction remains in
-       ``adapters/cursor/adapter.py`` — issues must come from the registered
-       rule functions, not be hand-built at the adapter boundary.
+    3. Each adapter's ``validate()`` returns ``list[dict]`` (the unchanged
+       external contract).
+    4. No raw-dict ``ValidationIssue(...)`` construction remains in either
+       adapter module — issues must come from the registered rule
+       functions, not be hand-built at the adapter boundary.
 """
 
 from __future__ import annotations
 
-import ast
 import inspect
 import pathlib
 
@@ -34,6 +33,7 @@ from skilllint.rule_registry import RULE_REGISTRY
 
 FIXTURES = pathlib.Path(__file__).parent / "fixtures"
 CURSOR_FIXTURES = FIXTURES / "cursor"
+CODEX_FIXTURES = FIXTURES / "codex"
 
 
 class TestCuCxRegistration:
@@ -97,17 +97,30 @@ class TestCursorAdapterBoundary:
         import skilllint.adapters.cursor.adapter as cursor_adapter_module
 
         source = inspect.getsource(cursor_adapter_module)
-        tree = ast.parse(source)
-        constructor_calls = [
-            node
-            for node in ast.walk(tree)
-            if isinstance(node, ast.Call)
-            and (
-                (isinstance(node.func, ast.Name) and node.func.id == "ValidationIssue")
-                or (isinstance(node.func, ast.Attribute) and node.func.attr == "ValidationIssue")
-            )
-        ]
-        assert constructor_calls == [], (
-            f"adapters/cursor/adapter.py must not construct ValidationIssue directly, "
-            f"found {len(constructor_calls)} call(s)"
+        assert "ValidationIssue(" not in source, (
+            "adapters/cursor/adapter.py must not construct ValidationIssue directly"
         )
+
+
+class TestCodexAdapterBoundary:
+    """The Codex adapter's external contract and internal construction."""
+
+    def test_validate_returns_list_of_dict(self) -> None:
+        """CodexAdapter.validate() returns list[dict], the unchanged external contract."""
+        adapter = CodexAdapter()
+        violations = adapter.validate(CODEX_FIXTURES / "invalid_rules.rules")
+        assert isinstance(violations, list)
+        assert violations, "expected at least one violation from invalid_rules.rules"
+        assert all(isinstance(v, dict) for v in violations)
+
+    def test_no_raw_validationissue_construction_in_adapter(self) -> None:
+        """adapters/codex/adapter.py never constructs ValidationIssue directly.
+
+        Issues must be produced by the registered CX rule functions and only
+        converted to dicts at the adapter boundary — not hand-built as raw
+        ``ValidationIssue(...)`` calls.
+        """
+        import skilllint.adapters.codex.adapter as codex_adapter_module
+
+        source = inspect.getsource(codex_adapter_module)
+        assert "ValidationIssue(" not in source, "adapters/codex/adapter.py must not construct ValidationIssue directly"
