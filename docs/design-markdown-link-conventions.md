@@ -163,8 +163,8 @@ def check_lk003(content: str, path: Path) -> list[ValidationIssue]:
 
 `check_lk003` calls `_resolve_link_target(url, path.parent, substitute_claude_vars=False)`
 for each `_iter_links(content)` triple and reports `LK003` when the resolved path is not
-`None` and does not exist — structurally the same loop `check_lk001` already runs, sharing
-`_resolve_link_target` rather than duplicating it. The `<!-- examples: LK003 -->` marker is
+`None` and does not exist — structurally the same loop `check_lk001` already runs (ADR-5).
+The `<!-- examples: LK003 -->` marker is
 required — every existing rule docstring carries one, and `_render_examples_block`
 (`plugin_validator.py`) expands it in `skilllint rule LK003` output.
 
@@ -213,9 +213,8 @@ elif file_type in {FileType.CLAUDE_MD, FileType.REFERENCE, FileType.MARKDOWN}:
 ```
 
 New branch. `FileType.REFERENCE` is untouched (Category C is deferred — ADR-3); `CLAUDE_MD`
-and `MARKDOWN` both gain `RepoDocLinkValidator()`, whose own internal filename gate (above) is
-what actually narrows the five target files out of the whole bucket — the dispatch layer
-itself stays as coarse-grained as it is today for every other validator in this codebase:
+and `MARKDOWN` both gain `RepoDocLinkValidator()`, whose own internal filename gate (above)
+narrows the five target files out of the whole bucket:
 
 ```python
 elif file_type in {FileType.CLAUDE_MD, FileType.MARKDOWN}:
@@ -301,12 +300,9 @@ does not target repo/plugin-root docs at all (out of scope for provider-director
 the latter already iterates `DEFAULT_SCAN_PATTERNS` generically, so the four new glob entries
 flow through it automatically.
 
-**Side effect that must be measured, not assumed (§8 has the explicit verification step):**
-every newly-discovered file also picks up whatever else `_get_validators_for_path` attaches
-to `FileType.CLAUDE_MD`/`FileType.MARKDOWN` — today that is `MarkdownTokenCounter()`
-(`TC001`, info-level) and the universal `SymlinkTargetValidator()`. This is a real, visible
-change to `skilllint check`'s output on every repo that has an `AGENTS.md`/`README.md`, not
-just a discovery-plumbing detail.
+**Side effect:** every newly-discovered file also picks up whatever else
+`_get_validators_for_path` attaches to its `FileType` — see ADR-6 for what that is and why
+§8.6 requires measuring it, not assuming it.
 
 ---
 
