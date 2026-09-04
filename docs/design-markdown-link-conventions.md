@@ -18,12 +18,6 @@ the first category gets link-existence checking (`LK001`). This design closes th
 the one category where the convention is well evidenced **and reachable**, and explicitly
 defers the other two.
 
-This is a revision of an earlier draft. The adversarial review appended at the end of this
-file found the first draft's rules were *correct but inert*: `DEFAULT_SCAN_PATTERNS` in
-`scan_runtime.py` does not discover `AGENTS.md`, `README.md`, `GEMINI.md`, `AGENT.md`, or
-`references/*.md` at all, so `uv run skilllint check .` measurably produced **zero** new
-findings under the original design. This revision adopts the review's Alternative A in full:
-
 1. **Repo/plugin-root convention docs** (`CLAUDE.md`, `AGENTS.md`, `README.md`, `GEMINI.md`,
    `AGENT.md`) — add **`LK003`**, a broken-link existence check resolved against each file's
    own directory, gated to exactly these five filenames via the existing
@@ -31,8 +25,8 @@ findings under the original design. This revision adopts the review's Alternativ
    `DEFAULT_SCAN_PATTERNS` and `_discover_plugin_paths` to discover the four filenames that
    are missing today (`CLAUDE.md` is already discovered) — see ADR-6.
 2. **Skill-internal supporting content** (`references/*.md` and friends) — **deferred**, same
-   status as Category D. The earlier draft's `PD004` compromise (flag link presence without
-   checking existence) is dropped: it was unreachable by discovery for the same reason as
+   status as Category D. A `PD004` compromise (flag link presence without checking existence)
+   was considered and dropped: it was unreachable by discovery for the same reason as
    `LK003` was, and even discovery aside, measured signal in this repo is 2 findings out of 66
    reference files, both in vendored third-party content, zero in this repo's own `plugins/`
    tree. See ADR-3.
@@ -123,8 +117,8 @@ functions never took a resolution root — they operate on raw text and yield
 `SKILL.md`; `check_lk001` was the only place that hardcoded `path.parent` as the resolution
 root and attempted `${CLAUDE_*}` substitution. `check_lk003` reuses `path.parent` as its root
 too (each file's own directory), so no root parameter needs to be threaded through the shared
-helpers — only the existence-check loop itself is factored out (ADR-5, confirmed sound by
-adversarial review — do not generalize the extraction helpers further).
+helpers — only the existence-check loop itself is factored out (ADR-5 — do not generalize the
+extraction helpers further).
 
 **New — extracted from `check_lk001`'s body, used by both `check_lk001` and `check_lk003`:**
 
@@ -181,16 +175,14 @@ read the file, call the rule function, package results into a `ValidationResult`
 auto-fix (matches `InternalLinkValidator.can_fix()`, `False` today for the same class of
 problem: fixing requires a human decision about content, not a mechanical rewrite).
 
-**Filename gate — the actual fix for the adversarial review's false-positive finding.** The
-first draft proposed dispatching `RepoDocLinkValidator` for the entire `FileType.MARKDOWN`
-bucket with no further narrowing, reasoning that a filename gate would be "new dispatch
-machinery." The review measured that reasoning as wrong: `InternalLinkValidator.validate()`
+**Filename gate.** Dispatching `RepoDocLinkValidator` for the entire `FileType.MARKDOWN` bucket
+with no further narrowing was considered and rejected: `InternalLinkValidator.validate()`
 already opens with exactly this kind of one-line filename guard
 (`if path.name != "SKILL.md": return ValidationResult(passed=True, ...)`), and the exact
 five-name target set already exists as a named constant, `FRONTMATTER_EXEMPT_FILENAMES`
 (`plugin_validator.py:582-588`: `{"AGENT.md", "AGENTS.md", "GEMINI.md", "CLAUDE.md",
-"README.md"}`). Ungated, the rule produced 9 findings across the `FileType.MARKDOWN` bucket
-on this repo, 0 of them in a Category-B doc and 7 of 9 regex artifacts from Shiki-HTML vendor
+"README.md"}`). Ungated, the rule produces 9 findings across the `FileType.MARKDOWN` bucket on
+this repo, 0 of them in a Category-B doc and 7 of 9 regex artifacts from Shiki-HTML vendor
 captures under `.claude/vendor/sources/`. `RepoDocLinkValidator` therefore gates itself the
 same way `InternalLinkValidator` does:
 
@@ -385,7 +377,6 @@ No `Any`, `object`, or `cast()` introduced anywhere in this design. `_resolve_li
 returns `Path | None` (a real union, not `Any`); callers must handle both branches explicitly
 before dereferencing. `ty check packages/` is the sole type checker per this project's policy
 (mypy/basedpyright intentionally off) — this design introduces nothing that requires either.
-Confirmed sound by adversarial review; no changes from the prior draft.
 
 ---
 
@@ -409,8 +400,6 @@ Confirmed sound by adversarial review; no changes from the prior draft.
   access boundary); command injection — N/A, no subprocess calls added; secure temp files —
   N/A; rate limiting — N/A, no API calls; certificate validation — N/A, no HTTPS calls.
 
-Confirmed sound by adversarial review; no changes from the prior draft.
-
 ---
 
 ## 8. Testing Architecture
@@ -424,8 +413,8 @@ packages/skilllint/tests/
 ```
 
 `test_repo_doc_link_validator.py` follows `test_internal_link_validator.py`'s existing
-structure (that file collects **29** tests, not 24 as an earlier draft of this spec claimed —
-verified via `pytest --collect-only`): broken-link detection, valid-link pass-through,
+structure (that file collects **29** tests, verified via `pytest --collect-only`):
+broken-link detection, valid-link pass-through,
 external/anchor/absolute-link filtering (shared helper — verify the reused filter still
 applies, not re-derive it), the `${...}`-token skip behavior (`LK003` skips unconditionally
 per ADR-2; `check_lk001`'s existing substitution tests are untouched), and the filename-gate
@@ -436,10 +425,9 @@ produce zero findings.
 
 `test_internal_link_validator.py` imports the exact module this design changes
 (`skilllint.rules.lk_series`), and the project is a CLI application — both independently
-select TDD as required per this project's standard determination. Two tests are required —
-conceptually the same two as before, but the first now has two sub-cases after the
-verification pass found a real hole in it; write everything below **before**
-implementation, confirm it is RED against the current codebase, then implement to GREEN:
+select TDD as required per this project's standard determination. Two tests are required;
+write everything below **before** implementation, confirm it is RED against the current
+codebase, then implement to GREEN:
 
 1. **Discovery-reachability test — bare AND plugin context.** ADR-6 has two independent
    halves: the `DEFAULT_SCAN_PATTERNS` glob additions (reached via `_discover_bare_paths`)
@@ -449,9 +437,8 @@ implementation, confirm it is RED against the current codebase, then implement t
    *plugin*-context `tmp_path` (one containing `.claude-plugin/plugin.json`) still finds
    **zero** of them, because `_discover_bare_paths` filters out any glob match under a
    `covered_root`. An implementer could ship only that half, pass a bare-only test, and leave
-   every plugin-root `README.md`/`AGENTS.md` unreachable — the same shape of gap the first
-   review pass caught, just moved one directory level down. This is the one required test
-   that actually guards a real defect; the two sub-cases are both mandatory:
+   every plugin-root `README.md`/`AGENTS.md` unreachable. This is the one required test that
+   actually guards a real defect; the two sub-cases are both mandatory:
    - **Bare case**: build a `tmp_path` directory (no `.claude-plugin/plugin.json`) containing
      `AGENTS.md`, `README.md`, `GEMINI.md`, `AGENT.md`, `CLAUDE.md`; assert
      `_discover_validatable_paths(tmp_path)` returns all five.
@@ -475,9 +462,9 @@ were reachability/gating decisions.
 
 Located under the existing `_FIXTURES_ROOT` convention
 (`packages/skilllint/tests/fixtures/providers/agentskills/{failing,passing}-examples/`), not
-a new top-level directory — the prior draft proposed `tests/fixtures/link_conventions/`,
-which sits outside that root and would leave `skilllint rule LK003` printing "No fixture
-examples available yet":
+a new top-level directory — a separate `tests/fixtures/link_conventions/` directory would sit
+outside that root and leave `skilllint rule LK003` printing "No fixture examples available
+yet":
 
 ```text
 packages/skilllint/tests/fixtures/providers/agentskills/
@@ -495,9 +482,9 @@ packages/skilllint/tests/fixtures/providers/agentskills/
 ```
 
 `LK001`/`PD001` ship with no committed example fixtures either, so omitting them would also be
-within precedent — this design chooses to add them because the filename-gate and `@import`
-non-flagging behaviors are exactly the two properties an adversarial reviewer already
-struggled to verify without a committed example.
+within precedent — this design adds them anyway because the filename-gate and `@import`
+non-flagging behaviors are exactly the two properties that are hard to verify by reasoning
+about the code alone and benefit from a concrete, runnable example.
 
 ### 8.4 Property-based testing (Hypothesis)
 
@@ -520,52 +507,35 @@ that precedent rather than inventing a number.
 
 ### 8.5 Coverage target
 
-80% line and branch coverage (project default; this is not payment/auth/security-critical
-code, so the 95%+/mutation-testing tier does not apply). **Correction from the prior draft:**
-`[tool.coverage.report] fail_under` in `pyproject.toml` is **60**, not 80
-(`pyproject.toml:129`) — the project-wide gate is 60%; this feature still targets 80% for its
-own new code as the design-level bar, but must not assume the repo-wide `fail_under` enforces
-that number itself. No `pyproject.toml` change is required either way.
+80% line and branch coverage for this feature's new code, as a design-level bar (this is not
+payment/auth/security-critical code, so the 95%+/mutation-testing tier does not apply). Note:
+the project-wide `[tool.coverage.report] fail_under` gate in `pyproject.toml` is **60**
+(`pyproject.toml:129`), not 80 — this feature's 80% target is a self-imposed bar for its own
+new code, not something the repo-wide gate enforces. No `pyproject.toml` change is required.
 
 ### 8.6 Pre-ship verification (ADR-6 side effect — explicit step, not a footnote)
 
-Extending `DEFAULT_SCAN_PATTERNS` widens the scan set on every repo with an
-`AGENTS.md`/`README.md`/`GEMINI.md`/`AGENT.md`, not just this one. Measured on this repo:
-discovery grows from 72 to **77** paths (**+5**, not +4) once both halves of ADR-6 are
-applied. The fifth addition is not a Category-B doc: `**/AGENTS.md` also newly discovers
-`packages/skilllint/tests/fixtures/codex/{empty,valid}/AGENTS.md`, skilllint's own
-negative-test fixtures for `CX001` (one is a 1-byte file whose entire content is a single
-newline, deliberately invalid). So the actual `LK003`-reachable gate-name set on this repo is
-**6 files, not 4**: `CLAUDE.md`, `AGENTS.md`, `README.md`,
-`plugins/agentskills-skilllint/README.md`, and the two `.../codex/{empty,valid}/AGENTS.md`
-fixtures. Harmless today — neither fixture contains a broken link, both currently produce only
-`TC001` info — but real, and the expected delta below must say so rather than imply only the
-four repo/plugin-root docs are affected.
+Extending `DEFAULT_SCAN_PATTERNS` (ADR-6) widens the scan set on every repo with an
+`AGENTS.md`/`README.md`/`GEMINI.md`/`AGENT.md`, not just this one — see ADR-6 for the measured
+72→77-path, 6-file reachability delta this step verifies against.
 
 Before this change is merged:
 
 1. Run `uv run skilllint check .` before and after the change on this repo and on
    `tests/fixtures/benchmark-plugin-1000-skills.zip` / `benchmark-plugin-violations.zip`;
-   diff the output. Expected delta: 5 newly-discovered files (including the 2 `codex/*/
-   AGENTS.md` test fixtures), each contributing one `TC001` info line from
-   `MarkdownTokenCounter()`. **Do not gate this on exit code** — `uv run skilllint check .`
-   on this repo already fails today (`Total files: 71, Passed: 62, Failed: 9, Warnings: 16`,
-   unrelated to this change), so the exit code is already non-zero and "unchanged" would be
-   trivially true regardless of whether `LK003` works correctly. Compare **finding counts**
-   instead: `LK003` findings must be 0 on this repo's current content, and the total
-   failed-file count must not increase beyond what is attributable to genuinely new, correct
-   findings.
+   diff the output against ADR-6's expected delta (5 newly-discovered files, each contributing
+   one `TC001` info line from `MarkdownTokenCounter()`). **Do not gate this on exit code** —
+   `uv run skilllint check .` on this repo already fails today (`Total files: 71, Passed: 62,
+   Failed: 9, Warnings: 16`, unrelated to this change), so the exit code is already non-zero
+   and "unchanged" would be trivially true regardless of whether `LK003` works correctly.
+   Compare **finding counts** instead: `LK003` findings must be 0 on this repo's current
+   content, and the total failed-file count must not increase beyond what is attributable to
+   genuinely new, correct findings.
 2. Re-run `scripts/bench_io.py` before and after on the benchmark fixtures and compare
    wall-clock time — `**/README.md`/`**/AGENTS.md` glob the whole tree, so this is a real
-   discovery-cost change, not a no-op. Use this repo's own configured regression tolerance
-   rather than an invented number: `.github/workflows/benchmark.yml` sets
-   `alert-threshold: '130%'` for the `github-action-benchmark` check and passes
-   `--threshold 1.30` to `scripts/bench_comment.py` — i.e. a 30% regression is this repo's
-   existing bar for "needs an explanation." Reuse it here.
-
-The full command sequence for both checks is recorded in this file's own
-"Review History → Verification commands" section below (Phase 2e and Phase 3e) — reuse those
-commands rather than re-deriving them.
+   discovery-cost change, not a no-op. Use this repo's own configured regression tolerance:
+   `.github/workflows/benchmark.yml` sets `alert-threshold: '130%'` (i.e. a 30% regression is
+   this repo's existing bar for "needs an explanation") — reuse it here.
 
 ---
 
@@ -590,12 +560,7 @@ sourced justification and fired on both the AgentSkills spec's own worked exampl
 Anthropic's skills doc example (`lk_series.py` module docstring). Reusing `LK002` for an
 unrelated rule would erase that history and risk a maintainer assuming the retired rule was
 reinstated. `LK003` is confirmed free by inspection of `RULE_REGISTRY` (`lk_series.py`
-registers `LK001` only). An earlier draft of this design also proposed `PD004` for Category
-C; that rule is dropped entirely in this revision (ADR-3) — the earlier draft's reasoning for
-using `PD004` rather than `LK004` (grouping by *what the rule asserts* — existence vs.
-structure — rather than by *what kind of file it looks at*) remains sound in principle and is
-worth keeping in mind if Category C existence-checking is ever built as a follow-up, but there
-is no live rule for that reasoning to apply to right now.
+registers `LK001` only).
 
 ### ADR-2: Category B — file's-own-directory root, plain links only, no `${CLAUDE_*}` substitution
 
@@ -639,27 +604,21 @@ substitution — any link containing a `${...}` token is skipped, not flagged.
   `${...}` syntax for illustrative purposes.
 
 **Confidence:** High for the root; explicitly not claimed as a literal documented rule for
-plain-link syntax specifically. Confirmed sound by adversarial review, including the
-docstring-vs-registry distinction above (previously mis-stated as living in a provenance
-registry entry — corrected per ADR-1/§11).
+plain-link syntax specifically.
 
 ### ADR-3: Category C — deferred (revised: reachability and measured signal, not "no evidence for a root")
 
 **Decision:** Do not add any link rule — existence-checker or presence-flagger — for links
-inside `references/*.md`, `resources/**`, or `scripts/**` in this iteration. This supersedes
-the prior draft's `PD004` compromise, which is dropped entirely.
+inside `references/*.md`, `resources/**`, or `scripts/**` in this iteration. No `PD004` or
+equivalent rule ships.
 
-**Why the prior reasoning was replaced.** The first draft argued `references/*.md` should not
-get an existence-checker because no documented resolution root exists for it, while granting
-`LK003` a file's-own-directory root on CommonMark-default plus repo-example evidence. The
-adversarial review correctly identified this as asymmetric: a `references/*.md` file is
-rendered by GitHub under the identical CommonMark relative-path semantics as a `README.md` —
-the *only* thing that changes between the two categories is the filename, not the applicable
-resolution convention. If CommonMark-default reasoning is adequate evidence for `LK003`'s
-root, it is equally adequate for a `references/*.md` existence-checker; the first draft could
-not apply the standard in one direction only.
+**Root-uncertainty is not the blocker.** A `references/*.md` file is rendered by GitHub under
+the identical CommonMark relative-path semantics as a `README.md` — the *only* thing that
+changes between the two categories is the filename, not the applicable resolution convention.
+The same file's-own-directory reasoning that backs `LK003` (ADR-2) applies here too, so root
+ambiguity is not why this category is deferred.
 
-**Why the decision is still to defer, on the correct grounds:**
+**Why this is deferred, on the actual grounds:**
 
 1. **Reachability.** No discovery pattern in `scan_runtime.py` reaches `references/*.md`
    today, and this design's `DEFAULT_SCAN_PATTERNS` change (ADR-6) does not add one — adding
@@ -691,10 +650,9 @@ slash-command files. The official commands documentation explicitly states skill
 recommended over commands specifically *because* skills "support additional features like
 supporting files" — i.e., commands do not get `SKILL.md`'s link-dereferencing feature at all.
 A subagent file's body "becomes the system prompt"; nothing in the documentation mentions
-markdown-link parsing for it. **Correction from the prior draft:** the earlier claim that
-"zero `agents/*.md`/`commands/*.md` files in this repo contain a markdown link" is false —
-measured count is **1** file, **1** link, across 110 agent/command files. That single instance
-does not establish a usage pattern to validate against, and the conclusion is unchanged: a
+markdown-link parsing for it. Measured: **1** of 110 agent/command files in this repo contains
+a markdown link — not enough to establish a usage pattern to validate against. The conclusion
+is unchanged: a
 broken link here is, at most, a human-readability defect — it does not break any documented
 runtime feature, unlike a broken `SKILL.md` link which breaks the documented "supporting
 files" mechanism. Per the ladder in this project's own engineering discipline ("does this need
@@ -706,8 +664,8 @@ in these same files — nothing here conflicts with or duplicates that.
 **Note the inverted risk profile:** `agents/*.md` and `commands/*.md` are, in fact, the *one*
 category in this whole design that auto-discovery already reliably reaches
 (`DEFAULT_SCAN_PATTERNS` includes `**/agents/*.md` and `**/commands/*.md` today). A rule here
-would actually fire on real scans, unlike the unreachable categories the first draft shipped
-instead. That makes deferring Category D *more* conservative than it looks, not less — an
+would actually fire on real scans. That makes deferring Category D *more* conservative than it
+looks, not less — an
 unsourced rule here would be immediately live, not inert.
 
 **Revisit when:** either Claude Code documents link-following behavior for these files, or
@@ -728,8 +686,8 @@ existence-check loop, parameterized by `base_dir: Path` and
 directory. There is no case in this design where the root differs from `path.parent`, so
 threading a caller-supplied root through the text-extraction helpers would be unused
 generality. The one real behavioral difference between the two rules — whether `${CLAUDE_*}`
-substitution is attempted — is exactly what `substitute_claude_vars` isolates. Confirmed
-sound by adversarial review; do not generalize further.
+substitution is attempted — is exactly what `substitute_claude_vars` isolates. Do not
+generalize further.
 
 ### ADR-6: Extend `DEFAULT_SCAN_PATTERNS` and `_discover_plugin_paths` so `LK003` is reachable
 
@@ -749,9 +707,16 @@ workflow this feature exists to serve.
 **This is a genuine behavior change with its own blast radius**, not a plumbing detail: every
 newly-discovered file also picks up whatever `_get_validators_for_path` already attaches to
 `FileType.CLAUDE_MD`/`FileType.MARKDOWN` — currently `MarkdownTokenCounter()` (`TC001`,
-info-level) and the universal `SymlinkTargetValidator()`. §8.6 makes measuring that delta
-(via a before/after `skilllint check` diff and a `scripts/bench_io.py` comparison) an explicit
-pre-merge verification step rather than an assumption.
+info-level) and the universal `SymlinkTargetValidator()`. Applying both halves of this ADR:
+discovery grows from 72 to **77** paths (**+5**). The fifth addition is not a Category-B doc —
+`**/AGENTS.md` also newly discovers
+`packages/skilllint/tests/fixtures/codex/{empty,valid}/AGENTS.md`, skilllint's own
+negative-test fixtures for `CX001` (one is a 1-byte file, deliberately invalid) — so the actual
+`LK003`-reachable gate-name set on this repo is **6 files, not 4**: `CLAUDE.md`, `AGENTS.md`,
+`README.md`, `plugins/agentskills-skilllint/README.md`, and the two
+`.../codex/{empty,valid}/AGENTS.md` fixtures. Harmless (neither fixture has a broken link;
+both currently produce only `TC001` info) but real — §8.6's pre-merge verification step checks
+against this actual 6-file, +5-path delta, not an assumed +4.
 
 **Alternative considered and rejected:** widen `InternalLinkValidator`'s existing
 `SKILL.md`-only guard to also accept the five convention filenames, dispatching it (instead of
@@ -778,8 +743,8 @@ Every file that must change for this design to ship, and the exact edit required
   `LK001` row's code column to `LK001, LK003` and description to add "; LK003 covers
   CLAUDE.md/AGENTS.md/README.md/GEMINI.md/AGENT.md, resolved against each file's own
   directory."
-- **`plugins/agentskills-skilllint/README.md`** (the *second*, separate rule-series table at
-  line 76 — missed by the prior draft, which updated only the root `README.md`): change the
+- **`plugins/agentskills-skilllint/README.md`** (a *second*, separate rule-series table at
+  line 76, distinct from the root `README.md` table above — both need the edit): change the
   `| LK001 | Internal markdown links |` row to
   `| LK001, LK003 | Internal markdown links (LK003: repo/plugin-root convention docs) |`.
 - **`packages/skilllint/schemas/provenance-registry.json`** — **no entry.** The registry's
@@ -867,12 +832,9 @@ Every file that must change for this design to ship, and the exact edit required
 per file) regex scanning, identical complexity class to the existing `LK001`. That part is
 unchanged from before and remains low-risk.
 
-**Correction from the prior draft:** an earlier version of this section stated the design
-"does not add new files to the scan set" as though that were a resource-management virtue.
-The adversarial review identified this as the blocking defect, not a feature — a rule whose
-entire target set is undiscovered validates nothing. ADR-6 deliberately *does* widen the scan
-set: `**/AGENTS.md`, `**/README.md`, `**/GEMINI.md`, `**/AGENT.md` join
-`DEFAULT_SCAN_PATTERNS`. The expected growth is bounded — at most one file per plugin root or
+This design deliberately widens the scan set (ADR-6): `**/AGENTS.md`, `**/README.md`,
+`**/GEMINI.md`, `**/AGENT.md` join `DEFAULT_SCAN_PATTERNS`. The expected growth is bounded — at
+most one file per plugin root or
 provider root per new filename, not proportional to skill or agent count — but `**/README.md`
 in particular globs the entire directory tree on every scan, which is a real discovery-cost
 change on large repos, not a bounded one. §8.6 requires a `scripts/bench_io.py` before/after
