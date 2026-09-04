@@ -44,7 +44,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator
 
 from skilllint.limits import DESCRIPTION_MAX_LENGTH
 
@@ -204,7 +204,14 @@ class AgentFrontmatter(BaseModel):
     # then normalizes strings and the string members of lists at consumption
     # time. Keep that authored value untouched so model_dump() and --fix retain
     # scalar-vs-sequence shape; normalized_skills exposes the loader's view.
-    skills: object | None = None
+    #
+    # JsonValue (not a hand-rolled recursive alias) because Pydantic cannot
+    # build a schema for an implicit recursive TypeAlias used as a model
+    # field under `from __future__ import annotations` -- it raises
+    # RecursionError at class-definition time. pydantic.JsonValue is
+    # Pydantic's own fast-pathed equivalent, already used the same way in
+    # rules/hk_series.py.
+    skills: JsonValue = None
     mcp_servers: list[Any] | dict[str, Any] | None = Field(None, alias="mcpServers")
     hooks: dict[str, Any] | None = None
     memory: Literal["user", "project", "local"] | None = None
