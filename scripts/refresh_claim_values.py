@@ -34,6 +34,8 @@ Exit codes:
     0 -- no drift; every checked claim's expected_value already matches
     1 -- drift found and written to provenance-registry.json
     2 -- a claim's vendor document could not be fetched and no cache exists
+    3 -- unexpected error (distinct from 1 so CI can't mistake a crash for
+         "drift found and written" -- see main())
 """
 
 from __future__ import annotations
@@ -41,11 +43,12 @@ from __future__ import annotations
 import json
 import re
 import sys
+import traceback
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from skilllint.vendor_cache import CacheStatus, NoCacheError, fetch_or_cached, read_section
+from skilllint.vendor_cache import CacheResult, CacheStatus, NoCacheError, fetch_or_cached, read_section
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -86,7 +89,22 @@ _KNOWN_EXTRACTORS: dict[str, tuple[str, Callable[[str], list[str]]]] = {
 }
 
 
-def _refresh_one(claim_id: str, claim: dict) -> bool:
+def _fetch_or_cached_memoized(url: str, cache: dict[str, CacheResult]) -> CacheResult:
+    """Wrap ``fetch_or_cached(url, force=True)``, fetching each URL at most once per run.
+
+    HK002 and HK003 both cite the same authority_url (code.claude.com/docs/en/hooks.md);
+    without this, a single run of main() would make two live network fetches of the
+    identical page and write two redundant timestamped cache files.
+
+    Returns:
+        The CacheResult for *url*, reused across claims that share it.
+    """
+    if url not in cache:
+        cache[url] = fetch_or_cached(url, force=True)
+    return cache[url]
+
+
+def _refresh_one(claim_id: str, claim: dict, fetch_cache: dict[str, CacheResult]) -> bool:
     """Re-fetch and re-extract one claim; rewrite it in place if the value changed.
 
     Returns:
@@ -96,7 +114,7 @@ def _refresh_one(claim_id: str, claim: dict) -> bool:
     authority_url = claim["authority"]["authority_url"]
 
     try:
-        result = fetch_or_cached(authority_url, force=True)
+        result = _fetch_or_cached_memoized(authority_url, fetch_cache)
     except NoCacheError as exc:
         print(f"ERROR: {claim_id}: cannot fetch {exc.url} and no cache exists ({exc.reason})", file=sys.stderr)
         sys.exit(2)
@@ -132,15 +150,20 @@ def main() -> int:
         0 if nothing changed, 1 if drift was found and written.
     """
     registry = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
+    fetch_cache: dict[str, CacheResult] = {}
 
     changed = False
     for claim_id, claim in registry["claims"].items():
         if claim_id not in _KNOWN_EXTRACTORS:
             continue
-        changed = _refresh_one(claim_id, claim) or changed
+        changed = _refresh_one(claim_id, claim, fetch_cache) or changed
 
     if changed:
-        REGISTRY_PATH.write_text(json.dumps(registry, indent=2) + "\n", encoding="utf-8")
+        # ensure_ascii=False: keep non-ASCII characters elsewhere in the
+        # registry (e.g. the top-level description's em dash) as literal
+        # UTF-8 instead of \uXXXX escapes, so a drift PR's diff is limited
+        # to the claim(s) that actually changed.
+        REGISTRY_PATH.write_text(json.dumps(registry, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         print(f"Wrote drift to {REGISTRY_PATH}")
         return 1
 
@@ -148,4 +171,19 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # A bare `sys.exit(main())` would let an unhandled exception (e.g. a
+    # malformed registry, a changed doc structure the extractors can't
+    # parse) exit with Python's default code 1 -- indistinguishable from
+    # main()'s own intentional "drift found and written" signal. Since the
+    # registry is only rewritten at the very end of main(), a crash before
+    # that point leaves the file unchanged; the CI workflow would then read
+    # exit code 1, run open_drift_pr.sh, find nothing to commit, and exit 0
+    # -- masking the crash as a successful, empty run. Give unexpected
+    # errors their own exit code so that can't happen.
+    try:
+        sys.exit(main())
+    except SystemExit:
+        raise
+    except Exception:  # noqa: BLE001 — must give any unexpected error a distinct exit code (3), not 1
+        traceback.print_exc()
+        sys.exit(3)

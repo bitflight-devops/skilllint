@@ -51,16 +51,11 @@ jobs:
 
       - name: Refresh claim values
         id: refresh
-        run: |
-          set +e
-          uv run --locked python scripts/refresh_claim_values.py
-          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+        run: scripts/run_claim_refresh.sh
 
-      - name: Fail on unfetchable claim
-        if: steps.refresh.outputs.exit_code == '2'
-        run: |
-          echo "::error::A claim's vendor document could not be fetched and no cache exists."
-          exit 1
+      - name: Fail on unfetchable claim or unexpected error
+        if: steps.refresh.outputs.exit_code == '2' || steps.refresh.outputs.exit_code == '3'
+        run: scripts/fail_claim_refresh.sh "${{ steps.refresh.outputs.exit_code }}"
 
       - name: Open PR for drift
         if: steps.refresh.outputs.exit_code == '1'

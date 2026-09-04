@@ -24,7 +24,16 @@ fi
 git checkout -B "$BRANCH"
 git add "$REGISTRY_PATH"
 git commit -m "chore(provenance): sync vendor-backed claim values"
-git push --force-with-lease origin "$BRANCH"
+
+# actions/checkout only fetches the ref that triggered the job, so this repo
+# has no remote-tracking ref for $BRANCH -- bare `--force-with-lease` compares
+# against that ref and, finding none, rejects the push as "stale info" on
+# every run after the first, even though nothing actually raced it. Look up
+# $BRANCH's real current SHA (empty if it doesn't exist yet) and pass it
+# explicitly as the lease so the push is still guarded against a genuine
+# concurrent update, just not against our own missing tracking history.
+REMOTE_SHA="$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)"
+git push --force-with-lease="$BRANCH:$REMOTE_SHA" origin "$BRANCH"
 
 if gh pr view "$BRANCH" >/dev/null 2>&1; then
     echo "PR for $BRANCH already exists — push updated it."
