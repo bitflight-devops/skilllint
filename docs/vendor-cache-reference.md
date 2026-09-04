@@ -95,13 +95,7 @@ skilllint docs sections <FILE_PATH>
 |------|---------|
 | 0 | Success |
 
-**Table format**
-
-No Rich terminal markup — plain ASCII table. Each row shows:
-- `index`: 0-based section index
-- `level`: Heading depth 1–6, or 0 for preamble before first heading
-- `heading`: Heading text, or `(preamble)` for content before the first heading
-- `lines`: Line span in `start-end` format (1-indexed, inclusive)
+Column definitions and table formatting are documented under `format_section_index()` in the Python API section below.
 
 ### section
 
@@ -120,11 +114,7 @@ skilllint docs section <FILE_PATH> <HEADING>
 | `FILE_PATH` | path | yes | Path to a cached markdown file |
 | `HEADING` | string | yes | Heading text or markdown anchor slug to locate (case-insensitive) |
 
-**Heading matching**
-
-Matches both of these formats:
-- **Heading text**: `"Hook input and output"` — case-insensitive, leading `#` stripped
-- **Markdown anchor slug**: `"hook-input-and-output"` — derived from heading via slug algorithm
+Heading matching rules (text or slug, case-insensitive) are documented under `read_section()` in the Python API section below.
 
 **Output**
 
@@ -403,7 +393,7 @@ def find_latest(page_name: str, *, sources_dir: Path | None = None) -> Path | No
 
 **Behavior**
 
-Scans *sources_dir* for all files matching the glob pattern `{page_name}-*.md` (excluding `.meta.json` files). Returns the path whose filename sorts lexicographically last. Timestamps in `YYYY-MM-DD-HHMM` format sort correctly by lexicographic order, so the most recent file is returned.
+Scans *sources_dir* for all files matching the glob pattern `{page_name}-*.md` (excluding `.meta.json` files). Returns the path whose filename sorts lexicographically last — see File Naming Convention below for why this reliably picks the most recent file.
 
 **Examples**
 
@@ -462,9 +452,7 @@ def fetch_or_cached(url: str, *, ttl_hours: float = 4.0, force: bool = False) ->
 
 **File naming**
 
-New cached files are written as: `{SOURCES_DIR}/{page_name}-{YYYY-MM-DD-HHMM}.md`
-
-The timestamp is in UTC and uses 24-hour format with no seconds.
+New cached files follow the pattern in File Naming Convention below: `{SOURCES_DIR}/{page_name}-{YYYY-MM-DD-HHMM}.md`
 
 **Examples**
 
@@ -1001,13 +989,7 @@ claude-code--settings-2026-03-23-1405.md  ← Latest
 claude-code--settings-2026-03-24-0930.md
 ```
 
-**Examples**
-
-| URL | page_name | Filename |
-|-----|-----------|----------|
-| `https://docs.anthropic.com/en/docs/claude-code/settings.md` | `claude-code--settings` | `claude-code--settings-2026-03-24-1430.md` |
-| `https://cursor.com/docs/context/rules.md` | `context--rules` | `context--rules-2026-03-24-1430.md` |
-| `https://code.claude.com/docs/en/sub-agents.md` | `sub-agents` | `sub-agents-2026-03-24-1430.md` |
+See `derive_page_name()` above for `page_name` examples derived from real URLs.
 
 ## Configuration
 

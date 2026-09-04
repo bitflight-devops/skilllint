@@ -45,7 +45,7 @@ An enumerated set of valid values. The assertion is "this set of strings is the 
 
 ### HK003.valid_hook_types (NOT SHIPPED AS A CLAIM)
 
-Kept here as a worked `enum_set` example. See the note below it.
+Kept here as a worked `enum_set` example -- see the note below.
 
 ```json
 {
@@ -295,124 +295,7 @@ must be labelled as one, not shipped as an error with a spec anchor attached.
 
 ## Full registry example
 
-A complete `provenance-registry.json` with all claims identified in the provenance audit:
-
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "description": "Rule Provenance Registry -- maps lint rule claims to upstream authority sources",
-  "version": "1",
-  "claims": {
-    "HK002.valid_event_types": {
-      "rule_code": "HK002",
-      "claim_name": "valid_event_types",
-      "description": "The set of recognized hook event type names",
-      "claim_type": "enum_set",
-      "authority": {
-        "vendor_file": ".claude/vendor/claude_code/plugins/plugin-dev/skills/hook-development/SKILL.md",
-        "anchor_selector": "#hook-input-and-output",
-        "authority_url": "https://docs.anthropic.com/en/docs/claude-code/hooks"
-      },
-      "extraction": {
-        "prompt_template": "List every event type name mentioned in this section. Return as a JSON array of strings with exact casing.\n\n{{section}}",
-        "output_schema": { "type": "array", "items": { "type": "string" } },
-        "post_processing": "sort"
-      },
-      "assertion_location": {
-        "file": "packages/skilllint/schemas/claude_code/v1.json",
-        "symbol": "$.enums.valid_event_types.values",
-        "source_type": "schema_json_enum"
-      },
-      "x-audited": { "date": "2026-03-23", "source": ".claude/vendor/claude_code/plugins/plugin-dev/skills/hook-development/SKILL.md" }
-    },
-    "HK003.valid_hook_types": {
-      "rule_code": "HK003",
-      "claim_name": "valid_hook_types",
-      "description": "The set of recognized hook type values",
-      "claim_type": "enum_set",
-      "authority": {
-        "vendor_file": ".claude/vendor/claude_code/plugins/plugin-dev/skills/hook-development/SKILL.md",
-        "anchor_selector": "#hook-types",
-        "authority_url": "https://docs.anthropic.com/en/docs/claude-code/hooks"
-      },
-      "extraction": {
-        "prompt_template": "List every valid hook type value for the \"type\" field. Return as a JSON array of lowercase strings.\n\n{{section}}",
-        "output_schema": { "type": "array", "items": { "type": "string" } },
-        "post_processing": "sort"
-      },
-      "assertion_location": {
-        "file": "packages/skilllint/schemas/claude_code/v1.json",
-        "symbol": "$.enums.valid_hook_types.values",
-        "source_type": "schema_json_enum"
-      },
-      "x-audited": { "date": "2026-03-23", "source": ".claude/vendor/claude_code/plugins/plugin-dev/skills/hook-development/SKILL.md" }
-    },
-    "FM007.tool_field_names": {
-      "rule_code": "FM007",
-      "claim_name": "tool_field_names",
-      "description": "Frontmatter field names that accept tool specifications",
-      "claim_type": "enum_set",
-      "authority": {
-        "vendor_file": ".claude/vendor/claude_code/plugins/plugin-dev/skills/plugin-structure/SKILL.md",
-        "anchor_selector": "#frontmatter-fields",
-        "authority_url": "https://docs.anthropic.com/en/docs/claude-code/plugins"
-      },
-      "extraction": {
-        "prompt_template": "List every field name that accepts tool names or tool patterns as its value. Return as a JSON array of strings.\n\n{{section}}",
-        "output_schema": { "type": "array", "items": { "type": "string" } },
-        "post_processing": "sort"
-      },
-      "assertion_location": {
-        "file": "packages/skilllint/schemas/claude_code/v1.json",
-        "symbol": "$.enums.tool_field_names.values",
-        "source_type": "schema_json_enum"
-      },
-      "x-audited": { "date": "2026-03-23", "source": ".claude/vendor/claude_code/plugins/plugin-dev/skills/plugin-structure/SKILL.md" }
-    },
-    "FM010.max_name_length": {
-      "rule_code": "FM010",
-      "claim_name": "max_name_length",
-      "description": "Maximum character length for skill names",
-      "claim_type": "scalar",
-      "authority": {
-        "vendor_file": "packages/skilllint/schemas/agentskills_io/v1.json",
-        "anchor_selector": null,
-        "authority_url": "https://agentskills.io/specification"
-      },
-      "extraction": {
-        "prompt_template": "What is the maxLength value for the name field? Return as JSON: {\"max_name_length\": <integer>}\n\n{{section}}",
-        "output_schema": { "type": "object", "properties": { "max_name_length": { "type": "integer" } } },
-        "post_processing": null
-      },
-      "assertion_location": {
-        "file": "packages/skilllint/schemas/agentskills_io/v1.json",
-        "symbol": "$.properties.name.maxLength",
-        "source_type": "schema_json_field"
-      },
-      "x-audited": { "date": "2026-03-23", "source": "packages/skilllint/schemas/agentskills_io/v1.json" }
-    },
-    "PA001.restricted_agent_fields": {
-      "rule_code": "PA001",
-      "claim_name": "restricted_agent_fields",
-      "description": "Frontmatter fields restricted for plugin sub-agents",
-      "claim_type": "field_set",
-      "authority": {
-        "vendor_file": ".claude/vendor/claude_code/plugins/plugin-dev/skills/plugin-structure/references/manifest-reference.md",
-        "anchor_selector": "#agents",
-        "authority_url": "https://docs.anthropic.com/en/docs/claude-code/sub-agents"
-      },
-      "extraction": {
-        "prompt_template": "List every frontmatter field described as restricted or not supported for sub-agents. Return as a JSON array of field name strings.\n\n{{section}}",
-        "output_schema": { "type": "array", "items": { "type": "string" } },
-        "post_processing": "sort"
-      },
-      "assertion_location": {
-        "file": "packages/skilllint/schemas/claude_code/v1.json",
-        "symbol": "$.file_types.agent.restricted_fields",
-        "source_type": "schema_json_field"
-      },
-      "x-audited": { "date": "2026-03-23", "source": ".claude/vendor/claude_code/plugins/plugin-dev/skills/plugin-structure/references/manifest-reference.md" }
-    }
-  }
-}
-```
+`provenance-registry.json` nests each claim entry shown above under `claims`,
+keyed by claim ID, in the top-level shape given in
+[design-rule-provenance-registry.md &sect; Registry Schema](./design-rule-provenance-registry.md#3-registry-schema).
+See `packages/skilllint/schemas/provenance-registry.json` for the current file.

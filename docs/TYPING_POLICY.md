@@ -46,7 +46,7 @@ Boundary code may temporarily use `Any`, `object`, or `cast()` only if **all** o
 4. No raw untyped value escapes the boundary.
 5. Any use of `cast()` is justified by a prior runtime check, schema validation, or library guarantee.
 
-`cast()` is not validation. It may only be used after a proof step. Python 3.11 added `typing.assert_type()` and `typing.reveal_type()` to help verify what a type checker infers during development, which makes it easier to prove or inspect narrowings instead of blindly forcing them.
+`cast()` is not validation. It may only be used after a proof step.
 
 ## 5. Golden Path
 
@@ -63,8 +63,6 @@ In practice, this means:
 - external `dict[str, Any]` in
 - validated Pydantic model out
 - typed domain code after that point
-
-Pydantic supports this model directly through `BaseModel`, validators, strict mode, and `TypeAdapter` for validating annotated types without requiring a model class.
 
 ## 6. Required File and Naming Conventions
 
@@ -111,8 +109,6 @@ Everywhere else:
 - boundary modules: narrowly scoped exceptions
 - all other modules: strict no-`Any` policy
 
-This is a policy boundary, not a suggestion.
-
 ### skilllint repository
 
 CI (`.github/workflows/test.yml`) and `.pre-commit-config.yaml` run Astral **`ty check`** on `packages/` (configuration: `pyproject.toml` → `[tool.ty.environment]` / `[tool.ty.src]`). Use `uv run ty check packages/` locally. **`[tool.mypy]`** (effectively excluded) and **`[tool.basedpyright]`** (`typeCheckingMode = "off"`) stay that way on purpose: **ty** is the single type gate; mypy and Pyright/basedpyright overlap it and would create conflicting diagnostics and repeated configuration work if left active.
@@ -123,19 +119,19 @@ When Pydantic is available, improve the boundary process as follows:
 
 ### 8.1 Use Pydantic models as the default ingress contract
 
-External payloads should be converted into `BaseModel` instances or validated typed structures immediately. Pydantic is explicitly designed for validation driven by type annotations.
+External payloads must be converted into `BaseModel` instances or validated typed structures immediately.
 
 ### 8.2 Prefer strict validation at boundaries
 
-Use Pydantic strict mode for boundary validation where silent coercion would hide producer errors. Pydantic documents both strict mode and lax mode, with strict mode preventing conversion-based acceptance.
+Use Pydantic strict mode for boundary validation where silent coercion would hide producer errors.
 
 ### 8.3 Use `TypeAdapter` for typed values that do not need a full model
 
-For `list[Foo]`, `dict[str, Bar]`, unions, and other annotated types, prefer `TypeAdapter` over hand-written validation logic. Pydantic exposes `TypeAdapter` specifically for validating annotated types directly.
+For `list[Foo]`, `dict[str, Bar]`, unions, and other annotated types, prefer `TypeAdapter` over hand-written validation logic.
 
 ### 8.4 Centralize custom validation in validators, not ad hoc checks
 
-If special coercion or normalization is required, do it in Pydantic validators or serializers so validation behavior stays declarative and testable. Pydantic documents validators and serializers as core customization mechanisms.
+If special coercion or normalization is required, do it in Pydantic validators or serializers so validation behavior stays declarative and testable.
 
 ### 8.5 Do not pass raw dicts past the model layer
 
@@ -147,7 +143,7 @@ When Hypothesis is available, improve the process as follows:
 
 ### 9.1 Property-test every boundary validator
 
-Hypothesis is a property-based testing library for Python and is designed to generate a wide range of inputs, including edge cases you may not anticipate. Use it to test that validators either accept valid shapes or fail cleanly on invalid ones.
+Use Hypothesis to test that validators either accept valid shapes or fail cleanly on invalid ones.
 
 ### 9.2 Generate data from types whenever possible
 
@@ -155,7 +151,7 @@ Hypothesis provides `from_type()` to infer a strategy from a Python type. Use th
 
 ### 9.3 Type your strategies and composite generators
 
-Hypothesis documents typed strategies using `SearchStrategy[T]` and shows how to annotate custom composite strategies using the generated value type. This lets test helpers participate in the same typing discipline as production code.
+Type composite strategies with `SearchStrategy[T]` so test helpers participate in the same typing discipline as production code.
 
 ### 9.4 Use Ghostwriter to bootstrap boundary tests
 
@@ -163,25 +159,25 @@ Hypothesis Ghostwriter can generate starter tests. It should be used as a starti
 
 ## 10. Python-Version Addendum
 
-### 10.1 When using Python 3.11, improve this process by doing these three things
+### 10.1 Python 3.11
 
-1. Use `Self` for fluent APIs, alternate constructors, and methods that return the current class. This makes typed wrappers and typed builders cleaner and less error-prone. Python 3.11 added `Self` for exactly this use case.
+1. Use `Self` for fluent APIs, alternate constructors, and methods that return the current class. Python 3.11 added `Self` for exactly this use case.
 2. Use `typing.assert_type()` in tests or type-check-only assertions to lock expected inferred types at critical boundaries. Python 3.11 added `assert_type()` for confirming a type checker's inferred type.
 3. Use `typing.reveal_type()` during development when refactoring validators or removing `cast()` calls. Python 3.11 added `reveal_type()` to inspect inferred types.
 
-### 10.2 When using Python 3.12, improve this process by doing these three things
+### 10.2 Python 3.12
 
 1. Use PEP 695 generic parameter syntax for new generic validators, adapters, and helper functions. Python 3.12 introduced a more compact syntax for generic classes and functions.
 2. Use the `type` statement for explicit type aliases instead of informal alias patterns. Python 3.12 added the `type` statement and `TypeAliasType` support for clearer alias declarations.
-3. Standardize shared alias definitions for raw-vs-validated shapes. The clearer alias and generic syntax in 3.12 reduces ambiguity in boundary helper APIs and makes internal typed contracts easier to read and review.
+3. Standardize shared alias definitions for raw-vs-validated shapes using the `type` statement and generic syntax introduced in Python 3.12.
 
-### 10.3 When using Python 3.13, improve this process by doing these three things
+### 10.3 Python 3.13
 
 1. Use `TypeIs` for custom narrowing helpers where you previously relied on weaker boolean checks or overused `cast()`. Python 3.13 added `typing.TypeIs` as a more intuitive narrowing mechanism than `TypeGuard` in many cases.
 2. Use `ReadOnly` in `TypedDict` definitions for payload fields that should never be mutated after validation. Python 3.13 added `typing.ReadOnly` for `TypedDict` items.
 3. Replace ad hoc mutation of structured payload dictionaries with immutable or read-only typed representations where possible. The new `ReadOnly` support gives static checkers a direct way to enforce post-validation invariants.
 
-### 10.4 When using Python 3.14, improve this process by doing these three things
+### 10.4 Python 3.14
 
 1. Stop reading `__annotations__` directly in framework, validator, or metaprogramming code. Python 3.14 changed annotation evaluation semantics and recommends using `annotationlib` APIs instead.
 2. Use `annotationlib.get_annotations()` when you need runtime access to annotations in cross-version-aware infrastructure code. Python 3.14 introduced `annotationlib` specifically to inspect deferred annotations safely.

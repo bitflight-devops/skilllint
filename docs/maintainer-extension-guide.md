@@ -13,13 +13,6 @@ Before implementing, determine which extension path applies:
 | **Cross-platform quality/style rule** | Rule in `rules/` + `ValidatorOwnership.LINT` | `packages/skilllint/rules/` |
 | **Traceability metadata** | `authority` dict in schema or rule | Schema top-level key, rule decorator |
 
-**Quick decision tree:**
-
-1. Does the validation come from an official schema specification? → **Schema update**
-2. Does it require platform-specific file patterns or behavior? → **Provider adapter**
-3. Is it a style/quality rule that applies across platforms? → **Lint rule**
-4. Do you need to trace where a validation requirement comes from? → **Provenance metadata**
-
 ---
 
 ## Section 1: Adding a Schema Update
@@ -87,8 +80,6 @@ To add a new field or constraint:
    - `"provider_specific"` — Only applies when this provider's adapter is active
 
 ### Schema Validators Produce Hard Errors
-
-Schema-backed validators automatically produce `ValidatorOwnership.SCHEMA` violations. These are **hard errors** that cause exit code 1.
 
 The ownership mapping is defined in `packages/skilllint/plugin_validator.py`:
 
@@ -293,14 +284,11 @@ Reference the S04 severity classification:
 | `warning` | Style preferences, best practices, runtime-accepted patterns | Exit 0 |
 | `info` | Recommendations, optional improvements | Exit 0 |
 
-**Key principle:** Only use `error` for violations that genuinely break functionality. Use `warning` for style rules and patterns that the runtime accepts but aren't preferred.
-
 ### Testing Lint Rules
 
 Run tests filtered by rule code:
 
 ```bash
-uv run pytest packages/skilllint/tests/ -k fm010 -v
 uv run pytest packages/skilllint/tests/ -k <rule_code> -v
 ```
 
@@ -308,7 +296,7 @@ uv run pytest packages/skilllint/tests/ -k <rule_code> -v
 
 ## Section 4: Adding Provenance Metadata
 
-Provenance metadata (`authority` dicts) enables traceability from any violation back to its authoritative source. This satisfies requirements D002 and D005 for auditable validation origins.
+Provenance metadata (`authority` dicts) enables traceability from any violation back to its authoritative source. See "Why It Matters" below for what this satisfies.
 
 ### Authority Dict Structure
 
@@ -323,16 +311,10 @@ authority = {
 
 ### In Schema Files
 
-Add a top-level `provenance` key (or per-field `x-audited`):
+Add a top-level `provenance` key (see Section 1's schema structure) or a per-field `x-audited` block, as shown here for the `name` field:
 
 ```json
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "provenance": {
-    "authority_url": "https://docs.anthropic.com/claude-code",
-    "last_verified": "2026-03-14",
-    "provider_id": "claude_code"
-  },
   "file_types": {
     "skill": {
       "fields": {
@@ -352,21 +334,7 @@ Add a top-level `provenance` key (or per-field `x-audited`):
 
 ### In Rule Definitions
 
-Pass the `authority` kwarg to `@skilllint_rule`:
-
-```python
-@skilllint_rule(
-    "FM010",
-    severity="error",
-    category="frontmatter",
-    platforms=["agentskills"],
-    # No `reference`: FM010 serves skills, agents and commands, whose frontmatter
-    # is defined by different vendor pages, so no single URL is correct for every
-    # finding. See the note below on rule-level versus claim-level authority.
-    authority={"origin": "anthropic.com"},
-)
-def check_fm010(frontmatter: dict, path: Path, file_type: str) -> list[ValidationIssue]: ...
-```
+Pass the `authority` kwarg to `@skilllint_rule`, as shown in the FM010 example in Section 3.
 
 The `authority` kwarg is **rule-level**, and the runtime lookup keys on the rule
 code, so every finding a rule emits inherits the same origin and reference. That
