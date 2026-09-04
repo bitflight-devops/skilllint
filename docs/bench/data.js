@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788498895959,
+  "lastUpdate": 1788499708242,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -1380,6 +1380,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 105.72,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "b503b719ad145f52e494a0fe999ab19c80a7d376",
+          "message": "refactor(FM010): import MAX_NAME_LENGTH from _spec_constants (#41) (#184)\n\nfm_series.py duplicated _spec_constants.MAX_NAME_LENGTH as a local\n_MAX_NAME_LENGTH = 64 literal. as_series.py has no equivalent constant\n(AS001 only asserts name presence), so fm_series.py was the one\nremaining series still carrying its own copy after #69e5e77 introduced\n_spec_constants as the canonical source.\n\nImports the constant directly rather than via a deferred import inside\nthe one function that uses it (check_fm010), since _spec_constants has\nno skilllint-internal imports and so carries none of the circular-import\nrisk that motivates this module's other deferred imports.\n\nRepoints provenance-registry.json's FM010.max_name_length locator at\nthe canonical definition (_spec_constants.py) instead of the now-deleted\nlocal alias.\n\n\nClaude-Session: https://claude.ai/code/session_01XATWGbELHG23qfNfvJVbDk\n\nCo-authored-by: Claude Sonnet 5 <noreply@anthropic.com>",
+          "timestamp": "2026-09-04T05:25:42Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/b503b719ad145f52e494a0fe999ab19c80a7d376"
+        },
+        "date": 1788499707296,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 10234.379,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 10932.615,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 12063.519,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 91.561,
             "unit": "files/s"
           }
         ]
