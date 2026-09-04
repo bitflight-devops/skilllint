@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788502744562,
+  "lastUpdate": 1788504010685,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -1464,6 +1464,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 85.278,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "7d69a4f0eaf8d9b82a41de7cfc30b2cf3ff13082",
+          "message": "feat(provenance): scheduled L3 drift check for vendor-backed claims (#187)\n\n* fix(HK002): add PreModelSwitch and PostModelSwitch events\n\nFound live by scripts/refresh_claim_values.py (this PR's own drift\nmechanism) against a fresh capture of code.claude.com/docs/en/hooks.md\n(2026-09-04): upstream added two events since the 2026-08-28 snapshot\nPR #183 (this session, six days earlier) verified against. Strict\naddition, no removals -- same pattern as PR #183.\n\nA plugin registering either event got a false HK002 error until this\nfix.\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01XATWGbELHG23qfNfvJVbDk\n\n* feat(provenance): scheduled L3 drift check for vendor-backed claims (#112)\n\nImplements Stage 4 (\"Compare\") of docs/design-rule-provenance-registry.md\nfor the two claims that currently cite a real external vendor document\n(HK002.valid_event_types, HK003.valid_hook_types) -- the other three\nclaims cite in-repo tracked schema files, already covered by every\ncommit's L2 locator+value test.\n\nscripts/refresh_claim_values.py fetches code.claude.com/docs/en/hooks.md\nfresh, re-extracts each known claim (HK002: level-3 headings under\n\"Hook events\"; HK003: the \"Common fields\" table's `type` row -- both\nmechanical, no LLM), and rewrites provenance-registry.json's\nexpected_value + x-audited in place when the live doc disagrees.\nLLM-based extraction (the design doc's Stage 3) is deliberately not\nbuilt: these two claims extract correctly without it, and nothing yet\nneeds prose interpretation.\n\n.github/workflows/claim-drift.yml runs the script weekly (+\nworkflow_dispatch), caching .claude/vendor/sources for resilience\nagainst a transient fetch failure mid-run (the script always\nforce-fetches, so the cache is not a performance optimization -- see\nits comment). Exit code 2 (no cache and fetch failed) fails the job\noutright, never silently skips -- the failure mode #155 is filed\nagainst. Exit code 1 (drift found and written) hands off to\nscripts/open_drift_pr.sh, which commits, pushes to a fixed bot-owned\nbranch, and opens a PR only the first time (a later run's push updates\nthe same open PR automatically). Uses gh directly rather than a new\nthird-party Action, since gh is already this repo's established tool\nfor this class of task.\n\nVerified live: the script found real drift while being developed\n(PreModelSwitch/PostModelSwitch, fixed in the preceding commit) and,\nseparately, its idempotent re-run and its full commit+push+PR-open\npath via open_drift_pr.sh -- the latter run created and then closed\nPR #186 when it unexpectedly found the preceding commit's changes\nstill uncommitted in the working tree during local testing.\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01XATWGbELHG23qfNfvJVbDk\n\n* fix: harden the claim-drift CI mechanism (5 review findings)\n\nCode review on #187 found five real issues:\n\n- open_drift_pr.sh's bare `git push --force-with-lease` fails with\n  \"stale info\" on every run after the branch's first push -- CI's\n  checkout never fetches chore/claim-drift-auto, so there's no\n  remote-tracking ref to compare against, even though nothing raced\n  it. Fixed by looking up the branch's real current SHA via\n  `git ls-remote` and passing it explicitly as the lease.\n- refresh_claim_values.py's main() only rewrites the registry at the\n  very end; an unhandled exception earlier (malformed JSON, a doc\n  structure an extractor can't parse) exited 1 by Python's default --\n  indistinguishable from the intentional \"drift found and written\"\n  signal, and left the registry unchanged, so open_drift_pr.sh saw\n  nothing to commit and exited 0. A crash would go green. Gave\n  unexpected errors their own exit code (3).\n- HK002 and HK003 cite the identical authority_url, but the per-claim\n  loop fetched it live once per claim -- two redundant network fetches\n  and two redundant timestamped cache files every run. Memoized the\n  fetch per URL within a single run.\n- claim-drift.yml embedded multi-line shell control flow (set +e, run\n  the script, capture $? into GITHUB_OUTPUT) directly in the workflow\n  YAML, violating AGENTS.md's \"logic belongs in scripts/, not inline\n  in YAML\" -- and set +e is load-bearing here (GH Actions runs `bash\n  -e` by default), so this wasn't cosmetic. Moved to\n  scripts/run_claim_refresh.sh and scripts/fail_claim_refresh.sh.\n- json.dumps(..., indent=2) defaults to ensure_ascii=True, so writing\n  drift for one claim re-escaped non-ASCII characters (an em dash)\n  across the whole registry file and reformatted unrelated arrays --\n  noise in every future drift PR's diff. Added ensure_ascii=False.\n\nVerified independently: the memoization fix produces exactly one new\nvendor cache file per run (was two); a malformed registry now exits 3,\nnot 1; full prek + pytest gate green.\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01XATWGbELHG23qfNfvJVbDk\n\n---------\n\nCo-authored-by: Claude Sonnet 5 <noreply@anthropic.com>",
+          "timestamp": "2026-09-04T06:37:14Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/7d69a4f0eaf8d9b82a41de7cfc30b2cf3ff13082"
+        },
+        "date": 1788504008961,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 6879.704,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 7398.312,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 8400.952,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 135.301,
             "unit": "files/s"
           }
         ]
