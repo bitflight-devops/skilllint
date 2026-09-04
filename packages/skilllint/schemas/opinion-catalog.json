@@ -9,8 +9,14 @@
       "rationale": "The 4400-token warning threshold is an empirical observation about context-window pressure, not a vendor-specified limit. No upstream spec or schema defines a maximum skill body token count.",
       "constraint": "TOKEN_WARNING_THRESHOLD = 4400 (tokens, approximate)",
       "references": [
-        "packages/skilllint/token_counter.py line 41: TOKEN_WARNING_THRESHOLD: int = 4400"
-      ]
+        "packages/skilllint/limits.py: BODY_TOKEN_WARNING"
+      ],
+      "assertion_location": {
+        "file": "packages/skilllint/limits.py",
+        "symbol": "BODY_TOKEN_WARNING",
+        "source_type": "python_constant"
+      },
+      "expected_value": 4400
     },
     "SK007": {
       "rule_code": "SK007",
@@ -18,8 +24,14 @@
       "rationale": "The 8800-token error threshold is an empirical observation about when skill bodies become unwieldy, not a vendor-specified limit. No upstream spec or schema defines a maximum skill body token count.",
       "constraint": "TOKEN_ERROR_THRESHOLD = 8800 (tokens, approximate)",
       "references": [
-        "packages/skilllint/token_counter.py line 44: TOKEN_ERROR_THRESHOLD: int = 8800"
-      ]
+        "packages/skilllint/limits.py: BODY_TOKEN_ERROR"
+      ],
+      "assertion_location": {
+        "file": "packages/skilllint/limits.py",
+        "symbol": "BODY_TOKEN_ERROR",
+        "source_type": "python_constant"
+      },
+      "expected_value": 8800
     },
     "SK005": {
       "rule_code": "SK005",
@@ -27,7 +39,25 @@
       "rationale": "Trigger phrases enable the model to decide when to auto-load a skill. No vendor schema or spec defines a required set of trigger phrases. The specific phrase list is a lint opinion.",
       "constraint": "Description must contain at least one of: 'use when', 'use this', 'use on', 'used when', 'used by', 'when ', 'trigger', 'activate', 'load this', 'load when', 'invoke'",
       "references": [
-        "packages/skilllint/rules/sk_series.py lines 154-165: _REQUIRED_TRIGGER_PHRASES"
+        "packages/skilllint/rules/sk_series.py: _REQUIRED_TRIGGER_PHRASES"
+      ],
+      "assertion_location": {
+        "file": "packages/skilllint/rules/sk_series.py",
+        "symbol": "_REQUIRED_TRIGGER_PHRASES",
+        "source_type": "python_constant"
+      },
+      "expected_value": [
+        "activate",
+        "invoke",
+        "load this",
+        "load when",
+        "trigger",
+        "use on",
+        "use this",
+        "use when",
+        "used by",
+        "used when",
+        "when "
       ]
     },
     "FM004": {
@@ -37,7 +67,13 @@
       "constraint": "Description field should use a single-line string, not a YAML block scalar or folded scalar",
       "references": [
         "packages/skilllint/rules/fm_series.py: _FM004_DESCRIPTION_BLOCK_SCALAR regex and check_fm004 function"
-      ]
+      ],
+      "assertion_location": {
+        "file": "packages/skilllint/rules/fm_series.py",
+        "symbol": "_FM004_DESCRIPTION_BLOCK_SCALAR",
+        "source_type": "python_constant"
+      },
+      "expected_value": "(?m)^description\\s*:\\s*(?:\\|[-+]?|>[-+]?)(?:\\s+#.*)?\\s*$"
     },
     "FM010.name_pattern": {
       "rule_code": "FM010",
@@ -45,9 +81,15 @@
       "rationale": "The agentskills.io schema enforces maxLength=64 but does not specify a regex pattern for the name field. The lowercase-alphanumeric-with-hyphens pattern and the consecutive-hyphen prohibition have no vendor source; they are lint opinions based on convention.",
       "constraint": "Name must match ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ and must not contain consecutive hyphens (--)",
       "references": [
-        "packages/skilllint/rules/fm_series.py: _NAME_RE = re.compile(r'^[a-z0-9]([a-z0-9-]*[a-z0-9])?$')",
-        "packages/skilllint/rules/fm_series.py: _CONSECUTIVE_HYPHENS_RE = re.compile(r'--')"
-      ]
+        "packages/skilllint/rules/fm_series.py: _NAME_RE",
+        "packages/skilllint/rules/fm_series.py: _CONSECUTIVE_HYPHENS_RE"
+      ],
+      "assertion_location": {
+        "file": "packages/skilllint/rules/fm_series.py",
+        "symbol": "_NAME_RE",
+        "source_type": "python_constant"
+      },
+      "expected_value": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"
     },
     "FM007.claude_code_tool_fields": {
       "rule_code": "FM007",
@@ -57,7 +99,13 @@
       "references": [
         "packages/skilllint/rules/fm_series.py: _CLAUDE_CODE_TOOL_FIELD_NAMES",
         "packages/skilllint/schemas/claude_code/v1.json: declares `tools`, does not declare `disallowedTools`"
-      ]
+      ],
+      "assertion_location": {
+        "file": "packages/skilllint/rules/fm_series.py",
+        "symbol": "_CLAUDE_CODE_TOOL_FIELD_NAMES",
+        "source_type": "python_constant"
+      },
+      "expected_value": ["disallowedTools", "tools"]
     },
     "HK003.valid_hook_types": {
       "rule_code": "HK003",
@@ -67,7 +115,13 @@
       "references": [
         "packages/skilllint/rules/hk_series.py: VALID_HOOK_TYPES",
         "docs/design-rule-provenance-registry.md: HK003 VALID_HOOK_TYPES has no vendor source"
-      ]
+      ],
+      "assertion_location": {
+        "file": "packages/skilllint/rules/hk_series.py",
+        "symbol": "VALID_HOOK_TYPES",
+        "source_type": "python_constant"
+      },
+      "expected_value": ["agent", "command", "http", "prompt"]
     },
     "SK004.min_description_length": {
       "rule_code": "SK004",
@@ -75,9 +129,15 @@
       "rationale": "The 20-character minimum description length is a quality heuristic, not a spec requirement. The agentskills.io schema sets minLength=1 for description; the 20-char threshold is a lint opinion for description quality.",
       "constraint": "_MIN_DESCRIPTION_LENGTH = 20 (characters); the 1024 maximum is schema-backed (see provenance registry SK004.max_description_length)",
       "references": [
-        "packages/skilllint/rules/sk_series.py line 72: _MIN_DESCRIPTION_LENGTH = 20",
+        "packages/skilllint/rules/sk_series.py: _MIN_DESCRIPTION_LENGTH",
         "packages/skilllint/schemas/agentskills_io/v1.json: description minLength = 1 (spec minimum)"
-      ]
+      ],
+      "assertion_location": {
+        "file": "packages/skilllint/rules/sk_series.py",
+        "symbol": "_MIN_DESCRIPTION_LENGTH",
+        "source_type": "python_constant"
+      },
+      "expected_value": 20
     },
     "HK002.valid_event_types": {
       "rule_code": "HK002",
@@ -87,6 +147,35 @@
       "references": [
         "packages/skilllint/rules/hk_series.py: VALID_EVENT_TYPES",
         "docs/design-rule-provenance-registry.md: 12 of the 21 event names have no traceable vendor source"
+      ],
+      "assertion_location": {
+        "file": "packages/skilllint/rules/hk_series.py",
+        "symbol": "VALID_EVENT_TYPES",
+        "source_type": "python_constant"
+      },
+      "expected_value": [
+        "ConfigChange",
+        "Elicitation",
+        "ElicitationResult",
+        "InstructionsLoaded",
+        "Notification",
+        "PermissionRequest",
+        "PostCompact",
+        "PostToolUse",
+        "PostToolUseFailure",
+        "PreCompact",
+        "PreToolUse",
+        "SessionEnd",
+        "SessionStart",
+        "Stop",
+        "StopFailure",
+        "SubagentStart",
+        "SubagentStop",
+        "TaskCompleted",
+        "TeammateIdle",
+        "UserPromptSubmit",
+        "WorktreeCreate",
+        "WorktreeRemove"
       ]
     }
   }
