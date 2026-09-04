@@ -20,6 +20,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Literal
 
+from skilllint._spec_constants import MAX_NAME_LENGTH
 from skilllint.rule_registry import rule_reference, skilllint_rule
 
 if TYPE_CHECKING:
@@ -39,10 +40,6 @@ _AGENTS_SPEC_URL = "https://docs.anthropic.com/en/docs/claude-code/sub-agents"
 # Source: sub-agents.md — "Unique identifier using lowercase letters and hyphens"
 _NAME_RE = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")
 _CONSECUTIVE_HYPHENS_RE = re.compile(r"--")
-
-# Source: skills.md — "Lowercase letters, numbers, and hyphens only (max 64 characters)"
-# Source: sub-agents.md — max 64 chars implied by same pattern constraint
-_MAX_NAME_LENGTH = 64
 
 # Tool allow/deny field defined by the AgentSkills specification.
 # Source: packages/skilllint/schemas/agentskills_io/v1.json — the schema declares
@@ -529,14 +526,14 @@ def check_fm010(frontmatter: dict, path: Path, file_type: str) -> list[Validatio
     issues: list[ValidationIssue] = []
 
     # Pattern validation
-    if len(name) == 0 or len(name) > _MAX_NAME_LENGTH:
+    if len(name) == 0 or len(name) > MAX_NAME_LENGTH:
         issues.append(
             _make_issue(
                 field="name",
                 severity="error",
-                message=f"Name must be 1-{_MAX_NAME_LENGTH} characters (got {len(name)})",
+                message=f"Name must be 1-{MAX_NAME_LENGTH} characters (got {len(name)})",
                 code="FM010",
-                suggestion=f"Shorten the name to {_MAX_NAME_LENGTH} characters or less",
+                suggestion=f"Shorten the name to {MAX_NAME_LENGTH} characters or less",
             )
         )
     elif _CONSECUTIVE_HYPHENS_RE.search(name):

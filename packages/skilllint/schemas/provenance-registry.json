@@ -21,8 +21,8 @@
         "post_processing": null
       },
       "assertion_location": {
-        "file": "packages/skilllint/rules/fm_series.py",
-        "symbol": "_MAX_NAME_LENGTH",
+        "file": "packages/skilllint/_spec_constants.py",
+        "symbol": "MAX_NAME_LENGTH",
         "source_type": "python_constant"
       },
       "expected_value": 64,
