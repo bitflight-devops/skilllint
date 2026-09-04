@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "description": "Rule Provenance Registry — maps lint rule claims to upstream authority sources",
+  "description": "Rule Provenance Registry \u2014 maps lint rule claims to upstream authority sources",
   "version": "1",
   "claims": {
     "FM010.max_name_length": {
@@ -53,7 +53,9 @@
         "symbol": "_AGENTSKILLS_TOOL_FIELD_NAMES",
         "source_type": "python_constant"
       },
-      "expected_value": ["allowed-tools"],
+      "expected_value": [
+        "allowed-tools"
+      ],
       "x-audited": {
         "date": "2026-03-14",
         "source": "packages/skilllint/schemas/agentskills_io/v1.json"
@@ -125,10 +127,12 @@
         "PermissionDenied",
         "PermissionRequest",
         "PostCompact",
+        "PostModelSwitch",
         "PostToolBatch",
         "PostToolUse",
         "PostToolUseFailure",
         "PreCompact",
+        "PreModelSwitch",
         "PreToolUse",
         "SessionEnd",
         "SessionStart",
@@ -147,7 +151,7 @@
       ],
       "x-audited": {
         "date": "2026-09-04",
-        "source": ".claude/vendor/sources/hooks-2026-08-28-0408.md"
+        "source": ".claude/vendor/sources/hooks-2026-09-04-0558.md"
       }
     },
     "HK003.valid_hook_types": {
@@ -175,7 +179,13 @@
         "symbol": "VALID_HOOK_TYPES",
         "source_type": "python_constant"
       },
-      "expected_value": ["agent", "command", "http", "mcp_tool", "prompt"],
+      "expected_value": [
+        "agent",
+        "command",
+        "http",
+        "mcp_tool",
+        "prompt"
+      ],
       "x-audited": {
         "date": "2026-09-04",
         "source": ".claude/vendor/sources/hooks-2026-08-28-0408.md"

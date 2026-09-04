@@ -49,8 +49,10 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 # Rule data for HK002: the event names Claude Code dispatches hooks for.
-# Source: .claude/vendor/sources/hooks-2026-08-28-0408.md, "Hook events" (level-3
-# headings). Provenance claim HK002.valid_event_types.
+# Source: .claude/vendor/sources/hooks-2026-09-04-0550.md, "Hook events" (level-3
+# headings). Provenance claim HK002.valid_event_types. Verified via
+# scripts/refresh_claim_values.py -- PreModelSwitch and PostModelSwitch were
+# added upstream between the 2026-08-28 and 2026-09-04 captures.
 VALID_EVENT_TYPES: frozenset[str] = frozenset({
     "SessionStart",
     "Setup",
@@ -80,6 +82,8 @@ VALID_EVENT_TYPES: frozenset[str] = frozenset({
     "WorktreeRemove",
     "PreCompact",
     "PostCompact",
+    "PreModelSwitch",
+    "PostModelSwitch",
     "Elicitation",
     "ElicitationResult",
     "SessionEnd",
@@ -332,8 +336,9 @@ def check_hk002(hooks_config: Mapping[str, JsonValue]) -> list[ValidationIssue]:
     ``SubagentStop``, ``Stop``, ``StopFailure``, ``TeammateIdle``,
     ``TaskCreated``, ``TaskCompleted``, ``ConfigChange``, ``CwdChanged``,
     ``DirectoryAdded``, ``FileChanged``, ``WorktreeCreate``,
-    ``WorktreeRemove``, ``PreCompact``, ``PostCompact``, ``Elicitation``,
-    ``ElicitationResult``, ``SessionEnd``.
+    ``WorktreeRemove``, ``PreCompact``, ``PostCompact``, ``PreModelSwitch``,
+    ``PostModelSwitch``, ``Elicitation``, ``ElicitationResult``,
+    ``SessionEnd``.
 
     **Source:** the module-level ``VALID_EVENT_TYPES`` frozenset — the
     canonical set of accepted event type strings.
