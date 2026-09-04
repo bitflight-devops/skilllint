@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788409766115,
+  "lastUpdate": 1788498895959,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -1338,6 +1338,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 117.175,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "9e676fc7a750519a8d926a7867703580035c84ec",
+          "message": "fix(HK002,HK003): sync valid event/hook-type sets to hooks.md (#183)\n\n* fix(HK002,HK003): sync valid event/hook-type sets to hooks.md (#112)\n\nVALID_EVENT_TYPES held 22 event names; the cached hooks reference\n(code.claude.com/docs/en/hooks.md, \"Hook events\" level-3 headings)\nenumerates 31 — a strict subset, zero removals. Missing: CwdChanged,\nDirectoryAdded, FileChanged, MessageDisplay, PermissionDenied,\nPostToolBatch, Setup, TaskCreated, UserPromptExpansion. A plugin\nregistering any of those got an error today.\n\nVALID_HOOK_TYPES lacked mcp_tool, documented in the same doc's \"Common\nfields\" table alongside command/http/prompt/agent. mcp_tool requires\ntwo fields (server, tool) rather than one, so\n_REQUIRED_FIELD_BY_HOOK_TYPE widens from dict[str, str] to\ndict[str, tuple[str, ...]] and _check_hook_entry loops over the\nrequired fields instead of checking a single one.\n\nMove HK002.valid_event_types and HK003.valid_hook_types from\nopinion-catalog.json to provenance-registry.json: both rows asserted\n\"no vendor document enumerates this set\", which is false now that the\ncurrent hooks doc does. PR1's locator+value test pins both sets going\nforward. Update docs/registry-schema-examples.md's worked HK002/HK003\nexamples, which were marked NOT SHIPPED and cited a superseded vendor\npath.\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01XATWGbELHG23qfNfvJVbDk\n\n* docs: mark HK002/HK003 resolved in the provenance design doc\n\nCode review on #179 found the design doc's problem-statement examples\nstill asserted HK002/HK003 have no traceable vendor source, directly\ncontradicting registry-schema-examples.md (updated by this same PR),\nwhich correctly marks both claims shipped with a real vendor source.\nAnnotated both bullets as resolved rather than rewriting the historical\naudit findings, since the original numbers (21/9/12, the four-type set)\nare what motivated the design and are still accurate as of that audit.\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01XATWGbELHG23qfNfvJVbDk\n\n---------\n\nCo-authored-by: Claude Sonnet 5 <noreply@anthropic.com>",
+          "timestamp": "2026-09-04T05:11:14Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/9e676fc7a750519a8d926a7867703580035c84ec"
+        },
+        "date": 1788498894723,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 8812.626,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 9468.388,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 10407.349,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 105.72,
             "unit": "files/s"
           }
         ]
