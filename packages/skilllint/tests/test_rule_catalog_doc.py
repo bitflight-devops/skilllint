@@ -45,7 +45,12 @@ CATALOG_PATH = (
 
 _ROW_PATTERN = re.compile(r"^\|\s*([A-Z]{2}\d{3})\s*\|\s*([a-z /]+?)\s*\|")
 _STUB_MARKER = "Always an empty list."
-_BACKTICKED_SYMBOL = re.compile(r"`([A-Za-z_]\w*)")
+# `[\w.]*` (not `\w*`) so a dotted attribute path like `FrontmatterValidator.
+# _extract_frontmatter` captures whole -- `\w*` alone stops at the first
+# `.`, silently truncating the capture to just `FrontmatterValidator` and
+# letting the hasattr check below pass on the class existing without ever
+# checking the named method exists.
+_BACKTICKED_SYMBOL = re.compile(r"`([A-Za-z_][\w.]*)")
 
 
 def _catalog_rows() -> dict[str, str]:
@@ -87,6 +92,24 @@ def test_rule_catalog_severities_match_registry() -> None:
         )
 
 
+def _resolves(symbol: str) -> bool:
+    """True if *symbol* -- a plain name or a dotted `Class.method` path -- exists.
+
+    `hasattr` alone only resolves a single attribute hop, so a dotted path
+    (e.g. ``FrontmatterValidator._extract_frontmatter``) is walked one
+    segment at a time.
+    """
+    for module in (plugin_validator_module, skilllint.rules):
+        obj = module
+        for part in symbol.split("."):
+            if not hasattr(obj, part):
+                break
+            obj = getattr(obj, part)
+        else:
+            return True
+    return False
+
+
 def test_stub_docstrings_name_a_resolvable_emitter() -> None:
     """A registration-only stub must name a real emitter symbol in backticks.
 
@@ -103,7 +126,7 @@ def test_stub_docstrings_name_a_resolvable_emitter() -> None:
         assert match is not None, f"{code}: stub docstring must name its emitter in backticks"
 
         symbol = match.group(1)
-        assert hasattr(plugin_validator_module, symbol) or hasattr(skilllint.rules, symbol), (
+        assert _resolves(symbol), (
             f"{code}: stub docstring names `{symbol}` as its emitter, "
             f"but that symbol does not exist in plugin_validator or skilllint.rules"
         )
