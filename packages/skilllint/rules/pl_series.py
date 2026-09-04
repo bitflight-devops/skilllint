@@ -286,7 +286,7 @@ def claude_validation_failure_issue(stdout: str, stderr: str) -> ValidationIssue
     severity="error",
     category="plugin",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
+    authority={"origin": "code.claude.com", "reference": PLUGIN_MANIFEST_SCHEMA_URL},
 )
 def check_pl001(claude_output: str) -> list[ValidationIssue]:
     r"""## PL001 — Missing plugin.json file
@@ -338,7 +338,7 @@ def check_pl001(claude_output: str) -> list[ValidationIssue]:
     severity="error",
     category="plugin",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
+    authority={"origin": "code.claude.com", "reference": PLUGIN_MANIFEST_SCHEMA_URL},
 )
 def check_pl002(plugin_json_path: Path | None = None, claude_output: str = "") -> list[ValidationIssue]:
     """## PL002 — Invalid JSON syntax in plugin.json or marketplace.json
@@ -415,7 +415,7 @@ def check_pl002(plugin_json_path: Path | None = None, claude_output: str = "") -
     severity="error",
     category="plugin",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
+    authority={"origin": "code.claude.com", "reference": PLUGIN_MANIFEST_SCHEMA_URL},
 )
 def check_pl003(claude_output: str) -> list[ValidationIssue]:
     """## PL003 — Missing required field 'name' in plugin.json
@@ -458,7 +458,7 @@ def check_pl003(claude_output: str) -> list[ValidationIssue]:
     severity="error",
     category="plugin",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
+    authority={"origin": "code.claude.com", "reference": PLUGIN_MANIFEST_SCHEMA_URL},
 )
 def check_pl004(claude_output: str) -> list[ValidationIssue]:
     r"""## PL004 — Component path does not start with './'
@@ -501,7 +501,7 @@ def check_pl004(claude_output: str) -> list[ValidationIssue]:
     severity="error",
     category="plugin",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
+    authority={"origin": "code.claude.com", "reference": PLUGIN_MANIFEST_SCHEMA_URL},
 )
 def check_pl005(claude_output: str) -> list[ValidationIssue]:
     """## PL005 — Referenced component file does not exist
@@ -547,7 +547,7 @@ def check_pl005(claude_output: str) -> list[ValidationIssue]:
     severity="error",
     category="plugin",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
+    authority={"origin": "code.claude.com", "reference": MARKETPLACE_MANIFEST_SCHEMA_URL},
 )
 def check_pl006(plugin_dir: Path) -> list[ValidationIssue]:
     """## PL006 — marketplace.json has invalid top-level keys
