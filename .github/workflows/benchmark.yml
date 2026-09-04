@@ -322,10 +322,112 @@ jobs:
           path: scripts/results/bench_cpu_base_gh.json
           retention-days: 30
 
+  benchmark-import:
+    name: Import-Time Performance Benchmark
+    runs-on: ubuntu-latest
+    if: github.event_name != 'release'
+    steps:
+      - name: Checkout compare ref
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.compare_ref || github.sha }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Drop OS page cache (import benchmark)
+        run: echo 3 | sudo tee /proc/sys/vm/drop_caches || true
+
+      - name: Run bench_import for github-action-benchmark output
+        run: |
+          source .venv/bin/activate
+          mkdir -p scripts/results
+          python scripts/bench_import.py --output scripts/results/bench_import_gh.json
+
+      - name: Store import-time benchmark result
+        if: github.ref == 'refs/heads/main'
+        uses: benchmark-action/github-action-benchmark@v1.22.1
+        with:
+          tool: customSmallerIsBetter
+          output-file-path: scripts/results/bench_import_gh.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          alert-threshold: '130%'
+          comment-on-alert: true
+          fail-on-alert: false
+          benchmark-data-dir-path: docs/bench
+
+      - name: Upload import compare benchmark results
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: benchmark-results-import-compare
+          path: scripts/results/bench_import_gh.json
+          retention-days: 30
+
+      - name: Compute base_ref
+        id: base_ref_import
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "ref=${{ github.event.pull_request.base.ref }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.base_ref }}" ]; then
+            echo "ref=${{ inputs.base_ref }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Preserve bench_import.py before base-ref checkout
+        if: steps.base_ref_import.outputs.ref != ''
+        run: |
+          if [ -f scripts/bench_import.py ]; then
+            cp scripts/bench_import.py /tmp/bench_import.py
+          fi
+
+      - name: Checkout base ref for import comparison
+        if: steps.base_ref_import.outputs.ref != ''
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.base_ref_import.outputs.ref }}
+          fetch-depth: 0
+          clean: false
+
+      - name: Reinstall dependencies for base ref
+        if: steps.base_ref_import.outputs.ref != ''
+        run: uv sync --locked
+
+      - name: Drop OS page cache (base import benchmark)
+        if: steps.base_ref_import.outputs.ref != ''
+        run: echo 3 | sudo tee /proc/sys/vm/drop_caches || true
+
+      - name: Run base import benchmark
+        if: steps.base_ref_import.outputs.ref != ''
+        run: |
+          source .venv/bin/activate
+          BENCH_IMPORT=scripts/bench_import.py
+          if [ ! -f "$BENCH_IMPORT" ]; then
+            BENCH_IMPORT=/tmp/bench_import.py
+          fi
+          python "$BENCH_IMPORT" --output scripts/results/bench_import_base_gh.json
+
+      - name: Upload import base benchmark results
+        if: steps.base_ref_import.outputs.ref != ''
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: benchmark-results-import-base
+          path: scripts/results/bench_import_base_gh.json
+          retention-days: 30
+
   post-pr-comment:
     name: Post Benchmark PR Comment
     runs-on: ubuntu-latest
-    needs: [benchmark-io, benchmark-cpu]
+    needs: [benchmark-io, benchmark-cpu, benchmark-import]
     if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v7
@@ -354,6 +456,18 @@ jobs:
           name: benchmark-results-cpu-base
           path: scripts/results/base/
 
+      - name: Download import compare results
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: benchmark-results-import-compare
+          path: scripts/results/
+
+      - name: Download import base results
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: benchmark-results-import-base
+          path: scripts/results/base/
+
       - name: Install uv
         uses: astral-sh/setup-uv@v10.0.1
         with:
@@ -371,6 +485,7 @@ jobs:
             --scenario "scan-violations:scripts/results/bench_io_violations_gh.json:scripts/results/base/bench_io_violations_base_gh.json" \
             --scenario "fix-violations:scripts/results/bench_io_fix_gh.json:scripts/results/base/bench_io_fix_base_gh.json" \
             --scenario "cpu:scripts/results/bench_cpu_gh.json:scripts/results/base/bench_cpu_base_gh.json" \
+            --scenario "import:scripts/results/bench_import_gh.json:scripts/results/base/bench_import_base_gh.json" \
             --output /tmp/bench_comment.md \
             --threshold 1.30 \
             --pages-url "https://bitflight-devops.github.io/agentskills-linter/"
