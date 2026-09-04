@@ -49,22 +49,33 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 # Rule data for HK002: the event names Claude Code dispatches hooks for.
+# Source: .claude/vendor/sources/hooks-2026-08-28-0408.md, "Hook events" (level-3
+# headings). Provenance claim HK002.valid_event_types.
 VALID_EVENT_TYPES: frozenset[str] = frozenset({
     "SessionStart",
+    "Setup",
+    "InstructionsLoaded",
     "UserPromptSubmit",
+    "UserPromptExpansion",
     "PreToolUse",
     "PermissionRequest",
+    "PermissionDenied",
     "PostToolUse",
     "PostToolUseFailure",
+    "PostToolBatch",
     "Notification",
+    "MessageDisplay",
     "SubagentStart",
     "SubagentStop",
     "Stop",
     "StopFailure",
     "TeammateIdle",
+    "TaskCreated",
     "TaskCompleted",
-    "InstructionsLoaded",
     "ConfigChange",
+    "CwdChanged",
+    "DirectoryAdded",
+    "FileChanged",
     "WorktreeCreate",
     "WorktreeRemove",
     "PreCompact",
@@ -75,14 +86,19 @@ VALID_EVENT_TYPES: frozenset[str] = frozenset({
 })
 
 # Rule data for HK003: the accepted values of a hook entry's "type" field.
-VALID_HOOK_TYPES: frozenset[str] = frozenset({"command", "http", "prompt", "agent"})
+# Source: .claude/vendor/sources/hooks-2026-08-28-0408.md, "Common fields" table.
+# Provenance claim HK003.valid_hook_types.
+VALID_HOOK_TYPES: frozenset[str] = frozenset({"command", "http", "mcp_tool", "prompt", "agent"})
 
-# Rule data for HK003: the companion field each hook type requires.
-_REQUIRED_FIELD_BY_HOOK_TYPE: dict[str, str] = {
-    "command": "command",
-    "prompt": "prompt",
-    "http": "url",
-    "agent": "prompt",
+# Rule data for HK003: the companion field(s) each hook type requires.
+# mcp_tool requires both "server" and "tool" (source: "MCP tool hook fields"
+# section of the same doc), which a single-field mapping cannot express.
+_REQUIRED_FIELDS_BY_HOOK_TYPE: dict[str, tuple[str, ...]] = {
+    "command": ("command",),
+    "prompt": ("prompt",),
+    "http": ("url",),
+    "agent": ("prompt",),
+    "mcp_tool": ("server", "tool"),
 }
 
 
@@ -308,13 +324,16 @@ def check_hk002(hooks_config: Mapping[str, JsonValue]) -> list[ValidationIssue]:
     ``skilllint`` flags them so misspelled or outdated event names are caught
     before deployment.
 
-    Valid event types include: ``SessionStart``, ``UserPromptSubmit``,
-    ``PreToolUse``, ``PermissionRequest``, ``PostToolUse``,
-    ``PostToolUseFailure``, ``Notification``, ``SubagentStart``,
+    Valid event types include: ``SessionStart``, ``Setup``,
+    ``InstructionsLoaded``, ``UserPromptSubmit``, ``UserPromptExpansion``,
+    ``PreToolUse``, ``PermissionRequest``, ``PermissionDenied``,
+    ``PostToolUse``, ``PostToolUseFailure``, ``PostToolBatch``,
+    ``Notification``, ``MessageDisplay``, ``SubagentStart``,
     ``SubagentStop``, ``Stop``, ``StopFailure``, ``TeammateIdle``,
-    ``TaskCompleted``, ``InstructionsLoaded``, ``ConfigChange``,
-    ``WorktreeCreate``, ``WorktreeRemove``, ``PreCompact``, ``PostCompact``,
-    ``Elicitation``, ``ElicitationResult``, ``SessionEnd``.
+    ``TaskCreated``, ``TaskCompleted``, ``ConfigChange``, ``CwdChanged``,
+    ``DirectoryAdded``, ``FileChanged``, ``WorktreeCreate``,
+    ``WorktreeRemove``, ``PreCompact``, ``PostCompact``, ``Elicitation``,
+    ``ElicitationResult``, ``SessionEnd``.
 
     **Source:** the module-level ``VALID_EVENT_TYPES`` frozenset — the
     canonical set of accepted event type strings.
@@ -380,18 +399,16 @@ def _check_hook_entry(entry: JsonValue, field_prefix: str) -> list[ValidationIss
             )
         ]
 
-    required_field = _REQUIRED_FIELD_BY_HOOK_TYPE[hook_type]
-    if required_field not in entry:
-        return [
-            _make_issue(
-                field=f"{field_prefix}.{required_field}",
-                severity="error",
-                message=f"Hook type '{hook_type}' requires '{required_field}' field",
-                code="HK003",
-            )
-        ]
-
-    return []
+    return [
+        _make_issue(
+            field=f"{field_prefix}.{required_field}",
+            severity="error",
+            message=f"Hook type '{hook_type}' requires '{required_field}' field",
+            code="HK003",
+        )
+        for required_field in _REQUIRED_FIELDS_BY_HOOK_TYPE[hook_type]
+        if required_field not in entry
+    ]
 
 
 def _check_hook_group(group: JsonValue, event_type: str, group_idx: int) -> list[ValidationIssue]:
@@ -446,11 +463,14 @@ def check_hk003(hooks_config: Mapping[str, JsonValue]) -> list[ValidationIssue]:
     - A hook group does not contain a ``"hooks"`` key with a list value.
     - A hook entry is not an object.
     - A hook entry has an invalid or missing ``"type"`` field.  Valid types
-      are ``"command"``, ``"http"``, ``"prompt"``, and ``"agent"``.
+      are ``"command"``, ``"http"``, ``"mcp_tool"``, ``"prompt"``, and
+      ``"agent"``.
     - A ``"command"`` entry is missing the required ``"command"`` field.
     - A ``"prompt"`` entry is missing the required ``"prompt"`` field.
     - An ``"http"`` entry is missing the required ``"url"`` field.
     - An ``"agent"`` entry is missing the required ``"prompt"`` field.
+    - An ``"mcp_tool"`` entry is missing the required ``"server"`` and/or
+      ``"tool"`` fields.
 
     Event types that HK002 rejects are skipped: an unrecognised event name is
     reported once, and its contents are not additionally picked apart here.

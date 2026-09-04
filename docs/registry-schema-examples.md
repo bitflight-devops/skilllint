@@ -8,6 +8,13 @@ An enumerated set of valid values. The assertion is "this set of strings is the 
 
 ### HK002.valid_event_types
 
+**Shipped.** `code.claude.com/docs/en/hooks.md` enumerates the complete set as
+level-3 headings under "Hook events" — 31 names, where the enforced frozenset
+held only 22. `assertion_location` points at the live `python_constant`
+(`VALID_EVENT_TYPES`) rather than the schema-enum shape below, because the
+schema file carries no such enum; the JSON schema example is kept as a worked
+`enum_set` shape for a future claim that does live in a packaged schema.
+
 ```json
 {
   "rule_code": "HK002",
@@ -16,13 +23,13 @@ An enumerated set of valid values. The assertion is "this set of strings is the 
   "claim_type": "enum_set",
 
   "authority": {
-    "vendor_file": ".claude/vendor/claude_code/plugins/plugin-dev/skills/hook-development/SKILL.md",
-    "anchor_selector": "#hook-input-and-output",
-    "authority_url": "https://docs.anthropic.com/en/docs/claude-code/hooks"
+    "vendor_file": ".claude/vendor/sources/hooks-2026-08-28-0408.md",
+    "anchor_selector": "#hook-events",
+    "authority_url": "https://code.claude.com/docs/en/hooks.md"
   },
 
   "extraction": {
-    "prompt_template": "The following markdown section describes Claude Code hook events. List every event type name mentioned in this section. Return as a JSON array of strings, with exact casing as shown in the source. Include only event type names (e.g., SessionStart, PreToolUse), not field names or other identifiers.\n\nSection:\n{{section}}",
+    "prompt_template": "The following markdown section lists Claude Code hook events as level-3 headings. List every event type name mentioned as a heading in this section. Return as a JSON array of strings, with exact casing as shown in the source.\n\nSection:\n{{section}}",
     "output_schema": {
       "type": "array",
       "items": { "type": "string" }
@@ -31,21 +38,27 @@ An enumerated set of valid values. The assertion is "this set of strings is the 
   },
 
   "assertion_location": {
-    "file": "packages/skilllint/schemas/claude_code/v1.json",
-    "symbol": "$.enums.valid_event_types.values",
-    "source_type": "schema_json_enum"
+    "file": "packages/skilllint/rules/hk_series.py",
+    "symbol": "VALID_EVENT_TYPES",
+    "source_type": "python_constant"
   },
 
   "x-audited": {
-    "date": "2026-03-23",
-    "source": ".claude/vendor/claude_code/plugins/plugin-dev/skills/hook-development/SKILL.md"
+    "date": "2026-09-04",
+    "source": ".claude/vendor/sources/hooks-2026-08-28-0408.md"
   }
 }
 ```
 
-### HK003.valid_hook_types (NOT SHIPPED AS A CLAIM)
+### HK003.valid_hook_types
 
-Kept here as a worked `enum_set` example -- see the note below.
+**Also shipped**, once the same doc's "Common fields" table was found to
+enumerate the whole `type` set (`command`, `http`, `mcp_tool`, `prompt`,
+`agent`) rather than the partial mention this file previously assumed. The
+prior note here said the hook-development page listed only `command` and
+`http` and that treating it as authoritative would misattribute `prompt` and
+`agent`; that page has been superseded by `hooks.md`, whose "Common fields"
+table is a genuine `enum_set` source.
 
 ```json
 {
@@ -55,13 +68,13 @@ Kept here as a worked `enum_set` example -- see the note below.
   "claim_type": "enum_set",
 
   "authority": {
-    "vendor_file": ".claude/vendor/claude_code/plugins/plugin-dev/skills/hook-development/SKILL.md",
-    "anchor_selector": "#hook-types",
-    "authority_url": "https://docs.anthropic.com/en/docs/claude-code/hooks"
+    "vendor_file": ".claude/vendor/sources/hooks-2026-08-28-0408.md",
+    "anchor_selector": "#common-fields",
+    "authority_url": "https://code.claude.com/docs/en/hooks.md"
   },
 
   "extraction": {
-    "prompt_template": "The following markdown section describes Claude Code hook types. List every valid hook type value that can appear in the \"type\" field of a hook entry. Return as a JSON array of lowercase strings.\n\nSection:\n{{section}}",
+    "prompt_template": "The following markdown section is the \"Common fields\" table for Claude Code hook entries. List every valid value for the \"type\" field. Return as a JSON array of lowercase strings.\n\nSection:\n{{section}}",
     "output_schema": {
       "type": "array",
       "items": { "type": "string" }
@@ -70,30 +83,21 @@ Kept here as a worked `enum_set` example -- see the note below.
   },
 
   "assertion_location": {
-    "file": "packages/skilllint/schemas/claude_code/v1.json",
-    "symbol": "$.enums.valid_hook_types.values",
-    "source_type": "schema_json_enum"
+    "file": "packages/skilllint/rules/hk_series.py",
+    "symbol": "VALID_HOOK_TYPES",
+    "source_type": "python_constant"
   },
 
   "x-audited": {
-    "date": "2026-03-23",
-    "source": ".claude/vendor/claude_code/plugins/plugin-dev/skills/hook-development/SKILL.md"
+    "date": "2026-09-04",
+    "source": ".claude/vendor/sources/hooks-2026-08-28-0408.md"
   }
 }
 ```
 
-`packages/skilllint/schemas/provenance-registry.json` does **not** ship this
-claim. Line 11 of `design-rule-provenance-registry.md` already says why: "no
-file enumerates the complete valid set". The enforced set is `{command, http,
-prompt, agent}`, and the hook-development section lists `command` and `http`
-only, so a comparison against it would either mismatch on every run or attribute
-`prompt` and `agent` to a page that does not mention them. HK003 is recorded in
-`opinion-catalog.json` instead, and moves to a claim if a vendor document ever
-enumerates the set.
-
-The shape above is still the right shape for an `enum_set` claim — that is why
-it is kept. The lesson is that an `enum_set` claim needs a source that
-enumerates the *whole* set, not one that happens to mention some members.
+The lesson from the earlier miss stands: an `enum_set` claim needs a source
+that enumerates the *whole* set, not one that happens to mention some
+members.
 
 ### FM007.tool_field_names
 
