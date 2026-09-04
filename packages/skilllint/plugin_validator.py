@@ -1715,10 +1715,13 @@ class AsSeriesValidator:
     """
 
     def validate(self, path: Path, policy: ValidationPolicy | None = None) -> ValidationResult:
-        """Run AS-series checks on a skill or agent file.
+        """Run AS-series checks on a skill file.
 
         Args:
-            path: Path to a SKILL.md or agent .md file.
+            path: Path to a SKILL.md file. Default dispatch wires only
+                ``FileType.SKILL`` to this validator (see the class
+                docstring for why); this method itself does not check the
+                file type, so tests may call it directly with other paths.
             policy: Optional resolved per-plugin policy.
 
         Returns:
