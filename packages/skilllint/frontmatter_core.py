@@ -105,14 +105,21 @@ class SkillFrontmatter(BaseModel):
     argument_hint: str | None = Field(None, alias="argument-hint")
     allowed_tools: str | None = Field(None, alias="allowed-tools")
     model: str | None = None
-    skills: str | None = None
+    # No `skills` field: the agentskills.io specification defines exactly six
+    # SKILL.md properties (name, description, license, compatibility,
+    # metadata, allowed-tools) and `skills` is not among them -- it is
+    # documented only as subagent frontmatter (sub-agents.md). FM008 was
+    # deleted in #105 for asserting a `skills` shape on SKILL.md for the same
+    # reason. `model_config.extra = "allow"` still captures an authored
+    # `skills:` key untouched, with no CSV coercion of a YAML list -- the
+    # same silent-mutation concern #147 fixed on the agent side (#151).
     context: Literal["fork"] | None = None
     agent: str | None = None
     user_invocable: bool | None = Field(None, alias="user-invocable")
     disable_model_invocation: bool | None = Field(None, alias="disable-model-invocation")
     hooks: dict[str, Any] | None = None
 
-    @field_validator("skills", "allowed_tools", mode="before")
+    @field_validator("allowed_tools", mode="before")
     @classmethod
     def normalize_comma_separated(cls, v: object) -> str | None:
         """Convert YAML arrays to comma-separated strings.
