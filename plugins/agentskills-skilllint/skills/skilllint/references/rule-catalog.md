@@ -52,8 +52,8 @@ Cross-platform compliance with the [agentskills.io](https://agentskills.io) spec
 
 **Retired:** AS002–AS005 are folded into the FM series (`name` syntax and
 directory equality into FM010, `description` presence into FM001, unquoted
-colons into FM009, body token budget into SK006/SK007). AS007 is retired
-outright — see `docs/registry-schema-examples.md`.
+colons into FM009, body token budget into SK006/SK007). AS007 was deleted
+outright, with no replacement — see `docs/registry-schema-examples.md`.
 
 **Full detail:** Use `skilllint check --filter <ID> --verbose <path>` (e.g. `skilllint check --filter AS006 --verbose <path>`) to see detailed output for any AS rule.
 

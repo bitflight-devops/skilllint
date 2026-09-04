@@ -2,7 +2,7 @@
 
 ## 1. Problem Statement
 
-skilllint's rule catalogue is not fixed to the FM, HK, AS, and PA families named below -- run `skilllint rules` for the current set. Many rules assert constraints derived from upstream vendor documentation -- event type enumerations, hook type sets, field constraints, and naming rules. These constraints are hardcoded as Python literals disconnected from their upstream sources.
+skilllint's rule catalogue is not fixed to the FM, HK, AS, and PA families -- run `skilllint rules` for the current set. Many rules assert constraints derived from upstream vendor documentation -- event type enumerations, hook type sets, field constraints, and naming rules. These constraints are hardcoded as Python literals disconnected from their upstream sources.
 
 This disconnection causes staleness. Concrete examples from the provenance audit:
 
