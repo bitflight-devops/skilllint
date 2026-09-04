@@ -2240,8 +2240,10 @@ class FrontmatterValidator:
         fixes = list(colon_fixes)
         if file_type == FileType.SKILL and file_path is not None:
             normalized_dict = fix_skill_name_field(normalized_dict, file_path, fixes)
-        # Both frontmatter models expose runtime-friendly views of `skills`,
-        # but --fix must preserve its parsed value and scalar/sequence/null shape.
+        # SkillFrontmatter has no declared `skills` field (passthrough only via
+        # extra="allow"); AgentFrontmatter exposes a runtime-friendly view via
+        # `normalized_skills`. Either way, --fix must preserve the originally
+        # authored value's parsed shape (scalar/sequence/null) untouched.
         if "skills" in original_data:
             normalized_dict["skills"] = original_data["skills"]
         tool_fields = {"tools", "disallowedTools", "allowed-tools"}

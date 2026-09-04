@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from skilllint.frontmatter_core import SkillFrontmatter
 from skilllint.plugin_validator import FrontmatterValidator
 
 if TYPE_CHECKING:
@@ -688,3 +689,36 @@ description: Skill with mismatched name field
         assert any(issue.code == "FM010" and "actual-dir-name" in issue.message for issue in result.errors), (
             f"Expected an FM010 directory-mismatch error, got: {result.errors}"
         )
+
+
+class TestSkillFrontmatterSkillsField:
+    """SkillFrontmatter declares no `skills` field, so no CSV coercion (#151).
+
+    The agentskills.io specification defines exactly six SKILL.md properties
+    (name, description, license, compatibility, metadata, allowed-tools);
+    `skills` is not among them -- it is documented only as subagent
+    frontmatter (sub-agents.md). FM008 was deleted in #105 for asserting a
+    `skills` shape on SKILL.md for the same reason. Silently rewriting an
+    authored list into a comma-separated string -- what the removed field's
+    validator did -- is the same class of silent mutation #114 and #147
+    fixed elsewhere; that mutation is what these tests guard against
+    reappearing.
+    """
+
+    def test_skills_list_survives_model_validation_untouched(self) -> None:
+        """A YAML list value for `skills` is not coerced to a CSV string."""
+        model = SkillFrontmatter.model_validate({
+            "description": "A" * 25,
+            "skills": ["api-conventions", "error-handling-patterns"],
+        })
+        dumped = model.model_dump(by_alias=True, exclude_none=True, mode="python")
+        assert dumped["skills"] == ["api-conventions", "error-handling-patterns"]
+
+    def test_skills_scalar_survives_model_validation_untouched(self) -> None:
+        """A scalar string value for `skills` also passes through unchanged."""
+        model = SkillFrontmatter.model_validate({
+            "description": "A" * 25,
+            "skills": "api-conventions, error-handling-patterns",
+        })
+        dumped = model.model_dump(by_alias=True, exclude_none=True, mode="python")
+        assert dumped["skills"] == "api-conventions, error-handling-patterns"

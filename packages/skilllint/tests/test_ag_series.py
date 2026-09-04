@@ -11,7 +11,9 @@ the scalar-versus-sequence shape authored in YAML.
 
 from __future__ import annotations
 
+import datetime
 import json
+import warnings
 from typing import TYPE_CHECKING
 
 import pytest
@@ -189,6 +191,52 @@ class TestCheckAg001:
     def test_empty_tools_list_is_not_sourced_as_fatal(self) -> None:
         """`tools: []` has no documented consequence — not flagged (see #109 analysis)."""
         assert check_ag001({"tools": []}) == []
+
+    def test_unconditionally_removed_tool_is_fatal(self) -> None:
+        """A single entry naming an unconditionally-removed tool is fatal.
+
+        Sourced from sub-agents.md, "Available tools" — the first filter
+        strips these tools from every subagent regardless of what `tools`
+        lists (#150). `AskUserQuestion` is one of the seven unconditional
+        entries (the two conditional ones, `Agent` and `ExitPlanMode`, are
+        deliberately excluded — see the module-level constant comment).
+        """
+        issues = check_ag001({"tools": ["AskUserQuestion"]})
+        assert len(issues) == 1
+        assert issues[0].code == "AG001"
+
+    def test_all_seven_unconditionally_removed_tools_are_fatal(self) -> None:
+        """Every documented unconditional-removal name is individually fatal."""
+        for tool_name in (
+            "AskUserQuestion",
+            "EndConversation",
+            "EnterPlanMode",
+            "ScheduleWakeup",
+            "TaskOutput",
+            "WaitForMcpServers",
+            "Workflow",
+        ):
+            issues = check_ag001({"tools": [tool_name]})
+            assert len(issues) == 1, f"{tool_name} should be fatal alone"
+            assert issues[0].code == "AG001"
+
+    def test_agent_is_not_provably_fatal(self) -> None:
+        """`Agent` is removed only at the subagent depth limit — not statically provable."""
+        assert check_ag001({"tools": ["Agent"]}) == []
+
+    def test_exit_plan_mode_is_not_provably_fatal(self) -> None:
+        """`ExitPlanMode` is removed only when `permissionMode` isn't `plan` — not statically provable."""
+        assert check_ag001({"tools": ["ExitPlanMode"]}) == []
+
+    def test_mixed_wildcard_and_removed_tool_is_fatal(self) -> None:
+        """An unscoped wildcard alongside an unconditionally-removed tool: both provably fail."""
+        issues = check_ag001({"tools": ["mcp__*", "AskUserQuestion"]})
+        assert len(issues) == 2
+        assert {issue.code for issue in issues} == {"AG001"}
+
+    def test_removed_tool_alongside_a_real_tool_is_not_fatal(self) -> None:
+        """skilllint cannot prove a sibling ordinary tool name also fails to resolve."""
+        assert check_ag001({"tools": ["Read", "AskUserQuestion"]}) == []
 
 
 # ---------------------------------------------------------------------------
@@ -425,6 +473,26 @@ class TestAgentFrontmatterSkillsShape:
     def test_skills_absent_is_none(self) -> None:
         model = AgentFrontmatter.model_validate({"name": "a", "description": "d"})
         assert model.skills is None
+        assert model.normalized_skills == []
+
+    def test_skills_date_scalar_does_not_raise(self) -> None:
+        """A YAML scalar ruamel.yaml resolves to datetime.date must not crash validation.
+
+        Regression test for a finding on PR #185's code review: retyping
+        `skills` from `object | None` to `JsonValue` made Pydantic reject any
+        value JSON cannot represent (JsonValue's schema has no `date` arm),
+        turning an unquoted date-like scalar into a hard ValidationError
+        instead of the AG003 warning normalize_agent_skills_value already
+        classifies it as. Also asserts no serializer warning fires on dump
+        (SkipValidation without a plain-returning field_serializer emits one
+        for exactly this case).
+        """
+        value = datetime.date(2024, 1, 1)
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            model = AgentFrontmatter.model_validate({"name": "a", "description": "d", "skills": value})
+            assert model.skills == value
+            assert model.model_dump()["skills"] == value
         assert model.normalized_skills == []
 
     @pytest.mark.parametrize(

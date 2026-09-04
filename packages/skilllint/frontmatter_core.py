@@ -44,7 +44,16 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    FieldSerializationInfo,
+    JsonValue,
+    SkipValidation,
+    field_serializer,
+    field_validator,
+)
 
 from skilllint.limits import DESCRIPTION_MAX_LENGTH
 
@@ -105,14 +114,21 @@ class SkillFrontmatter(BaseModel):
     argument_hint: str | None = Field(None, alias="argument-hint")
     allowed_tools: str | None = Field(None, alias="allowed-tools")
     model: str | None = None
-    skills: str | None = None
+    # No `skills` field: the agentskills.io specification defines exactly six
+    # SKILL.md properties (name, description, license, compatibility,
+    # metadata, allowed-tools) and `skills` is not among them -- it is
+    # documented only as subagent frontmatter (sub-agents.md). FM008 was
+    # deleted in #105 for asserting a `skills` shape on SKILL.md for the same
+    # reason. `model_config.extra = "allow"` still captures an authored
+    # `skills:` key untouched, with no CSV coercion of a YAML list -- the
+    # same silent-mutation concern #147 fixed on the agent side (#151).
     context: Literal["fork"] | None = None
     agent: str | None = None
     user_invocable: bool | None = Field(None, alias="user-invocable")
     disable_model_invocation: bool | None = Field(None, alias="disable-model-invocation")
     hooks: dict[str, Any] | None = None
 
-    @field_validator("skills", "allowed_tools", mode="before")
+    @field_validator("allowed_tools", mode="before")
     @classmethod
     def normalize_comma_separated(cls, v: object) -> str | None:
         """Convert YAML arrays to comma-separated strings.
@@ -204,13 +220,45 @@ class AgentFrontmatter(BaseModel):
     # then normalizes strings and the string members of lists at consumption
     # time. Keep that authored value untouched so model_dump() and --fix retain
     # scalar-vs-sequence shape; normalized_skills exposes the loader's view.
-    skills: object | None = None
+    #
+    # JsonValue (not a hand-rolled recursive alias) because Pydantic cannot
+    # build a schema for an implicit recursive TypeAlias used as a model
+    # field under `from __future__ import annotations` -- it raises
+    # RecursionError at class-definition time. pydantic.JsonValue is
+    # Pydantic's own fast-pathed equivalent; rules/hk_series.py uses the same
+    # type for hook-config annotations, though only as a TYPE_CHECKING-only
+    # function-signature annotation, not a live Pydantic model field.
+    #
+    # SkipValidation because a YAML author can write a scalar ruamel.yaml
+    # resolves to a type JsonValue rejects (e.g. an unquoted date), and
+    # normalize_agent_skills_value already classifies any non-str/non-list
+    # value as unsupported (AG003 warns) -- JsonValue's runtime validation
+    # would instead hard-fail with an uninformative FM005 before AG003 ever
+    # runs. The field_serializer bypasses a Pydantic serializer warning that
+    # SkipValidation's schema/runtime-value mismatch would otherwise emit for
+    # exactly that case; dump behavior (the value passed through unchanged)
+    # is identical without it.
+    skills: SkipValidation[JsonValue] = None
     mcp_servers: list[Any] | dict[str, Any] | None = Field(None, alias="mcpServers")
     hooks: dict[str, Any] | None = None
     memory: Literal["user", "project", "local"] | None = None
     background: bool | None = None
     isolation: Literal["worktree"] | None = None
     color: str | None = None
+
+    @field_serializer("skills")
+    def _serialize_skills(self, value: JsonValue, _info: FieldSerializationInfo) -> object:
+        """Pass ``skills`` through unchanged; see the field's SkipValidation comment.
+
+        Returns:
+            The unchanged input value, typed ``object`` rather than
+            ``JsonValue``: a ``JsonValue``-typed return makes Pydantic
+            re-validate the returned value against the same tagged union
+            that ``SkipValidation`` was declared to bypass on input,
+            re-emitting the serializer warning ``SkipValidation`` exists to
+            avoid. Nothing else reads this method's static return type.
+        """
+        return value
 
     @property
     def normalized_skills(self) -> list[str]:

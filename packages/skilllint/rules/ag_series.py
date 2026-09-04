@@ -68,6 +68,30 @@ _AVAILABLE_TOOLS_URL = f"{_SUBAGENTS_URL}#available-tools"
 # constraint, so only this exact literal is treated as fatal.
 _UNRESOLVABLE_WILDCARD_TOOLS: frozenset[str] = frozenset({"mcp__*"})
 
+# Source: sub-agents.md, "Available tools" -- "The first filter removes these
+# tools, even when listed in the `tools` field:" (.claude/vendor/sources/
+# sub-agents-2026-08-30-1123.md:374-384). Every subagent, foreground or
+# background, unconditionally loses these tool names regardless of what
+# `tools` lists. Two names from that same bullet list are deliberately
+# excluded because their removal is conditional, not provable from
+# frontmatter alone: `Agent` is removed only when the subagent is at the
+# depth limit, and `ExitPlanMode` is removed unless `permissionMode` is
+# `plan` (a case AG001 cannot rule out without also inspecting that field).
+_UNCONDITIONALLY_REMOVED_TOOLS: frozenset[str] = frozenset({
+    "AskUserQuestion",
+    "EndConversation",
+    "EnterPlanMode",
+    "ScheduleWakeup",
+    "TaskOutput",
+    "WaitForMcpServers",
+    "Workflow",
+})
+
+# The full provable-zero set: an entry in `tools` is provably non-functional
+# when it either names no server (an unresolvable wildcard) or is stripped by
+# the first filter before the subagent ever sees it (unconditionally removed).
+_PROVABLY_ZERO_TOOLS: frozenset[str] = _UNRESOLVABLE_WILDCARD_TOOLS | _UNCONDITIONALLY_REMOVED_TOOLS
+
 # Fields the "Supported frontmatter fields" table defines for MCP tool
 # grants/denials on an agent file.
 _AGENT_TOOL_FIELD_NAMES: tuple[str, ...] = ("tools", "disallowedTools")
@@ -88,44 +112,62 @@ _AGENT_TOOL_FIELD_NAMES: tuple[str, ...] = ("tools", "disallowedTools")
 def check_ag001(frontmatter: dict) -> list[ValidationIssue]:
     """## AG001 — `tools` field resolves to no tool
 
-    Every entry in the agent's `tools` field is the literal string `mcp__*`,
-    which names no MCP server. A *server-scoped* grant such as `mcp__Ref__*`
-    is supported and NOT reported here — Claude Code resolves it to every
-    tool that server exposes, identically to the bare `mcp__Ref` form.
+    Every entry in the agent's `tools` field is provably non-functional, by
+    one of two documented mechanisms:
 
-    This rule is deliberately narrow: only the exact literal `mcp__*` is
-    treated as unresolvable. No other wildcard-bearing token — a bare `*`, or
-    a non-MCP form like `Bash(git:*)` — is established by sub-agents.md to
-    fail; the absence of a documented *resolving* meaning for a token is not
-    proof it is *invalid*, and asserting otherwise would be an unsourced
-    constraint (see the AS007 rule #108 deleted for the same reason).
+    - **Unscoped wildcard.** The literal string `mcp__*`, which names no MCP
+      server. A *server-scoped* grant such as `mcp__Ref__*` is supported and
+      NOT reported here — Claude Code resolves it to every tool that server
+      exposes, identically to the bare `mcp__Ref` form.
+    - **Unconditionally removed.** One of `AskUserQuestion`,
+      `EndConversation`, `EnterPlanMode`, `ScheduleWakeup`, `TaskOutput`,
+      `WaitForMcpServers`, or `Workflow` — Claude Code's first tool filter
+      strips these from every subagent regardless of what `tools` lists, so
+      listing one has no effect.
 
-    This only fires when **every** entry in `tools` is exactly `mcp__*`. A
-    single `mcp__*` alongside an ordinary tool name (`Read`, `mcp__Ref__*`)
-    is not reported: skilllint has no registry of live tool names, so it
-    cannot prove the sibling entry fails to resolve too.
+    Both checks are deliberately narrow. For the wildcard case: no other
+    wildcard-bearing token — a bare `*`, or a non-MCP form like
+    `Bash(git:*)` — is established by sub-agents.md to fail; the absence of a
+    documented *resolving* meaning for a token is not proof it is *invalid*,
+    and asserting otherwise would be an unsourced constraint (see the AS007
+    rule #108 deleted for the same reason). For the removed-tools case: two
+    names from the same documented list are deliberately excluded because
+    their removal is conditional, not provable from frontmatter alone —
+    `Agent` (removed only at the subagent depth limit) and `ExitPlanMode`
+    (removed unless `permissionMode` is `plan`).
 
-    **Source:** sub-agents.md, "Available tools" — "When nothing in the
-    `tools` list resolves to a tool ... Claude Code usually refuses to launch
-    the subagent and the Agent tool returns an error naming the unresolved
-    entries." Same section, same paragraph: "`mcp__<server>` or
+    This only fires when **every** entry in `tools` is provably
+    non-functional. A single such entry alongside an ordinary tool name
+    (`Read`, `mcp__Ref__*`) is not reported: skilllint has no registry of
+    live tool names, so it cannot prove the sibling entry fails to resolve
+    too.
+
+    **Source (wildcard):** sub-agents.md, "Available tools" — "When nothing
+    in the `tools` list resolves to a tool ... Claude Code usually refuses to
+    launch the subagent and the Agent tool returns an error naming the
+    unresolved entries." Same section, same paragraph: "`mcp__<server>` or
     `mcp__<server>__*` grants or removes every tool from the named server. In
     `disallowedTools`, `mcp__*` also removes every MCP tool from any server."
     `mcp__*` is therefore defined *only* for `disallowedTools`; in `tools` it
     matches neither documented grant pattern (a real server name is required)
     and so names no server there.
 
-    **Fix:** Replace `mcp__*` with a server-scoped grant (e.g. `mcp__Ref__*`)
-    or the exact tool names, or remove `tools` entirely to inherit the
-    default set.
+    **Source (removed tools):** sub-agents.md, "Available tools" — "The
+    first filter removes these tools, even when listed in the `tools`
+    field:" followed by the bullet list naming the seven tools above (plus
+    the two conditional exclusions).
+
+    **Fix:** Replace the offending entry with a server-scoped grant (e.g.
+    `mcp__Ref__*`), an exact tool name that the first filter does not strip,
+    or remove `tools` entirely to inherit the default set.
 
     Args:
         frontmatter: Raw parsed agent frontmatter dict (pre-Pydantic).
 
     Returns:
-        One error issue per `mcp__*` entry when every entry in `tools` is
-        `mcp__*`; empty list otherwise, including when `tools` is absent,
-        blank, or an empty list.
+        One error issue per provably non-functional entry when every entry
+        in `tools` is provably non-functional; empty list otherwise,
+        including when `tools` is absent, blank, or an empty list.
 
     <!-- examples: AG001 -->
     """
@@ -133,28 +175,34 @@ def check_ag001(frontmatter: dict) -> list[ValidationIssue]:
     if not tools:
         return []
 
-    unscoped = [t for t in tools if t in _UNRESOLVABLE_WILDCARD_TOOLS]
-    if not unscoped or len(unscoped) != len(tools):
-        # Not fatal: either no unresolvable wildcard is present, or at least
-        # one entry is not one and may resolve to a real tool.
+    provably_zero = [t for t in tools if t in _PROVABLY_ZERO_TOOLS]
+    if not provably_zero or len(provably_zero) != len(tools):
+        # Not fatal: either no provably non-functional entry is present, or
+        # at least one entry is not one and may resolve to a real tool.
         return []
 
-    return [
-        _make_issue(
-            field="tools",
-            severity="error",
-            message=(
+    issues: list[ValidationIssue] = []
+    for tool_name in provably_zero:
+        if tool_name in _UNRESOLVABLE_WILDCARD_TOOLS:
+            message = (
                 f"Unscoped wildcard '{tool_name}' in the tools field names no server. Every entry in tools "
                 "resolves to nothing, so Claude Code will refuse to launch this subagent."
-            ),
-            code="AG001",
-            suggestion=(
+            )
+            suggestion = (
                 f"Replace '{tool_name}' with a server-scoped grant (e.g. 'mcp__Ref__*'), the exact tool "
-                "names (e.g. 'mcp__Ref__ref_read_url'), or remove 'tools' to inherit the default set."
-            ),
+                "names (e.g. 'mcp__Ref__ref_read_url'), or remove 'tools' entirely to inherit the default set."
+            )
+        else:
+            message = (
+                f"'{tool_name}' in the tools field is unconditionally removed by Claude Code's first tool "
+                "filter. Every entry in tools resolves to nothing, so Claude Code will refuse to launch "
+                "this subagent."
+            )
+            suggestion = f"Remove '{tool_name}' from tools, or remove 'tools' entirely to inherit the default set."
+        issues.append(
+            _make_issue(field="tools", severity="error", message=message, code="AG001", suggestion=suggestion)
         )
-        for tool_name in unscoped
-    ]
+    return issues
 
 
 # ---------------------------------------------------------------------------
