@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788499708242,
+  "lastUpdate": 1788502744562,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -1422,6 +1422,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 91.561,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "bcdfd3222784940eec91154e4860f1884b968a1a",
+          "message": "feat(AG): close the #109 follow-up cluster (#150, #149, #151, #153) (#185)\n\n* fix(AG001): detect unconditionally-removed tool names as provable-zero (#150)\n\n#109's analysis defined the provable-zero set for an agent tools: list\nas unscoped wildcards and/or the documented unconditional first-filter\nremoval list. #147 shipped only the wildcard half.\n\nSourced the removal list from sub-agents.md, \"Available tools\":\n\"The first filter removes these tools, even when listed in the tools\nfield:\" followed by a bullet list of nine names. Excluded Agent\n(removed only at the subagent depth limit) and ExitPlanMode (removed\nunless permissionMode is plan) since both are conditional and not\nprovable from frontmatter alone -- exactly the exclusion #150\nspecified. The remaining seven (AskUserQuestion, EndConversation,\nEnterPlanMode, ScheduleWakeup, TaskOutput, WaitForMcpServers, Workflow)\nmatch #150's proposed list exactly.\n\nAG001 now fires when every tools entry is either an unresolvable\nwildcard or one of these seven names, with a distinct message and fix\nsuggestion per failure reason. Added unit coverage for all seven names\nindividually, the two conditional exclusions staying clean, a mixed\nwildcard+removed-tool case, and a removed-tool-alongside-a-real-tool\ncase staying clean (skilllint has no live tool registry, so a sibling\nentry's resolution can't be proven either way). Added a fixture-driven\nfailing example alongside the existing wildcard one.\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01XATWGbELHG23qfNfvJVbDk\n\n* refactor(AgentFrontmatter): type skills as JsonValue, not bare object (#149)\n\nAgentFrontmatter.skills was object | None, a bare catch-all forbidden\nby docs/TYPING_POLICY.md §3 outside boundary modules; frontmatter_core.py\ndoes not match any approved boundary naming convention (§6).\n\nFirst attempt reused plugin_validator.py's hand-rolled recursive\nYamlValue TypeAlias by moving it into frontmatter_core.py. That broke:\nPydantic cannot build a schema for an implicit recursive TypeAlias used\nas a model field under `from __future__ import annotations` -- it hits\nRecursionError at class-definition time (a documented Pydantic 2.13\nlimitation; its own error message points at PEP 695 type aliases,\nwhich need Python 3.12+ and this project supports 3.11+). Reverted that\nand used pydantic.JsonValue instead, Pydantic's own fast-pathed\nrecursive-value type built for exactly this case -- already used the\nsame way in rules/hk_series.py, so this isn't a new pattern.\n\nScope: only the `skills` field named in #149. AgentFrontmatter's other\nAny-typed fields (mcp_servers, hooks) and the sibling models' similar\nfields are out of scope -- larger retyping the issue itself frames as\nan open design question, not this fix's ask.\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01XATWGbELHG23qfNfvJVbDk\n\n* fix(SkillFrontmatter): remove skills field and its CSV coercion (#151)\n\nVerified agentskills.io's packaged schema defines exactly six SKILL.md\nproperties (name, description, license, compatibility, metadata,\nallowed-tools); `skills` is not among them. It is documented only as\nsubagent frontmatter (sub-agents.md), the same reason FM008 was\ndeleted in #105 for asserting a `skills` shape on SKILL.md.\n\nRemoved SkillFrontmatter's explicit `skills: str | None` field and its\ninclusion in normalize_comma_separated. model_config.extra = \"allow\"\nnow captures an authored `skills:` key untouched -- no CSV coercion of\na YAML list, the same silent-mutation class #147 fixed for\nAgentFrontmatter. Verified nothing reads SkillFrontmatter.skills as a\ntyped attribute (grep -rn '\\.skills\\b' finds only the unrelated\nAgentFrontmatter/manifest hits).\n\nConfirmed the field-level fix does not change --fix output:\n_normalize_tool_fields_and_detect_changes already restores the raw\nparsed `skills` value into the fix output regardless of Pydantic\ncoercion (plugin_validator.py:2245-2246), so the field's own CSV\ncoercion only affected direct model_dump() consumers, not --fix. Added\na model-level regression test (not a --fix-level one, which would not\nhave discriminated) confirming both list and scalar skills values\nsurvive SkillFrontmatter.model_validate() untouched; verified it fails\nagainst the pre-fix model shape.\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01XATWGbELHG23qfNfvJVbDk\n\n* test: cover JSON-output authority for an AG rule (#153)\n\nThe only existing test of this shape, test_cli_json_output_includes_authority,\nexercised FM010. #132's checklist named JSON/text reporters as in\nscope for the AG series, and nothing exercised it. Added the same\nvalidate_file() + _assert_authority() pattern against AG001's mcp__*\ncase.\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01XATWGbELHG23qfNfvJVbDk\n\n* fix: AgentFrontmatter.skills no longer hard-fails on non-JSON YAML scalars\n\nCode review on #185 found a real regression: retyping skills from\nobject | None to JsonValue made Pydantic reject any value JSON can't\nrepresent (e.g. an unquoted date-like scalar, which ruamel.yaml\nresolves to datetime.date). Reproduced end-to-end: validated cleanly\non main, raised pydantic.ValidationError here, surfaced as a confusing\nFM005 alongside AG003's pre-existing, correct warning --\nnormalize_agent_skills_value already classifies any non-str/non-list\nvalue as unsupported.\n\nWrapped the field in SkipValidation[JsonValue]: keeps JsonValue as the\nprecise static annotation (the TYPING_POLICY ask #149 was answering)\nwhile restoring the original \"accept whatever YAML produced\" runtime\nbehavior. SkipValidation alone reintroduced a different problem --\nPydantic's serializer warns on model_dump() whenever the runtime value\ndoesn't match the declared schema, exactly the case SkipValidation\nexists to accept. A field_serializer that returns the value unchanged,\ntyped object rather than JsonValue, avoids that (verified with\nwarnings-as-errors): a JsonValue-typed return re-triggers the same\nschema mismatch on the way out that SkipValidation bypassed on the way\nin.\n\nVerified via the real check pipeline: a SKILL.md-style agent file with\nskills: 2024-01-01 now produces exactly one finding (AG003), not two.\nAdded a regression test with warnings-as-errors covering both the\nvalidation and the dump path.\n\nAlso fixed three doc/comment accuracy findings from the same review:\nfrontmatter_core.py's stale claim that hk_series.py uses JsonValue \"the\nsame way\" (it's TYPE_CHECKING-only, never a live model field, so it\nnever exercises the schema-building path this fix is about);\nplugin_validator.py's now-false \"both models expose runtime-friendly\nviews of skills\" (only AgentFrontmatter does, post-#151);\nag_series.py's two AG001 suggestion strings that had drifted apart in\nwording, and an off-by-one line citation.\n\nA fourth review finding (--fix reorders an authored `skills:` key to\nthe end of the frontmatter block when it also fixes another field) is\nnot fixed here: verified it is pre-existing Pydantic extra=\"allow\" dump\nordering behavior, reproducible on main today for any already-unrecognized\nfrontmatter key -- #151 made `skills` fall into that existing category\nrather than introducing new behavior. Fixing it generally is a separate,\nlarger change (preserving original key order for every extra field, not\none field), out of scope here.\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01XATWGbELHG23qfNfvJVbDk\n\n---------\n\nCo-authored-by: Claude Sonnet 5 <noreply@anthropic.com>",
+          "timestamp": "2026-09-04T06:16:15Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/bcdfd3222784940eec91154e4860f1884b968a1a"
+        },
+        "date": 1788502743758,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 11157.611,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 11738.099,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 12861.985,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 85.278,
             "unit": "files/s"
           }
         ]
