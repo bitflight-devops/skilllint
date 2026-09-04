@@ -70,7 +70,7 @@ _UNRESOLVABLE_WILDCARD_TOOLS: frozenset[str] = frozenset({"mcp__*"})
 
 # Source: sub-agents.md, "Available tools" -- "The first filter removes these
 # tools, even when listed in the `tools` field:" (.claude/vendor/sources/
-# sub-agents-2026-08-30-1123.md:375-384). Every subagent, foreground or
+# sub-agents-2026-08-30-1123.md:374-384). Every subagent, foreground or
 # background, unconditionally loses these tool names regardless of what
 # `tools` lists. Two names from that same bullet list are deliberately
 # excluded because their removal is conditional, not provable from
@@ -190,7 +190,7 @@ def check_ag001(frontmatter: dict) -> list[ValidationIssue]:
             )
             suggestion = (
                 f"Replace '{tool_name}' with a server-scoped grant (e.g. 'mcp__Ref__*'), the exact tool "
-                "names (e.g. 'mcp__Ref__ref_read_url'), or remove 'tools' to inherit the default set."
+                "names (e.g. 'mcp__Ref__ref_read_url'), or remove 'tools' entirely to inherit the default set."
             )
         else:
             message = (

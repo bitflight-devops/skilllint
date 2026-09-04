@@ -11,7 +11,9 @@ the scalar-versus-sequence shape authored in YAML.
 
 from __future__ import annotations
 
+import datetime
 import json
+import warnings
 from typing import TYPE_CHECKING
 
 import pytest
@@ -471,6 +473,26 @@ class TestAgentFrontmatterSkillsShape:
     def test_skills_absent_is_none(self) -> None:
         model = AgentFrontmatter.model_validate({"name": "a", "description": "d"})
         assert model.skills is None
+        assert model.normalized_skills == []
+
+    def test_skills_date_scalar_does_not_raise(self) -> None:
+        """A YAML scalar ruamel.yaml resolves to datetime.date must not crash validation.
+
+        Regression test for a finding on PR #185's code review: retyping
+        `skills` from `object | None` to `JsonValue` made Pydantic reject any
+        value JSON cannot represent (JsonValue's schema has no `date` arm),
+        turning an unquoted date-like scalar into a hard ValidationError
+        instead of the AG003 warning normalize_agent_skills_value already
+        classifies it as. Also asserts no serializer warning fires on dump
+        (SkipValidation without a plain-returning field_serializer emits one
+        for exactly this case).
+        """
+        value = datetime.date(2024, 1, 1)
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            model = AgentFrontmatter.model_validate({"name": "a", "description": "d", "skills": value})
+            assert model.skills == value
+            assert model.model_dump()["skills"] == value
         assert model.normalized_skills == []
 
     @pytest.mark.parametrize(
