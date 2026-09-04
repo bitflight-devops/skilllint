@@ -1718,8 +1718,10 @@ class AsSeriesValidator:
         """Run AS-series checks on a skill file.
 
         Args:
-            path: Path to a SKILL.md file. Only ``FileType.SKILL`` reaches
-                this validator; see the class docstring for why.
+            path: Path to a SKILL.md file. Default dispatch wires only
+                ``FileType.SKILL`` to this validator (see the class
+                docstring for why); this method itself does not check the
+                file type, so tests may call it directly with other paths.
             policy: Optional resolved per-plugin policy.
 
         Returns:
