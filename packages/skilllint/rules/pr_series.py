@@ -56,8 +56,6 @@ def find_actual_capabilities(plugin_dir: Path) -> tuple[set[Path], set[Path], se
         Tuple of (actual_skills, actual_agents, actual_commands) as sets of
         paths relative to plugin_dir.
     """
-    # Deferred import to break the circular dependency: plugin_validator
-    # imports rules/, so rules/ cannot import plugin_validator at module level.
     from skilllint.plugin_validator import FRONTMATTER_EXEMPT_FILENAMES  # noqa: PLC0415
 
     actual_skills: set[Path] = set()

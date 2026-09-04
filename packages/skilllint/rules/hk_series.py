@@ -630,8 +630,6 @@ def check_hk005(hook_entries: Iterable[object], base_dir: Path) -> list[Validati
 
     <!-- examples: HK005 -->
     """
-    # Deferred import: plugin_validator imports rules/, so the Git helper it
-    # owns cannot be imported here at module level.
     from skilllint.plugin_validator import _git_file_has_execute_bit  # noqa: PLC0415
 
     issues: list[ValidationIssue] = []

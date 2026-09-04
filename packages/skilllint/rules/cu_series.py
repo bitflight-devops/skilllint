@@ -8,6 +8,11 @@ Architectural note — adapter-backed series:
     imports ``validate_mdc_frontmatter`` and converts its output to
     ``list[dict]`` at the adapter boundary.
 
+    CU001/CU002 were previously inlined in that adapter as raw dict
+    construction, bypassing ``@skilllint_rule`` registration entirely; this
+    module lifted that logic into the registry so both are discoverable via
+    ``skilllint rule CU001`` and appear in ``RULE_REGISTRY``.
+
 Rule IDs and default severities:
     +-------+-----------------------------------------------------------+-----------+
     | ID    | Summary                                                   | Severity  |
@@ -71,8 +76,6 @@ def check_cu001(frontmatter: dict[str, object], mdc_schema: dict[str, object]) -
 
     <!-- examples: CU001 -->
     """
-    # Deferred import to break circular dependency:
-    # plugin_validator imports rules/, so rules/ cannot import plugin_validator at module level.
     from skilllint.plugin_validator import ValidationIssue  # noqa: PLC0415
 
     required_val: object = mdc_schema.get("required", [])

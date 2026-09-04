@@ -85,8 +85,6 @@ def check_sk004(frontmatter: dict[str, object], path: Path, file_type: str) -> l
 
     <!-- examples: SK004 -->
     """
-    # Deferred import to break circular dependency:
-    # plugin_validator imports rules/, so rules/ cannot import plugin_validator at module level.
     from skilllint.frontmatter_core import RECOMMENDED_DESCRIPTION_LENGTH  # noqa: PLC0415
     from skilllint.plugin_validator import ValidationIssue  # noqa: PLC0415
 

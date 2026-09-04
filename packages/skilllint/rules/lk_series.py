@@ -178,8 +178,6 @@ def _resolve_claude_variables(url: str, skill_dir: Path) -> str | None:
     if "${CLAUDE_SKILL_DIR}" in resolved:
         resolved = resolved.replace("${CLAUDE_SKILL_DIR}", str(skill_dir))
     if "${CLAUDE_PLUGIN_ROOT}" in resolved:
-        # Deferred import to break the circular dependency: plugin_validator
-        # imports rules/, so rules/ cannot import plugin_validator at module level.
         from skilllint.plugin_validator import find_plugin_dir  # noqa: PLC0415
 
         plugin_root = find_plugin_dir(skill_dir)

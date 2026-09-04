@@ -12,6 +12,11 @@ Architectural note — adapter-backed series:
     content strings: CX001 checks AGENTS.md non-emptiness and CX002 checks
     prefix_rule() field names in .rules files.
 
+    CX001/CX002 were previously inlined in that adapter as raw dict
+    construction, bypassing ``@skilllint_rule`` registration entirely; this
+    module lifted that logic into the registry so both are discoverable via
+    ``skilllint rule CX001`` and appear in ``RULE_REGISTRY``.
+
 Rule IDs and default severities:
     +-------+-----------------------------------------------------------+-----------+
     | ID    | Summary                                                   | Severity  |
@@ -81,8 +86,6 @@ def check_cx001(content: str) -> list[ValidationIssue]:
 
     <!-- examples: CX001 -->
     """
-    # Deferred import to break circular dependency:
-    # plugin_validator imports rules/, so rules/ cannot import plugin_validator at module level.
     from skilllint.plugin_validator import ValidationIssue  # noqa: PLC0415
 
     if not content.strip():
