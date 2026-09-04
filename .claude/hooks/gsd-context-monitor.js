@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// gsd-hook-version: 1.42.3
 // Context Monitor - PostToolUse/AfterTool hook (Gemini uses AfterTool)
 // Reads context metrics from the statusline bridge file and injects
 // warnings when context usage is high. This makes the AGENT aware of
@@ -20,6 +21,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { spawn } = require('child_process');
 
 const WARNING_THRESHOLD = 35;  // remaining_percentage <= 35%
 const CRITICAL_THRESHOLD = 25; // remaining_percentage <= 25%
@@ -27,10 +29,11 @@ const STALE_SECONDS = 60;      // ignore metrics older than 60s
 const DEBOUNCE_CALLS = 5;      // min tool uses between warnings
 
 let input = '';
-// Timeout guard: if stdin doesn't close within 3s (e.g. pipe issues on
-// Windows/Git Bash), exit silently instead of hanging until Claude Code
-// kills the process and reports "hook error". See #775.
-const stdinTimeout = setTimeout(() => process.exit(0), 3000);
+// Timeout guard: if stdin doesn't close within 10s (e.g. pipe issues on
+// Windows/Git Bash, or slow Claude Code piping during large outputs),
+// exit silently instead of hanging until Claude Code kills the process
+// and reports "hook error". See #775, #1162.
+const stdinTimeout = setTimeout(() => process.exit(0), 10000);
 process.stdin.setEncoding('utf8');
 process.stdin.on('data', chunk => input += chunk);
 process.stdin.on('end', () => {
@@ -41,6 +44,29 @@ process.stdin.on('end', () => {
 
     if (!sessionId) {
       process.exit(0);
+    }
+
+    // Reject session IDs that contain path traversal sequences or path separators.
+    // session_id is used to construct file paths in /tmp — an unsanitized value
+    // could escape the temp directory and read or write arbitrary files.
+    if (/[/\\]|\.\./.test(sessionId)) {
+      process.exit(0);
+    }
+
+    // Check if context warnings are disabled via config.
+    // Quick sentinel check: skip config read entirely for non-GSD projects (#P2.5).
+    const cwd = data.cwd || process.cwd();
+    const planningDir = path.join(cwd, '.planning');
+    if (fs.existsSync(planningDir)) {
+      try {
+        const configPath = path.join(planningDir, 'config.json');
+        const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        if (config.hooks?.context_warnings === false) {
+          process.exit(0);
+        }
+      } catch (e) {
+        // Ignore config read/parse errors (config may not exist in .planning/)
+      }
     }
 
     const tmpDir = os.tmpdir();
@@ -101,8 +127,33 @@ process.stdin.on('end', () => {
     fs.writeFileSync(warnPath, JSON.stringify(warnData));
 
     // Detect if GSD is active (has .planning/STATE.md in working directory)
-    const cwd = data.cwd || process.cwd();
     const isGsdActive = fs.existsSync(path.join(cwd, '.planning', 'STATE.md'));
+
+    // On CRITICAL with active GSD project, auto-record session state as a
+    // breadcrumb for /gsd:resume-work (#1974). Fire-and-forget subprocess —
+    // doesn't block the hook or the agent. Fires ONCE per CRITICAL session,
+    // guarded by warnData.criticalRecorded to prevent repeated overwrites
+    // of the "crash moment" record on every debounce cycle.
+    if (isCritical && isGsdActive && !warnData.criticalRecorded) {
+      try {
+        // Runtime-agnostic path: this hook lives at <runtime-config>/hooks/
+        // and gsd-tools.cjs lives at <runtime-config>/get-shit-done/bin/.
+        // Using __dirname makes this work on Claude Code, OpenCode, Gemini,
+        // Kilo, etc. without hardcoding ~/.claude/.
+        const gsdTools = path.join(__dirname, '..', 'get-shit-done', 'bin', 'gsd-tools.cjs');
+        // Coerce usedPct to a safe number in case bridge file is malformed
+        const safeUsedPct = Number(usedPct) || 0;
+        const stoppedAt = `context exhaustion at ${safeUsedPct}% (${new Date().toISOString().split('T')[0]})`;
+        spawn(
+          process.execPath,
+          [gsdTools, 'state', 'record-session', '--stopped-at', stoppedAt],
+          { cwd, detached: true, stdio: 'ignore' }
+        ).unref();
+        warnData.criticalRecorded = true;
+        // Persist the sentinel so subsequent debounce cycles don't re-fire
+        fs.writeFileSync(warnPath, JSON.stringify(warnData));
+      } catch { /* non-critical — don't let state recording break the hook */ }
+    }
 
     // Build advisory warning message (never use imperative commands that
     // override user preferences — see #884)

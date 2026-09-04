@@ -1,7 +1,7 @@
 ---
 name: gsd:discuss-phase
-description: Gather phase context through adaptive questioning before planning
-argument-hint: "<phase> [--auto]"
+description: Gather phase context through adaptive questioning before planning.
+argument-hint: "<phase> [--all] [--auto] [--chain] [--batch] [--analyze] [--text] [--power] [--assumptions]"
 allowed-tools:
   - Read
   - Write
@@ -9,9 +9,10 @@ allowed-tools:
   - Glob
   - Grep
   - AskUserQuestion
-  - Task
+  - Agent
   - mcp__context7__resolve-library-id
   - mcp__context7__query-docs
+requires: [config, phase]
 ---
 
 <objective>
@@ -29,9 +30,13 @@ Extract implementation decisions that downstream agents need — researcher and 
 </objective>
 
 <execution_context>
-@./.claude/get-shit-done/workflows/discuss-phase.md
-@./.claude/get-shit-done/templates/context.md
+Workflow files are loaded on-demand in the <process> section below — not upfront.
+Do not pre-load any workflow files before reading the mode routing instructions.
 </execution_context>
+
+<runtime_note>
+**Copilot (VS Code):** Use `vscode_askquestions` wherever this workflow calls `AskUserQuestion`. They are equivalent — `vscode_askquestions` is the VS Code Copilot implementation of the same interactive question API.
+</runtime_note>
 
 <context>
 Phase number: $ARGUMENTS (required)
@@ -40,43 +45,24 @@ Context files are resolved in-workflow using `init phase-op` and roadmap/state t
 </context>
 
 <process>
-1. Validate phase number (error if missing or not in roadmap)
-2. Check if CONTEXT.md exists (offer update/view/skip if yes)
-3. **Load prior context** — Read PROJECT.md, REQUIREMENTS.md, STATE.md, and all prior CONTEXT.md files
-4. **Scout codebase** — Find reusable assets, patterns, and integration points
-5. **Analyze phase** — Check prior decisions, skip already-decided areas, generate remaining gray areas
-6. **Present gray areas** — Multi-select: which to discuss? Annotate with prior decisions + code context
-7. **Deep-dive each area** — 4 questions per area, code-informed options, Context7 for library choices
-8. **Write CONTEXT.md** — Sections match areas discussed + code_context section
-9. Offer next steps (research or plan)
+**Mode routing:**
+```bash
+DISCUSS_MODE=$(gsd-sdk query config-get workflow.discuss_mode 2>/dev/null || echo "discuss")
+```
 
-**CRITICAL: Scope guardrail**
-- Phase boundary from ROADMAP.md is FIXED
-- Discussion clarifies HOW to implement, not WHETHER to add more
-- If user suggests new capabilities: "That's its own phase. I'll note it for later."
-- Capture deferred ideas — don't lose them, don't act on them
+If `--assumptions` is in $ARGUMENTS:
+Read and execute `./.claude/get-shit-done/workflows/list-phase-assumptions.md` end-to-end.
+Stop here.
 
-**Domain-aware gray areas:**
-Gray areas depend on what's being built. Analyze the phase goal:
-- Something users SEE → layout, density, interactions, states
-- Something users CALL → responses, errors, auth, versioning
-- Something users RUN → output format, flags, modes, error handling
-- Something users READ → structure, tone, depth, flow
-- Something being ORGANIZED → criteria, grouping, naming, exceptions
+Otherwise, if `DISCUSS_MODE` is `"assumptions"`:
+Read and execute `./.claude/get-shit-done/workflows/discuss-phase-assumptions.md` end-to-end.
 
-Generate 3-4 **phase-specific** gray areas, not generic categories.
+Otherwise (`"discuss"` / unset / any other value):
+Read and execute `./.claude/get-shit-done/workflows/discuss-phase.md` end-to-end.
 
-**Probing depth:**
-- Ask 4 questions per area before checking
-- "More questions about [area], or move to next?"
-- If more → ask 4 more, check again
-- After all areas → "Ready to create context?"
+**MANDATORY:** Read the appropriate workflow file BEFORE taking any action. The objective and success_criteria sections in this command file are summaries — the workflow file contains the complete step-by-step process with all required behaviors, config checks, and interaction patterns. Do not improvise from the summary.
 
-**Do NOT ask about (Claude handles these):**
-- Technical implementation
-- Architecture choices
-- Performance concerns
-- Scope expansion
+**Lazy loading:** `templates/context.md` is loaded inside the `write_context` step of the active workflow. `discuss-phase-power.md` is loaded inside `discuss-phase.md` when `--power` is detected. Do not load either here.
 </process>
 
 <success_criteria>

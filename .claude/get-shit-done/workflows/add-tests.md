@@ -33,7 +33,7 @@ Exit.
 Load phase operation context:
 
 ```bash
-INIT=$(node "./.claude/get-shit-done/bin/gsd-tools.cjs" init phase-op "${PHASE_ARG}")
+INIT=$(gsd-sdk query init.phase-op "${PHASE_ARG}")
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 ```
 
@@ -108,6 +108,9 @@ Read each file to verify classification. Don't classify based on filename alone.
 <step name="present_classification">
 Present the classification to the user for confirmation before proceeding:
 
+
+**Text mode (`workflow.text_mode: true` in config or `--text` flag):** Set `TEXT_MODE=true` if `--text` is present in `$ARGUMENTS` OR `text_mode` from init JSON is `true`. When TEXT_MODE is active, replace every `AskUserQuestion` call with a plain-text numbered list and ask the user to type their choice number. This is required for non-Claude runtimes (OpenAI Codex, Gemini CLI, etc.) where `AskUserQuestion` is not available.
+
 ```
 AskUserQuestion(
   header: "Test Classification",
@@ -146,7 +149,7 @@ find . -type d -name "*test*" -o -name "*spec*" -o -name "*__tests__*" 2>/dev/nu
 # Find existing test files for convention matching
 find . -type f \( -name "*.test.*" -o -name "*.spec.*" -o -name "*Tests.fs" -o -name "*Test.fs" \) 2>/dev/null | head -20
 # Check for test runners
-ls package.json *.sln 2>/dev/null
+ls package.json *.sln 2>/dev/null || true
 ```
 
 Identify:
@@ -243,7 +246,7 @@ For each approved E2E test:
 
 1. **Check for existing tests** covering the same scenario:
    ```bash
-   grep -r "{scenario keyword}" {e2e test directory} 2>/dev/null
+   grep -r "{scenario keyword}" {e2e test directory} 2>/dev/null || true
    ```
    If found, extend rather than duplicate.
 
@@ -297,7 +300,7 @@ Create a test coverage report and present to user:
 
 Record test generation in project state:
 ```bash
-node "./.claude/get-shit-done/bin/gsd-tools.cjs" state-snapshot
+gsd-sdk query state-snapshot
 ```
 
 If there are passing tests to commit:
@@ -312,7 +315,7 @@ Present next steps:
 ```
 ---
 
-## ▶ Next Up
+## ▶ Next Up — [${PROJECT_CODE}] ${PROJECT_TITLE}
 
 {if bugs discovered:}
 **Fix discovered bugs:** `/gsd:quick fix the {N} test failures discovered in phase ${phase_number}`

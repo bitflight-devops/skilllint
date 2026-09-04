@@ -27,7 +27,7 @@ Extract each milestone version (e.g., v1.0, v1.1, v2.0).
 Check which milestone archive dirs already exist:
 
 ```bash
-ls -d .planning/milestones/v*-phases 2>/dev/null
+ls -d .planning/milestones/v*-phases 2>/dev/null || true
 ```
 
 Filter to milestones that do NOT already have a `-phases` archive directory.
@@ -55,7 +55,7 @@ Extract phase numbers and names from the archived roadmap (e.g., Phase 1: Founda
 Check which of those phase directories still exist in `.planning/phases/`:
 
 ```bash
-ls -d .planning/phases/*/ 2>/dev/null
+ls -d .planning/phases/*/ 2>/dev/null || true
 ```
 
 Match phase directories to milestone membership. Only include directories that still exist in `.planning/phases/`.
@@ -93,6 +93,8 @@ No phase directories found to archive. Phases may have been removed or archived 
 
 Stop here.
 
+
+**Text mode (`workflow.text_mode: true` in config or `--text` flag):** Set `TEXT_MODE=true` if `--text` is present in `$ARGUMENTS` OR `text_mode` from init JSON is `true`. When TEXT_MODE is active, replace every `AskUserQuestion` call with a plain-text numbered list and ask the user to type their choice number. This is required for non-Claude runtimes (OpenAI Codex, Gemini CLI, etc.) where `AskUserQuestion` is not available.
 AskUserQuestion: "Proceed with archiving?" with options: "Yes — archive listed phases" | "Cancel"
 
 If "Cancel": Stop.
@@ -122,7 +124,7 @@ Repeat for all milestones in the cleanup set.
 Commit the changes:
 
 ```bash
-node "./.claude/get-shit-done/bin/gsd-tools.cjs" commit "chore: archive phase directories from completed milestones" --files .planning/milestones/ .planning/phases/
+gsd-sdk query commit "chore: archive phase directories from completed milestones" --files .planning/milestones/ .planning/phases/
 ```
 
 </step>

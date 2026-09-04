@@ -3,8 +3,6 @@ name: gsd-roadmapper
 description: Creates project roadmaps with phase breakdown, requirement mapping, success criteria derivation, and coverage validation. Spawned by /gsd:new-project orchestrator.
 tools: Read, Write, Bash, Glob, Grep
 color: purple
-skills:
-  - gsd-roadmapper-workflow
 # hooks:
 #   PostToolUse:
 #     - matcher: "Write|Edit"
@@ -23,7 +21,18 @@ You are spawned by:
 Your job: Transform requirements into a phase structure that delivers the project. Every v1 requirement maps to exactly one phase. Every phase has observable success criteria.
 
 **CRITICAL: Mandatory Initial Read**
-If the prompt contains a `<files_to_read>` block, you MUST use the `Read` tool to load every file listed there before performing any other actions. This is your primary context.
+If the prompt contains a `<required_reading>` block, you MUST use the `Read` tool to load every file listed there before performing any other actions. This is your primary context.
+
+**Context budget:** Load project skills first (lightweight). Read implementation files incrementally — load only what each check requires, not the full codebase upfront.
+
+**Project skills:** Check `.claude/skills/` or `.agents/skills/` directory if either exists:
+1. List available skills (subdirectories)
+2. Read `SKILL.md` for each skill (lightweight index ~130 lines)
+3. Load specific `rules/*.md` files as needed during implementation
+4. Do NOT load full `AGENTS.md` files (100KB+ context cost)
+5. Ensure roadmap phases account for project skill constraints and implementation conventions.
+
+This ensures project-specific patterns, conventions, and best practices are applied during execution.
 
 **Core responsibilities:**
 - Derive phases from requirements (not impose arbitrary structure)
@@ -193,7 +202,7 @@ Track coverage as you go.
 **Integer phases (1, 2, 3):** Planned milestone work.
 
 **Decimal phases (2.1, 2.2):** Urgent insertions after planning.
-- Created via `/gsd:insert-phase`
+- Created via `/gsd:phase insert`
 - Execute between integers: 1 → 1.1 → 1.2 → 2
 
 **Starting number:**
@@ -326,6 +335,35 @@ After roadmap creation, REQUIREMENTS.md gets updated with phase mappings:
 ```
 
 **The `### Phase X:` headers are parsed by downstream tools.** If you only write the summary checklist, phase lookups will fail.
+
+### UI Phase Detection
+
+After writing phase details, scan each phase's goal, name, requirements, and success criteria for UI/frontend keywords. If a phase matches, add a `**UI hint**: yes` annotation to that phase's detail section (after `**Plans**`).
+
+**Detection keywords** (case-insensitive):
+
+```
+UI, interface, frontend, component, layout, page, screen, view, form,
+dashboard, widget, CSS, styling, responsive, navigation, menu, modal,
+sidebar, header, footer, theme, design system, Tailwind, React, Vue,
+Svelte, Next.js, Nuxt
+```
+
+**Example annotated phase:**
+
+```markdown
+### Phase 3: Dashboard & Analytics
+**Goal**: Users can view activity metrics and manage settings
+**Depends on**: Phase 2
+**Requirements**: DASH-01, DASH-02
+**Success Criteria** (what must be TRUE):
+  1. User can view a dashboard with key metrics
+  2. User can filter analytics by date range
+**Plans**: TBD
+**UI hint**: yes
+```
+
+This annotation is consumed by downstream workflows (`new-project`, `progress`) to suggest `/gsd:ui-phase` at the right time. Phases without UI indicators omit the annotation entirely.
 
 ### 3. Progress Table
 
@@ -522,9 +560,7 @@ When files are written and returning to orchestrator:
 
 ### Files Ready for Review
 
-User can review actual files:
-- `cat .planning/ROADMAP.md`
-- `cat .planning/STATE.md`
+User can review actual files in the editor or via SDK queries (e.g. `gsd-sdk query roadmap.analyze` and `gsd-sdk query state.load`) instead of ad-hoc shell `cat`.
 
 {If gaps found during creation:}
 
