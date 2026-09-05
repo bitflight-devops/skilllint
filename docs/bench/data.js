@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788504010685,
+  "lastUpdate": 1788571607650,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -1506,6 +1506,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 135.301,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "47870cecbdd54e69956caf2afd929c5f82ea4a80",
+          "message": "refactor(rule-registry): constrain category/platforms to Literal types (#190)\n\n* refactor(rule-registry): constrain category/platforms to Literal types\n\nRuleEntry.category and .platforms were plain str/list[str], so a typo'd\ncategory (e.g. \"skils\") would silently register and a typo'd\n`skilllint rules --category` CLI filter would silently return an empty\ntable instead of erroring. Add RuleCategory/RulePlatform Literal aliases\nin rules/_constants.py, sourced from grepping the 51 live\n@skilllint_rule(...) call sites, and use them on RuleEntry and the\nskilllint_rule decorator so Pydantic validates every registration at\nimport time. Validate the CLI --category option against the same\nLiteral and raise typer.BadParameter on an unknown value.\n\nCloses part of #41 (item 3).\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01G3ke4pBmhpiEuWoFTV2ax4\n\n* refactor(rule-registry): type all three rules-cmd filters as Literals\n\n--category was hand-validated with a manual typer.BadParameter check\nwhile --platform and --severity, sharing the identical bug class,\nsilently accepted typos. Typing all three options as their real\nLiteral types lets Typer validate natively and removes the hand-rolled\ncheck.\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01G3ke4pBmhpiEuWoFTV2ax4\n\n---------\n\nCo-authored-by: Claude Sonnet 5 <noreply@anthropic.com>",
+          "timestamp": "2026-09-05T01:23:33Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/47870cecbdd54e69956caf2afd929c5f82ea4a80"
+        },
+        "date": 1788571607146,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 11232.282,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 11710.451,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 12641.175,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 85.479,
             "unit": "files/s"
           }
         ]
