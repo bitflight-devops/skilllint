@@ -74,7 +74,11 @@ def _make_issue(
     severity="info",
     category="token-count",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
+    # No authority: TC001 is a measurement/telemetry rule, not a pass/fail
+    # check. It reports raw tiktoken (cl100k_base) counts with no threshold
+    # comparison and always emits severity="info" — cl100k_base is an OpenAI
+    # tokenizer choice, unrelated to any Claude Code or agentskills.io spec,
+    # so there is no vendor claim here for "authority" to anchor.
 )
 def check_tc001(content: str) -> list[ValidationIssue]:
     """## TC001 — Token count info

@@ -130,7 +130,10 @@ def parse_registered_paths(manifest: dict[str, YamlValue], plugin_dir: Path, fie
     severity="warning",
     category="plugin-registration",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
+    authority={
+        "origin": "code.claude.com",
+        "reference": "https://code.claude.com/docs/en/plugins-reference.md#path-behavior-rules",
+    },
 )
 def check_pr001(manifest: dict[str, YamlValue], plugin_dir: Path) -> list[ValidationIssue]:
     """## PR001 — Capability exists but not explicitly registered
@@ -320,7 +323,10 @@ def check_pr002(manifest: dict[str, YamlValue], plugin_dir: Path) -> list[Valida
     severity="info",
     category="plugin-registration",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
+    authority={
+        "origin": "code.claude.com",
+        "reference": "https://code.claude.com/docs/en/plugins-reference.md#metadata-fields",
+    },
 )
 def check_pr003(manifest: dict[str, YamlValue], git_metadata: dict[str, YamlValue]) -> list[ValidationIssue]:
     """## PR003 — Plugin metadata fields not populated
