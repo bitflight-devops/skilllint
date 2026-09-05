@@ -4640,6 +4640,7 @@ from rich.table import Table as _Table
 
 from skilllint.fixture_loader import FIXTURES_ROOT as _FIXTURES_ROOT, discover_fixtures as _discover_fixtures
 from skilllint.rule_registry import get_rule as _get_rule, list_rules as _list_rules
+from skilllint.rules._constants import RuleCategory, RulePlatform
 from skilllint.rules.pa_series import PluginAgentFrontmatterValidator
 
 
@@ -4686,10 +4687,10 @@ def rule_cmd(
 
 @app.command("rules")
 def rules_cmd(
-    platform: Annotated[str | None, typer.Option("--platform", "-p", help="Filter rules by platform")] = None,
-    category: Annotated[str | None, typer.Option("--category", "-c", help="Filter rules by category")] = None,
+    platform: Annotated[RulePlatform | None, typer.Option("--platform", "-p", help="Filter rules by platform")] = None,
+    category: Annotated[RuleCategory | None, typer.Option("--category", "-c", help="Filter rules by category")] = None,
     severity: Annotated[
-        str | None, typer.Option("--severity", "-s", help="Filter rules by severity (error, warning, info)")
+        Literal["error", "warning", "info"] | None, typer.Option("--severity", "-s", help="Filter rules by severity")
     ] = None,
     *,
     record: Annotated[Path | None, typer.Option("--record", help="Record terminal output to SVG or HTML file")] = None,

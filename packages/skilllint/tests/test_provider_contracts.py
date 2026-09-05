@@ -100,7 +100,7 @@ class TestRuleAuthority:
         entry = RuleEntry(
             id="TE001",
             severity="error",
-            category="test",
+            category="skill",
             platforms=["agentskills"],
             docstring="Test rule",
             authority=authority,
@@ -117,7 +117,7 @@ class TestRuleAuthority:
         entry = RuleEntry(
             id="TE002",
             severity="warning",
-            category="test",
+            category="skill",
             platforms=["agentskills"],
             docstring="Test rule without authority",
         )
@@ -133,7 +133,7 @@ class TestRuleAuthority:
         @skilllint_rule(
             "TA001",
             severity="error",
-            category="test",
+            category="skill",
             authority={"origin": "test-origin", "reference": "/test/rules/TA001"},
         )
         def test_rule_with_authority(frontmatter: dict) -> list:
@@ -151,7 +151,7 @@ class TestRuleAuthority:
         """skilllint_rule decorator should work without authority kwarg."""
         from skilllint.rule_registry import RULE_REGISTRY
 
-        @skilllint_rule("TN001", severity="info", category="test")
+        @skilllint_rule("TN001", severity="info", category="skill")
         def test_rule_without_authority(frontmatter: dict) -> list:
             """Test rule without authority."""
             return []
