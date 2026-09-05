@@ -12,6 +12,7 @@ Usage::
       --scenario scan-violations:scripts/results/bench_io_violations_gh.json:scripts/results/bench_io_violations_base_gh.json \\
       --scenario fix-violations:scripts/results/bench_io_fix_gh.json:scripts/results/bench_io_fix_base_gh.json \\
       --scenario cpu:scripts/results/bench_cpu_gh.json:scripts/results/bench_cpu_base_gh.json \\
+      --scenario import:scripts/results/bench_import_gh.json:scripts/results/bench_import_base_gh.json \\
       --output /tmp/bench_comment.md \\
       --threshold 1.30 \\
       --pages-url https://bitflight-devops.github.io/skilllint/
@@ -38,6 +39,12 @@ _SMALLER_IS_BETTER: frozenset[str] = frozenset({
     "cpu_clean_mean_ms",
     "cpu_violations_mean_ms",
     "cpu_fix_mean_ms",
+    "import_package_min_ms",
+    "import_package_mean_ms",
+    "import_package_max_ms",
+    "import_rules_min_ms",
+    "import_rules_mean_ms",
+    "import_rules_max_ms",
 })
 
 # Hidden marker so sticky-pull-request-comment can find and update the comment.
