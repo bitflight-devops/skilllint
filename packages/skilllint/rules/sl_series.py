@@ -83,7 +83,9 @@ def iter_symlinks(path: Path) -> list[Path]:
     severity="error",
     category="symlink",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
+    # No authority: no vendor doc addresses malformed symlink targets. A
+    # trailing-whitespace/newline target is skilllint's own filesystem
+    # robustness check, not a claim traceable to an upstream spec.
 )
 def check_sl001(path: Path) -> list[ValidationIssue]:
     r"""## SL001 — Symlink target has trailing whitespace or newlines

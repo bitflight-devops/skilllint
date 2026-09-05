@@ -17,7 +17,7 @@ Rule IDs and default severities:
     | ID    | Summary                                       | Severity  |
     +-------+-----------------------------------------------+-----------+
     | PD001 | No references/ directory found                | info      |
-    | PD002 | No examples/ directory found                  | info      |
+    | PD002 | No assets/ directory found                    | info      |
     | PD003 | No scripts/ directory found                   | info      |
     +-------+-----------------------------------------------+-----------+
 
@@ -40,6 +40,14 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 # Spec sources
 # ---------------------------------------------------------------------------
+
+# PD002 authority: agentskills.io/specification.md, "Progressive disclosure"
+# section. Verified via `skilllint docs fetch` — the cached spec's `assets/`
+# subsection states verbatim: "Contains static resources: Templates ...
+# Images ... Data files ...". The spec documents `references/`, `scripts/`,
+# and `assets/` as the three optional subdirectories; it never mentions an
+# `examples/` directory.
+_PD002_ASSETS_URL = "https://agentskills.io/specification.md#assets"
 
 
 def _check_disclosure_dir(path: Path, dir_name: str, code: str) -> list[ValidationIssue]:
@@ -139,32 +147,37 @@ def check_pd001(path: Path) -> list[ValidationIssue]:
     severity="info",
     category="progressive-disclosure",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
+    authority={"origin": "agentskills.io", "reference": _PD002_ASSETS_URL},
 )
 def check_pd002(path: Path) -> list[ValidationIssue]:
-    """## PD002 — No examples/ directory found
+    """## PD002 — No assets/ directory found
 
-    The skill directory does not contain an ``examples/`` subdirectory.
-    An ``examples/`` directory holds concrete usage samples, demo inputs, and
-    worked scenarios that help users understand how to invoke the skill
-    effectively.
+    The skill directory does not contain an ``assets/`` subdirectory.
+    An ``assets/`` directory holds static resources — templates (document
+    templates, configuration templates), images (diagrams, examples), and
+    data files (lookup tables, schemas) — that the skill's content can
+    reference without embedding them in ``SKILL.md``.
 
     This is an informational notice, not an error.  Missing the directory does
     not prevent the skill from functioning; it is a recommendation for better
     content organisation.
 
-    **Source:** ``ProgressiveDisclosureValidator`` in ``plugin_validator.py`` —
-    calls this rule, which checks for the presence of ``examples/`` under the skill directory.
+    **Source:** `agentskills.io/specification.md` — the "Progressive
+    disclosure" section documents ``assets/`` alongside ``references/`` and
+    ``scripts/`` as the three optional subdirectories; verified via
+    `skilllint docs fetch` against the cached spec, which describes
+    ``assets/`` as containing "Templates ... Images ... Data files". See
+    https://agentskills.io/specification.md#assets
 
-    **Fix:** Create an ``examples/`` directory and populate it with usage
-    samples:
+    **Fix:** Create an ``assets/`` directory and populate it with static
+    resources:
 
     ```
     my-skill/
       SKILL.md
-      examples/
-        basic-usage.md
-        advanced-usage.md
+      assets/
+        template.docx
+        diagram.png
     ```
 
     Args:
@@ -172,12 +185,12 @@ def check_pd002(path: Path) -> list[ValidationIssue]:
             parent directory).
 
     Returns:
-        A single info issue when ``examples/`` is missing; empty when it exists or
+        A single info issue when ``assets/`` is missing; empty when it exists or
         when the resolved directory is not a skill directory.
 
     <!-- examples: PD002 -->
     """
-    return _check_disclosure_dir(path, "examples", "PD002")
+    return _check_disclosure_dir(path, "assets", "PD002")
 
 
 # ---------------------------------------------------------------------------
