@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788572043154,
+  "lastUpdate": 1788572502022,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -1590,6 +1590,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 86.099,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "c16c62b28cdff642fd384c4e1379807e3080bc8a",
+          "message": "fix(PR001,PR003,TC001): final 3 rules of the #40 authority-origin sweep (#198)\n\nPR001 and PR003 get real code.claude.com citations (plugins-reference.md's\n\"Path behavior rules\" and \"Metadata fields\" sections respectively, verified\nvia `skilllint docs fetch`), replacing the placeholder personal-repo origin.\nTC001 is a pure measurement/telemetry rule with no pass/fail semantics or\nthreshold — its authority is removed entirely and replaced with a one-line\ncomment, matching the precedent set for other no-authority rules; no\nopinion-catalog.json entry was added since TC001 has no underlying constant\nto anchor one to.\n\nPR005 is deliberately left untouched (tracked separately by #195), and the\npre-existing PluginRegistrationValidator wiring gap is out of scope.\n\n\nClaude-Session: https://claude.ai/code/session_01G3ke4pBmhpiEuWoFTV2ax4\n\nCo-authored-by: Claude Sonnet 5 <noreply@anthropic.com>",
+          "timestamp": "2026-09-05T01:38:59Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/c16c62b28cdff642fd384c4e1379807e3080bc8a"
+        },
+        "date": 1788572501065,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 11044.587,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 11754.083,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 12930.099,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 85.162,
             "unit": "files/s"
           }
         ]
