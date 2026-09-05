@@ -444,7 +444,9 @@ def _has_path_traversal(component: str) -> bool:
     severity="error",
     category="namespace-reference",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
+    # No authority: no vendor doc requires that a namespace reference's
+    # target actually resolve on disk. That resolution check is skilllint's
+    # own opinion, not a claim traceable to an upstream spec.
 )
 def check_nr001(content: str, path: Path) -> list[ValidationIssue]:
     """## NR001 — Namespace reference target does not exist

@@ -78,7 +78,7 @@ Validate the `references/` directory structure for progressive disclosure.
 | Rule | Severity | Auto-fix | Description |
 |------|----------|----------|-------------|
 | PD001 | info | no | Skill directory has no `references/` subdirectory for supporting documentation |
-| PD002 | info | no | Skill directory has no `examples/` subdirectory for usage samples |
+| PD002 | info | no | Skill directory has no `assets/` subdirectory for static resources |
 | PD003 | info | no | Skill directory has no `scripts/` subdirectory for helper scripts |
 
 ---

@@ -197,7 +197,9 @@ def _resolve_claude_variables(url: str, skill_dir: Path) -> str | None:
     severity="error",
     category="link",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
+    # No authority: no vendor doc documents a "check that internal markdown
+    # links resolve" requirement. Broken links are skilllint's own
+    # documentation-hygiene check, not a claim traceable to an upstream spec.
 )
 def check_lk001(content: str, path: Path) -> list[ValidationIssue]:
     """## LK001 — Broken internal link

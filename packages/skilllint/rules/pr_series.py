@@ -231,7 +231,10 @@ def check_pr001(manifest: dict[str, YamlValue], plugin_dir: Path) -> list[Valida
     severity="error",
     category="plugin-registration",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
+    # No authority: no vendor doc requires validating that a registered
+    # skills/agents/commands path resolves on disk before load. This
+    # existence check is skilllint's own robustness check, not a claim
+    # traceable to an upstream spec.
 )
 def check_pr002(manifest: dict[str, YamlValue], plugin_dir: Path) -> list[ValidationIssue]:
     """## PR002 — Registered capability path does not exist
@@ -380,7 +383,9 @@ def check_pr003(manifest: dict[str, YamlValue], git_metadata: dict[str, YamlValu
     severity="warning",
     category="plugin-registration",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
+    # No authority: no vendor doc requires plugin.json's "repository" field
+    # to match the git remote URL. That consistency check is skilllint's own
+    # opinion, not a claim traceable to an upstream spec.
 )
 def check_pr004(manifest: dict[str, YamlValue], git_metadata: dict[str, YamlValue]) -> list[ValidationIssue]:
     """## PR004 — Plugin metadata repository URL mismatches git remote URL

@@ -1,7 +1,7 @@
 """Unit tests for ProgressiveDisclosureValidator.
 
 Tests:
-- Directory existence checks (references/, examples/, scripts/)
+- Directory existence checks (references/, assets/, scripts/)
 - INFO severity (not warnings or errors)
 - File counting in existing directories
 """
@@ -72,12 +72,12 @@ description: Test skill
         assert len(result.warnings) == 0
         assert len(result.errors) == 0
 
-    def test_missing_examples_directory(self, tmp_path: Path) -> None:
-        """Test INFO when examples/ directory missing (PD002).
+    def test_missing_assets_directory(self, tmp_path: Path) -> None:
+        """Test INFO when assets/ directory missing (PD002).
 
-        Tests: Skill without examples/ directory
-        How: Create skill without examples/, validate
-        Why: Ensure PD002 info raised for missing examples/
+        Tests: Skill without assets/ directory
+        How: Create skill without assets/, validate
+        Why: Ensure PD002 info raised for missing assets/
         """
         skill_dir = tmp_path / "test-skill"
         skill_dir.mkdir()
@@ -180,12 +180,12 @@ description: Test skill
 
         # Create all three directories
         (skill_dir / "references").mkdir()
-        (skill_dir / "examples").mkdir()
+        (skill_dir / "assets").mkdir()
         (skill_dir / "scripts").mkdir()
 
         # Add files to each
         (skill_dir / "references" / "ref.md").write_text("# Reference\n")
-        (skill_dir / "examples" / "ex.md").write_text("# Example\n")
+        (skill_dir / "assets" / "template.txt").write_text("Template\n")
         (skill_dir / "scripts" / "script.py").write_text("# Script\n")
 
         validator = ProgressiveDisclosureValidator()

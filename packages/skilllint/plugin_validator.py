@@ -345,7 +345,7 @@ class ErrorCode(StrEnum):
 
     # Progressive Disclosure (PD001-PD003)
     PD001 = "PD001"  # No `references/` directory found
-    PD002 = "PD002"  # No `examples/` directory found
+    PD002 = "PD002"  # No `assets/` directory found
     PD003 = "PD003"  # No `scripts/` directory found
 
     # Plugin (PL001-PL006)
@@ -1407,7 +1407,7 @@ def _check_skill_directory_name(path: Path, file_type: FileType, errors: list[Va
 class ProgressiveDisclosureValidator:
     """Validates presence of progressive disclosure directories.
 
-    Checks for references/, examples/, and scripts/ directories that help
+    Checks for references/, assets/, and scripts/ directories that help
     organize additional content for on-demand exploration. Missing directories
     are reported as INFO (not errors) since they're optional organizational aids.
     """
