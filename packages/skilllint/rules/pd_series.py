@@ -37,6 +37,12 @@ if TYPE_CHECKING:
 # Spec sources
 # ---------------------------------------------------------------------------
 
+# PD001 authority: agentskills.io/specification.md, "Optional directories"
+# section. Verified via `skilllint docs fetch` — the cached spec's
+# `references/` subsection states verbatim: "Contains additional
+# documentation that agents can read when needed."
+_PD001_REFERENCES_URL = "https://agentskills.io/specification.md#references"
+
 # PD002 authority: agentskills.io/specification.md, "Progressive disclosure"
 # section. Verified via `skilllint docs fetch` — the cached spec's `assets/`
 # subsection states verbatim: "Contains static resources: Templates ...
@@ -44,6 +50,12 @@ if TYPE_CHECKING:
 # and `assets/` as the three optional subdirectories; it never mentions an
 # `examples/` directory.
 _PD002_ASSETS_URL = "https://agentskills.io/specification.md#assets"
+
+# PD003 authority: agentskills.io/specification.md, "Optional directories"
+# section. Verified via `skilllint docs fetch` — the cached spec's
+# `scripts/` subsection states verbatim: "Contains executable code that
+# agents can run."
+_PD003_SCRIPTS_URL = "https://agentskills.io/specification.md#scripts"
 
 
 def _check_disclosure_dir(path: Path, dir_name: str, code: str) -> list[ValidationIssue]:
@@ -92,7 +104,7 @@ def _check_disclosure_dir(path: Path, dir_name: str, code: str) -> list[Validati
     severity="info",
     category="progressive-disclosure",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
+    authority={"origin": "agentskills.io", "reference": _PD001_REFERENCES_URL},
 )
 def check_pd001(path: Path) -> list[ValidationIssue]:
     """## PD001 — No references/ directory found
@@ -199,7 +211,7 @@ def check_pd002(path: Path) -> list[ValidationIssue]:
     severity="info",
     category="progressive-disclosure",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
+    authority={"origin": "agentskills.io", "reference": _PD003_SCRIPTS_URL},
 )
 def check_pd003(path: Path) -> list[ValidationIssue]:
     """## PD003 — No scripts/ directory found
