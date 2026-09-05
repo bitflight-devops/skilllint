@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788572502022,
+  "lastUpdate": 1788572940482,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -1632,6 +1632,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 85.162,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "4fbfd1f400ba4e6a10710d481c386c90f31f9dda",
+          "message": "fix(PD001,PD003): cite real agentskills.io spec authority (#197)\n\nReplaces the bogus github.com/jamie-bitflight/claude_skills authority\non PD001 (references/) and PD003 (scripts/) with the real\nagentskills.io/specification.md citations, verified by fetching the\nspec via `skilllint docs fetch`. Completes PD-series authority\ncoverage alongside #196, which fixes PD002 separately.\n\n\nClaude-Session: https://claude.ai/code/session_01G3ke4pBmhpiEuWoFTV2ax4\n\nCo-authored-by: Claude Sonnet 5 <noreply@anthropic.com>",
+          "timestamp": "2026-09-05T01:46:18Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/4fbfd1f400ba4e6a10710d481c386c90f31f9dda"
+        },
+        "date": 1788572939530,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 11017.761,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 11617.874,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 12710.003,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 86.16,
             "unit": "files/s"
           }
         ]
