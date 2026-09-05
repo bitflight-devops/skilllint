@@ -1,8 +1,5 @@
 """PR-series plugin registration rules (PR001-PR005).
 
-Each function is decorated with @skilllint_rule and returns a list of
-ValidationIssue objects.
-
 PR001-PR005 detection lives here.  ``PluginRegistrationValidator`` in
 ``plugin_validator.py`` is a thin wrapper that calls these functions and
 packages the results into a ``ValidationResult``; it retains SK009 (a
@@ -10,9 +7,7 @@ different rule family) and the git-metadata lookup, which shells out to
 ``git`` and is a validator concern rather than a rule concern.
 
 Detection needs the plugin manifest and the filesystem, not frontmatter, so
-each function takes the input it actually reads.  Signatures across the rules
-package state the input the rule actually reads rather than a uniform
-frontmatter triple.
+each function takes the input it actually reads.
 
 Note: ``PluginRegistrationValidator`` is not currently wired into
 ``_get_validators_for_path``, so PR001-PR005 do not fire during a normal
@@ -29,10 +24,6 @@ Rule IDs and default severities:
     | PR004 | Plugin metadata repository URL mismatches git remote URL  | warning   |
     | PR005 | Registered command path is a skill directory              | error     |
     +-------+-----------------------------------------------------------+-----------+
-
-Import note: ValidationIssue is deferred inside each function to break the
-circular import: plugin_validator imports rules/, so rules/ cannot import
-plugin_validator at module level.
 """
 
 from __future__ import annotations
@@ -65,8 +56,6 @@ def find_actual_capabilities(plugin_dir: Path) -> tuple[set[Path], set[Path], se
         Tuple of (actual_skills, actual_agents, actual_commands) as sets of
         paths relative to plugin_dir.
     """
-    # Deferred import to break the circular dependency: plugin_validator
-    # imports rules/, so rules/ cannot import plugin_validator at module level.
     from skilllint.plugin_validator import FRONTMATTER_EXEMPT_FILENAMES  # noqa: PLC0415
 
     actual_skills: set[Path] = set()
@@ -108,8 +97,6 @@ def parse_registered_paths(manifest: dict[str, YamlValue], plugin_dir: Path, fie
     Returns:
         Set of registered paths relative to plugin_dir.
     """
-    # Deferred import to break the circular dependency: plugin_validator
-    # imports rules/, so rules/ cannot import plugin_validator at module level.
     from skilllint.plugin_validator import FRONTMATTER_EXEMPT_FILENAMES  # noqa: PLC0415
 
     registered: set[Path] = set()

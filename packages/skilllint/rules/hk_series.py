@@ -1,8 +1,5 @@
 """HK-series hooks validation rules (HK001-HK005).
 
-Each function is decorated with @skilllint_rule and returns a list of
-ValidationIssue objects.
-
 HK001-HK005 detection lives here.  ``HookValidator`` in ``plugin_validator.py``
 is a thin wrapper that calls these functions and packages the result; it
 retains the auto-fix, which mutates the filesystem and is a validator concern
@@ -633,8 +630,6 @@ def check_hk005(hook_entries: Iterable[object], base_dir: Path) -> list[Validati
 
     <!-- examples: HK005 -->
     """
-    # Deferred import: plugin_validator imports rules/, so the Git helper it
-    # owns cannot be imported here at module level.
     from skilllint.plugin_validator import _git_file_has_execute_bit  # noqa: PLC0415
 
     issues: list[ValidationIssue] = []
