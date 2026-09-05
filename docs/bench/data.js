@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788571607650,
+  "lastUpdate": 1788572043154,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -1548,6 +1548,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 85.479,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "59d7e3c3cee0eac611b3a8d0ef130d8bb80f5d00",
+          "message": "fix(LK001,NR001,PR002,PR004,SL001,PD002): reclassify opinions, fix PD002 spec citation (#196)\n\n* fix(LK001,NR001,PR002,PR004,SL001,PD002): reclassify opinions, fix PD002 spec citation\n\nFive rules cited a personal repo (github.com/jamie-bitflight/claude_skills)\nas authority with no real content behind it. A research pass this session\nfound no vendor doc traceable source for any of them; a human reviewed and\napproved reclassifying them as skilllint's own lint opinions:\n\n- LK001: broken internal markdown link — no vendor doc requires links resolve\n- NR001: namespace reference target existence — not documented upstream\n- PR002: registered capability path existence — not documented upstream\n- PR004: plugin.json repository field vs git remote match — not documented\n- SL001: symlink target trailing-whitespace check — not documented\n\nEach now carries an inline \"No authority: ...\" comment instead of the\nauthority field, matching the house style already used in sk_series.py and\nhk_series.py. No opinion-catalog.json entries were added: none of the five\nrules has a genuine pre-existing named constant capturing its check (only\nLK001, NR001, and PR002/004 use inline regexes or plain existence checks),\nso inventing one purely to satisfy the catalog schema was rejected per the\nHK004 precedent.\n\nPD002 is a real behavior change, not just a citation fix: research found the\nagentskills.io spec documents `assets/` (templates, images, data files) as\nthe third optional progressive-disclosure directory alongside `references/`\nand `scripts/` — it never mentions `examples/`. PD002 now checks for\n`assets/` instead, with authority pointing at the spec's `assets` anchor\n(confirmed via `skilllint docs fetch` + `docs sections`). Any skill with an\n`examples/` directory but no `assets/` directory will now be flagged where\nit previously was not, and vice versa — updated the one test assertion and\n19 fixture skill directories (renamed `examples/` to `assets/`) that relied\non the old directory name to stay silent under PD002.\n\nRef #40\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01G3ke4pBmhpiEuWoFTV2ax4\n\n* fix(PD002): correct stale examples/ banner comment to assets/\n\nThe section-banner comment still read \"No examples/ directory found\"\nafter the check was changed to look for assets/, contradicting the\ndocstring and behavior three lines below it.\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01G3ke4pBmhpiEuWoFTV2ax4\n\n---------\n\nCo-authored-by: Claude Sonnet 5 <noreply@anthropic.com>",
+          "timestamp": "2026-09-05T01:31:12Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/59d7e3c3cee0eac611b3a8d0ef130d8bb80f5d00"
+        },
+        "date": 1788572042710,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 11046.521,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 11626.107,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 12761.468,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 86.099,
             "unit": "files/s"
           }
         ]
