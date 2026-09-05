@@ -122,21 +122,6 @@
         "source_type": "python_constant"
       },
       "expected_value": 20
-    },
-    "HK004": {
-      "rule_code": "HK004",
-      "description": "Hook script referenced in hooks.json by a command-type hook entry does not exist on disk",
-      "rationale": "Claude Code's hooks docs describe the mechanism (a command-type hook spawns the script at the given path) but never name a missing script as a documented failure mode with vendor-specified behavior. Checking that the referenced file exists is skilllint's own robustness check, not a claim traceable to an upstream spec.",
-      "constraint": "A command-type hook entry's file-path command (starting with ./, ../, /, or ${CLAUDE_PLUGIN_ROOT}/) must resolve to an existing file",
-      "references": [
-        "packages/skilllint/rules/hk_series.py: check_hk004 and iter_command_scripts"
-      ],
-      "assertion_location": {
-        "file": "packages/skilllint/rules/hk_series.py",
-        "symbol": "HK004_MISSING_SCRIPT_IS_ERROR",
-        "source_type": "python_constant"
-      },
-      "expected_value": true
     }
   }
 }
