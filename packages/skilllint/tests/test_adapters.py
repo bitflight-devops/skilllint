@@ -119,14 +119,11 @@ def test_cursor_adapter_mdc_validation():
 
 
 def test_cursor_mdc_unknown_fields():
-    """CursorAdapter reports a violation for unknown field in .mdc frontmatter."""
+    """CursorAdapter reports CU002 for an unknown field in .mdc frontmatter."""
     adapter = CursorAdapter()
     violations = adapter.validate(CURSOR_FIXTURES / "invalid_rule.mdc")
     codes = [v["code"] for v in violations]
-    assert any("cursor" in c.lower() or "unknown" in c.lower() or c for c in codes), (
-        f"Expected a violation for unknown .mdc field, got: {violations}"
-    )
-    assert len(violations) > 0
+    assert codes == ["CU002"], f"Expected a CU002 violation for unknown .mdc field, got: {violations}"
 
 
 # ---------------------------------------------------------------------------
