@@ -138,7 +138,7 @@ def check_pd001(path: Path) -> list[ValidationIssue]:
 
 
 # ---------------------------------------------------------------------------
-# PD002 — No examples/ directory found
+# PD002 — No assets/ directory found
 # ---------------------------------------------------------------------------
 
 
