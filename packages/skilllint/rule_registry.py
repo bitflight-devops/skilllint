@@ -106,6 +106,13 @@ class RuleEntry(BaseModel):
 
 
 # Global registry: rule ID → RuleEntry
+#
+# RULE_REGISTRY is authoritative for which rules exist -- it backs `skilllint
+# rules`, `skilllint rule <ID>`, and rule-catalog.md. plugin_validator.ErrorCode
+# is a legacy, partial enum kept only for specific historical consumers; it is
+# not expected to have 1:1 membership with RULE_REGISTRY (see #40 and
+# packages/skilllint/tests/test_registry_errorcode_contract.py, which pins the
+# known, intentional divergence).
 RULE_REGISTRY: dict[str, RuleEntry] = {}
 
 
