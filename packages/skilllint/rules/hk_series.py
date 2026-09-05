@@ -249,7 +249,7 @@ def load_hooks_object(path: Path) -> tuple[dict[str, JsonValue] | None, list[Val
     severity="error",
     category="hook",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
+    authority={"origin": "code.claude.com", "reference": "https://code.claude.com/docs/en/hooks.md#configuration"},
 )
 def check_hk001(path: Path) -> list[ValidationIssue]:
     """## HK001 — Invalid hooks.json structure
@@ -315,7 +315,7 @@ def check_hk001(path: Path) -> list[ValidationIssue]:
     severity="error",
     category="hook",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
+    authority={"origin": "code.claude.com", "reference": "https://code.claude.com/docs/en/hooks.md#hook-events"},
 )
 def check_hk002(hooks_config: Mapping[str, JsonValue]) -> list[ValidationIssue]:
     """## HK002 — Invalid event type in hooks.json
@@ -452,7 +452,7 @@ def _check_hook_group(group: JsonValue, event_type: str, group_idx: int) -> list
     severity="error",
     category="hook",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
+    authority={"origin": "code.claude.com", "reference": "https://code.claude.com/docs/en/hooks.md#common-fields"},
 )
 def check_hk003(hooks_config: Mapping[str, JsonValue]) -> list[ValidationIssue]:
     """## HK003 — Invalid hook entry structure
@@ -536,7 +536,10 @@ def check_hk003(hooks_config: Mapping[str, JsonValue]) -> list[ValidationIssue]:
     severity="error",
     category="hook",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
+    # No authority: Claude Code's hooks docs describe the mechanism (a
+    # command-type hook spawns the script at the given path) but never name a
+    # missing script as a documented failure mode. This is skilllint's own
+    # robustness check, not a claim traceable to an upstream spec.
 )
 def check_hk004(hook_entries: Iterable[object], base_dir: Path) -> list[ValidationIssue]:
     """## HK004 — Hook script referenced but not found
@@ -594,7 +597,10 @@ def check_hk004(hook_entries: Iterable[object], base_dir: Path) -> list[Validati
     severity="warning",
     category="hook",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
+    authority={
+        "origin": "code.claude.com",
+        "reference": "https://code.claude.com/docs/en/plugins-reference.md#hook-troubleshooting",
+    },
 )
 def check_hk005(hook_entries: Iterable[object], base_dir: Path) -> list[ValidationIssue]:
     """## HK005 — Hook script exists but is not executable
