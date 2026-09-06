@@ -51,7 +51,7 @@ _AS006_EVALS_URL = "https://agentskills.io/skill-creation/evaluating-skills.md#d
 
 AS_RULES: dict[str, str] = {
     "AS001": "SKILL.md must declare a name field",
-    "AS006": "No eval_queries.json found — add evaluation queries for quality assurance",
+    "AS006": "No eval_queries.json or evals/evals.json found — add evaluation queries for quality assurance",
     "AS008": "MCP tool name may have incorrect casing — case is sensitive in the tools field",
     "AS009": "Nested skill will not be auto-discovered — skills must be direct children of the skills/ directory",
 }
@@ -285,8 +285,7 @@ def _check_as006(path: pathlib.Path) -> dict | None:
     Recommends adding evaluation queries to the skill directory to enable
     automated quality assessment, either as a top-level ``eval_queries.json``
     (or any ``*eval*.json``/``*queries*.json`` file) or as ``evals/evals.json``
-    — the layout documented by agentskills.io's evaluating-skills guide and
-    Claude Code's skill-creator plugin.
+    — the layout documented by agentskills.io's evaluating-skills guide.
 
     Args:
         path: Path to the SKILL.md file being validated.
@@ -326,7 +325,7 @@ def _check_as006(path: pathlib.Path) -> dict | None:
     return _make_violation(
         "AS006",
         "info",
-        "No eval_queries.json found in skill directory — add evaluation queries to enable automated quality assessment",
+        "No eval_queries.json or evals/evals.json found in skill directory — add evaluation queries to enable automated quality assessment",
     )
 
 
