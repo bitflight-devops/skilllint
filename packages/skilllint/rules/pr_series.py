@@ -139,15 +139,22 @@ def check_pr001(manifest: dict[str, YamlValue], plugin_dir: Path) -> list[Valida
     """## PR001 — Capability exists but not explicitly registered
 
     A skill, agent, or command directory was found on the filesystem but is
-    not listed in the corresponding array in ``plugin.json``.  When
-    ``plugin.json`` contains an explicit ``skills``, ``agents``, or
-    ``commands`` array, Claude Code uses only the listed paths and will not
-    auto-discover unregistered capabilities.
+    not listed in the corresponding array in ``plugin.json``.
 
-    Note: when the ``skills`` field is absent from ``plugin.json`` entirely,
-    standard-path skills (under ``./skills/``) are auto-discovered by Claude
-    Code and PR001 is suppressed for them.  PR001 is only emitted when the
-    plugin has opted into explicit registration by declaring the array.
+    Per the vendor path-behavior rules, an explicit ``agents`` or
+    ``commands`` array *replaces* default directory discovery: once either
+    field is declared, Claude Code stops auto-discovering unregistered files
+    under the matching default directory, so anything PR001 still finds
+    there is a genuine gap.  When the field is absent, the default directory
+    is auto-discovered wholesale and PR001 is suppressed.
+
+    ``skills`` behaves differently: the default ``./skills/`` directory is
+    *always* scanned, whether or not ``skills`` is declared (additive, not
+    replacing).  An unregistered standard-path skill therefore always loads.
+    PR001 still flags it once the plugin has opted into explicit
+    registration by declaring the ``skills`` array (even empty), as a
+    consistency nudge, but is suppressed while no ``skills`` array is
+    declared at all.
 
     **Source:** ``PluginRegistrationValidator.validate`` in
     ``plugin_validator.py`` — scans the filesystem for actual capability
@@ -180,13 +187,12 @@ def check_pr001(manifest: dict[str, YamlValue], plugin_dir: Path) -> list[Valida
 
     issues: list[ValidationIssue] = []
 
-    # When plugin.json has no ``skills`` field at all, the plugin relies
-    # entirely on Claude Code's auto-discovery of the ./skills/ directory.
-    # Standard-path skills (under ./skills/) are auto-discovered and need
-    # no explicit registration — suppress PR001 for them in this case.
-    # When an explicit ``skills`` array is present (even if empty), the
-    # plugin has opted into explicit registration and unregistered
-    # standard-path skills should still be flagged.
+    # ``skills`` is additive (path-behavior-rules): the default ./skills/
+    # directory is always scanned regardless of declaration, so an
+    # unregistered standard-path skill always loads.  PR001 only nudges for
+    # explicit registration once the plugin has opted in by declaring the
+    # array (even empty); it is suppressed while no ``skills`` array exists
+    # at all.  (Mirrors the SK009 gate in plugin_validator.py.)
     issues.extend(
         _make_issue(
             field="plugin.json",
@@ -196,9 +202,14 @@ def check_pr001(manifest: dict[str, YamlValue], plugin_dir: Path) -> list[Valida
             suggestion=f"Add './{orphan}' to the skills array in plugin.json",
         )
         for orphan in actual_skills - registered_skills
-        if "skills" in manifest or not str(orphan).startswith("skills/")
+        if "skills" in manifest
     )
 
+    # ``agents``/``commands`` replace default discovery once declared
+    # (path-behavior-rules): an unregistered file under the default
+    # directory is then a genuine gap.  When the field is absent, the
+    # default directory is still auto-discovered wholesale, so PR001 is
+    # suppressed for it.
     issues.extend(
         _make_issue(
             field="plugin.json",
@@ -208,6 +219,7 @@ def check_pr001(manifest: dict[str, YamlValue], plugin_dir: Path) -> list[Valida
             suggestion=f"Add './{orphan}' to the agents array in plugin.json",
         )
         for orphan in actual_agents - registered_agents
+        if "agents" in manifest
     )
 
     issues.extend(
@@ -219,6 +231,7 @@ def check_pr001(manifest: dict[str, YamlValue], plugin_dir: Path) -> list[Valida
             suggestion=f"Add './{orphan}' to the commands array in plugin.json",
         )
         for orphan in actual_commands - registered_commands
+        if "commands" in manifest
     )
 
     return issues
