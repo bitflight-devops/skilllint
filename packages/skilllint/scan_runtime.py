@@ -228,18 +228,30 @@ def _is_skill_folder(path: Path) -> bool:
     return path.is_dir() and (path / "SKILL.md").is_file()
 
 
-def _is_within_excluded_dir(path: Path) -> bool:
-    """Return whether any component of *path* is a directory skilllint skips."""
-    return any(part in EXCLUDED_DIR_NAMES for part in path.parts)
+def _is_within_excluded_dir(relative_path: Path) -> bool:
+    """Return whether any component of *relative_path* is a directory skilllint skips.
+
+    ``relative_path`` must already be relative to the directory being walked —
+    checking components of an absolute/raw path would also match ancestor
+    segments belonging to the scan root itself (e.g. a target explicitly
+    named ``node_modules/my-plugin``), which is not what EXCLUDED_DIR_NAMES
+    is for: it exists to avoid walking *into* a vendored tree during
+    discovery, not to second-guess an explicitly named target.
+    """
+    return any(part in EXCLUDED_DIR_NAMES for part in relative_path.parts)
 
 
 def _glob_excluding(directory: Path, pattern: str) -> list[Path]:
     """Glob *pattern* under *directory*, dropping matches under excluded dirs.
 
+    Only path components discovered beneath *directory* are checked against
+    EXCLUDED_DIR_NAMES, so an excluded name in the scan root's own ancestry
+    does not suppress results.
+
     Returns:
         Matching paths, excluding any under a directory named in EXCLUDED_DIR_NAMES.
     """
-    return [p for p in directory.glob(pattern) if not _is_within_excluded_dir(p)]
+    return [p for p in directory.glob(pattern) if not _is_within_excluded_dir(p.relative_to(directory))]
 
 
 def _discover_provider_paths(directory: Path) -> list[Path]:

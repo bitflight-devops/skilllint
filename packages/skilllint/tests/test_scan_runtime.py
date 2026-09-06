@@ -201,6 +201,26 @@ class TestDiscoverValidatablePaths:
 
         assert skill_dir not in discovered, f"Did not expect {skill_dir} in discovered paths: {discovered}"
 
+    def test_scan_root_own_ancestry_named_node_modules_is_not_excluded(self, tmp_path: Path) -> None:
+        """A scan target whose OWN path contains 'node_modules' still discovers its skills.
+
+        Tests: _glob_excluding/_is_within_excluded_dir only test path components
+               discovered *beneath* the scanned directory, not the scan root's
+               own ancestor segments.
+        How: Scan a directory literally named .../node_modules/my-plugin (e.g. a
+             real npm-installed plugin) and confirm a skill inside it is found.
+        Why: Regression for a false negative where naming a real target whose
+             path happens to contain an excluded segment silently returned [].
+        """
+        root = tmp_path / "node_modules" / "my-plugin"
+        skill_dir = root / "skills" / "x"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("---\ndescription: Test\n---\n# Test\n")
+
+        discovered = _discover_validatable_paths(root)
+
+        assert discovered == [skill_dir], f"Expected the skill to be discovered: {discovered}"
+
     def test_direct_skill_folder_is_one_target(self, tmp_path: Path) -> None:
         skill_dir = tmp_path / "my-skill"
         skill_dir.mkdir()
