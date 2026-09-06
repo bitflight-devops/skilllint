@@ -129,6 +129,98 @@ class TestDiscoverValidatablePaths:
         discovered = _discover_validatable_paths(tmp_path)
         assert discovered == []
 
+    def test_discovers_provider_skills(self, tmp_path: Path) -> None:
+        """_discover_validatable_paths finds skills under a provider's skills/ dir.
+
+        Tests: {provider}/skills/*/SKILL.md is discovered the same way
+               {provider}/agents/*.md already is.
+        How: Create .claude/skills/my-skill/SKILL.md under a bare scan root
+             and verify the skill folder is discovered.
+        Why: Regression for the bug where .claude/skills/ (and other known
+             provider dirs) were never scanned — only {provider}/agents/ was.
+        """
+        skill_dir = tmp_path / ".claude" / "skills" / "my-skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("---\ndescription: Test\n---\n# Test\n")
+
+        discovered = _discover_validatable_paths(tmp_path)
+
+        assert skill_dir in discovered, f"Expected {skill_dir} in discovered paths: {discovered}"
+
+    def test_provider_skill_not_double_counted(self, tmp_path: Path) -> None:
+        """A skill reachable via the provider path and the generic bare pattern appears once.
+
+        Tests: _discover_bare_paths's covered_roots exclusion still holds once
+               _discover_provider_paths also globs skills/*/SKILL.md.
+        How: Create .claude/skills/my-skill/SKILL.md, which is matched both by
+             _discover_provider_paths(.claude) and by the generic
+             '**/skills/*/SKILL.md' DEFAULT_SCAN_PATTERNS entry.
+        Why: Guards against silently duplicating results in FileResults/reports.
+        """
+        skill_dir = tmp_path / ".claude" / "skills" / "my-skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("---\ndescription: Test\n---\n# Test\n")
+
+        discovered = _discover_validatable_paths(tmp_path)
+
+        assert discovered.count(skill_dir) == 1, f"Expected exactly one occurrence: {discovered}"
+
+    def test_excludes_git_directory(self, tmp_path: Path) -> None:
+        """A skill under .git/ is never discovered.
+
+        Tests: EXCLUDED_DIR_NAMES filtering during the discovery glob walk
+        How: Place a SKILL.md inside a nested .git directory and verify absence
+        Why: .git/ is explicitly called out by the client-implementation guide
+             as a tree that must never be scanned into.
+        """
+        skill_dir = tmp_path / ".git" / "skills" / "vendored-skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("---\ndescription: Test\n---\n# Test\n")
+
+        discovered = _discover_validatable_paths(tmp_path)
+
+        assert skill_dir not in discovered, f"Did not expect {skill_dir} in discovered paths: {discovered}"
+
+    def test_excludes_node_modules_directory(self, tmp_path: Path) -> None:
+        """A skill under node_modules/ is never discovered."""
+        skill_dir = tmp_path / "node_modules" / "some-pkg" / "skills" / "vendored-skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("---\ndescription: Test\n---\n# Test\n")
+
+        discovered = _discover_validatable_paths(tmp_path)
+
+        assert skill_dir not in discovered, f"Did not expect {skill_dir} in discovered paths: {discovered}"
+
+    def test_excludes_venv_directory(self, tmp_path: Path) -> None:
+        """A skill vendored inside a .venv/ site-packages tree is never discovered."""
+        skill_dir = tmp_path / ".venv" / "lib" / "site-packages" / "somepkg" / ".agents" / "skills" / "somepkg"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("---\ndescription: Test\n---\n# Test\n")
+
+        discovered = _discover_validatable_paths(tmp_path)
+
+        assert skill_dir not in discovered, f"Did not expect {skill_dir} in discovered paths: {discovered}"
+
+    def test_scan_root_own_ancestry_named_node_modules_is_not_excluded(self, tmp_path: Path) -> None:
+        """A scan target whose OWN path contains 'node_modules' still discovers its skills.
+
+        Tests: _glob_excluding/_is_within_excluded_dir only test path components
+               discovered *beneath* the scanned directory, not the scan root's
+               own ancestor segments.
+        How: Scan a directory literally named .../node_modules/my-plugin (e.g. a
+             real npm-installed plugin) and confirm a skill inside it is found.
+        Why: Regression for a false negative where naming a real target whose
+             path happens to contain an excluded segment silently returned [].
+        """
+        root = tmp_path / "node_modules" / "my-plugin"
+        skill_dir = root / "skills" / "x"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("---\ndescription: Test\n---\n# Test\n")
+
+        discovered = _discover_validatable_paths(root)
+
+        assert discovered == [skill_dir], f"Expected the skill to be discovered: {discovered}"
+
     def test_direct_skill_folder_is_one_target(self, tmp_path: Path) -> None:
         skill_dir = tmp_path / "my-skill"
         skill_dir.mkdir()
