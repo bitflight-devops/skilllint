@@ -654,3 +654,24 @@ def test_as009_dot_claude_skills_bare_context_warns(tmp_path: pathlib.Path) -> N
     assert as009 != [], "Expected AS009 warning for .claude/skills/category/nested-skill/ layout"
     assert as009[0]["severity"] == "warning"
     assert "will not activate in Claude Code" in as009[0]["message"]
+
+
+def test_as009_scoped_to_claude_code_platform() -> None:
+    """AS009's registry entry declares only the Claude Code platform.
+
+    Tests: AS009 platform scoping, distinct from its AS-series siblings.
+    How: Look up the AS009 registry entry and assert its platforms list.
+    Why: Unlike AS001/AS006/AS008 (agentskills.io spec rules, which apply to
+         every platform), AS009 describes a Claude Code-only auto-discovery
+         limitation and cites Claude Code's own docs as its authority — it
+         must not be listed under `skilllint rules --platform cursor` or
+         `--platform codex`, where the underlying constraint does not exist.
+    """
+    # Imported locally: importing rule_registry before skilllint.rules.as_series
+    # at module scope trips the rule_registry <-> rules circular-import trap
+    # documented in ag_series.py's module docstring.
+    from skilllint.rule_registry import get_rule
+
+    entry = get_rule("AS009")
+    assert entry is not None
+    assert entry.platforms == ["claude-code"], entry.platforms
