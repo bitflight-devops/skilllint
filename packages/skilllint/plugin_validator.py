@@ -1279,6 +1279,12 @@ def _pydantic_error_to_validation_issue(error: ErrorDetails) -> ValidationIssue:
         max_len = _get_pydantic_ctx_val(error, "max_length", "unknown")
         msg = f"Exceeds maximum length of {max_len} characters"
         suggestion = f"Shorten to {max_len} characters or less"
+        if field == "name":
+            # FM010 owns name-length validation (see check_fm010 in fm_series.py).
+            # Routing here avoids a duplicate FM005+FM010 finding for the same
+            # over-length name (#139); _check_name_field_format's duplicate
+            # guard then suppresses the second FM010 source.
+            code = FM010
     elif "Input should be" in msg and "literal" in msg.lower():
         code = FM006
         valid_values = _get_pydantic_ctx_val(error, "expected")
