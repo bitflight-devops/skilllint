@@ -323,6 +323,33 @@ class TestUnregisteredSkill:
         pr001_warnings = [w for w in result.warnings if w.code == "PR001"]
         assert len(pr001_warnings) >= 2
 
+    def test_pr001_still_fires_when_skills_array_explicitly_empty(self, tmp_path: Path) -> None:
+        """Test PR001 still fires for an orphan skill when 'skills' is an explicit empty array.
+
+        Tests: PR001 must not be suppressed merely because 'skills' is declared (issue #200)
+        How: plugin.json declares 'skills': [] explicitly; an unregistered skill exists
+            under the standard ./skills/ path; validate
+        Why: The vendor path-behavior rules make 'skills' additive -- the default
+            ./skills/ directory is scanned regardless of declaration. Declaring the
+            array (even empty) must never, by itself, suppress PR001 for skills that
+            still are not listed in it. A prior condition (`"skills" in manifest or
+            not str(orphan).startswith("skills/")`) risked being "corrected" into a
+            form that always evaluates to False for standard-path skills, silently
+            disabling this warning entirely -- this regression test guards against
+            exactly that.
+        """
+        plugin_dir = _make_plugin(
+            tmp_path, plugin_json_content=msgspec.json.encode({"name": "test-plugin", "skills": []}).decode()
+        )
+        _add_skill(plugin_dir, "orphan-skill")
+
+        validator = PluginRegistrationValidator()
+        result = validator.validate(plugin_dir)
+
+        pr001_warnings = [w for w in result.warnings if w.code == "PR001"]
+        assert len(pr001_warnings) >= 1
+        assert any("orphan-skill" in w.message for w in pr001_warnings)
+
 
 class TestUnregisteredAgent:
     """Test PR001 warning when agent file exists but is not in plugin.json."""
@@ -382,6 +409,47 @@ class TestUnregisteredAgent:
         pr001_warnings = [w for w in result.warnings if w.code == "PR001"]
         assert len(pr001_warnings) == 0
 
+    def test_no_pr001_for_unregistered_agent_when_agents_field_absent(self, tmp_path: Path) -> None:
+        """Test no PR001 warning for an agent when 'agents' is absent from plugin.json.
+
+        Tests: PR001 suppression for agents when the field is undeclared
+        How: plugin.json has no 'agents' key at all; an agent file exists; validate
+        Why: Per the vendor path-behavior rules, an explicit 'agents' array replaces
+            default discovery of ./agents/ -- only once declared. When the field is
+            absent, Claude Code still auto-discovers ./agents/ wholesale, so an
+            unregistered agent there is not a genuine gap and must not be flagged.
+        """
+        plugin_dir = _make_plugin(tmp_path, plugin_json_content=msgspec.json.encode({"name": "test-plugin"}).decode())
+        _add_agent(plugin_dir, "auto-discovered-agent")
+
+        validator = PluginRegistrationValidator()
+        result = validator.validate(plugin_dir)
+
+        pr001_warnings = [w for w in result.warnings if w.code == "PR001"]
+        assert len(pr001_warnings) == 0
+
+    def test_pr001_fires_for_unregistered_agent_when_agents_field_explicitly_empty(self, tmp_path: Path) -> None:
+        """Test PR001 fires for an orphan agent when 'agents' is an explicit empty array.
+
+        Tests: PR001 for agents once the plugin has opted into explicit registration
+        How: plugin.json declares 'agents': [] explicitly; an unregistered agent
+            file exists; validate
+        Why: Declaring 'agents' (even empty) replaces default discovery of
+            ./agents/, per the vendor path-behavior rules, so any file Claude Code
+            still finds there is a genuine gap that PR001 must flag.
+        """
+        plugin_dir = _make_plugin(
+            tmp_path, plugin_json_content=msgspec.json.encode({"name": "test-plugin", "agents": []}).decode()
+        )
+        _add_agent(plugin_dir, "orphan-agent")
+
+        validator = PluginRegistrationValidator()
+        result = validator.validate(plugin_dir)
+
+        pr001_warnings = [w for w in result.warnings if w.code == "PR001"]
+        assert len(pr001_warnings) >= 1
+        assert any("orphan-agent" in w.message for w in pr001_warnings)
+
 
 class TestUnregisteredCommand:
     """Test PR001 warning when command file exists but is not in plugin.json."""
@@ -401,6 +469,47 @@ class TestUnregisteredCommand:
 
         pr001_warnings = [w for w in result.warnings if w.code == "PR001"]
         assert len(pr001_warnings) >= 1
+
+    def test_no_pr001_for_unregistered_command_when_commands_field_absent(self, tmp_path: Path) -> None:
+        """Test no PR001 warning for a command when 'commands' is absent from plugin.json.
+
+        Tests: PR001 suppression for commands when the field is undeclared
+        How: plugin.json has no 'commands' key at all; a command file exists; validate
+        Why: Per the vendor path-behavior rules, an explicit 'commands' array
+            replaces default discovery of ./commands/ -- only once declared. When
+            the field is absent, Claude Code still auto-discovers ./commands/
+            wholesale, so an unregistered command there is not a genuine gap.
+        """
+        plugin_dir = _make_plugin(tmp_path, plugin_json_content=msgspec.json.encode({"name": "test-plugin"}).decode())
+        _add_command(plugin_dir, "auto-discovered-command")
+
+        validator = PluginRegistrationValidator()
+        result = validator.validate(plugin_dir)
+
+        pr001_warnings = [w for w in result.warnings if w.code == "PR001"]
+        assert len(pr001_warnings) == 0
+
+    def test_pr001_fires_for_unregistered_command_when_commands_field_explicitly_empty(self, tmp_path: Path) -> None:
+        """Test PR001 fires for an orphan command when 'commands' is an explicit empty array.
+
+        Tests: PR001 for commands once the plugin has opted into explicit registration
+        How: plugin.json declares 'commands': [] explicitly; an unregistered command
+            file exists; validate
+        Why: Declaring 'commands' (even empty) replaces default discovery of
+            ./commands/, per the vendor path-behavior rules, so any file Claude Code
+            still finds there is a genuine gap that PR001 must flag.
+        """
+        plugin_dir = _make_plugin(
+            tmp_path, plugin_json_content=msgspec.json.encode({"name": "test-plugin", "commands": []}).decode()
+        )
+        _add_command(plugin_dir, "orphan-command")
+
+        validator = PluginRegistrationValidator()
+        result = validator.validate(plugin_dir)
+
+        pr001_warnings = [w for w in result.warnings if w.code == "PR001"]
+        assert len(pr001_warnings) >= 1
+        assert any("orphan-command" in w.message for w in pr001_warnings)
 
     def test_registered_command_no_pr001(self, tmp_path: Path) -> None:
         """Test no PR001 warning when command is registered in plugin.json.
