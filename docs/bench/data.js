@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788678723545,
+  "lastUpdate": 1788682185827,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -1926,6 +1926,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 83.519,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "f7107187a046c525e10c79ae349600a2a5300a57",
+          "message": "fix(scan): route plugin-path discovery through the exclusion helper (#209)\n\n_discover_plugin_paths's convention-driven glob calls used raw\nroot.glob(...) directly, bypassing _glob_excluding — the exclusion\nhelper _discover_provider_paths and _discover_bare_paths already use.\nA skill/agent/command literally named .git/node_modules/.venv was\nsilently treated differently depending only on whether its containing\ntree was classified as PLUGIN vs. PROVIDER/BARE.\n\nFound during the integrated review of the last 48 hours of changes.\n\n\nClaude-Session: https://claude.ai/code/session_01G3ke4pBmhpiEuWoFTV2ax4\n\nCo-authored-by: Claude Sonnet 5 <noreply@anthropic.com>",
+          "timestamp": "2026-09-06T08:07:06Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/f7107187a046c525e10c79ae349600a2a5300a57"
+        },
+        "date": 1788682184755,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 8994.891,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 9474.1,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 10402.44,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 105.656,
             "unit": "files/s"
           }
         ]
