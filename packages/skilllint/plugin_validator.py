@@ -2578,18 +2578,30 @@ class DescriptionValidator:
         if description is None or not isinstance(description, str):
             return ValidationResult(passed=True, errors=errors, warnings=warnings, info=info)
 
-        self._check_description_quality(description, warnings)
+        self._check_description_quality(data, description, warnings)
         return ValidationResult(passed=len(errors) == 0, errors=errors, warnings=warnings, info=info)
 
-    def _check_description_quality(self, description: str, warnings: list[ValidationIssue]) -> None:
+    def _check_description_quality(
+        self, data: dict[str, YamlValue], description: str, warnings: list[ValidationIssue]
+    ) -> None:
         """Append warnings for description length and trigger phrases.
 
         Delegates to sk_series check_sk004/check_sk005 — the series module is
         the single source of truth for SK-series rule logic.
+
+        Args:
+            data: Full parsed frontmatter dict, needed so sk_series can read
+                `disable-model-invocation` and suppress both checks when a
+                skill has opted out of model-driven activation.
+            description: The frontmatter `description` value.
+            warnings: Mutable list to append warnings to.
         """
         from pathlib import Path as _Path  # ruff: ignore[import-outside-top-level]
 
-        frontmatter: dict[str, object] = {"description": description}
+        frontmatter: dict[str, object] = {
+            "description": description,
+            "disable-model-invocation": data.get("disable-model-invocation"),
+        }
         sentinel = _Path()
         file_type_str = self.file_type.value
         # Coerce through _coerce_validation_issues so that ValidationIssue

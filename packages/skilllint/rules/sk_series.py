@@ -91,6 +91,17 @@ def check_sk004(frontmatter: dict[str, object], path: Path, file_type: str) -> l
     if file_type not in {"skill", "agent"}:
         return []
 
+    if file_type == "skill" and frontmatter.get("disable-model-invocation") is True:
+        # Model-driven activation is opted out (client-implementation guide:
+        # a `disable-model-invocation: true` skill is hidden from the catalog
+        # and never model-selected), so description-quality lint opinions
+        # aimed at activation matching no longer apply. `disable-model-invocation`
+        # is a SkillFrontmatter-only field (frontmatter_core.py has no such
+        # field on AgentFrontmatter), so this only applies to file_type=="skill".
+        # `is True` (not truthy) so a malformed non-bool value (e.g. a quoted
+        # YAML string "false") never masks a real SK004 warning.
+        return []
+
     desc_val = frontmatter.get("description")
     if not isinstance(desc_val, str):
         return []
@@ -186,6 +197,14 @@ def check_sk005(frontmatter: dict[str, object], path: Path, file_type: str) -> l
     from skilllint.plugin_validator import ValidationIssue  # noqa: PLC0415
 
     if file_type != "skill":
+        return []
+
+    if frontmatter.get("disable-model-invocation") is True:
+        # Model-driven activation is opted out; trigger-phrase quality in
+        # the description is irrelevant for a skill that is never
+        # model-selected. `is True` (not truthy) so a malformed non-bool
+        # value (e.g. a quoted YAML string "false") never masks a real
+        # SK005 warning.
         return []
 
     desc_val = frontmatter.get("description")
