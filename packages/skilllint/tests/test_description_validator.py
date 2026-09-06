@@ -582,7 +582,7 @@ description: "test skill"
         Tests: Same short, trigger-phrase-free description with the flag
                explicitly set to false
         How: Validate a SKILL.md with disable-model-invocation: false
-        Why: Only a truthy flag should suppress the checks
+        Why: Only a real `True` boolean should suppress the checks
         """
         skill_md = tmp_path / "SKILL.md"
         skill_md.write_text("""---
@@ -598,3 +598,51 @@ disable-model-invocation: false
         warning_codes = {issue.code for issue in result.warnings}
         assert "SK004" in warning_codes
         assert "SK005" in warning_codes
+
+    def test_same_description_still_warns_when_flag_is_quoted_false_string(self, tmp_path: Path) -> None:
+        """Test SK004 and SK005 still fire when disable-model-invocation is the string "false".
+
+        Tests: Same short, trigger-phrase-free description with the flag
+               written as a quoted YAML string "false" rather than a boolean
+        How: Validate a SKILL.md with disable-model-invocation: "false"
+        Why: A non-empty string is truthy in Python — a raw `if frontmatter.get(...)`
+             check would wrongly suppress the checks for a quoted "false";
+             gating on `is True` avoids that
+        """
+        skill_md = tmp_path / "SKILL.md"
+        skill_md.write_text("""---
+description: "test skill"
+disable-model-invocation: "false"
+---
+""")
+
+        validator = DescriptionValidator(file_type=FileType.SKILL)
+        result = validator.validate(skill_md)
+
+        assert result.passed is True
+        warning_codes = {issue.code for issue in result.warnings}
+        assert "SK004" in warning_codes
+        assert "SK005" in warning_codes
+
+    def test_short_description_still_warns_for_agent_with_disable_flag(self, tmp_path: Path) -> None:
+        """Test SK004 still fires for an AGENT file with disable-model-invocation set.
+
+        Tests: A short description on an agent file that carries a
+               disable-model-invocation key (not a real AgentFrontmatter field)
+        How: Validate an agent .md with disable-model-invocation: true
+        Why: disable-model-invocation is a SkillFrontmatter-only concept;
+             an agent file setting it should not mask SK004
+        """
+        agent_md = tmp_path / "agent.md"
+        agent_md.write_text("""---
+description: "test agent"
+disable-model-invocation: true
+---
+""")
+
+        validator = DescriptionValidator(file_type=FileType.AGENT)
+        result = validator.validate(agent_md)
+
+        assert result.passed is True
+        warning_codes = {issue.code for issue in result.warnings}
+        assert "SK004" in warning_codes
