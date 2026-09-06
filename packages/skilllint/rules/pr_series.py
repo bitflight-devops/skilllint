@@ -22,7 +22,7 @@ Rule IDs and default severities:
     | PR002 | Registered capability path does not exist                 | error     |
     | PR003 | Plugin metadata fields not populated                      | info      |
     | PR004 | Plugin metadata repository URL mismatches git remote URL  | warning   |
-    | PR005 | Registered command path is a skill directory              | error     |
+    | PR005 | Registered command path is a skill directory              | info      |
     +-------+-----------------------------------------------------------+-----------+
 """
 
@@ -466,26 +466,32 @@ def check_pr004(manifest: dict[str, YamlValue], git_metadata: dict[str, YamlValu
 
 @skilllint_rule(
     "PR005",
-    severity="error",
+    severity="info",
     category="plugin-registration",
     platforms=["agentskills"],
-    authority={"origin": "github.com/jamie-bitflight/claude_skills"},
+    authority={
+        "origin": "code.claude.com",
+        "reference": "https://code.claude.com/docs/en/plugins-reference.md#component-path-fields",
+    },
 )
 def check_pr005(manifest: dict[str, YamlValue], plugin_dir: Path) -> list[ValidationIssue]:
     """## PR005 — Registered command path is a skill directory
 
     A path listed in the ``commands`` array of ``plugin.json`` resolves to a
-    directory that contains a ``SKILL.md`` file.  Skill directories must be
-    listed under ``skills``, not ``commands``.  Listing a skill directory as a
-    command causes incorrect runtime behaviour and may prevent the skill from
-    loading.
+    directory that contains a ``SKILL.md`` file.  Per
+    code.claude.com/docs/en/plugins-reference, ``commands`` accepts "custom
+    flat .md skill files or directories", so this is valid configuration, not
+    a load-blocking error.  Listing it under ``commands`` instead of
+    ``skills`` does forgo skill-only features (e.g. supporting files) that
+    code.claude.com/docs/en/skills gives as the reason skills are recommended
+    over commands.
 
     **Source:** ``PluginRegistrationValidator.validate`` in
     ``plugin_validator.py`` — checks whether each registered command path is a
     directory containing a ``SKILL.md`` file.
 
-    **Fix:** Move the path from the ``commands`` array to the ``skills`` array
-    in ``plugin.json``:
+    **Fix (recommended, not required):** Move the path from the ``commands``
+    array to the ``skills`` array in ``plugin.json``:
 
     ```json
     {
@@ -499,18 +505,19 @@ def check_pr005(manifest: dict[str, YamlValue], plugin_dir: Path) -> list[Valida
         plugin_dir: Plugin directory containing ``.claude-plugin/plugin.json``.
 
     Returns:
-        One error per registered command path that is a directory containing a
-        ``SKILL.md``.
+        One info issue per registered command path that is a directory
+        containing a ``SKILL.md``.
 
     <!-- examples: PR005 -->
     """
     return [
         _make_issue(
             field="plugin.json",
-            severity="error",
+            severity="info",
             message=(
                 f"Registered command '{ref}' is a skill directory (contains SKILL.md). "
-                f"Skill directories must not be listed under 'commands'."
+                f"Consider listing it under 'skills' instead of 'commands' — skills support "
+                f"features (e.g. supporting files) that commands do not."
             ),
             code="PR005",
             suggestion=f"Move '{ref}' from the 'commands' array to the 'skills' array in plugin.json",

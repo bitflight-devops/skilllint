@@ -175,7 +175,7 @@ Validate `plugin.json` capability registration (skills, agents, commands arrays)
 | PR002 | error | no | Registered capability path does not exist on the filesystem |
 | PR003 | info | no | Plugin metadata fields not populated (`repository`, `homepage`, `author`) |
 | PR004 | warning | no | Plugin metadata repository URL mismatches git remote URL |
-| PR005 | error | no | Registered command path is a skill directory (contains `SKILL.md`) |
+| PR005 | info | no | Registered command path is a skill directory (contains `SKILL.md`) |
 
 ---
 
