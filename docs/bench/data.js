@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788678327370,
+  "lastUpdate": 1788678723545,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -1884,6 +1884,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 80.625,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "2e69f25ac1f64e004bd2925d8f64d388a15f875e",
+          "message": "fix(AS006): recognize evals/evals.json, cite live agentskills.io authority (#207)\n\n* fix(AS006): recognize evals/evals.json, cite live agentskills.io authority\n\nAS006 only scanned files via parent.iterdir(), so a skill following the\ndocumented evals/evals.json layout was invisible to it and got falsely\nflagged \"No eval_queries.json found\". Add an explicit check for\nevals/evals.json alongside the existing eval_queries.json and\n*eval*.json/*queries*.json file checks (unchanged).\n\nAlso re-verified the rule's authority citation live: agentskills.io's\nspecification.md has zero eval-related content (checked via `skilllint\ndocs fetch`), so the old {\"origin\": \"agentskills.io\", \"reference\":\n\"/specification#evaluation-queries\"} citation was dangling. The real\nagentskills.io coverage lives on a sibling page,\nskill-creation/evaluating-skills.md (\"Designing test cases\" section),\nwhich verbatim documents storing test cases in evals/evals.json — the\nsame layout Claude Code's skill-creator plugin uses. Rewrote the\nauthority as an absolute URL to that page, following the pattern PD001/\nPD003 established in #197.\n\nFixes the false positive from issue #199, which proposed a new rule for\nthis; AS006 already owns this exact concept, so this is a bug fix to\nthe existing rule rather than a new rule ID.\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01G3ke4pBmhpiEuWoFTV2ax4\n\n* fix(AS006): drop unsupported skill-creator plugin citation, sync message\n\nThe docstring claimed evals/evals.json is documented by \"Claude Code's\nskill-creator plugin,\" but the vendored Claude Code reference\n(skill-creator-original.md) and the rest of the vendored claude_code\ntree contain zero occurrences of \"eval\" related to a file layout — the\nclaim had no citation. Removed the unsupported half, keeping only the\nverified agentskills.io evaluating-skills citation. Also synced the\nAS006 violation message and AS_RULES summary to mention both accepted\nlayouts (eval_queries.json and evals/evals.json), matching the\ndocstring's existing \"Fix:\" guidance.\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01G3ke4pBmhpiEuWoFTV2ax4\n\n* fix(test): remove unsupported skill-creator-plugin claim from test docstring\n\nThe AS006 fix removed this unsourced claim from the rule's own docstring\nbut left an identical copy in the regression test's docstring.\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01G3ke4pBmhpiEuWoFTV2ax4\n\n---------\n\nCo-authored-by: Claude Sonnet 5 <noreply@anthropic.com>",
+          "timestamp": "2026-09-06T07:09:19Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/2e69f25ac1f64e004bd2925d8f64d388a15f875e"
+        },
+        "date": 1788678722399,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 11419.585,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 11985.319,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 12885.006,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 83.519,
             "unit": "files/s"
           }
         ]
