@@ -102,6 +102,9 @@ def _make_issue(
     # docstring that `skilllint rule <CODE>` renders, and claim-level provenance
     # lives in schemas/provenance-registry.json.
     authority={"origin": "anthropic.com"},
+    # Only the missing/empty-description branch matches the guide's classified
+    # behavior — see the "Client behaviour" docstring paragraph below.
+    client_load_behavior="skip-skill",
 )
 def check_fm001(frontmatter: dict, path: Path, file_type: str) -> list[ValidationIssue]:
     """## FM001 — Missing required field
@@ -119,6 +122,16 @@ def check_fm001(frontmatter: dict, path: Path, file_type: str) -> list[Validatio
     "description — Required: Recommended"
 
     **Fix:** Add the missing `name` and/or `description` field to the frontmatter.
+
+    **Client behaviour:** the client-implementation guide's lenient-validation
+    bullets cover only the missing/empty-**description** branch of this rule:
+    "Description is missing or empty → skip the skill (a description is
+    essential for disclosure), log the error"
+    (https://agentskills.io/client-implementation/adding-skills-support#lenient-validation).
+    FM001 also fires on a missing `name` and on agent files (where both fields
+    are error-severity, not warning) — the guide does not classify those
+    branches, so `client_load_behavior` describes only the description branch,
+    not everything this rule checks.
 
     Returns:
         List of ValidationIssue objects, one per missing field; empty when both
@@ -169,6 +182,7 @@ def check_fm001(frontmatter: dict, path: Path, file_type: str) -> list[Validatio
     category="frontmatter",
     platforms=["agentskills"],
     authority={"origin": "anthropic.com", "reference": _SKILLS_SPEC_URL},
+    client_load_behavior="skip-skill",
 )
 def check_fm002(frontmatter: dict, path: Path, file_type: str) -> list[ValidationIssue]:
     """## FM002 — Invalid YAML syntax
@@ -183,6 +197,13 @@ def check_fm002(frontmatter: dict, path: Path, file_type: str) -> list[Validatio
     **Fix:** Correct the YAML syntax in the frontmatter block. Common causes
     are unquoted colons in values (e.g. `description: Foo: bar` — quote it
     as `description: "Foo: bar"`).
+
+    **Client behaviour:** the client-implementation guide's lenient-validation
+    bullets state: "YAML is completely unparseable → skip the skill, log the
+    error"
+    (https://agentskills.io/client-implementation/adding-skills-support#lenient-validation). FM002 fires
+    on exactly that condition — completely unparseable frontmatter YAML — so
+    this classification covers the whole of what FM002 checks.
 
     Returns:
         Always an empty list. FM002 is emitted by the YAML parsing layer in
@@ -485,6 +506,10 @@ def check_fm009(frontmatter: dict, path: Path, file_type: str) -> list[Validatio
     # docstring that `skilllint rule <CODE>` renders, and claim-level provenance
     # lives in schemas/provenance-registry.json.
     authority={"origin": "anthropic.com"},
+    # Only 2 of FM010's 4 branches (directory mismatch, >64 chars) match the
+    # guide's classified behavior — see the "Client behaviour" docstring
+    # paragraph below. Charset and consecutive-hyphen branches are unclassified.
+    client_load_behavior="warn-and-load",
 )
 def check_fm010(frontmatter: dict, path: Path, file_type: str) -> list[ValidationIssue]:
     """## FM010 — Name field does not match directory name or violates naming pattern
@@ -502,6 +527,16 @@ def check_fm010(frontmatter: dict, path: Path, file_type: str) -> list[Validatio
 
     **Fix:** Set `name` to match the parent directory name, using only lowercase
     letters, digits, and hyphens.
+
+    **Client behaviour:** the client-implementation guide's lenient-validation
+    bullets classify two of FM010's four branches:
+    "Name doesn't match the parent directory name → warn, load anyway" and
+    "Name exceeds 64 characters → warn, load anyway"
+    (https://agentskills.io/client-implementation/adding-skills-support#lenient-validation).
+    FM010 also fires on a disallowed character set and on consecutive hyphens
+    — branches the guide's bullets do not enumerate — so `client_load_behavior`
+    describes only the directory-mismatch and length branches, not everything
+    this rule checks.
 
     Returns:
         List of error issues describing pattern violations or a directory-name
