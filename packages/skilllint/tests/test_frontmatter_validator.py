@@ -390,6 +390,36 @@ description: Test agent
         assert result.passed is False
         assert any(issue.code == "FM010" for issue in result.errors)
 
+    def test_overlength_name_reports_fm010_only(self, tmp_path: Path) -> None:
+        """Test an over-64-char name reports FM010 once, not FM005+FM010 (#139).
+
+        Tests: Frontmatter with a name exceeding the 64-character limit
+        How: Create a skill with a 65-character name, validate
+        Why: Pydantic's max_length rejection and check_fm010's own length
+             check both cover this case; FM010 is the sole documented owner
+             of name-length validation, so the Pydantic-triggered error must
+             be attributed to FM010, not the unrelated FM005 field-type code,
+             and must not also duplicate as a second FM010 finding.
+        """
+        long_name = "a" * 65
+        skill_dir = tmp_path / long_name
+        skill_dir.mkdir()
+        skill_md = skill_dir / "SKILL.md"
+        skill_md.write_text(f"""---
+name: {long_name}
+description: A valid description that is long enough to pass minimum checks.
+---
+
+# Content
+""")
+
+        validator = FrontmatterValidator()
+        result = validator.validate(skill_md)
+
+        assert result.passed is False
+        codes = [issue.code for issue in result.errors]
+        assert codes == ["FM010"], f"Expected exactly one FM010 finding, got: {codes}"
+
 
 class TestFrontmatterEdgeCases:
     """Test edge cases and boundary conditions."""
