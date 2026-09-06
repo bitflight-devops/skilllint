@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788674238002,
+  "lastUpdate": 1788677221877,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -1716,6 +1716,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 85.745,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "122e569055c3a368aa9cecf7b727a48d9e9e3401",
+          "message": "fix(scan): discover skills under known provider dirs (.claude/skills etc.) (#202)\n\n* fix(scan): discover skills under known provider dirs (.claude/skills etc.)\n\n_discover_provider_paths only globbed {provider}/agents/**/*.md, so a\nprovider directory's skills/ subtree (e.g. .claude/skills/x/SKILL.md) was\nnever discovered by any scan path — the generic bare-scan pattern that\nwould otherwise catch it is explicitly excluded once a directory is\nrecognized as a covered provider root. This repo's own .claude/skills/\n(linear-walkthrough, mmap-processor, rebase, receiving-pr-reviews) was a\nlive instance: `skilllint check .` reported clean while never actually\nvalidating any of the four skills there.\n\nFix _discover_provider_paths to also glob {provider}/skills/*/SKILL.md,\nmirroring how agents/ is already discovered. The existing covered_roots\ndedup in _discover_bare_paths already prevents double-counting once a\nskill is reachable via both the provider path and the generic pattern;\nadded a regression test asserting single occurrence.\n\nAlso add a by-name exclusion (.git, node_modules, .venv) applied to every\ndiscovery glob. .git/ is not covered by the existing gitignore-based\nfilter (verified: git check-ignore does not match .git/ paths, since\n.gitignore never declares .git itself). .venv/ and node_modules/ are\ntypically covered by gitignore, but that filter only runs downstream in\nrun_validation_loop and requires a git repo to exist at all, so a non-git\ncheckout gets no protection — the by-name exclusion in the discovery walk\nis the single mechanism that also covers that case.\n\nVerified via before/after `skilllint check . --show-summary`: total files\n72->76, passed 62->66, exactly the four .claude/skills/ skills, all clean.\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01G3ke4pBmhpiEuWoFTV2ax4\n\n* fix(scan): exclude only ancestry discovered beneath the scan root, not the root's own path\n\n_is_within_excluded_dir tested every component of a glob match, including\nsegments that belonged to the scan root's own path (e.g. a real target\nnamed node_modules/my-plugin). Any scan root whose path itself contained\n.git/node_modules/.venv silently discovered nothing. Fixed the single\nchoke point (_glob_excluding) to test only the path relative to the\ndirectory being walked, so exclusion still applies to trees discovered\nduring a walk but never to the root's own ancestry. This also resolves\nthe same-file inconsistency between naming a skill folder directly vs.\nnaming its parent, since both now walk from a base that excludes nothing\nabove it.\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01G3ke4pBmhpiEuWoFTV2ax4\n\n---------\n\nCo-authored-by: Claude Sonnet 5 <noreply@anthropic.com>",
+          "timestamp": "2026-09-06T06:44:10Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/122e569055c3a368aa9cecf7b727a48d9e9e3401"
+        },
+        "date": 1788677221240,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 11091.484,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 11649.046,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 12702.583,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 85.93,
             "unit": "files/s"
           }
         ]
