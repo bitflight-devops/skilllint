@@ -91,6 +91,35 @@ def test_as001_missing_name_is_error(tmp_path: pathlib.Path):
     assert as001[0]["severity"] == "error", f"AS001 missing-name must be an error, got: {as001[0]['severity']}"
 
 
+def test_as001_block_scalar_body_collision_is_not_a_name_field(tmp_path: pathlib.Path):
+    """A ``name: ...``-shaped line inside a block-scalar description is not the name field.
+
+    Regression for the naive colon-splitter that used to back AS001: it read
+    frontmatter line-by-line without YAML indentation awareness, so a line
+    inside a multi-line ``description: |`` block that happened to read
+    ``name: something`` was misread as a top-level ``name`` key — masking a
+    SKILL.md that has no real ``name`` field at all.
+    """
+    skill_dir = tmp_path / "my-skill"
+    skill_dir.mkdir()
+    skill_md = skill_dir / "SKILL.md"
+    skill_md.write_text(
+        textwrap.dedent("""\
+            ---
+            description: |
+              This skill does many things.
+              name: something
+              It also documents its own fields inline.
+            ---
+
+            Body content.
+        """)
+    )
+    as001 = _violations_with_code(check_skill_md(skill_md), "AS001")
+    assert as001 != [], "Expected AS001: no real top-level name field, only a block-scalar body collision"
+    assert as001[0]["severity"] == "error", f"AS001 missing-name must be an error, got: {as001[0]['severity']}"
+
+
 # ---------------------------------------------------------------------------
 # AS002: name matches parent directory name
 # ---------------------------------------------------------------------------
