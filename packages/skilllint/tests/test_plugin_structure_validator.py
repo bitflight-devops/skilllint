@@ -491,8 +491,10 @@ class TestMarketplaceJsonLayout:
         validator = PluginStructureValidator()
         result = validator.validate(plugin_dir)
 
-        assert result.passed is False
-        assert any(e.code == PL006 for e in result.errors)
+        # PL006 unrecognized/misplaced root keys are a warning, not an error
+        # (verified against `claude plugin validate` v2.1.263, see issue #145).
+        assert result.passed is True
+        assert any(e.code == PL006 for e in result.warnings)
         mock_run.assert_not_called()
 
     def test_pl006_recognized_field_suggests_move_to_metadata(self, tmp_path: Path) -> None:
@@ -511,7 +513,7 @@ class TestMarketplaceJsonLayout:
         validator = PluginStructureValidator()
         result = validator.validate(plugin_dir)
 
-        pl006 = [e for e in result.errors if e.code == PL006]
+        pl006 = [e for e in result.warnings if e.code == PL006]
         assert len(pl006) == 1
         assert pl006[0].suggestion is not None
         assert "metadata" in pl006[0].suggestion
@@ -531,7 +533,7 @@ class TestMarketplaceJsonLayout:
         validator = PluginStructureValidator()
         result = validator.validate(plugin_dir)
 
-        pl006 = [e for e in result.errors if e.code == PL006]
+        pl006 = [e for e in result.warnings if e.code == PL006]
         assert len(pl006) == 1
         assert pl006[0].suggestion is not None
         assert "remove or rename" in pl006[0].suggestion.lower()
@@ -560,6 +562,31 @@ class TestMarketplaceJsonLayout:
         result = validator.validate(plugin_dir)
 
         assert not any(e.code == PL006 for e in result.errors)
+        assert not any(e.code == PL006 for e in result.warnings)
+
+    def test_pl006_non_object_root_stays_error(self, tmp_path: Path) -> None:
+        """A non-object marketplace.json root is a structural defect, not an
+        unrecognized-key finding, and must stay an **error** (exit 1).
+
+        Regression guard: a naive blanket ``severity="error"`` -> ``"warning"``
+        find-and-replace across `check_pl006` would wrongly downgrade this
+        case too. Verified against `claude plugin validate` v2.1.263 (issue
+        #145): a non-object root still reports a real error, non-zero exit.
+        """
+        plugin_dir = tmp_path / "test-plugin"
+        plugin_dir.mkdir()
+        claude_plugin = plugin_dir / ".claude-plugin"
+        claude_plugin.mkdir()
+        (claude_plugin / "plugin.json").write_text('{"name": "test"}')
+        (claude_plugin / "marketplace.json").write_text(json.dumps([1, 2, 3]))
+
+        validator = PluginStructureValidator()
+        result = validator.validate(plugin_dir)
+
+        assert result.passed is False
+        pl006 = [e for e in result.errors if e.code == PL006]
+        assert len(pl006) == 1
+        assert not any(e.code == PL006 for e in result.warnings)
 
     def test_fix_leaves_documented_marketplace_json_byte_identical(self, tmp_path: Path) -> None:
         """`--fix` must not rewrite a marketplace.json with documented root fields.
@@ -617,5 +644,7 @@ class TestMarketplaceJsonLayout:
         validator = PluginStructureValidator()
         result = validator.validate(plugin_dir)
 
-        assert result.passed is False
-        assert any(e.code == PL006 for e in result.errors)
+        # Subprocess-derived PL006 (fallback parser) is also a warning
+        # (verified against `claude plugin validate` v2.1.263, see issue #145).
+        assert result.passed is True
+        assert any(e.code == PL006 for e in result.warnings)

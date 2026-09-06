@@ -115,6 +115,31 @@ def test_token_band_severity_is_configurable(tmp_path: Path) -> None:
     assert diagnostics == []
 
 
+def test_pl006_severity_is_configurable(tmp_path: Path) -> None:
+    # PL006's unrecognized-root-key finding is a warning by default (issue
+    # #145/#152); a config override must still be honored, same as SK006/SK007.
+    cfg = tmp_path / ".skilllint.json"
+    cfg.write_text(json.dumps({"severity": {"PL006": "info"}}))
+    policy, diagnostics = _load_policy(cfg)
+    assert policy.severity == {"PL006": "info"}
+    assert diagnostics == []
+
+
+def test_resolve_policy_finds_plugin_config_from_plugin_root_directory(tmp_path: Path) -> None:
+    # `_get_validators_for_path` passes the plugin ROOT DIRECTORY itself (not
+    # a file within it) to `_resolve_policy` for FileType.PLUGIN. Regression
+    # guard: `start_dir` must search from that directory, not its parent, or
+    # PL006's (and any other plugin-root-scoped rule's) own
+    # `.claude-plugin/validator.json` is silently skipped.
+    root = tmp_path / "plugin"
+    (root / ".claude-plugin").mkdir(parents=True)
+    (root / ".claude-plugin" / "plugin.json").write_text("{}")
+    (root / ".claude-plugin" / "validator.json").write_text(json.dumps({"severity": {"PL006": "info"}}))
+    policy, config_root = _resolve_policy(root, {})
+    assert policy.severity == {"PL006": "info"}
+    assert config_root == root
+
+
 def test_inverted_thresholds_reset_to_defaults(tmp_path: Path) -> None:
     # SK006 >= SK007 makes the warning band unreachable; reset both (finding #2).
     cfg = tmp_path / ".skilllint.json"

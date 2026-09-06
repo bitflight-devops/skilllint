@@ -33,8 +33,14 @@ Rule IDs and default severities:
     | PL003 | Missing required field 'name' in plugin.json              | error     |
     | PL004 | Component path does not start with './'                   | error     |
     | PL005 | Referenced component file does not exist                  | error     |
-    | PL006 | marketplace.json has invalid top-level keys               | error     |
+    | PL006 | marketplace.json has invalid top-level keys               | split*    |
     +-------+-----------------------------------------------------------+-----------+
+
+    * PL006 severity is not uniform: unrecognized top-level keys are a
+      **warning** (verified against ``claude plugin validate`` v2.1.263, see
+      issue #145), while a non-object ``marketplace.json`` root is a genuine
+      structural defect and stays an **error**. ``@skilllint_rule`` still
+      registers PL006's nominal default as ``error`` (see ``check_pl006``).
 
 Import note: ValidationIssue is deferred inside ``_make_issue`` to break the
 circular import: plugin_validator imports rules/, so rules/ cannot import
@@ -235,8 +241,9 @@ def claude_validation_failure_issue(stdout: str, stderr: str) -> ValidationIssue
     """Build the catch-all issue for a failed ``claude plugin validate`` run.
 
     Used when the subprocess reported failure but no PL001-PL005 pattern
-    matched.  Emits PL006 when the output names unrecognized marketplace keys,
-    otherwise a generic PL002.
+    matched.  Emits PL006 as a **warning** when the output names unrecognized
+    marketplace keys (verified against ``claude plugin validate`` v2.1.263,
+    see issue #145), otherwise a generic PL002.
 
     Args:
         stdout: Standard output from claude CLI.
@@ -250,7 +257,7 @@ def claude_validation_failure_issue(stdout: str, stderr: str) -> ValidationIssue
     if "marketplace" in low and "unrecognized keys" in low:
         return _make_issue(
             field="marketplace.json",
-            severity="error",
+            severity="warning",
             message=(
                 "marketplace.json: top-level keys rejected by `claude plugin validate` "
                 "(see the Claude Code marketplace schema for the documented root keys)"
@@ -538,6 +545,11 @@ def check_pl005(claude_output: str) -> list[ValidationIssue]:
 # PL006 — marketplace.json has invalid top-level keys
 # ---------------------------------------------------------------------------
 
+# Severity split verified against `claude plugin validate` v2.1.263 (issue
+# #145): unrecognized top-level keys are a warning; a non-object root stays
+# an error. The decorator below keeps "error" as PL006's nominal default,
+# matching the check_pa001 precedent for dual-severity rules.
+
 
 @skilllint_rule(
     "PL006",
@@ -554,6 +566,15 @@ def check_pl006(plugin_dir: Path) -> list[ValidationIssue]:
     ``plugins``, ``metadata``, ``$schema``, ``description``, ``version``,
     ``allowCrossMarketplaceDependenciesOn``, or ``renames`` (see
     ``MARKETPLACE_JSON_ROOT_KEYS``).
+
+    **Severity is split by branch**, verified against ``claude plugin
+    validate`` v2.1.263 (issue #145):
+
+    - Unrecognized/misplaced top-level keys -> **warning**: the vendor CLI
+      reports these under ``warnings`` with ``errors: []`` and exits 0.
+    - A non-object ``marketplace.json`` root -> **error**: a genuine
+      structural defect: the vendor CLI still reports a real error and a
+      non-zero exit for this case.
 
     Detection is **direct**: ``.claude-plugin/marketplace.json`` is read and
     decoded, then its root keys are classified by
@@ -653,7 +674,7 @@ def check_pl006(plugin_dir: Path) -> list[ValidationIssue]:
     return [
         _make_issue(
             field="marketplace.json",
-            severity="error",
+            severity="warning",
             message=f"marketplace.json violates the Claude Code marketplace schema: {detail}.",
             code="PL006",
             suggestion=suggestion,
