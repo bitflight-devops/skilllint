@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788682622239,
+  "lastUpdate": 1788690069273,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -2010,6 +2010,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 82.981,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "fef5f37b6a823ae012bd0d861fde6eb2df16f425",
+          "message": "fix(PR005): downgrade to info, replace placeholder authority (#212)\n\nPR005 flagged a SKILL.md-bearing directory registered under a plugin's\n`commands` field as an error, citing a placeholder authority\n(github.com/jamie-bitflight/claude_skills) and an unsourced claim that the\nconfig \"may prevent the skill from loading.\"\n\ncode.claude.com/docs/en/plugins-reference documents `commands` as accepting\n\"custom flat .md skill files or directories\" (Component path fields), and\ncode.claude.com/docs/en/skills documents skills as recommended over commands\nfor feature parity reasons (supporting files), not because commands can't\nhold a skill directory. So the configuration PR005 flags is valid, not\nload-blocking -- downgrade to info, cite the real plugins-reference section,\nand rewrite the message as a recommendation. Also fixes plugin_validator.py's\nPluginRegistrationValidator.validate, which hardcoded PR005 into the errors\nbucket regardless of the rule's declared severity.\n\nPR005 was the last rule in RULE_REGISTRY carrying the jamie-bitflight\nplaceholder authority.\n\nCloses #195\n\n\nClaude-Session: https://claude.ai/code/session_01G3ke4pBmhpiEuWoFTV2ax4\n\nCo-authored-by: Claude Sonnet 5 <noreply@anthropic.com>",
+          "timestamp": "2026-09-06T10:18:14Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/fef5f37b6a823ae012bd0d861fde6eb2df16f425"
+        },
+        "date": 1788690068493,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 11472.231,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 12202.877,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 13638.145,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 82.03,
             "unit": "files/s"
           }
         ]
