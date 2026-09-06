@@ -7,9 +7,11 @@ Tests:
 - Sidecar: write_sidecar, load_sidecar
 - Timestamp: utc_now_iso
 - Directory constants: PROJECT_ROOT, VENDOR_DIR, SOURCES_DIR
+- Worktree detection: _shared_checkout_root
 
 How: Unit tests with tmp_path for file operations, mocker.patch for httpx,
-     known-input/known-output checks for hash functions.
+     known-input/known-output checks for hash functions, real `git init` /
+     `git worktree add` subprocess calls for worktree-detection tests.
 Why: vendor_io is the foundation layer used by all vendor documentation scripts;
      correctness here is required for cache integrity and offline-first behaviour.
 """
@@ -18,7 +20,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 from datetime import datetime
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import httpx
@@ -28,6 +32,7 @@ from skilllint.vendor_io import (
     PROJECT_ROOT,
     SOURCES_DIR,
     VENDOR_DIR,
+    _shared_checkout_root,
     fetch_url_text,
     load_json_or_none,
     load_sidecar,
@@ -40,8 +45,6 @@ from skilllint.vendor_io import (
 )
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from pytest_mock import MockerFixture
 
 # ---------------------------------------------------------------------------
@@ -698,16 +701,20 @@ class TestDirectoryConstants:
         # Arrange / Act / Assert
         assert (PROJECT_ROOT / "pyproject.toml").exists()
 
-    def test_vendor_dir_is_under_project_root_claude(self) -> None:
-        """VENDOR_DIR is PROJECT_ROOT / '.claude' / 'vendor'.
+    def test_vendor_dir_is_shared_checkout_root_claude_vendor(self) -> None:
+        """VENDOR_DIR is _shared_checkout_root(PROJECT_ROOT) / '.claude' / 'vendor'.
 
         Tests: VENDOR_DIR path derivation
-        How: Compare VENDOR_DIR against the expected composed path.
+        How: Compare VENDOR_DIR against the expected composed path, deriving the
+             base via _shared_checkout_root rather than assuming PROJECT_ROOT
+             directly — VENDOR_DIR is redirected to the primary checkout root
+             when running inside a linked git worktree (see issue #116).
         Why: Scripts must write into .claude/vendor; an incorrect constant
-             would scatter files elsewhere in the repo.
+             would scatter files elsewhere in the repo, or make a worktree's
+             cache invisible to the primary checkout and vice versa.
         """
         # Arrange / Act / Assert
-        assert VENDOR_DIR == PROJECT_ROOT / ".claude" / "vendor"
+        assert _shared_checkout_root(PROJECT_ROOT) / ".claude" / "vendor" == VENDOR_DIR
 
     def test_sources_dir_is_under_vendor_dir(self) -> None:
         """SOURCES_DIR is VENDOR_DIR / 'sources'.
@@ -719,3 +726,250 @@ class TestDirectoryConstants:
         """
         # Arrange / Act / Assert
         assert SOURCES_DIR == VENDOR_DIR / "sources"
+
+
+# ---------------------------------------------------------------------------
+# Worktree detection
+# ---------------------------------------------------------------------------
+
+
+def _run_git(args: list[str], *, cwd: Path) -> None:
+    """Run a git command, raising with captured output on failure.
+
+    Args:
+        args: Arguments to pass to ``git`` (excluding the ``git`` executable itself).
+        cwd: Working directory to run the command in.
+
+    Raises:
+        subprocess.CalledProcessError: If the git command exits non-zero.
+    """
+    subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)
+
+
+def _init_repo_with_commit(repo_dir: Path) -> None:
+    """Create a git repository at *repo_dir* with a single commit.
+
+    Args:
+        repo_dir: Directory to initialise as a git repository. Must already exist.
+    """
+    _run_git(["init", "--initial-branch=main"], cwd=repo_dir)
+    _run_git(["config", "user.email", "test@example.com"], cwd=repo_dir)
+    _run_git(["config", "user.name", "Test"], cwd=repo_dir)
+    (repo_dir / "file.txt").write_text("content\n", encoding="utf-8")
+    _run_git(["add", "."], cwd=repo_dir)
+    _run_git(["commit", "-m", "initial commit"], cwd=repo_dir)
+
+
+class TestSharedCheckoutRoot:
+    """Tests for _shared_checkout_root — linked-worktree primary-checkout detection.
+
+    Uses real ``git init`` / ``git worktree add`` subprocess calls rather than
+    mocks, per the issue #116 fix requirement that detection be validated
+    against actual git-managed filesystem shapes, not simulated behaviour.
+    """
+
+    def test_non_git_directory_returns_start_unchanged(self, tmp_path: Path) -> None:
+        """A directory with no .git entry at all returns start unchanged.
+
+        Tests: _shared_checkout_root with no repository present
+        How: Pass a plain empty directory with no .git file or directory.
+        Why: An installed wheel with no .git anywhere above it must resolve
+             VENDOR_DIR under itself, not raise or require git.
+        """
+        # Arrange
+        plain_dir = tmp_path / "no_repo"
+        plain_dir.mkdir()
+
+        # Act
+        result = _shared_checkout_root(plain_dir)
+
+        # Assert
+        assert result == plain_dir
+
+    def test_plain_checkout_returns_start_unchanged(self, tmp_path: Path) -> None:
+        """A plain checkout (.git is a directory) returns start unchanged.
+
+        Tests: _shared_checkout_root with a plain (non-worktree) checkout
+        How: git init a real repository, assert the function returns its own root.
+        Why: The overwhelming majority of clones are plain checkouts; this must
+             be a complete no-op for them, preserving today's behaviour exactly.
+        """
+        # Arrange
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        _init_repo_with_commit(repo)
+
+        # Act
+        result = _shared_checkout_root(repo)
+
+        # Assert
+        assert result == repo
+
+    def test_linked_worktree_returns_primary_checkout_root(self, tmp_path: Path) -> None:
+        """A linked worktree (git worktree add) resolves to the primary checkout root.
+
+        Tests: _shared_checkout_root with a real linked worktree
+        How: git init a repo with a commit, `git worktree add` a second working
+             tree, assert _shared_checkout_root(worktree) == primary repo root.
+        Why: This is the exact issue #116 scenario — a linked worktree's
+             gitignored .claude/vendor/ must resolve to the primary checkout's
+             cache, not its own empty directory.
+        """
+        # Arrange
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        _init_repo_with_commit(repo)
+        worktree = tmp_path / "linked-worktree"
+        _run_git(["worktree", "add", str(worktree)], cwd=repo)
+
+        # Act
+        result = _shared_checkout_root(worktree)
+
+        # Assert
+        assert result == repo.resolve()
+
+    def test_submodule_shape_returns_start_unchanged(self, tmp_path: Path) -> None:
+        """A submodule's .git file (gitdir with no commondir) returns start unchanged.
+
+        Tests: _shared_checkout_root defensive fallback for the submodule shape
+        How: Construct the filesystem shape directly (a .git file pointing at a
+             gitdir that lacks a commondir file) — the same shape `git submodule
+             add` produces — rather than invoking `git submodule add`, whose
+             exact internal layout depends on git version and requires enabling
+             the file:// transport (CVE-2022-39253 mitigation) in CI.
+        Why: A submodule's .git file has no commondir, so it must be treated as
+             "not a linked worktree" and never redirected — confirmed as a
+             distinct case during design.
+        """
+        # Arrange
+        submodule_dir = tmp_path / "submodule"
+        submodule_gitdir = tmp_path / "parent" / ".git" / "modules" / "submodule"
+        submodule_gitdir.mkdir(parents=True)
+        submodule_dir.mkdir()
+        (submodule_dir / ".git").write_text(f"gitdir: {submodule_gitdir}\n", encoding="utf-8")
+        # No commondir file under submodule_gitdir — this is what distinguishes
+        # a submodule's gitdir from a linked worktree's gitdir.
+
+        # Act
+        result = _shared_checkout_root(submodule_dir)
+
+        # Assert
+        assert result == submodule_dir
+
+    def test_bare_repo_worktree_resolves_via_commondir(self, tmp_path: Path) -> None:
+        """A worktree attached to a bare repository resolves via its commondir.
+
+        Tests: _shared_checkout_root with a bare-repo-backed worktree
+        How: Create a bare repo, seed it with a commit via a throwaway clone,
+             then `git --git-dir=<bare> worktree add` a real working tree.
+        Why: Bare-repo worktree setups are a distinct topology from a linked
+             worktree off a normal checkout; the commondir-resolution algorithm
+             must handle both without special-casing.
+        """
+        # Arrange
+        bare = tmp_path / "repo.git"
+        _run_git(["init", "--bare", "--initial-branch=main", str(bare)], cwd=tmp_path)
+        seed = tmp_path / "seed"
+        seed.mkdir()
+        _run_git(["clone", str(bare), str(seed)], cwd=tmp_path)
+        _run_git(["config", "user.email", "test@example.com"], cwd=seed)
+        _run_git(["config", "user.name", "Test"], cwd=seed)
+        (seed / "file.txt").write_text("content\n", encoding="utf-8")
+        _run_git(["add", "."], cwd=seed)
+        _run_git(["commit", "-m", "initial commit"], cwd=seed)
+        _run_git(["push", "origin", "main"], cwd=seed)
+        bare_worktree = tmp_path / "bare-worktree"
+        _run_git(["--git-dir", str(bare), "worktree", "add", str(bare_worktree), "main"], cwd=tmp_path)
+
+        # Act
+        result = _shared_checkout_root(bare_worktree)
+
+        # Assert — the bare repo's directory has no working-tree parent of its
+        # own, so the resolved commondir's parent is the bare repo's *parent*
+        # directory. This is the algorithm's defined, deterministic behaviour
+        # for this topology, not a meaningful "primary checkout" in the
+        # linked-worktree sense.
+        assert result == bare.resolve().parent
+
+    def test_malformed_gitdir_content_returns_start_unchanged(self, tmp_path: Path) -> None:
+        """A .git file with unreadable/garbage gitdir content returns start unchanged.
+
+        Tests: _shared_checkout_root defensive fallback for malformed .git file
+        How: Write a .git file with content that doesn't match the "gitdir: "
+             prefix contract at all.
+        Why: Must never raise on a corrupt or foreign .git file; always falls
+             back to treating the directory as its own root.
+        """
+        # Arrange
+        weird_dir = tmp_path / "weird"
+        weird_dir.mkdir()
+        (weird_dir / ".git").write_text("not a gitdir pointer\n", encoding="utf-8")
+
+        # Act
+        result = _shared_checkout_root(weird_dir)
+
+        # Assert
+        assert result == weird_dir
+
+    def test_gitdir_pointing_nowhere_returns_start_unchanged(self, tmp_path: Path) -> None:
+        """A .git file pointing at a nonexistent gitdir returns start unchanged.
+
+        Tests: _shared_checkout_root defensive fallback for a dangling gitdir pointer
+        How: Write a .git file whose gitdir target directory doesn't exist,
+             so reading its commondir file fails.
+        Why: A dangling or stale worktree registration must never raise;
+             falls back to start.
+        """
+        # Arrange
+        dangling_dir = tmp_path / "dangling"
+        dangling_dir.mkdir()
+        (dangling_dir / ".git").write_text(f"gitdir: {tmp_path / 'nonexistent-gitdir'}\n", encoding="utf-8")
+
+        # Act
+        result = _shared_checkout_root(dangling_dir)
+
+        # Assert
+        assert result == dangling_dir
+
+
+# ---------------------------------------------------------------------------
+# Regression guard: PROJECT_ROOT must stay worktree-local
+# ---------------------------------------------------------------------------
+
+
+class TestProjectRootStaysWorktreeLocal:
+    """Regression guard for issue #116 point 1 — PROJECT_ROOT is never redirected.
+
+    Only VENDOR_DIR (and therefore SOURCES_DIR) is redirected to the primary
+    checkout root inside a linked worktree. PROJECT_ROOT itself must remain
+    worktree-local because scripts/fetch_spec_schema.py uses it to write
+    tracked source files (packages/skilllint/schemas/agentskills_io/ and
+    packages/skilllint/_spec_constants.py); redirecting it would make a
+    worktree run of that script silently overwrite generated source in a
+    different working tree than the one being edited.
+    """
+
+    def test_schema_dir_resolves_under_this_checkout_not_a_shared_one(self) -> None:
+        """fetch_spec_schema.SCHEMA_DIR resolves under this test's own repo root.
+
+        Tests: PROJECT_ROOT (and everything derived from it) is not passed
+               through _shared_checkout_root.
+        How: Compute this test file's own repo root independently of vendor_io
+             (by walking up from __file__), then assert SCHEMA_DIR and
+             PROJECT_ROOT both match it exactly. This test runs for real
+             inside a linked worktree in CI/dev — if PROJECT_ROOT were ever
+             redirected to a primary checkout, this assertion would fail
+             whenever a primary checkout with an existing cache exists
+             alongside the worktree running the tests.
+        Why: Guards against the exact wrong-implementation described in the
+             issue #116 design — redirecting PROJECT_ROOT instead of only
+             VENDOR_DIR.
+        """
+        # Arrange
+        from scripts.fetch_spec_schema import SCHEMA_DIR
+
+        this_checkout_root = Path(__file__).resolve().parents[3]
+
+        # Act / Assert
+        assert this_checkout_root == PROJECT_ROOT
+        assert this_checkout_root / "packages" / "skilllint" / "schemas" / "agentskills_io" == SCHEMA_DIR

@@ -678,7 +678,9 @@ Vendor documentation directory inside `.claude/`.
 
 **Type**: `Path`
 
-**Value**: `{PROJECT_ROOT} / ".claude" / "vendor"`
+**Value**: `_shared_checkout_root(PROJECT_ROOT) / ".claude" / "vendor"`
+
+Redirected to the primary checkout root when running inside a linked git worktree (`git worktree add`), so the gitignored cache is shared instead of duplicated — and silently invisible — per worktree. A plain (non-worktree) checkout is unaffected: `_shared_checkout_root` returns `PROJECT_ROOT` unchanged.
 
 **Usage**
 
@@ -1007,7 +1009,7 @@ A file is considered stale when its age (time since `fetched_at` in the sidecar)
 
 **SOURCES_DIR**
 
-Default: `{PROJECT_ROOT} / ".claude" / "vendor" / "sources"`
+Default: `_shared_checkout_root(PROJECT_ROOT) / ".claude" / "vendor" / "sources"` (see VENDOR_DIR above)
 
 The constant is defined in `skilllint.vendor_io.SOURCES_DIR` and cannot be reconfigured via environment variables or config files. To use a different directory, pass `sources_dir` to `find_latest()` or create cached files manually in the desired location.
 

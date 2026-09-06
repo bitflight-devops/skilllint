@@ -9,8 +9,8 @@ It is imported by scripts that fetch, cache, and compare external documentation:
 
 Public API:
   Constants:
-    PROJECT_ROOT -- absolute path to the repository root
-    VENDOR_DIR   -- PROJECT_ROOT / ".claude" / "vendor"
+    PROJECT_ROOT -- absolute path to the repository root (worktree-local)
+    VENDOR_DIR   -- _shared_checkout_root(PROJECT_ROOT) / ".claude" / "vendor"
     SOURCES_DIR  -- VENDOR_DIR / "sources"
 
   Functions:
@@ -47,10 +47,89 @@ import httpx
 #:   .parent                → packages/skilllint/
 #:   .parent.parent         → packages/
 #:   .parent.parent.parent  → repo root (contains pyproject.toml)
+#: This stays worktree-local by design: scripts/fetch_spec_schema.py uses it
+#: to write tracked source files, and those must land in the worktree the
+#: agent is actually operating in, not a sibling checkout.
 PROJECT_ROOT: Path = Path(__file__).resolve().parent.parent.parent
 
+
+def _read_git_internal_file_or_none(path: Path) -> str | None:
+    """Read a git-internal metadata file (``.git``, ``commondir``), stripped.
+
+    Args:
+        path: Path to the git-internal file to read.
+
+    Returns:
+        Stripped file content, or None if the file is missing, unreadable,
+        or otherwise inaccessible (permission error, is a directory, etc.).
+    """
+    try:
+        return path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+
+
+def _shared_checkout_root(start: Path) -> Path:
+    """Return the primary checkout root when *start* sits inside a linked git worktree.
+
+    A plain checkout has ``.git`` as a directory; a linked worktree (created by
+    ``git worktree add``) has ``.git`` as a *file* containing a ``gitdir:``
+    pointer into the primary checkout's ``.git/worktrees/<name>/`` directory,
+    which in turn holds a ``commondir`` file pointing back at the shared
+    ``.git`` directory. Resolving that chain yields the primary checkout root,
+    which is where a gitignored cache directory (e.g. ``.claude/vendor/``)
+    actually lives and is shared across all worktrees.
+
+    Detection here is pure filesystem inspection — no ``git`` subprocess call.
+    This function runs at ``skilllint`` package import time, so a subprocess
+    round-trip would tax every CLI invocation, and it would also require
+    ``git`` on PATH, which an installed wheel's consumer may not have.
+
+    Args:
+        start: Directory to inspect (typically ``PROJECT_ROOT``).
+
+    Returns:
+        The primary checkout root if *start* is a linked worktree with a
+        resolvable ``commondir``; otherwise *start* unchanged. Never raises —
+        any missing, unreadable, or malformed git-internal file (including
+        the submodule case, where ``.git`` is a file but its gitdir has no
+        ``commondir``) is treated as "not a linked worktree" and falls back
+        to *start*.
+    """
+    git_entry = start / ".git"
+    if not git_entry.is_file():
+        return start
+
+    gitdir_line = _read_git_internal_file_or_none(git_entry)
+    prefix = "gitdir: "
+    if gitdir_line is None or not gitdir_line.startswith(prefix):
+        return start
+
+    gitdir_path = Path(gitdir_line[len(prefix) :].strip())
+    if not gitdir_path.is_absolute():
+        gitdir_path = start / gitdir_path
+
+    commondir_line = _read_git_internal_file_or_none(gitdir_path / "commondir")
+    if not commondir_line:
+        return start
+
+    commondir_path = Path(commondir_line)
+    if not commondir_path.is_absolute():
+        commondir_path = gitdir_path / commondir_path
+
+    try:
+        resolved_git_dir = commondir_path.resolve(strict=True)
+    except OSError:
+        return start
+
+    return resolved_git_dir.parent
+
+
 #: Vendor documentation directory inside .claude/.
-VENDOR_DIR: Path = PROJECT_ROOT / ".claude" / "vendor"
+#: Redirected to the primary checkout when running inside a linked git
+#: worktree, so the gitignored cache is shared instead of duplicated
+#: (and silently invisible) per worktree. See _shared_checkout_root.
+VENDOR_DIR: Path = _shared_checkout_root(PROJECT_ROOT) / ".claude" / "vendor"
 
 #: Per-source cached documents directory.
 SOURCES_DIR: Path = VENDOR_DIR / "sources"
