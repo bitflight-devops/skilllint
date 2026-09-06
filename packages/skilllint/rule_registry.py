@@ -31,7 +31,7 @@ from urllib.parse import urljoin
 
 from pydantic import BaseModel, Field
 
-from skilllint.rules._constants import RuleCategory, RulePlatform
+from skilllint.rules._constants import ClientLoadBehavior, RuleCategory, RulePlatform
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -105,6 +105,7 @@ class RuleEntry(BaseModel):
     platforms: list[RulePlatform]  # ["agentskills"] = all platforms, or specific like ["claude-code"]
     docstring: str
     authority: RuleAuthority | None = None
+    client_load_behavior: ClientLoadBehavior | None = None
 
 
 # Global registry: rule ID → RuleEntry
@@ -125,6 +126,7 @@ def skilllint_rule(
     category: RuleCategory,
     platforms: list[RulePlatform] | None = None,
     authority: dict | None = None,
+    client_load_behavior: ClientLoadBehavior | None = None,
 ) -> Callable[[Callable], Callable]:
     """Decorator to register a validator function as a rule.
 
@@ -136,6 +138,10 @@ def skilllint_rule(
                    Defaults to ["agentskills"].
         authority: Optional authority metadata dict with 'origin' and optional 'reference' keys.
                    Converted to RuleAuthority dataclass.
+        client_load_behavior: Optional declarative record of what a real client does for this
+                   rule's finding ("warn-and-load" or "skip-skill"), per the client-implementation
+                   guide. Defaults to None when the guide does not say, mirroring authority's
+                   None-means-unstated semantics.
 
     Returns:
         Decorated function (unchanged) that's registered in RULE_REGISTRY.
@@ -170,6 +176,7 @@ def skilllint_rule(
             platforms=platforms,
             docstring=fn.__doc__ or f"Rule {rule_id}",
             authority=rule_authority,
+            client_load_behavior=client_load_behavior,
         )
         RULE_REGISTRY[rule_id.upper()] = entry
         return fn

@@ -367,6 +367,37 @@ class RuleAuthority:
     reference: str | None = None  # URL or doc path
 ```
 
+### Client Load Behavior
+
+`RuleEntry.client_load_behavior` is a separate, optional field recording what a
+real Claude Code / agent-skill client actually *does* at load time for a
+rule's finding — `"warn-and-load"` (the client logs a warning and loads the
+skill anyway) or `"skip-skill"` (the client refuses to load the skill). It is
+distinct from `authority`: `authority` says where a constraint comes from,
+`client_load_behavior` says what happens when a client encounters a
+violation of it.
+
+Set it only when the client-implementation guide
+(`https://agentskills.io/client-implementation/adding-skills-support#lenient-validation`)
+is explicit about client behavior for that exact check. Pass it as a keyword
+argument to `@skilllint_rule`, the same way as `authority`:
+
+```python
+@skilllint_rule(
+    "FM010",
+    severity="error",
+    category="frontmatter",
+    client_load_behavior="warn-and-load",
+)
+```
+
+It defaults to `None` — "the guide does not say" — matching how `authority`
+defaults to `None` for "no external reference." There is no third literal
+member for "unknown"; `None` already covers it. Most rules will leave this
+unset: only classify a rule when the guide states the client's behavior for
+the specific branch the rule checks, and note any branch-granularity gap
+(a rule checking more than the guide classifies) in the rule's docstring.
+
 ### In Violation Dicts
 
 Rules can include authority directly in violation outputs:
