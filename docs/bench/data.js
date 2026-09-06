@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788677952991,
+  "lastUpdate": 1788678327370,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -1842,6 +1842,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 133.96,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "5ea713b0fc8b635831c191f1497ed09bce2060b0",
+          "message": "fix(SK004,SK005): suppress description-quality checks when model invocation is disabled (#204)\n\n* fix(SK004,SK005): suppress description-quality checks when model invocation is disabled\n\nA skill with disable-model-invocation: true is hidden from the catalog and\nnever model-selected, so its description never drives activation matching.\nSK004 (minimum length) and SK005 (trigger phrases) both exist to improve\nmodel-driven activation quality, which is moot for such a skill.\n\nAlso fixes the DescriptionValidator call site, which previously narrowed\nthe frontmatter dict passed to check_sk004/check_sk005 down to just\n{\"description\": ...} -- the new gate would never have seen the flag\nwithout also threading it through here.\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01G3ke4pBmhpiEuWoFTV2ax4\n\n* fix(test): restore test_cm001_error_code_is_defined to its original class\n\nThe new TestDisableModelInvocationSuppression class was inserted in the\nmiddle of TestFileTypeAwareScoping, splitting it and pulling an unrelated\nCM001 test into the new class by accident of insertion point.\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01G3ke4pBmhpiEuWoFTV2ax4\n\n* fix(SK004,SK005): require exact bool True for disable-model-invocation gate\n\nA quoted YAML string (\"false\") is truthy in Python, so the raw dict\ntruthiness check wrongly suppressed SK004/SK005 for a skill that never\nintended to opt out. Also scope the SK004 suppression to file_type==\"skill\"\nonly, since disable-model-invocation isn't a field AgentFrontmatter defines\nand shouldn't mask a real too-short-description warning on agent files.\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01G3ke4pBmhpiEuWoFTV2ax4\n\n---------\n\nCo-authored-by: Claude Sonnet 5 <noreply@anthropic.com>",
+          "timestamp": "2026-09-06T07:02:41Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/5ea713b0fc8b635831c191f1497ed09bce2060b0"
+        },
+        "date": 1788678326426,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 11713.405,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 12415.499,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 13436.71,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 80.625,
             "unit": "files/s"
           }
         ]
