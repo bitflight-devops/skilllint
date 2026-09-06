@@ -179,9 +179,9 @@ def _discover_plugin_paths(manifest: PluginManifest) -> list[Path]:
             if path_list is not None:
                 discovered.update(root / rel for rel in path_list)
     else:
-        discovered.update(root.glob("agents/*.md"))
-        discovered.update(root.glob("commands/*.md"))
-        discovered.update(path.parent for path in root.glob("skills/*/SKILL.md"))
+        discovered.update(_glob_excluding(root, "agents/*.md"))
+        discovered.update(_glob_excluding(root, "commands/*.md"))
+        discovered.update(path.parent for path in _glob_excluding(root, "skills/*/SKILL.md"))
 
     discovered.add(root)
 
