@@ -601,6 +601,7 @@ def check_hk004(hook_entries: Iterable[object], base_dir: Path) -> list[Validati
         "origin": "code.claude.com",
         "reference": "https://code.claude.com/docs/en/plugins-reference.md#hook-troubleshooting",
     },
+    fixable=True,
 )
 def check_hk005(hook_entries: Iterable[object], base_dir: Path) -> list[ValidationIssue]:
     """## HK005 — Hook script exists but is not executable

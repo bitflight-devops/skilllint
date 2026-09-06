@@ -25,7 +25,7 @@ explicit provenance; this module remains a transitional compatibility surface.
 #   1. Add to the appropriate section below
 #   2. Include a source URL or reference in the docstring
 #   3. Add corresponding entries to the RuleLimit enum (if applicable)
-#   4. Update documentation (rule-catalog.md, README.md)
+#   4. Update documentation (README.md)
 #
 # ---------------------------------------------------------------------------
 #

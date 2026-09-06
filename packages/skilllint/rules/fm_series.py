@@ -267,6 +267,7 @@ _FM004_DESCRIPTION_BLOCK_SCALAR = re.compile(r"(?m)^description\s*:\s*(?:\|[-+]?
     # No authority: opinion-catalog.json records FM004 as a style preference with
     # no upstream source — the Claude Code runtime accepts block scalars — so
     # violations must not carry a vendor origin.
+    fixable=True,
 )
 def check_fm004(
     frontmatter: dict, path: Path, file_type: str, *, frontmatter_yaml: str | None = None
@@ -401,6 +402,7 @@ def check_fm006(frontmatter: dict, path: Path, file_type: str) -> list[Validatio
     category="frontmatter",
     platforms=["agentskills"],
     authority={"origin": "anthropic.com", "reference": _SKILLS_SPEC_URL},
+    fixable=True,
 )
 def check_fm007(frontmatter: dict, path: Path, file_type: str) -> list[ValidationIssue]:
     """## FM007 — Tools field is a YAML array (prefer CSV string)
@@ -458,6 +460,7 @@ def check_fm007(frontmatter: dict, path: Path, file_type: str) -> list[Validatio
     category="frontmatter",
     platforms=["agentskills"],
     authority={"origin": "anthropic.com", "reference": _SKILLS_SPEC_URL},
+    fixable=True,
 )
 def check_fm009(frontmatter: dict, path: Path, file_type: str) -> list[ValidationIssue]:
     """## FM009 — Unquoted value containing colon
@@ -510,6 +513,7 @@ def check_fm009(frontmatter: dict, path: Path, file_type: str) -> list[Validatio
     # guide's classified behavior — see the "Client behaviour" docstring
     # paragraph below. Charset and consecutive-hyphen branches are unclassified.
     client_load_behavior="warn-and-load",
+    fixable=True,
 )
 def check_fm010(frontmatter: dict, path: Path, file_type: str) -> list[ValidationIssue]:
     """## FM010 — Name field does not match directory name or violates naming pattern
