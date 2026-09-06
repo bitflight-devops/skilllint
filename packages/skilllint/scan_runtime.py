@@ -57,6 +57,14 @@ class ScanContext(StrEnum):
 
 KNOWN_PROVIDER_DIRS: frozenset[str] = frozenset({".claude", ".cursor", ".gemini", ".codex"})
 
+# Directory names skilllint never scans into during discovery. `.git` and
+# `node_modules` are the client-implementation guide's explicit recommendation
+# (agentskills.io/client-implementation/adding-skills-support); `.venv` is the
+# same class of irrelevant/vendored tree and is not reliably covered by the
+# separate gitignore-based filter in run_validation_loop (that filter only
+# applies when a git repo is present at all).
+EXCLUDED_DIR_NAMES: frozenset[str] = frozenset({".git", "node_modules", ".venv"})
+
 PLUGIN_FILTER_TYPE_MAP: dict[str, str] = {
     "skills": "skills/*/SKILL.md",
     "agents": "agents/*.md",
@@ -220,13 +228,28 @@ def _is_skill_folder(path: Path) -> bool:
     return path.is_dir() and (path / "SKILL.md").is_file()
 
 
+def _is_within_excluded_dir(path: Path) -> bool:
+    """Return whether any component of *path* is a directory skilllint skips."""
+    return any(part in EXCLUDED_DIR_NAMES for part in path.parts)
+
+
+def _glob_excluding(directory: Path, pattern: str) -> list[Path]:
+    """Glob *pattern* under *directory*, dropping matches under excluded dirs.
+
+    Returns:
+        Matching paths, excluding any under a directory named in EXCLUDED_DIR_NAMES.
+    """
+    return [p for p in directory.glob(pattern) if not _is_within_excluded_dir(p)]
+
+
 def _discover_provider_paths(directory: Path) -> list[Path]:
     """Discover validatable files in a provider directory.
 
-    Uses the provider's known agent location pattern:
+    Uses the provider's known locations:
         {directory}/agents/**/*.md
+        {directory}/skills/*/SKILL.md
 
-    No other files in the provider tree are discovered as agents.
+    No other files in the provider tree are discovered as agents or skills.
 
     Args:
         directory: The provider directory (e.g., .claude/).
@@ -234,7 +257,9 @@ def _discover_provider_paths(directory: Path) -> list[Path]:
     Returns:
         Sorted list of unique paths.
     """
-    return sorted(set(directory.glob("agents/**/*.md")))
+    discovered: set[Path] = set(_glob_excluding(directory, "agents/**/*.md"))
+    discovered.update(path.parent for path in _glob_excluding(directory, "skills/*/SKILL.md"))
+    return sorted(discovered)
 
 
 def _discover_bare_paths(directory: Path) -> list[Path]:
@@ -245,14 +270,14 @@ def _discover_bare_paths(directory: Path) -> list[Path]:
     """
     discovered: set[Path] = set()
     plugin_roots: set[Path] = set()
-    for plugin_json in directory.glob("**/.claude-plugin/plugin.json"):
+    for plugin_json in _glob_excluding(directory, "**/.claude-plugin/plugin.json"):
         plugin_root = plugin_json.parent.parent
         plugin_roots.add(plugin_root)
         discovered.update(_discover_plugin_paths(_parse_plugin_manifest(plugin_root)))
 
     provider_roots: set[Path] = set()
     for provider_name in KNOWN_PROVIDER_DIRS:
-        for provider_dir in directory.glob(f"**/{provider_name}"):
+        for provider_dir in _glob_excluding(directory, f"**/{provider_name}"):
             if not provider_dir.is_dir() or any(provider_dir.is_relative_to(root) for root in plugin_roots):
                 continue
             provider_roots.add(provider_dir)
@@ -260,7 +285,7 @@ def _discover_bare_paths(directory: Path) -> list[Path]:
 
     covered_roots = plugin_roots | provider_roots
     for pattern in DEFAULT_SCAN_PATTERNS:
-        for match in directory.glob(pattern):
+        for match in _glob_excluding(directory, pattern):
             if pattern.endswith("plugin.json"):
                 candidate = match.parent.parent
             elif pattern.endswith("skills/*/SKILL.md"):
