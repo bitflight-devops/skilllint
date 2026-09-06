@@ -374,10 +374,17 @@ def _count_levels_under_skills(path: pathlib.Path) -> int:
     "AS009",
     severity="warning",
     category="skill",
+    platforms=["claude-code"],
     authority={"origin": "anthropic.com", "reference": "https://docs.anthropic.com/en/docs/claude-code/skills"},
 )
 def _check_as009(path: pathlib.Path) -> dict | None:
     """AS009 — Nested skill will not be auto-discovered.
+
+    Unlike its AS-series siblings (AS001, AS006, AS008), this rule is not
+    sourced from the agentskills.io specification — its ``authority`` above
+    cites Claude Code's own docs, and it describes a Claude Code auto-discovery
+    limitation. It is scoped to ``platforms=["claude-code"]`` instead of the
+    AS-series default of "applies to every platform" for that reason.
 
     Claude Code skills only support single-level namespacing. A SKILL.md must be
     a direct child of the ``skills/`` directory (e.g., ``skills/my-skill/SKILL.md``).
