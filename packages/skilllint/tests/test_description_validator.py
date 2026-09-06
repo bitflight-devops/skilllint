@@ -509,6 +509,86 @@ description: "test skill"
         assert "SK004" in warning_codes
         assert "SK005" in warning_codes
 
+
+class TestDisableModelInvocationSuppression:
+    """Test SK004/SK005 are suppressed when disable-model-invocation is set.
+
+    Per the client-implementation guide, a skill with
+    `disable-model-invocation: true` is hidden from the catalog and never
+    model-selected, so description length (SK004) and trigger-phrase
+    quality (SK005) — both aimed at model-driven activation — no longer
+    apply.
+    """
+
+    def test_short_no_trigger_description_suppressed_when_disabled(self, tmp_path: Path) -> None:
+        """Test SK004 and SK005 do not fire when disable-model-invocation is true.
+
+        Tests: A short, trigger-phrase-free description on an opted-out skill
+        How: Validate a SKILL.md with disable-model-invocation: true
+        Why: Model-driven activation quality lint opinions are moot for a
+             skill that is never model-selected
+        """
+        skill_md = tmp_path / "SKILL.md"
+        skill_md.write_text("""---
+description: "test skill"
+disable-model-invocation: true
+---
+""")
+
+        validator = DescriptionValidator(file_type=FileType.SKILL)
+        result = validator.validate(skill_md)
+
+        assert result.passed is True
+        warning_codes = {issue.code for issue in result.warnings}
+        assert "SK004" not in warning_codes
+        assert "SK005" not in warning_codes
+
+    def test_same_description_still_warns_when_flag_absent(self, tmp_path: Path) -> None:
+        """Test SK004 and SK005 still fire for the same description without the flag.
+
+        Tests: Same short, trigger-phrase-free description with no
+               disable-model-invocation key present
+        How: Validate a SKILL.md lacking the flag entirely
+        Why: Proves the gate keys off disable-model-invocation specifically,
+             not that the checks were broken outright
+        """
+        skill_md = tmp_path / "SKILL.md"
+        skill_md.write_text("""---
+description: "test skill"
+---
+""")
+
+        validator = DescriptionValidator(file_type=FileType.SKILL)
+        result = validator.validate(skill_md)
+
+        assert result.passed is True
+        warning_codes = {issue.code for issue in result.warnings}
+        assert "SK004" in warning_codes
+        assert "SK005" in warning_codes
+
+    def test_same_description_still_warns_when_flag_false(self, tmp_path: Path) -> None:
+        """Test SK004 and SK005 still fire when disable-model-invocation is false.
+
+        Tests: Same short, trigger-phrase-free description with the flag
+               explicitly set to false
+        How: Validate a SKILL.md with disable-model-invocation: false
+        Why: Only a truthy flag should suppress the checks
+        """
+        skill_md = tmp_path / "SKILL.md"
+        skill_md.write_text("""---
+description: "test skill"
+disable-model-invocation: false
+---
+""")
+
+        validator = DescriptionValidator(file_type=FileType.SKILL)
+        result = validator.validate(skill_md)
+
+        assert result.passed is True
+        warning_codes = {issue.code for issue in result.warnings}
+        assert "SK004" in warning_codes
+        assert "SK005" in warning_codes
+
     def test_cm001_error_code_is_defined(self) -> None:
         """Test CM001 error code constant is exported from plugin_validator.
 
