@@ -91,6 +91,78 @@ def test_as001_missing_name_is_error(tmp_path: pathlib.Path):
     assert as001[0]["severity"] == "error", f"AS001 missing-name must be an error, got: {as001[0]['severity']}"
 
 
+def test_as001_block_scalar_body_collision_is_not_a_name_field(tmp_path: pathlib.Path):
+    """A ``name: ...``-shaped line inside a block-scalar description is not the name field.
+
+    Regression for the naive colon-splitter that used to back AS001: it read
+    frontmatter line-by-line without YAML indentation awareness, so a line
+    inside a multi-line ``description: |`` block that happened to read
+    ``name: something`` was misread as a top-level ``name`` key — masking a
+    SKILL.md that has no real ``name`` field at all.
+    """
+    skill_dir = tmp_path / "my-skill"
+    skill_dir.mkdir()
+    skill_md = skill_dir / "SKILL.md"
+    skill_md.write_text(
+        textwrap.dedent("""\
+            ---
+            description: |
+              This skill does many things.
+              name: something
+              It also documents its own fields inline.
+            ---
+
+            Body content.
+        """)
+    )
+    as001 = _violations_with_code(check_skill_md(skill_md), "AS001")
+    assert as001 != [], "Expected AS001: no real top-level name field, only a block-scalar body collision"
+    assert as001[0]["severity"] == "error", f"AS001 missing-name must be an error, got: {as001[0]['severity']}"
+
+
+def test_parse_skill_md_body_lines_excludes_closing_delimiter(tmp_path: pathlib.Path):
+    """body_lines for a well-formed file must not include the closing '---'.
+
+    Regression: _parse_skill_md delegates to plugin_validator.parse_skill_md,
+    which used to slice body_lines as ``lines[end_line:]`` — off by one, so
+    the closing frontmatter delimiter leaked in as the first body line.
+    """
+    from skilllint.rules.as_series import _parse_skill_md
+
+    skill_dir = tmp_path / "my-skill"
+    skill_dir.mkdir()
+    skill_md = skill_dir / "SKILL.md"
+    skill_md.write_text(
+        textwrap.dedent("""\
+            ---
+            name: my-skill
+            description: A valid skill description.
+            ---
+            Body content.
+        """)
+    )
+    _frontmatter, body_lines = _parse_skill_md(skill_md)
+    assert body_lines == ["Body content."], f"Expected the delimiter excluded from body_lines, got: {body_lines}"
+
+
+def test_parse_skill_md_unclosed_frontmatter_returns_empty_body(tmp_path: pathlib.Path):
+    """Unclosed frontmatter (opening '---' with no closing '---') yields no body.
+
+    Regression: after this PR moved off the naive colon splitter,
+    _parse_skill_md returned the entire raw file as body_lines for this case
+    instead of the pre-existing ``[]`` behavior.
+    """
+    from skilllint.rules.as_series import _parse_skill_md
+
+    skill_dir = tmp_path / "my-skill"
+    skill_dir.mkdir()
+    skill_md = skill_dir / "SKILL.md"
+    skill_md.write_text("---\nname: my-skill\ndescription: never closed\n")
+    frontmatter, body_lines = _parse_skill_md(skill_md)
+    assert frontmatter == {}
+    assert body_lines == [], f"Expected empty body_lines for unclosed frontmatter, got: {body_lines}"
+
+
 # ---------------------------------------------------------------------------
 # AS002: name matches parent directory name
 # ---------------------------------------------------------------------------

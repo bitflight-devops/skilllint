@@ -56,44 +56,25 @@ AS_RULES: dict[str, str] = {
 def _parse_skill_md(path: pathlib.Path) -> tuple[dict, list[str]]:
     """Parse a SKILL.md file into frontmatter dict and body lines.
 
-    Frontmatter is delimited by leading '---' lines. Everything after
-    the closing '---' is the body.
+    Delegates to plugin_validator.parse_skill_md — the same real-YAML
+    extract+parse+body-slice sequence AsSeriesValidator.validate already
+    uses for the production AS-series entry point — instead of
+    reimplementing it a third time (the other existing copy is
+    _extract_tools_list, below). Real YAML parsing matters because a naive
+    line-by-line colon splitter has no notion of YAML indentation or block
+    scalars, so a line inside a multi-line ``description: |`` value that
+    happens to read like ``name: something`` would be misread as a
+    top-level ``name`` key, masking a SKILL.md with no real name field.
 
     Returns:
         (frontmatter, body_lines) where frontmatter is a dict of parsed YAML
         fields and body_lines is the content after the frontmatter block.
     """
-    text = path.read_text(encoding="utf-8")
-    lines = text.splitlines()
+    # Deferred import to break circular dependency; plugin_validator imports
+    # rules modules, so we defer here rather than at module level.
+    from skilllint.plugin_validator import parse_skill_md  # noqa: PLC0415
 
-    frontmatter: dict = {}
-    body_lines: list[str] = []
-
-    if not lines or lines[0].strip() != "---":
-        # No frontmatter — treat entire file as body
-        return {}, lines
-
-    # Find closing '---'
-    close_idx = None
-    for i, line in enumerate(lines[1:], start=1):
-        if line.strip() == "---":
-            close_idx = i
-            break
-
-    if close_idx is None:
-        # Unclosed frontmatter — parse what we can, no body
-        return {}, []
-
-    # Parse frontmatter lines as simple key: value YAML
-    for line in lines[1:close_idx]:
-        if ":" in line:
-            key, _, value = line.partition(":")
-            key_stripped = key.strip()
-            value_stripped = value.strip()
-            frontmatter[key_stripped] = value_stripped
-
-    body_lines = lines[close_idx + 1 :]
-
+    frontmatter, body_lines, _yaml_err, _colon_fields = parse_skill_md(path)
     return frontmatter, body_lines
 
 
