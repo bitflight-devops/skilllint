@@ -244,7 +244,14 @@ def check_lk001(content: str, path: Path) -> list[ValidationIssue]:
     <!-- examples: LK001 -->
     """
     issues: list[ValidationIssue] = []
-    skill_dir = path.parent
+    # Resolve to absolute up front: callers (pre-commit, in particular) pass
+    # relative paths, and every downstream use of skill_dir -- the
+    # ${CLAUDE_SKILL_DIR} substitution, the find_plugin_dir() walk behind
+    # ${CLAUDE_PLUGIN_ROOT}, and the final join below -- must operate on an
+    # absolute base or a relative substituted path (e.g. "plugins/foo/README.md")
+    # gets appended onto skill_dir instead of replacing it (Path.__truediv__
+    # only discards the left operand when the right operand is absolute).
+    skill_dir = path.parent.resolve()
 
     for link_text, link_url, link_url_no_fragment in _iter_links(content):
         # Resolve documented ${CLAUDE_*} substitution variables before the

@@ -529,6 +529,46 @@ See [foo](${CLAUDE_PLUGIN_ROOT}/docs/foo.md) for details.
         assert result.passed is True
         assert not any(issue.code == "LK001" for issue in result.errors)
 
+    def test_claude_plugin_root_resolves_with_relative_invocation_path(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """${CLAUDE_PLUGIN_ROOT} must resolve correctly even when SKILL.md is
+        passed as a path relative to cwd (as pre-commit always invokes hooks).
+
+        Regression test for a real-world false positive: ``skill_dir =
+        path.parent`` stayed relative, so substituting a relative
+        ``plugin_root`` into the link and then joining it onto the
+        already-relative ``skill_dir`` *extended* the path instead of
+        replacing it (``Path.__truediv__`` only discards the left operand
+        when the right operand is absolute).
+        """
+        plugin_dir = tmp_path / "my-plugin"
+        claude_plugin_dir = plugin_dir / ".claude-plugin"
+        claude_plugin_dir.mkdir(parents=True)
+        (claude_plugin_dir / "plugin.json").write_text('{"name": "my-plugin"}', encoding="utf-8")
+
+        (plugin_dir / "README.md").write_text("# Plugin\n")
+
+        skill_dir = plugin_dir / "skills" / "my-skill"
+        skill_dir.mkdir(parents=True)
+        skill_md = skill_dir / "SKILL.md"
+        skill_md.write_text("""---
+description: Test skill
+---
+
+See [readme](${CLAUDE_PLUGIN_ROOT}/README.md) for details.
+""")
+
+        monkeypatch.chdir(tmp_path)
+        relative_skill_md = skill_md.relative_to(tmp_path)
+        assert not relative_skill_md.is_absolute()
+
+        validator = InternalLinkValidator()
+        result = validator.validate(relative_skill_md)
+
+        assert result.passed is True
+        assert not any(issue.code == "LK001" for issue in result.errors)
+
     def test_claude_plugin_root_skipped_when_no_plugin_json_found(self, tmp_path: Path) -> None:
         """${CLAUDE_PLUGIN_ROOT} is skipped (not reported broken) when no
         plugin.json exists anywhere above the skill -- skilllint has no basis
