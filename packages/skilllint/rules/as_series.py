@@ -56,11 +56,14 @@ AS_RULES: dict[str, str] = {
 def _parse_skill_md(path: pathlib.Path) -> tuple[dict, list[str]]:
     """Parse a SKILL.md file into frontmatter dict and body lines.
 
-    Uses real YAML parsing (extract_frontmatter + safe_load_yaml_with_colon_fix
-    — the same pattern _extract_tools_list uses below), not a line-by-line
-    colon splitter. A naive splitter has no notion of YAML indentation or
-    block scalars, so a line inside a multi-line ``description: |`` value
-    that happens to read like ``name: something`` would be misread as a
+    Delegates to plugin_validator.parse_skill_md — the same real-YAML
+    extract+parse+body-slice sequence AsSeriesValidator.validate already
+    uses for the production AS-series entry point — instead of
+    reimplementing it a third time (the other existing copy is
+    _extract_tools_list, below). Real YAML parsing matters because a naive
+    line-by-line colon splitter has no notion of YAML indentation or block
+    scalars, so a line inside a multi-line ``description: |`` value that
+    happens to read like ``name: something`` would be misread as a
     top-level ``name`` key, masking a SKILL.md with no real name field.
 
     Returns:
@@ -69,21 +72,9 @@ def _parse_skill_md(path: pathlib.Path) -> tuple[dict, list[str]]:
     """
     # Deferred import to break circular dependency; plugin_validator imports
     # rules modules, so we defer here rather than at module level.
-    from skilllint.frontmatter_core import extract_frontmatter  # noqa: PLC0415
-    from skilllint.plugin_validator import safe_load_yaml_with_colon_fix  # noqa: PLC0415
+    from skilllint.plugin_validator import parse_skill_md  # noqa: PLC0415
 
-    content = path.read_text(encoding="utf-8")
-    lines = content.splitlines()
-
-    fm_text, _start, end_line = extract_frontmatter(content)
-    if fm_text is None:
-        # No frontmatter (or unclosed) — treat entire file as body
-        return {}, lines
-
-    parsed, _err, _colon_fields, _used = safe_load_yaml_with_colon_fix(fm_text)
-    frontmatter: dict = parsed if isinstance(parsed, dict) else {}
-    body_lines = lines[end_line:]
-
+    frontmatter, body_lines, _yaml_err, _colon_fields = parse_skill_md(path)
     return frontmatter, body_lines
 
 

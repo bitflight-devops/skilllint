@@ -4016,15 +4016,20 @@ def parse_skill_md(path: Path) -> tuple[dict, list[str], str | None, list[str]]:
         colon_fixed_fields).  yaml_error_message is None when parsing
         succeeds (or when the colon auto-fix succeeds).
         colon_fixed_fields lists field names where unquoted colons were
-        detected and auto-fixed.
+        detected and auto-fixed. body_lines excludes the closing '---'
+        delimiter. When frontmatter opens with '---' but never closes,
+        body_lines is empty — there is no recoverable body.
     """
     content = path.read_text(encoding="utf-8")
     fm_text, _start, end_line = extract_frontmatter(content)
     if fm_text is None:
+        if content.startswith("---"):
+            # Opening delimiter present but never closed — no recoverable body.
+            return {}, [], None, []
         return {}, content.splitlines(), None, []
     parsed, yaml_err, colon_fields, _used_text = safe_load_yaml_with_colon_fix(fm_text)
     frontmatter_dict: dict = parsed if parsed is not None else {}
-    body_lines = content.splitlines()[end_line:]
+    body_lines = content.splitlines()[end_line + 1 :]
     return frontmatter_dict, body_lines, yaml_err, colon_fields
 
 
