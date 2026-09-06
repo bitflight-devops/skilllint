@@ -11,7 +11,7 @@ Arguments received: `$ARGUMENTS`
 ## Argument Routing
 
 - **No arguments** → Run full workflow guide below
-- **Rule ID** (e.g. `FM010`, `AG003`, `SK006`) → Run `skilllint rule <ID>` and consult [rule-catalog.md](./references/rule-catalog.md) for the series overview
+- **Rule ID** (e.g. `FM010`, `AG003`, `SK006`) → Run `skilllint rule <ID>`
 - **A path** (e.g. `./plugins/my-plugin`) → Run `skilllint check <path>` and interpret the output
 
 ---
@@ -116,7 +116,7 @@ skilllint rules --severity error
 skilllint rules --category skill
 ```
 
-Every registered rule is available through `skilllint rule <ID>`. Use [rule-catalog.md](./references/rule-catalog.md) for a compact overview of every series.
+Every registered rule is available through `skilllint rule <ID>`. Run `skilllint rules` for a compact overview of every series.
 
 ---
 
@@ -135,7 +135,7 @@ skilllint check --fix ./plugins/my-plugin
 
 > **Note:** `--check` and `--fix` are mutually exclusive. Passing both flags at the same time is an error.
 
-**Auto-fixable rules:** FM004, FM007, FM009, FM010, SL001
+**Auto-fixable rules:** FM004, FM007, FM009, FM010, SL001, HK005
 
 **Not auto-fixable:** AG series, SK006/SK007 (token size — requires manual refactoring), PD series, AS006, LK series, most PL/HK rules.
 
@@ -182,7 +182,7 @@ description: 'Validate files: plugins, skills, and agents'
 
 Move large reference content to a `references/` subdirectory and link to it:
 ```markdown
-For the full rule catalog, see [rule-catalog.md](./references/rule-catalog.md)
+For background, see [background.md](./references/background.md)
 ```
 Token thresholds are defined by `TOKEN_WARNING_THRESHOLD` (warning) and `TOKEN_ERROR_THRESHOLD` (error) in the skilllint source. Run `skilllint rules` to see current threshold values. Body text only — frontmatter is excluded from the count.
 
@@ -222,7 +222,7 @@ skilllint --version
 
 1. **Scan**: `skilllint check --show-summary --show-progress <path>`
 2. **Identify** rule IDs in the output (e.g. `[FM004]`, `[SK006]`, `[FM010]`)
-3. **Explain**: Run `skilllint rule <ID>` and use [rule-catalog.md](./references/rule-catalog.md) for the series overview
+3. **Explain**: Run `skilllint rule <ID>` for full documentation on that rule
 4. **Fix auto-fixable**: `skilllint check --fix <path>`
 5. **Fix manual issues**: Apply the patterns above based on rule ID
 6. **Verify**: `skilllint check --check <path>` — should exit 0 with no errors
@@ -252,4 +252,4 @@ SK006 (warning) and SK007 (error) fire when body token count exceeds `TOKEN_WARN
 
 ---
 
-For the full rule catalog with all rule IDs, descriptions, severity, and auto-fix flags, see [rule-catalog.md](./references/rule-catalog.md).
+Run `skilllint rules` for the full rule catalog — all rule IDs, descriptions, severity, and auto-fix flags.

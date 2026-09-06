@@ -9,9 +9,12 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 import pytest
+
+import skilllint.plugin_validator as plugin_validator_module
+import skilllint.rules
 
 if TYPE_CHECKING:
     from typer.testing import CliRunner
@@ -19,6 +22,8 @@ if TYPE_CHECKING:
 # MIN_REGISTERED_SERIES and EXPECTED_SERIES are re-exported from skilllint.rules._constants.
 # Sources: P038 architect spec section 8 (14 series) and issue #132 (AG, the
 # fifteenth series).
+from skilllint.plugin_validator import FrontmatterValidator, HookValidator, NameFormatValidator, SymlinkTargetValidator
+from skilllint.rule_registry import RULE_REGISTRY
 from skilllint.rules import EXPECTED_SERIES, MIN_REGISTERED_SERIES
 
 # Local alias preserving the underscore-prefixed naming convention used in tests.
@@ -197,4 +202,96 @@ class TestReadmeTableMatchesRegistry:
             f"{sorted(missing)}. "
             f"README currently lists: {sorted(readme_series)}. "
             f"T14 must add documentation rows for these series."
+        )
+
+
+class TestFixableRulesHaveWorkingFixers:
+    """Assert every rule marked ``fixable=True`` has a validator whose ``can_fix()`` is True.
+
+    ``fixable`` used to be undeclared metadata that only existed as a hand-written
+    "Auto-fix" column in the now-deleted rule-catalog.md, which drifted from
+    reality (it said "no" for HK005 even though ``HookValidator.can_fix()`` is
+    True and HK005's own docstring says it's auto-fixable). Pinning the exact set
+    here, plus checking each one against its real validator, is strictly more
+    coverage than the catalog ever enforced -- same pattern as
+    test_client_load_behavior.py's "pin the exact classified set" test.
+
+    This is a one-directional check: a validator's ``can_fix()`` covers a group
+    of rules, not a 1:1 mapping, so the reverse (every rule a validator's
+    ``can_fix()`` implies) is not asserted.
+    """
+
+    # Rule ID -> validator classes responsible for auto-fixing it. FM010 has two
+    # because NameFormatValidator does the actual repair while FrontmatterValidator
+    # remains FM010's sole reporter (see NameFormatValidator's docstring).
+    _FIXABLE_VALIDATORS: ClassVar[dict[str, tuple[type, ...]]] = {
+        "FM004": (FrontmatterValidator,),
+        "FM007": (FrontmatterValidator,),
+        "FM009": (FrontmatterValidator,),
+        "FM010": (FrontmatterValidator, NameFormatValidator),
+        "SL001": (SymlinkTargetValidator,),
+        "HK005": (HookValidator,),
+    }
+
+    def test_exactly_six_rules_are_fixable(self) -> None:
+        """Pin the exact fixable set so a future session cannot silently add one without a validator mapping."""
+        fixable_ids = sorted(rule_id for rule_id, entry in RULE_REGISTRY.items() if entry.fixable)
+        assert fixable_ids == sorted(self._FIXABLE_VALIDATORS)
+
+    def test_fixable_rules_have_a_validator_that_can_fix(self) -> None:
+        """Every fixable=True rule's mapped validator(s) must report can_fix() is True."""
+        for rule_id, validator_classes in self._FIXABLE_VALIDATORS.items():
+            assert RULE_REGISTRY[rule_id].fixable, f"{rule_id} is in _FIXABLE_VALIDATORS but not marked fixable=True"
+            for validator_cls in validator_classes:
+                assert validator_cls().can_fix() is True, (
+                    f"{rule_id}: {validator_cls.__name__}.can_fix() must be True for a fixable=True rule"
+                )
+
+
+_STUB_MARKER = "Always an empty list."
+# `[\w.]*` (not `\w*`) so a dotted attribute path like `FrontmatterValidator.
+# _extract_frontmatter` captures whole -- `\w*` alone stops at the first
+# `.`, silently truncating the capture to just `FrontmatterValidator` and
+# letting the hasattr check below pass on the class existing without ever
+# checking the named method exists.
+_BACKTICKED_SYMBOL = re.compile(r"`([A-Za-z_][\w.]*)")
+
+
+def _resolves(symbol: str) -> bool:
+    """True if *symbol* -- a plain name or a dotted `Class.method` path -- exists.
+
+    `hasattr` alone only resolves a single attribute hop, so a dotted path
+    (e.g. ``FrontmatterValidator._extract_frontmatter``) is walked one
+    segment at a time.
+    """
+    for module in (plugin_validator_module, skilllint.rules):
+        obj = module
+        for part in symbol.split("."):
+            if not hasattr(obj, part):
+                break
+            obj = getattr(obj, part)
+        else:
+            return True
+    return False
+
+
+def test_stub_docstrings_name_a_resolvable_emitter() -> None:
+    """A registration-only stub must name a real emitter symbol in backticks.
+
+    Finds stubs by their docstring's "Always an empty list." sentence rather
+    than a hand-maintained code list, so it self-scopes to whatever the
+    registry actually contains today.
+    """
+    for code, entry in RULE_REGISTRY.items():
+        marker_index = entry.docstring.find(_STUB_MARKER)
+        if marker_index == -1:
+            continue
+        tail = entry.docstring[marker_index + len(_STUB_MARKER) :]
+        match = _BACKTICKED_SYMBOL.search(tail)
+        assert match is not None, f"{code}: stub docstring must name its emitter in backticks"
+
+        symbol = match.group(1)
+        assert _resolves(symbol), (
+            f"{code}: stub docstring names `{symbol}` as its emitter, "
+            f"but that symbol does not exist in plugin_validator or skilllint.rules"
         )

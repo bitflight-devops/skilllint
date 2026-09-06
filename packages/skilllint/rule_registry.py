@@ -106,12 +106,13 @@ class RuleEntry(BaseModel):
     docstring: str
     authority: RuleAuthority | None = None
     client_load_behavior: ClientLoadBehavior | None = None
+    fixable: bool = False
 
 
 # Global registry: rule ID → RuleEntry
 #
 # RULE_REGISTRY is authoritative for which rules exist -- it backs `skilllint
-# rules`, `skilllint rule <ID>`, and rule-catalog.md. plugin_validator.ErrorCode
+# rules` and `skilllint rule <ID>`. plugin_validator.ErrorCode
 # is a legacy, partial enum kept only for specific historical consumers; it is
 # not expected to have 1:1 membership with RULE_REGISTRY (see #40 and
 # packages/skilllint/tests/test_registry_errorcode_contract.py, which pins the
@@ -127,6 +128,7 @@ def skilllint_rule(
     platforms: list[RulePlatform] | None = None,
     authority: dict | None = None,
     client_load_behavior: ClientLoadBehavior | None = None,
+    fixable: bool = False,
 ) -> Callable[[Callable], Callable]:
     """Decorator to register a validator function as a rule.
 
@@ -142,6 +144,8 @@ def skilllint_rule(
                    rule's finding ("warn-and-load" or "skip-skill"), per the client-implementation
                    guide. Defaults to None when the guide does not say, mirroring authority's
                    None-means-unstated semantics.
+        fixable: Whether `skilllint check --fix` can repair a violation of this rule.
+                   Defaults to False. Surfaced as the "Fixable" column in `skilllint rules`.
 
     Returns:
         Decorated function (unchanged) that's registered in RULE_REGISTRY.
@@ -177,6 +181,7 @@ def skilllint_rule(
             docstring=fn.__doc__ or f"Rule {rule_id}",
             authority=rule_authority,
             client_load_behavior=client_load_behavior,
+            fixable=fixable,
         )
         RULE_REGISTRY[rule_id.upper()] = entry
         return fn

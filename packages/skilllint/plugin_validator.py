@@ -4518,12 +4518,14 @@ def _show_rules_list(
     table.add_column("ID", style="cyan", no_wrap=True)
     table.add_column("Severity", no_wrap=True)
     table.add_column("Category", no_wrap=True)
+    table.add_column("Fixable", no_wrap=True)
     table.add_column("Summary")
 
     for rule in rules:
         sev_color = severity_colors.get(rule.severity, "white")
         summary = rule.docstring.split("\n")[0].lstrip("#").strip() if rule.docstring else ""
-        table.add_row(rule.id, f"[{sev_color}]{rule.severity}[/{sev_color}]", rule.category, summary)
+        fixable = "[green]Yes[/green]" if rule.fixable else "No"
+        table.add_row(rule.id, f"[{sev_color}]{rule.severity}[/{sev_color}]", rule.category, fixable, summary)
 
     console.print(table)
 

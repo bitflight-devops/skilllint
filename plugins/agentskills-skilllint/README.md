@@ -65,7 +65,7 @@ Claude will automatically load this skill when you ask about linting plugins, fi
 
 ## Rule Catalog
 
-The skill includes a [full rule catalog](./skills/skilllint/references/rule-catalog.md) covering all rule series:
+Run `skilllint rules` for the full rule listing, or `skilllint rule <ID>` for a single rule's documentation. Series overview:
 
 | Series | Domain |
 |--------|--------|

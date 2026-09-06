@@ -573,8 +573,8 @@ substitution — any link containing a `${...}` token is skipped, not flagged.
   directory." That sentence is written for the `@import` mechanism, not plain markdown links,
   so it is not a literal citation for this rule — but this repo's own two working examples
   (`README.md:508` → `docs/ignore-config.md`, resolved against the repo-root README's own
-  directory; `plugins/agentskills-skilllint/README.md:68` → `./skills/skilllint/references/
-  rule-catalog.md`, resolved against *that* README's own directory, not the repo root) both
+  directory; `docs/registry-schema-examples.md:3` → `./design-rule-provenance-registry.md`,
+  resolved against *that* file's own directory, not the repo root) both
   independently confirm file's-own-directory resolution for plain links too. Confidence: high,
   by directional evidence plus internal repo consistency, not by a single documented sentence
   that covers the exact syntax being checked. This caveat is recorded in the rule's own
@@ -729,12 +729,6 @@ entry, and fix note all say "in `SKILL.md`" today, and any existing ignore-confi
 
 Every file that must change for this design to ship, and the exact edit required:
 
-- **`plugins/agentskills-skilllint/skills/skilllint/references/rule-catalog.md`**
-  - Add a row to the `## LK — Internal Link Rules` table:
-    `| LK003 | error | no | Broken internal link in a repo/plugin-root convention doc (CLAUDE.md, AGENTS.md, README.md, GEMINI.md, AGENT.md) |`
-  - Add a fix note below the table, matching the existing `LK001 fix:` note style:
-    `**LK003 fix:** Links in these files are relative to that file's own directory, not the repo root. Verify the linked file path is correct relative to where the link is written.`
-  - No `PD` table change — `PD004` is dropped (ADR-3).
 - **`README.md`** (repo root) — update the `## What gets validated` table: change the
   `LK001` row's code column to `LK001, LK003` and description to add "; LK003 covers
   CLAUDE.md/AGENTS.md/README.md/GEMINI.md/AGENT.md, resolved against each file's own
