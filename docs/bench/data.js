@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788690616712,
+  "lastUpdate": 1788700788990,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -2094,6 +2094,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 83.774,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "f617f012c1ecd5e515c6b37f889f9f75d18921d5",
+          "message": "fix(vendor-io): redirect VENDOR_DIR to primary checkout inside linked worktrees (#216)\n\n`.claude/vendor/` is gitignored, so a linked git worktree's VENDOR_DIR\n(derived from PROJECT_ROOT, which resolves worktree-local via __file__)\npointed at an empty directory — the documented \"fetch to disk, then read\nfrom disk\" agent workflow silently found nothing, and every fetch would\nre-download into a worktree-local copy invisible to the primary checkout\nand every other worktree.\n\nAdd _shared_checkout_root(), a pure-filesystem (no git subprocess) detector\nfor linked worktrees: reads the .git file's `gitdir:` pointer, then that\ngitdir's `commondir` file, to resolve the primary checkout root. Falls back\nto the input path unchanged for plain checkouts, submodules (gitdir with no\ncommondir), and any missing/unreadable/malformed git-internal file — never\nraises, never shells out to git.\n\nVENDOR_DIR (and therefore SOURCES_DIR, which derives from it) is redirected\nthrough this helper; PROJECT_ROOT is left untouched since\nscripts/fetch_spec_schema.py uses it to write tracked source files that must\nland in the worktree actually being edited.\n\nCloses #116\n\n\nClaude-Session: https://claude.ai/code/session_01G3ke4pBmhpiEuWoFTV2ax4\n\nCo-authored-by: Claude Sonnet 5 <noreply@anthropic.com>",
+          "timestamp": "2026-09-06T13:17:05Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/f617f012c1ecd5e515c6b37f889f9f75d18921d5"
+        },
+        "date": 1788700788202,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 11282.666,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 11796.101,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 12789.31,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 84.859,
             "unit": "files/s"
           }
         ]
