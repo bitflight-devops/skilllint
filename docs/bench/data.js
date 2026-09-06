@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788682185827,
+  "lastUpdate": 1788682622239,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -1968,6 +1968,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 105.656,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "41437f9a5b8180f78de480b6e71957509c709a44",
+          "message": "fix(scripts): remove hardcoded python3 shebang from bench_import.py (#210)\n\nViolates the global rule to always invoke Python via uv run python,\nnever a hardcoded interpreter path. bench_io.py and bench_cpu.py have\nneither a shebang nor the executable bit; bench_import.py is invoked\nidentically to both (python scripts/bench_import.py, in benchmark.yml)\nand never executed directly, so neither is load-bearing.\n\nFound during the integrated review of the last 48 hours of changes.\n\n\nClaude-Session: https://claude.ai/code/session_01G3ke4pBmhpiEuWoFTV2ax4\n\nCo-authored-by: Claude Sonnet 5 <noreply@anthropic.com>",
+          "timestamp": "2026-09-06T08:14:08Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/41437f9a5b8180f78de480b6e71957509c709a44"
+        },
+        "date": 1788682620853,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 11305.533,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 12063.005,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 13462.498,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 82.981,
             "unit": "files/s"
           }
         ]
