@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788677582272,
+  "lastUpdate": 1788677952991,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -1800,6 +1800,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 82.998,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "dc92aaf4bf567094d108202e79b7454828ba2c24",
+          "message": "fix(AS009): exclude from `rules --platform` listing for non-Claude-Code platforms (#205)\n\n* fix(AS009): scope to platforms=[\"claude-code\"]\n\nAS009 warns that a skill nested more than one level under skills/ will\nnot auto-activate in Claude Code. Unlike its AS-series siblings (AS001,\nAS006, AS008), which cite agentskills.io and apply to every platform,\nAS009's authority cites Claude Code's own docs and describes a\nClaude-Code-specific auto-discovery limitation (confirmed against\nAnthropic's own plugin-dev skill/agent docs, which scan skills/*/SKILL.md\n-- one level). It was registered with the AS-series default of\nplatforms=[\"agentskills\"] (\"applies to every platform\"), so\n`skilllint rules --platform cursor` and `--platform codex` incorrectly\nlisted a rule about Claude Code activation. Scope it to\nplatforms=[\"claude-code\"], matching how AG-series already scopes its\nClaude-Code-specific rules.\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01G3ke4pBmhpiEuWoFTV2ax4\n\n* docs(AS009): clarify platforms= scopes rule listing only, not check enforcement\n\nThe docstring paragraph explaining AS009's platforms=[\"claude-code\"] scoping\ncould be read as implying `skilllint check --platform cursor/codex` also\nstops enforcing AS009. It doesn't: validator dispatch in\n_get_validators_for_path() selects AsSeriesValidator by file type alone, so\nAS009 still fires unconditionally on every SKILL.md regardless of\n--platform. Only `skilllint rules --platform <X>` listing is affected by\nthis field. Confirmed live across cursor/codex/claude-code/no-platform.\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01G3ke4pBmhpiEuWoFTV2ax4\n\n---------\n\nCo-authored-by: Claude Sonnet 5 <noreply@anthropic.com>",
+          "timestamp": "2026-09-06T06:56:43Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/dc92aaf4bf567094d108202e79b7454828ba2c24"
+        },
+        "date": 1788677950960,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 6989.686,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 7472.372,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 8360.648,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 133.96,
             "unit": "files/s"
           }
         ]
