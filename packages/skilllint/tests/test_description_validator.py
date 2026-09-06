@@ -509,6 +509,16 @@ description: "test skill"
         assert "SK004" in warning_codes
         assert "SK005" in warning_codes
 
+    def test_cm001_error_code_is_defined(self) -> None:
+        """Test CM001 error code constant is exported from plugin_validator.
+
+        Tests: CM001 stub defined for command-specific description checks
+        How: Import CM001 from plugin_validator, verify it is a non-empty string
+        Why: CM001 is reserved for future command-specific validation rules;
+             its presence confirms the error code namespace is correctly established
+        """
+        assert CM001 == "CM001", f"CM001 constant must equal 'CM001', got {CM001!r}"
+
 
 class TestDisableModelInvocationSuppression:
     """Test SK004/SK005 are suppressed when disable-model-invocation is set.
@@ -588,13 +598,3 @@ disable-model-invocation: false
         warning_codes = {issue.code for issue in result.warnings}
         assert "SK004" in warning_codes
         assert "SK005" in warning_codes
-
-    def test_cm001_error_code_is_defined(self) -> None:
-        """Test CM001 error code constant is exported from plugin_validator.
-
-        Tests: CM001 stub defined for command-specific description checks
-        How: Import CM001 from plugin_validator, verify it is a non-empty string
-        Why: CM001 is reserved for future command-specific validation rules;
-             its presence confirms the error code namespace is correctly established
-        """
-        assert CM001 == "CM001", f"CM001 constant must equal 'CM001', got {CM001!r}"
