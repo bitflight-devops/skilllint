@@ -672,9 +672,10 @@ class ValidationPolicy:
 DEFAULT_THRESHOLDS: dict[str, int] = {"SK006": TOKEN_WARNING_THRESHOLD, "SK007": TOKEN_ERROR_THRESHOLD}
 # Threshold keys must map to an implemented warning/error band.
 _THRESHOLD_POLICY_RULES = frozenset({"SK006", "SK007"})
-# Severity may be reconfigured for the token-band rules. AS005 shared this band
-# and was listed here until it was retired into SK006/SK007.
-_SEVERITY_POLICY_RULES = frozenset({"SK006", "SK007"})
+# Severity may be reconfigured for the token-band rules (SK006/SK007) and for
+# PL006's marketplace.json root-key check (see issue #145). AS005 shared this
+# band and was listed here until it was retired into SK006/SK007.
+_SEVERITY_POLICY_RULES = frozenset({"PL006", "SK006", "SK007"})
 _VALID_SEVERITIES = frozenset({"warning", "info"})
 
 _SKILLLINT_CONFIG_FILENAME = ".skilllint.json"
@@ -831,7 +832,9 @@ def _resolve_ignore_config(
     """Resolve the ignore config for *path*, walking up the directory tree.
 
     Checks the cache first (keyed by resolved directory path string). If not
-    cached, walks up from ``path.parent`` looking for:
+    cached, walks up from ``path`` itself when *path* is already a directory
+    (e.g. a plugin root passed directly by ``FileType.PLUGIN`` validation) or
+    from ``path.parent`` when *path* is a file, looking for:
 
     - ``.claude-plugin/plugin.json`` → loads from ``.claude-plugin/validator.json``
       via :func:`_load_ignore_config`.
@@ -851,7 +854,7 @@ def _resolve_ignore_config(
         that contained the config file, used as the base for relative-path
         prefix matching. Both values are empty / ``None`` when nothing is found.
     """
-    start_dir = path.parent.resolve()
+    start_dir = (path if path.is_dir() else path.parent).resolve()
     cache_key = str(start_dir)
     if cache_key in cache:
         return cache[cache_key]
@@ -896,12 +899,15 @@ def _resolve_policy(
 
     Diagnostics for invalid config are emitted once per config file: they fire
     only on a cache miss (the first file that resolves a given config), so a
-    1000-file scan warns once, not once per file.
+    1000-file scan warns once, not once per file. Walks up from ``path``
+    itself when *path* is already a directory (a plugin root passed directly
+    by ``FileType.PLUGIN`` validation), or from ``path.parent`` when *path*
+    is a file -- see ``_resolve_ignore_config`` for the identical rationale.
 
     Returns:
         The policy and its config root, or defaults and ``None``.
     """
-    start_dir = path.parent.resolve()
+    start_dir = (path if path.is_dir() else path.parent).resolve()
     key = str(start_dir)
     if key in cache:
         return cache[key]
@@ -3145,8 +3151,9 @@ class PluginStructureValidator:
 
         mp_layout = check_pl006(plugin_dir)
         if mp_layout:
-            errors.extend(mp_layout)
-            return ValidationResult(passed=False, errors=errors, warnings=warnings, info=info)
+            for issue in mp_layout:
+                (errors if issue.severity == "error" else warnings).append(issue)
+            return ValidationResult(passed=not errors, errors=errors, warnings=warnings, info=info)
 
         # Skip claude plugin validate when running inside a Claude Code session
         # (nested CLI invocations are blocked by Anthropic safety measure).
@@ -3329,7 +3336,8 @@ class PluginStructureValidator:
         # If no specific error pattern matched but validation failed, add generic error
         # Include actual CLI output for diagnosis (truncate to avoid huge messages)
         if not errors:
-            errors.append(claude_validation_failure_issue(stdout, stderr))
+            issue = claude_validation_failure_issue(stdout, stderr)
+            (errors if issue.severity == "error" else warnings).append(issue)
 
 
 # ============================================================================
