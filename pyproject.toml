@@ -26,14 +26,14 @@ keywords = [
 ]
 requires-python = ">=3.11,<3.15"
 dependencies = [
-    "gitpython>=3.1.46",
+    "gitpython>=3.1.61",
     "httpx>=0.28.1",
-    "marko>=2.2.2",
-    "msgspec>=0.20.0",
-    "pydantic>=2.12.5",
+    "marko>=2.2.4",
+    "msgspec>=0.21.1",
+    "pydantic>=2.13.5",
     "ruamel-yaml>=0.19.1",
-    "tiktoken>=0.12.0",
-    "typer>=0.24.1",
+    "tiktoken>=0.14.0",
+    "typer>=0.27.2",
 ]
 
 [project.entry-points."skilllint.adapters"]
@@ -61,18 +61,18 @@ build-backend = "hatchling.build"
 # dependency ordering in this file.
 # Keep entries formatter-driven to avoid review churn from manual reordering.
 dev = [
-    "beautifulsoup4>=4.14.3",
+    "beautifulsoup4>=4.15.0",
     "hatch-vcs>=0.5.0",
-    "hatchling>=1.29.0",
-    "hypothesis>=6.151.10",
-    "prek>=0.3.8",
+    "hatchling>=1.32.0",
+    "hypothesis>=6.167.1",
+    "prek>=0.5.2",
     "pytest-cov>=7.1.0",
     "pytest-mock>=3.15.1",
     "pytest-xdist>=3.8.0",
-    "pytest>=9.0.2",
-    "rich>=14.3.3",
-    "ruff>=0.16.5",
-    "ty>=0.0.75",
+    "pytest>=9.1.1",
+    "rich>=15.0.0",
+    "ruff>=0.16.6",
+    "ty>=0.0.78",
 ]
 
 [tool.hatch.build.targets.sdist]
