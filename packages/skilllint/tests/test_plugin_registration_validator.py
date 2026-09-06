@@ -7,6 +7,7 @@ Tests:
 - PR001 warning for unregistered agent (TestUnregisteredAgent)
 - PR001 warning for unregistered command (TestUnregisteredCommand)
 - PR002 error when registered path does not exist (TestMissingRegisteredFile)
+- PR005 info when a registered command path is a skill directory (TestCommandPathIsSkillDirectory)
 - No errors when all capabilities registered and files exist (TestFullyRegistered)
 - Empty plugin with no capabilities passes (TestEmptyPlugin)
 - PR003 info when metadata fields absent from plugin.json (TestMissingMetadata)
@@ -647,6 +648,94 @@ class TestMissingRegisteredFile:
         pr002_errors = [e for e in result.errors if e.code == "PR002"]
         assert len(pr002_errors) >= 1
         assert all(e.suggestion is not None for e in pr002_errors)
+
+
+class TestCommandPathIsSkillDirectory:
+    """Test PR005 info issue when a registered command path is a skill directory.
+
+    PR005 downgraded from error to info per issue #195: code.claude.com/docs/en/
+    plugins-reference documents 'commands' as accepting directories (not just
+    flat .md files), so this configuration is valid, not load-blocking -- it
+    only forgoes skill-only features that code.claude.com/docs/en/skills
+    describes as the reason skills are recommended over commands.
+    """
+
+    def test_command_path_that_is_skill_directory_produces_pr005_info(self, tmp_path: Path) -> None:
+        """Test PR005 info issue for a command path that is a SKILL.md directory.
+
+        Tests: PR005 detection and severity (check_pr005 in pr_series.py)
+        How: Register a directory containing SKILL.md under 'commands', validate
+        Why: PR005 must still detect this configuration, now as a recommendation
+        """
+        plugin_dir = _make_plugin(
+            tmp_path,
+            plugin_json_content=msgspec.json.encode({
+                "name": "test-plugin",
+                "commands": ["./commands/embedded-skill/"],
+            }).decode(),
+        )
+        skill_dir = plugin_dir / "commands" / "embedded-skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("---\ndescription: embedded-skill\n---\n\n# embedded-skill\n")
+
+        validator = PluginRegistrationValidator()
+        result = validator.validate(plugin_dir)
+
+        pr005_info = [i for i in result.info if i.code == "PR005"]
+        assert len(pr005_info) >= 1
+        assert not any(i.code == "PR005" for i in result.errors)
+        assert not any(i.code == "PR005" for i in result.warnings)
+
+    def test_pr005_does_not_fail_validation(self, tmp_path: Path) -> None:
+        """Test PR005 alone does not fail validation (result.passed stays True).
+
+        Tests: PR005 severity is info, not error
+        How: Register a skill directory under 'commands' with no other issues, validate
+        Why: An info-severity rule must not flip result.passed to False
+        """
+        plugin_dir = _make_plugin(
+            tmp_path,
+            plugin_json_content=msgspec.json.encode({
+                "name": "test-plugin",
+                "commands": ["./commands/embedded-skill/"],
+            }).decode(),
+        )
+        skill_dir = plugin_dir / "commands" / "embedded-skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("---\ndescription: embedded-skill\n---\n\n# embedded-skill\n")
+
+        validator = PluginRegistrationValidator()
+        result = validator.validate(plugin_dir)
+
+        assert result.passed is True
+
+    def test_pr005_message_does_not_claim_it_may_prevent_loading(self, tmp_path: Path) -> None:
+        """Test PR005's message no longer contains the unsourced load-blocking claim.
+
+        Tests: PR005 message content after issue #195's rewrite
+        How: Trigger PR005, inspect the message text
+        Why: The prior message claimed the config "may prevent the skill from
+            loading" with no vendor-doc citation backing that claim; issue #195
+            required removing it, not softening it
+        """
+        plugin_dir = _make_plugin(
+            tmp_path,
+            plugin_json_content=msgspec.json.encode({
+                "name": "test-plugin",
+                "commands": ["./commands/embedded-skill/"],
+            }).decode(),
+        )
+        skill_dir = plugin_dir / "commands" / "embedded-skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("---\ndescription: embedded-skill\n---\n\n# embedded-skill\n")
+
+        validator = PluginRegistrationValidator()
+        result = validator.validate(plugin_dir)
+
+        pr005_info = [i for i in result.info if i.code == "PR005"]
+        assert len(pr005_info) >= 1
+        assert not any("may prevent the skill from loading" in i.message for i in pr005_info)
+        assert not any("must not be listed" in i.message for i in pr005_info)
 
 
 class TestFullyRegistered:

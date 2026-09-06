@@ -3046,7 +3046,7 @@ class PluginRegistrationValidator:
         # Registration checks — detection lives in skilllint.rules.pr_series.
         warnings.extend(check_pr001(plugin_config, plugin_dir))
         errors.extend(check_pr002(plugin_config, plugin_dir))
-        errors.extend(check_pr005(plugin_config, plugin_dir))
+        info.extend(check_pr005(plugin_config, plugin_dir))
 
         # SK009 — manual skill selection mode (informational)
         if "skills" in plugin_config:
