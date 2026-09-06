@@ -226,12 +226,7 @@ def _ingest_agent_frontmatter_for_pa001(
     Returns:
         Snapshot for PA001 checks, or None on YAML failure or non-mapping document root.
     """
-    from skilllint.plugin_validator import (  # noqa: PLC0415 — deferred to break circular import
-        FM002,
-        FM009,
-        ValidationIssue,
-        generate_docs_url,
-    )
+    from skilllint.plugin_validator import FM002, FM009, ValidationIssue, generate_docs_url  # noqa: PLC0415 — deferred to break circular import
 
     outcome = ingest_plugin_agent_frontmatter_for_pa001(fm_text)
 
