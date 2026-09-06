@@ -135,7 +135,7 @@ skilllint check --fix ./plugins/my-plugin
 
 > **Note:** `--check` and `--fix` are mutually exclusive. Passing both flags at the same time is an error.
 
-**Auto-fixable rules:** FM004, FM007, FM009, FM010, SL001
+**Auto-fixable rules:** FM004, FM007, FM009, FM010, SL001, HK005
 
 **Not auto-fixable:** AG series, SK006/SK007 (token size — requires manual refactoring), PD series, AS006, LK series, most PL/HK rules.
 
