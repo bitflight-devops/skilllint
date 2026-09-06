@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788572940482,
+  "lastUpdate": 1788674238002,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -1674,6 +1674,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 86.16,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "3d77807dfde65fd246a54b5fee0fbaab675fe548",
+          "message": "fix(PR001): suppress default-discovery false positives for agents/commands (#208)\n\nInvestigating issue #200 (PR001's skills-array suppression) against the\nfreshly re-fetched code.claude.com/docs/en/plugins-reference.md#path-behavior-rules\nfound that the issue's own diagnosis of the current code does not hold: a\nrunnable check against `check_pr001` shows declaring an explicit `skills`\narray (even empty) does NOT suppress PR001 today -- it already warns in\nthat case, and only suppresses when `skills` is absent entirely. That is\nthe doc-correct behavior (skills is additive; ./skills/ is always scanned\nregardless of declaration), so no change was needed there beyond dropping a\ndead, confusing path-check clause the original condition carried\n(`actual_skills` can only ever contain \"skills/\"-prefixed paths, so\n`not str(orphan).startswith(\"skills/\")` never evaluated true) and correcting\nthe docstring's inaccurate blanket claim that any explicit array replaces\ndefault discovery.\n\nThe same doc section confirmed a real, mirror-image bug: `agents` and\n`commands` DO replace default discovery once declared, but check_pr001 had\nno suppression at all for them, so a plugin with no `agents`/`commands` key\n(fully auto-discovered, same as an unregistered `skills` array) got PR001\nfalse positives for every agent/command file on disk. Added the same\n\"suppressed while absent, warned once declared\" gate already used for\nskills (and already precedented by the SK009 check in plugin_validator.py).\n\nAdded regression tests: an explicit-empty-array-must-still-warn guard for\nskills (protecting against a naive fix that would silently disable the\ncheck by always evaluating the dead path-check clause to False), plus new\nabsent/declared coverage for agents and commands.\n\n\nClaude-Session: https://claude.ai/code/session_01G3ke4pBmhpiEuWoFTV2ax4\n\nCo-authored-by: Claude Sonnet 5 <noreply@anthropic.com>",
+          "timestamp": "2026-09-06T05:54:38Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/3d77807dfde65fd246a54b5fee0fbaab675fe548"
+        },
+        "date": 1788674237570,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 11033.041,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 11674.129,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 12847.902,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 85.745,
             "unit": "files/s"
           }
         ]
