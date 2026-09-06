@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788677221877,
+  "lastUpdate": 1788677582272,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -1758,6 +1758,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 85.93,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "036354851be92a7f0896f88e89d731656c2ec067",
+          "message": "fix(AS001): use real YAML parser instead of naive colon splitter (#203)\n\n* fix(AS001): use real YAML parser instead of naive colon splitter\n\n_parse_skill_md read frontmatter line-by-line with a bare colon split,\nwith no awareness of YAML indentation or block scalars. A multi-line\n`description: |` value whose body text contained a line like\n`name: something` was misread as a top-level `name` key, so AS001\nstayed silent on a SKILL.md with no real name field (false negative).\n\nReuse the same extract_frontmatter + safe_load_yaml_with_colon_fix\npattern _extract_tools_list already uses in this file instead of\nwriting a new parser.\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01G3ke4pBmhpiEuWoFTV2ax4\n\n* fix(AS001): delegate _parse_skill_md to the canonical parse_skill_md\n\nCode review on PR #203 found _parse_skill_md was a third independent\nreimplementation of the extract+parse+body-slice sequence that already\nlives in plugin_validator.parse_skill_md (used by AsSeriesValidator.validate,\nthe production AS-series entry point). Delegate instead of reimplementing.\n\nInvestigation found plugin_validator.parse_skill_md itself carried the same\ntwo bugs the review flagged in the new duplicate:\n- body_lines = content.splitlines()[end_line:] included the closing '---'\n  delimiter as the first body line (off by one).\n- Malformed/unclosed frontmatter returned the entire raw file as body_lines\n  instead of the pre-existing (pre-#203) behavior of an empty list.\n\nBoth are fixed at the source in parse_skill_md so every caller benefits,\nrather than special-cased in as_series.py (which would just be a fourth\nreimplementation of the same distinction). Confirmed both call sites of\nparse_skill_md only forward body_lines into run_as_series, which does not\nread that parameter, so this had no observable production effect before\nnow — but the function's contract should still be honest.\n\nConfirmed via grep: check_skill_md (the function _parse_skill_md feeds) is\nonly called from as_series.py's own module and from tests; AsSeriesValidator\n.validate never routes through it. The review's \"dead code path\" observation\nchecks out, but check_skill_md remains a correct, directly tested public\nfunction and is left in place.\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01G3ke4pBmhpiEuWoFTV2ax4\n\n---------\n\nCo-authored-by: Claude Sonnet 5 <noreply@anthropic.com>",
+          "timestamp": "2026-09-06T06:50:18Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/036354851be92a7f0896f88e89d731656c2ec067"
+        },
+        "date": 1788677581377,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 11442.909,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 12060.575,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 13284.06,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 82.998,
             "unit": "files/s"
           }
         ]
