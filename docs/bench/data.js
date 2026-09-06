@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788700788990,
+  "lastUpdate": 1788707224102,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -2136,6 +2136,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 84.859,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "48dfeeaae176c354f18941fa1c964e20103e0276",
+          "message": "fix(PL006): downgrade unrecognized root keys to warning, make severity tunable (#217)\n\n`claude plugin validate` v2.1.263 reports an unrecognized marketplace.json\nroot key as a warning (errors: []), but PL006 emitted error, exit 1 -- the\ncaptured-stderr fixture that severity rested on predates the current CLI and\nmatches neither its severity nor its wording (verified live, both this\nsession and the prior #114 session).\n\nPL006 actually spans two distinct upstream behaviors: unrecognized root keys\n(now warning, matching the CLI) and a non-object marketplace.json root\n(stays error -- a genuine structural defect, confirmed still an error on the\nlive CLI). The @skilllint_rule decorator keeps its nominal \"error\" default,\nmatching the existing check_pa001 dual-severity precedent.\n\nAlso adds PL006 to _SEVERITY_POLICY_RULES so a user who disagrees with the\ndefault can override it via .claude-plugin/validator.json, and fixes\n_resolve_ignore_config/_resolve_policy to search from a directory path\nitself (not its parent) when FileType.PLUGIN passes the plugin root\ndirectly -- without this, a plugin-root config was silently skipped for any\nplugin-root-scoped rule, including PL006's new override.\n\nCloses #145, closes #152.\n\n\nClaude-Session: https://claude.ai/code/session_01G3ke4pBmhpiEuWoFTV2ax4\n\nCo-authored-by: Claude Sonnet 5 <noreply@anthropic.com>",
+          "timestamp": "2026-09-06T15:04:37Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/48dfeeaae176c354f18941fa1c964e20103e0276"
+        },
+        "date": 1788707223362,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 8323.088,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 8711.683,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 9374.761,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 114.903,
             "unit": "files/s"
           }
         ]
