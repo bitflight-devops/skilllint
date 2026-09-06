@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788690069273,
+  "lastUpdate": 1788690616712,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -2052,6 +2052,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 82.03,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "71de943659c45fd640aaf7f274e46558f40f9360",
+          "message": "feat(RuleEntry): add client_load_behavior field for loads-anyway distinction (#213)\n\nskilllint grades findings against /specification strictness, but the\nclient-implementation guide documents that real clients deliberately relax\nsome of the same constraints and warn-and-load instead of rejecting. Add an\noptional RuleEntry.client_load_behavior field (ClientLoadBehavior Literal in\nrules/_constants.py, matching RuleCategory/RulePlatform precedent) so a\nfinding's docstring can state what a real client actually does, without\nchanging any severity.\n\nClassifies exactly 3 rule IDs per the guide's \"Lenient validation\" bullets:\nFM001 and FM002 (missing/empty description, unparseable YAML) -> skip-skill;\nFM010 (name/directory mismatch, >64 chars -- 2 of its 4 branches) ->\nwarn-and-load. Every other rule stays unset (None), matching how\nauthority's None already means \"not stated.\" Each classified rule's\ndocstring gets a \"Client behaviour\" paragraph citing the guide quote and\nnoting which branches of the rule the classification does and does not\ncover.\n\n\nClaude-Session: https://claude.ai/code/session_01G3ke4pBmhpiEuWoFTV2ax4\n\nCo-authored-by: Claude Sonnet 5 <noreply@anthropic.com>",
+          "timestamp": "2026-09-06T10:27:37Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/71de943659c45fd640aaf7f274e46558f40f9360"
+        },
+        "date": 1788690616219,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 11458.527,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 11948.767,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 12887.89,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 83.774,
             "unit": "files/s"
           }
         ]
