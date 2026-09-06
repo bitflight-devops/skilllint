@@ -386,6 +386,15 @@ def _check_as009(path: pathlib.Path) -> dict | None:
     limitation. It is scoped to ``platforms=["claude-code"]`` instead of the
     AS-series default of "applies to every platform" for that reason.
 
+    Scope of ``platforms=`` here: it affects only rule *listing* — it is what
+    makes ``skilllint rules --platform cursor``/``codex`` correctly omit
+    AS009. It has no effect on *enforcement*: ``skilllint check --platform
+    <any>`` still runs this check unconditionally on every SKILL.md, because
+    validator dispatch (``_get_validators_for_path`` in plugin_validator.py)
+    selects ``AsSeriesValidator`` by file type alone, never by platform. That
+    dispatch is pre-existing, deliberate architecture — unrelated to and
+    unchanged by this fix.
+
     Claude Code skills only support single-level namespacing. A SKILL.md must be
     a direct child of the ``skills/`` directory (e.g., ``skills/my-skill/SKILL.md``).
     If nested deeper (e.g., ``skills/category/my-skill/SKILL.md``), it will not be
