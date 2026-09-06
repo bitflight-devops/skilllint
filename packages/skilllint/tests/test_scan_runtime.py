@@ -101,6 +101,33 @@ class TestDiscoverValidatablePaths:
         # Should return the plugin root directory, not the plugin.json file
         assert plugin_dir in discovered, f"Expected {plugin_dir} in discovered paths: {discovered}"
 
+    def test_plugin_skill_named_node_modules_is_excluded_consistently(self, tmp_path: Path) -> None:
+        """A convention-driven plugin's own skill/agent/command globs respect EXCLUDED_DIR_NAMES too.
+
+        Tests: _discover_plugin_paths's convention-driven glob calls route
+               through _glob_excluding the same way _discover_provider_paths
+               and _discover_bare_paths already do.
+        How: A plugin skill directory literally named "node_modules" must be
+             excluded the same way it would be under provider/bare discovery.
+        Why: Regression for an inconsistency — the plugin-classified code
+             path used raw root.glob(...) directly, bypassing the exclusion
+             helper, so a skill/agent/command named after an excluded
+             directory was silently treated differently depending only on
+             whether its containing tree was classified as PLUGIN vs.
+             PROVIDER/BARE.
+        """
+        plugin_dir = tmp_path / "my-plugin"
+        claude_plugin = plugin_dir / ".claude-plugin"
+        claude_plugin.mkdir(parents=True)
+        (claude_plugin / "plugin.json").write_text('{"name": "my-plugin"}')
+        skill_dir = plugin_dir / "skills" / "node_modules"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("---\ndescription: Test\n---\n# Test\n")
+
+        discovered = _discover_validatable_paths(plugin_dir)
+
+        assert skill_dir not in discovered, f"Did not expect {skill_dir} in discovered paths: {discovered}"
+
     def test_returns_sorted_paths(self, tmp_path: Path) -> None:
         """_discover_validatable_paths returns sorted paths.
 
