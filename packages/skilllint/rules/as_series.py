@@ -37,6 +37,14 @@ if TYPE_CHECKING:
 
 _logger = logging.getLogger(__name__)
 
+# AS006 authority: agentskills.io/specification.md has no eval-related
+# section (re-verified via `skilllint docs fetch` — zero matches for
+# "eval" in the full spec text). The real agentskills.io coverage of this
+# concept lives on a sibling page, skill-creation/evaluating-skills.md,
+# "Designing test cases" section, which states verbatim: "Store test
+# cases in `evals/evals.json` inside your skill directory."
+_AS006_EVALS_URL = "https://agentskills.io/skill-creation/evaluating-skills.md#designing-test-cases"
+
 # ---------------------------------------------------------------------------
 # Rule registry — maps code to human-readable description
 # ---------------------------------------------------------------------------
@@ -269,17 +277,16 @@ def _check_as008(tools: list[str], path: pathlib.Path) -> list[dict]:
 
 
 @skilllint_rule(
-    "AS006",
-    severity="info",
-    category="skill",
-    authority={"origin": "agentskills.io", "reference": "/specification#evaluation-queries"},
+    "AS006", severity="info", category="skill", authority={"origin": "agentskills.io", "reference": _AS006_EVALS_URL}
 )
 def _check_as006(path: pathlib.Path) -> dict | None:
     """AS006 — No evaluation queries file found.
 
-    Recommends adding an ``eval_queries.json`` file to the skill directory
-    to enable automated quality assessment. The file should contain test
-    queries that exercise the skill's functionality.
+    Recommends adding evaluation queries to the skill directory to enable
+    automated quality assessment, either as a top-level ``eval_queries.json``
+    (or any ``*eval*.json``/``*queries*.json`` file) or as ``evals/evals.json``
+    — the layout documented by agentskills.io's evaluating-skills guide and
+    Claude Code's skill-creator plugin.
 
     Args:
         path: Path to the SKILL.md file being validated.
@@ -288,8 +295,8 @@ def _check_as006(path: pathlib.Path) -> dict | None:
         Violation dict if no eval file found, None otherwise.
 
     Fix:
-        Create ``eval_queries.json`` in the skill directory with test queries
-        in JSON format.
+        Create ``eval_queries.json`` (or ``evals/evals.json``) in the skill
+        directory with test queries in JSON format.
 
     Note:
         This is an informational message, not an error. Skills work
@@ -300,6 +307,13 @@ def _check_as006(path: pathlib.Path) -> dict | None:
 
     # Check for eval_queries.json exact name first
     if (parent / "eval_queries.json").exists():
+        return None
+
+    # Check for evals/evals.json — a directory, so it's invisible to the
+    # file glob below (which only scans parent.iterdir(), not subdirs).
+    # The doc wording ("stores ... in evals/evals.json") is about the file's
+    # content, so an empty evals/ dir does not satisfy this.
+    if (parent / "evals" / "evals.json").is_file():
         return None
 
     # Check for any file matching *eval*.json or *queries*.json

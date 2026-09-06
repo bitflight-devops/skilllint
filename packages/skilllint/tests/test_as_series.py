@@ -215,6 +215,36 @@ def test_as006_no_eval_queries_info(tmp_path: pathlib.Path):
     )
 
 
+def test_as006_evals_json_in_evals_dir_satisfies_check(tmp_path: pathlib.Path):
+    """A skill with only evals/evals.json (no eval_queries.json) triggers no AS006.
+
+    agentskills.io's evaluating-skills guide and Claude Code's skill-creator
+    plugin both document ``evals/evals.json`` as the standard eval layout.
+    The old file-only glob over ``parent.iterdir()`` never sees content
+    inside a subdirectory, so this documented layout was a blind spot.
+    """
+    skill_dir = tmp_path / "my-skill"
+    skill_dir.mkdir()
+    skill_md = skill_dir / "SKILL.md"
+    skill_md.write_text(
+        textwrap.dedent("""\
+            ---
+            name: my-skill
+            description: A skill with evals/evals.json instead of eval_queries.json.
+            ---
+
+            Body content.
+        """)
+    )
+    evals_dir = skill_dir / "evals"
+    evals_dir.mkdir()
+    (evals_dir / "evals.json").write_text('{"skill_name": "my-skill", "evals": []}')
+
+    violations = check_skill_md(skill_md)
+    as006 = _violations_with_code(violations, "AS006")
+    assert as006 == [], f"Expected no AS006 when evals/evals.json is present, got: {as006}"
+
+
 # ---------------------------------------------------------------------------
 # AS008: MCP server name references in the allowed-tools field
 # ---------------------------------------------------------------------------
