@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Import-time benchmark for the ``skilllint`` package and its rule registry.
 
 Measures the wall-clock cost of ``import skilllint.rules`` in a fresh
