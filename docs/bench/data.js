@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788741607494,
+  "lastUpdate": 1788742486759,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -2220,6 +2220,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 84.043,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "0ecb008a37f413622dda760e8d67170f66f1b2b4",
+          "message": "fix(PL006): discover and validate marketplace-only repositories (#219)\n\nPL006 (marketplace.json layout) never fired on a repository whose only\nClaude-plugin artifact is `.claude-plugin/marketplace.json`, because three\nindependent gates all anchored exclusively on plugin.json:\n\n1. DEFAULT_SCAN_PATTERNS had no marketplace.json entry, so\n   _discover_bare_paths found nothing to validate.\n2. FileType.detect_file_type classified a marketplace-only root as UNKNOWN,\n   so the CLI reported \"Cannot determine file type\" (exit 2) for a direct\n   marketplace.json path.\n3. PluginStructureValidator.validate resolved its root via find_plugin_dir\n   only, returning passed=True (skipping check_pl006 entirely) whenever no\n   plugin.json existed anywhere in the ancestry.\n\nAdds a marketplace.json scan pattern, extends detect_file_type's PLUGIN\nbranch to recognize marketplace.json, and adds find_marketplace_dir (sharing\nfind_plugin_dir's upward-walk helper) as a fallback root anchor tried only\nafter find_plugin_dir fails -- so a nested plugin root still resolves to\nitself rather than an ancestor's marketplace.json.\n\nFixes #118\n\n\nClaude-Session: https://claude.ai/code/session_01G3ke4pBmhpiEuWoFTV2ax4\n\nCo-authored-by: Claude Sonnet 5 <noreply@anthropic.com>",
+          "timestamp": "2026-09-07T00:51:57Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/0ecb008a37f413622dda760e8d67170f66f1b2b4"
+        },
+        "date": 1788742485948,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 11214.344,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 11871.97,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 13155.748,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 84.316,
             "unit": "files/s"
           }
         ]
