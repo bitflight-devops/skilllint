@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
     from pytest_mock import MockerFixture
 
-from skilllint.plugin_validator import PL006, PluginStructureValidator, validate_single_path
+from skilllint.plugin_validator import PL006, PluginStructureValidator, find_marketplace_dir, validate_single_path
 
 
 class TestPluginStructureValidatorBasic:
@@ -648,3 +648,146 @@ class TestMarketplaceJsonLayout:
         # (verified against `claude plugin validate` v2.1.263, see issue #145).
         assert result.passed is True
         assert any(e.code == PL006 for e in result.warnings)
+
+
+class TestMarketplaceOnlyDiscovery:
+    """PL006 must be reachable when the only Claude-plugin artifact in a
+    repository is `.claude-plugin/marketplace.json` (skilllint#118).
+
+    `PluginStructureValidator.validate` anchored only on `find_plugin_dir`,
+    which recognizes `.claude-plugin/plugin.json` and nothing else. A
+    marketplace-only root has no `plugin.json` anywhere in its ancestry, so
+    `find_plugin_dir` always returned None and PL006 was silently skipped.
+    These tests cover the `find_plugin_dir(path) or find_marketplace_dir(path)`
+    fallback at the validator's root-resolution gate.
+    """
+
+    def test_pl006_fires_on_marketplace_only_root_non_object(self, tmp_path: Path) -> None:
+        """A marketplace-only root with a non-object marketplace.json still
+        reports PL006 as an error, with no plugin.json anywhere in the tree.
+        """
+        claude_plugin = tmp_path / ".claude-plugin"
+        claude_plugin.mkdir()
+        (claude_plugin / "marketplace.json").write_text(json.dumps([1, 2, 3]))
+
+        result = PluginStructureValidator().validate(tmp_path)
+
+        assert result.passed is False
+        pl006 = [e for e in result.errors if e.code == PL006]
+        assert len(pl006) == 1
+
+    def test_pl006_fires_on_marketplace_only_root_unknown_keys(self, tmp_path: Path) -> None:
+        """A marketplace-only root with an unrecognized top-level key reports
+        PL006 as a warning, matching the plugin-root behavior in
+        TestMarketplaceJsonLayout.
+        """
+        claude_plugin = tmp_path / ".claude-plugin"
+        claude_plugin.mkdir()
+        marketplace = {"name": "cat", "owner": {"name": "x"}, "plugins": [], "pluginz": "typo"}
+        (claude_plugin / "marketplace.json").write_text(json.dumps(marketplace))
+
+        result = PluginStructureValidator().validate(tmp_path)
+
+        assert result.passed is True
+        pl006 = [e for e in result.warnings if e.code == PL006]
+        assert len(pl006) == 1
+
+    def test_pl006_attributed_to_marketplace_root_not_nested_plugin(self, tmp_path: Path) -> None:
+        """A repo-root marketplace.json is validated at the root, independent
+        of a nested plugin directory living underneath it.
+        """
+        claude_plugin = tmp_path / ".claude-plugin"
+        claude_plugin.mkdir()
+        marketplace = {"name": "cat", "owner": {"name": "x"}, "plugins": [], "pluginz": "typo"}
+        (claude_plugin / "marketplace.json").write_text(json.dumps(marketplace))
+
+        nested_plugin = tmp_path / "plugins" / "foo"
+        (nested_plugin / ".claude-plugin").mkdir(parents=True)
+        (nested_plugin / ".claude-plugin" / "plugin.json").write_text('{"name": "foo"}')
+
+        result = PluginStructureValidator().validate(tmp_path)
+
+        assert any(e.code == PL006 for e in result.warnings)
+
+    def test_nested_plugin_not_shadowed_by_ancestor_marketplace(self, tmp_path: Path) -> None:
+        """`find_plugin_dir` must be tried before `find_marketplace_dir`:
+        a nested plugin root resolves to itself, never to an ancestor's
+        marketplace.json — even when that ancestor's marketplace.json has
+        PL006 findings of its own.
+
+        Regression guard for the fallback ordering call in `validate`
+        (`find_plugin_dir(path) or find_marketplace_dir(path)`). Reversing
+        the operands would let `find_marketplace_dir` walk past `foo` up to
+        the ancestor's marketplace.json before `find_plugin_dir` ever runs.
+        """
+        claude_plugin = tmp_path / ".claude-plugin"
+        claude_plugin.mkdir()
+        marketplace = {"name": "cat", "owner": {"name": "x"}, "plugins": [], "pluginz": "typo"}
+        (claude_plugin / "marketplace.json").write_text(json.dumps(marketplace))
+
+        nested_plugin = tmp_path / "plugins" / "foo"
+        (nested_plugin / ".claude-plugin").mkdir(parents=True)
+        (nested_plugin / ".claude-plugin" / "plugin.json").write_text('{"name": "foo"}')
+
+        result = PluginStructureValidator().validate(nested_plugin)
+
+        # foo has no marketplace.json of its own — the ancestor's PL006
+        # finding must not leak onto foo's result.
+        assert not any(e.code == PL006 for e in result.warnings)
+        assert not any(e.code == PL006 for e in result.errors)
+
+    def test_marketplace_root_with_plugin_json_unchanged(self, tmp_path: Path) -> None:
+        """Regression guard: a plugin root that also carries marketplace.json
+        keeps resolving via find_plugin_dir, unaffected by the new fallback.
+        """
+        plugin_dir = tmp_path / "test-plugin"
+        claude_plugin = plugin_dir / ".claude-plugin"
+        claude_plugin.mkdir(parents=True)
+        (claude_plugin / "plugin.json").write_text('{"name": "test"}')
+        marketplace = {"name": "cat", "owner": {"name": "x"}, "plugins": [], "pluginz": "typo"}
+        (claude_plugin / "marketplace.json").write_text(json.dumps(marketplace))
+
+        result = PluginStructureValidator().validate(plugin_dir)
+
+        assert any(e.code == PL006 for e in result.warnings)
+
+    def test_plugin_only_root_unaffected(self, tmp_path: Path) -> None:
+        """Regression guard: a plugin-only root (no marketplace.json anywhere)
+        behaves exactly as before — no PL006, passed True.
+        """
+        plugin_dir = tmp_path / "test-plugin"
+        claude_plugin = plugin_dir / ".claude-plugin"
+        claude_plugin.mkdir(parents=True)
+        (claude_plugin / "plugin.json").write_text('{"name": "test"}')
+
+        result = PluginStructureValidator().validate(plugin_dir)
+
+        assert not any(e.code == PL006 for e in result.warnings)
+        assert not any(e.code == PL006 for e in result.errors)
+
+
+class TestFindMarketplaceDir:
+    """Unit tests for `find_marketplace_dir` (skilllint#118)."""
+
+    def test_returns_own_dir_when_marketplace_json_present(self, tmp_path: Path) -> None:
+        """A directory whose own .claude-plugin/marketplace.json exists resolves to itself."""
+        claude_plugin = tmp_path / ".claude-plugin"
+        claude_plugin.mkdir()
+        (claude_plugin / "marketplace.json").write_text("{}")
+
+        assert find_marketplace_dir(tmp_path) == tmp_path
+
+    def test_walks_up_from_nested_file(self, tmp_path: Path) -> None:
+        """A file several directories below the marketplace root still resolves to the root."""
+        claude_plugin = tmp_path / ".claude-plugin"
+        claude_plugin.mkdir()
+        (claude_plugin / "marketplace.json").write_text("{}")
+        nested_file = tmp_path / "plugins" / "foo" / "SKILL.md"
+        nested_file.parent.mkdir(parents=True)
+        nested_file.write_text("# skill")
+
+        assert find_marketplace_dir(nested_file) == tmp_path
+
+    def test_returns_none_when_absent(self, tmp_path: Path) -> None:
+        """No marketplace.json anywhere up-tree returns None, matching find_plugin_dir's contract."""
+        assert find_marketplace_dir(tmp_path) is None

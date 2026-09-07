@@ -261,6 +261,66 @@ class TestDiscoverValidatablePaths:
 
         assert _discover_validatable_paths(skill_dir) == [skill_dir]
 
+    def test_discovers_marketplace_only_root(self, tmp_path: Path) -> None:
+        """_discover_validatable_paths returns the marketplace root itself.
+
+        Tests: .claude-plugin/marketplace.json discovery returns the owning
+               root directory, mirroring plugin.json discovery (skilllint#118).
+        How: Create a marketplace-only directory (no plugin.json anywhere)
+             and verify the root directory is discovered.
+        Why: Without this, PL006 has no reachable path to validate on a
+             marketplace-only repository -- the scan silently discovers
+             nothing (skilllint#118).
+        """
+        claude_plugin = tmp_path / ".claude-plugin"
+        claude_plugin.mkdir()
+        (claude_plugin / "marketplace.json").write_text('{"name": "cat"}')
+
+        discovered = _discover_validatable_paths(tmp_path)
+
+        assert tmp_path in discovered, f"Expected {tmp_path} in discovered paths: {discovered}"
+
+    def test_discovers_marketplace_root_and_nested_plugin_separately(self, tmp_path: Path) -> None:
+        """A repo-root marketplace.json and a nested plugin root are both
+        discovered, as distinct paths (skilllint#118).
+
+        Tests: the marketplace root is not swallowed by the nested plugin's
+               covered_roots exclusion, and vice versa.
+        How: Create tmp_path/.claude-plugin/marketplace.json plus
+             tmp_path/plugins/foo/.claude-plugin/plugin.json.
+        Why: PL006 must be attributed to the repository root, not
+             re-attributed to (or hidden by) a nested plugin.
+        """
+        claude_plugin = tmp_path / ".claude-plugin"
+        claude_plugin.mkdir()
+        (claude_plugin / "marketplace.json").write_text('{"name": "cat"}')
+
+        nested_plugin = tmp_path / "plugins" / "foo"
+        (nested_plugin / ".claude-plugin").mkdir(parents=True)
+        (nested_plugin / ".claude-plugin" / "plugin.json").write_text('{"name": "foo"}')
+
+        discovered = _discover_validatable_paths(tmp_path)
+
+        assert tmp_path in discovered, f"Expected marketplace root in {discovered}"
+        assert nested_plugin in discovered, f"Expected nested plugin root in {discovered}"
+
+    def test_marketplace_and_plugin_json_same_nested_root_not_duplicated(self, tmp_path: Path) -> None:
+        """A nested directory carrying both plugin.json and marketplace.json
+        in the same .claude-plugin/ is discovered exactly once (skilllint#118).
+
+        Tests: _discover_bare_paths's covered_roots guard also dedupes the
+               new marketplace.json pattern against the plugin.json pattern.
+        """
+        nested = tmp_path / "my-plugin"
+        claude_plugin = nested / ".claude-plugin"
+        claude_plugin.mkdir(parents=True)
+        (claude_plugin / "plugin.json").write_text('{"name": "test"}')
+        (claude_plugin / "marketplace.json").write_text('{"name": "cat"}')
+
+        discovered = _discover_validatable_paths(tmp_path)
+
+        assert discovered.count(nested) == 1, f"Expected exactly one occurrence: {discovered}"
+
 
 class TestResolveFilterAndExpandPaths:
     """Tests for _resolve_filter_and_expand_paths seam."""
@@ -715,6 +775,8 @@ class TestConstantsExport:
         assert any("commands" in p for p in patterns), f"Missing commands pattern in {patterns}"
         # Should include plugin.json
         assert any("plugin.json" in p for p in patterns), f"Missing plugin.json pattern in {patterns}"
+        # Should include marketplace.json (skilllint#118)
+        assert any("marketplace.json" in p for p in patterns), f"Missing marketplace.json pattern in {patterns}"
         # Should include hooks.json
         assert any("hooks.json" in p for p in patterns), f"Missing hooks.json pattern in {patterns}"
         # Should include CLAUDE.md
