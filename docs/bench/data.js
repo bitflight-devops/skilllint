@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788742486759,
+  "lastUpdate": 1788742743578,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -2262,6 +2262,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 84.316,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "9d2396aa5b3d9e0764e981c5e12347133d5610da",
+          "message": "fix(fix): gate fixer invocation on that path's own findings, report applied fixes (#220)\n\n`--fix` ran every fixer's fix() on every eligible path regardless of what\nwas actually flagged for it, and silently discarded the list of fixes\napplied without telling the user. Add FIXER_TRIGGER_CODES, a rule-code-scoped\n(not validator-identity-scoped) map keyed by validator class name, and gate\neach fixer at the --fix call site in validate_single_path on the pre-ignore-\nfilter findings for that path (ignore suppresses reporting, not fixing).\nRule-code scoping (Approach A from the design brief) is required because\nNameFormatValidator is a fix-only participant that never reports FM010 itself,\nand FrontmatterValidator's fix() also repairs AS001 (a code owned by\nAsSeriesValidator) -- a validator-identity gate would silently break both.\n\nThread a new AppliedFix record through an opt-in fixes_out out-param on\nvalidate_single_path, collected by run_validation_loop and printed via a new\nReporter.report_fixes() before summarize() (which mutates console width for\nits panel). ConsoleReporter/CIReporter render it; SummaryReporter no-ops.\n\nFixes #144, fixes #117.\n\nFollow-ups intentionally out of scope (see design brief):\n- FrontmatterValidator.fix() destroys authored YAML comments, reorders keys,\n  and drops trailing blank lines when any transform fires.\n- AS001 is auto-fixed in part but marked fixable=False in the rule registry.\n- Approach C (pass findings into fix()) for precise per-description\n  attribution instead of per-invocation.\n- FM010 has two fixers writing `name` from different sources of truth.\n- Re-implementing a correct PL006 marketplace.json relocation fix.\n\n\nClaude-Session: https://claude.ai/code/session_01G3ke4pBmhpiEuWoFTV2ax4\n\nCo-authored-by: Claude Sonnet 5 <noreply@anthropic.com>",
+          "timestamp": "2026-09-07T00:56:12Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/9d2396aa5b3d9e0764e981c5e12347133d5610da"
+        },
+        "date": 1788742742785,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 11839.033,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 12448.015,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 13561.197,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 80.414,
             "unit": "files/s"
           }
         ]
