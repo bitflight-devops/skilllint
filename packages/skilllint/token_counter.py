@@ -132,13 +132,21 @@ TOKEN_ERROR_THRESHOLD: int = BODY_TOKEN_ERROR
 def count_tokens(text: str) -> int:
     """Count tokens in *text* using the cl100k_base encoding.
 
+    A SKILL.md body is free-form prose/markdown, not a prompt being replayed
+    through a model, so it must never be validated against tiktoken's own
+    special-token allowlist: literal text like ``<|endoftext|>`` appearing in
+    a skill body (e.g. documentation describing tiktoken itself) is ordinary
+    content to count, not a special token to reject. ``disallowed_special=()``
+    is tiktoken's own documented way to disable that check (see the
+    suggestion in ``tiktoken.core.Encoding.encode``'s ``ValueError`` message).
+
     Args:
         text: Text content to count tokens in.
 
     Returns:
         Number of tokens in *text*.
     """
-    return len(_get_encoding().encode(text))
+    return len(_get_encoding().encode(text, disallowed_special=()))
 
 
 # ---------------------------------------------------------------------------
