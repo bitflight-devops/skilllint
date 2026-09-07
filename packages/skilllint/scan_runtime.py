@@ -44,6 +44,7 @@ DEFAULT_SCAN_PATTERNS: tuple[str, ...] = (
     "**/agents/*.md",
     "**/commands/*.md",
     "**/.claude-plugin/plugin.json",
+    "**/.claude-plugin/marketplace.json",
     "**/hooks/hooks.json",
     "**/CLAUDE.md",
 )
@@ -300,7 +301,9 @@ def _discover_bare_paths(directory: Path) -> list[Path]:
     covered_roots = plugin_roots | provider_roots
     for pattern in DEFAULT_SCAN_PATTERNS:
         for match in _glob_excluding(directory, pattern):
-            if pattern.endswith("plugin.json"):
+            if ".claude-plugin/" in pattern:
+                # Both plugin.json and marketplace.json anchor a root two
+                # levels up from the match (skilllint#118).
                 candidate = match.parent.parent
             elif pattern.endswith("skills/*/SKILL.md"):
                 candidate = match.parent

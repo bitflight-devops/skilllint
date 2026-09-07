@@ -148,6 +148,27 @@ def _safe_load_yaml(text: str) -> YamlValue:
     return _yaml_safe.load(text)
 
 
+def _find_anchor_dir(path: Path, marker_relpath: str) -> Path | None:
+    """Walk up from *path* looking for a marker file relative to a root.
+
+    Shared upward walk behind :func:`find_plugin_dir` and
+    :func:`find_marketplace_dir` (skilllint#118).
+
+    Args:
+        path: Path to start searching from (file or directory).
+        marker_relpath: Marker path relative to a candidate root, e.g.
+            ``".claude-plugin/plugin.json"``.
+
+    Returns:
+        The directory containing the marker, or None if not found.
+    """
+    search_path = path.parent if path.is_file() else path
+    for parent in [search_path, *search_path.parents]:
+        if (parent / marker_relpath).exists():
+            return parent
+    return None
+
+
 def find_plugin_dir(path: Path) -> Path | None:
     """Find the plugin directory containing .claude-plugin/plugin.json.
 
@@ -160,11 +181,25 @@ def find_plugin_dir(path: Path) -> Path | None:
     Returns:
         Plugin directory path, or None if not found.
     """
-    search_path = path.parent if path.is_file() else path
-    for parent in [search_path, *search_path.parents]:
-        if (parent / ".claude-plugin" / "plugin.json").exists():
-            return parent
-    return None
+    return _find_anchor_dir(path, ".claude-plugin/plugin.json")
+
+
+def find_marketplace_dir(path: Path) -> Path | None:
+    """Find the directory containing .claude-plugin/marketplace.json.
+
+    Walks up the directory tree from *path* (or its parent, if *path* is a
+    file) looking for a ``.claude-plugin/marketplace.json`` marker. Used as a
+    fallback root anchor when no ``plugin.json`` exists anywhere in the
+    ancestry (skilllint#118): a repository whose only Claude-plugin artifact
+    is a marketplace manifest still needs a root for PL006 to validate.
+
+    Args:
+        path: Path to start searching from.
+
+    Returns:
+        Marketplace root directory path, or None if not found.
+    """
+    return _find_anchor_dir(path, ".claude-plugin/marketplace.json")
 
 
 def _dump_yaml(data: dict[str, YamlValue]) -> str:
@@ -1117,7 +1152,14 @@ class FileType(StrEnum):
 
         if path.name == "SKILL.md":
             result = FileType.SKILL
-        elif path.name == "plugin.json" or (path / ".claude-plugin/plugin.json").exists():
+        elif (
+            path.name in {"plugin.json", "marketplace.json"}
+            or (path / ".claude-plugin/plugin.json").exists()
+            or (path / ".claude-plugin/marketplace.json").exists()
+        ):
+            # marketplace.json is a Claude-plugin artifact in its own right
+            # (skilllint#118): a marketplace-only repository must be
+            # classified as PLUGIN so PluginStructureValidator (PL006) runs.
             result = FileType.PLUGIN
         elif "agents" in path.parts:
             result = FileType.AGENT
@@ -3188,10 +3230,15 @@ class PluginStructureValidator:
         warnings: list[ValidationIssue] = []
         info: list[ValidationIssue] = []
 
-        # Find plugin directory (contains .claude-plugin/plugin.json)
-        plugin_dir = find_plugin_dir(path)
+        # Find plugin directory (contains .claude-plugin/plugin.json), falling
+        # back to a marketplace-only root (contains .claude-plugin/
+        # marketplace.json but no plugin.json anywhere in its ancestry) so
+        # PL006 is reachable there too (skilllint#118). Plugin anchor is
+        # tried first: a nested plugin root must resolve to itself, not to
+        # an ancestor's marketplace.json.
+        plugin_dir = find_plugin_dir(path) or find_marketplace_dir(path)
         if plugin_dir is None:
-            # Not a plugin directory - skip validation
+            # Neither a plugin nor a marketplace directory - skip validation
             return ValidationResult(passed=True, errors=errors, warnings=warnings, info=info)
 
         # Validate plugin.json JSON syntax locally before delegating to claude CLI.
