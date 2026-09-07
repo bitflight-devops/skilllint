@@ -1216,6 +1216,28 @@ class TestBareDirectoryRegressionCompatibility:
         # Assert — plugin root itself must be present (added by _discover_plugin_paths)
         assert tmp_path in result
 
+    def test_bare_directory_marketplace_only_root_included(self, tmp_path: Path) -> None:
+        """Directory with only .claude-plugin/marketplace.json is discovered as itself.
+
+        Tests: _discover_validatable_paths — BARE context marketplace.json
+               fallback in DEFAULT_SCAN_PATTERNS (skilllint#118)
+        How: Create .claude-plugin/marketplace.json at tmp_path root (no
+             plugin.json anywhere), call _discover_validatable_paths, assert
+             tmp_path itself is in the result.
+        Why: Without a marketplace anchor in DEFAULT_SCAN_PATTERNS, a
+             marketplace-only repository is never discovered and PL006 can
+             never fire (skilllint#118).
+        """
+        # Arrange
+        (tmp_path / ".claude-plugin").mkdir()
+        (tmp_path / ".claude-plugin" / "marketplace.json").write_text("{}")
+
+        # Act
+        result = _discover_validatable_paths(tmp_path)
+
+        # Assert — marketplace root itself must be present
+        assert tmp_path in result
+
     def test_bare_directory_nested_plugin_root_in_results(self, tmp_path: Path) -> None:
         """For BARE dir with nested plugin, the plugin root appears in results.
 
