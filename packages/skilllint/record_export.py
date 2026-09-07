@@ -34,6 +34,31 @@ def make_recording_console(*, no_color: bool = False) -> Console:
     return Console(record=True, force_terminal=True, no_color=no_color)
 
 
+def _strip_trailing_whitespace(content: str) -> str:
+    """Strip trailing whitespace from every line of *content*.
+
+    Rich's SVG export template embeds structurally-indented lines that carry
+    trailing whitespace independent of the recorded terminal content. The
+    ``trailing-whitespace`` pre-commit/prek hook rewrites such lines whenever
+    a checked-in recording is regenerated, which turns routine screenshot
+    updates into a guaranteed CI failure on first push. Stripping here keeps
+    the file the hook would already consider clean.
+
+    Only trailing whitespace is removed; leading whitespace (indentation) is
+    left untouched so the exported markup is not otherwise reformatted. A
+    trailing newline at the end of *content*, if present, is preserved.
+
+    Args:
+        content: Raw SVG or HTML markup, as returned by
+            :meth:`rich.console.Console.export_svg` or
+            :meth:`rich.console.Console.export_html`.
+
+    Returns:
+        *content* with trailing whitespace removed from each line.
+    """
+    return "\n".join(line.rstrip() for line in content.split("\n"))
+
+
 def export_recording(console: Console, path: Path, *, title: str) -> None:
     """Export a recorded Rich console session to *path*.
 
@@ -41,6 +66,10 @@ def export_recording(console: Console, path: Path, *, title: str) -> None:
 
     - ``.html`` — :meth:`rich.console.Console.export_html`
     - anything else (including ``.svg``) — :meth:`rich.console.Console.export_svg`
+
+    Trailing whitespace is stripped from every line before writing (see
+    :func:`_strip_trailing_whitespace`) so the recorded file never trips the
+    repository's ``trailing-whitespace`` hook.
 
     The write is atomic: content is first written to a :class:`tempfile.NamedTemporaryFile`
     in the same directory as *path*, then renamed into place with :func:`os.replace`.
@@ -62,6 +91,7 @@ def export_recording(console: Console, path: Path, *, title: str) -> None:
     if suffix not in {".svg", ".html"}:
         raise ValueError(f"Unsupported file extension {path.suffix!r}. Use .svg or .html.")
     content = console.export_html(clear=False) if suffix == ".html" else console.export_svg(title=title, clear=False)
+    content = _strip_trailing_whitespace(content)
 
     # Atomic write: write to a sibling temp file, then rename.
     dir_ = path.parent
