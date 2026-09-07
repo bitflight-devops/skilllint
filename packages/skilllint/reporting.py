@@ -14,7 +14,7 @@ from rich.measure import Measurement
 from rich.panel import Panel
 
 if TYPE_CHECKING:
-    from skilllint.plugin_validator import ValidationIssue, ValidationResult
+    from skilllint.plugin_validator import AppliedFix, ValidationIssue, ValidationResult
 
 FileResults: TypeAlias = dict[Path, list[tuple[str, "ValidationResult"]]]
 
@@ -33,6 +33,10 @@ class Reporter(Protocol):
 
     def summarize(self, total_files: int, passed: int, failed: int, warnings: int) -> None:
         """Display summary statistics."""
+        ...
+
+    def report_fixes(self, fixes: list[AppliedFix]) -> None:
+        """Display fixes applied by --fix, grouped by file."""
         ...
 
 
@@ -118,6 +122,29 @@ class ConsoleReporter:
                 for issue in issues_to_show:
                     self._print_issue(issue)
 
+    def report_fixes(self, fixes: list[AppliedFix]) -> None:
+        """Display a summary of files and rules that --fix modified.
+
+        Args:
+            fixes: Fixes applied during this run, in the order they were
+                recorded. Grouped by file for display, preserving the order
+                each file's fixes were recorded in.
+        """
+        self.console.print("\n[bold]Fixes applied[/bold]", crop=False, overflow="ignore")
+        fixes_by_path: dict[Path, list[AppliedFix]] = {}
+        for applied_fix in fixes:
+            fixes_by_path.setdefault(applied_fix.path, []).append(applied_fix)
+        for file_path, path_fixes in fixes_by_path.items():
+            self.console.print(f"[bold]{file_path}[/bold]", crop=False, overflow="ignore")
+            for applied_fix in path_fixes:
+                codes = ", ".join(applied_fix.codes)
+                self.console.print(
+                    f"  :wrench: [magenta][{codes}][/magenta] "
+                    f"[dim]{applied_fix.validator}:[/dim] {applied_fix.description}",
+                    crop=False,
+                    overflow="ignore",
+                )
+
     def summarize(self, total_files: int, passed: int, failed: int, warnings: int) -> None:
         """Display summary statistics with Rich formatting."""
         if failed == 0:
@@ -201,6 +228,16 @@ class CIReporter:
                 for issue in issues_to_show:
                     self._print_issue(issue)
 
+    def report_fixes(self, fixes: list[AppliedFix]) -> None:
+        """Display a summary of files and rules that --fix modified, plain text.
+
+        Args:
+            fixes: Fixes applied during this run, one line per fix.
+        """
+        for applied_fix in fixes:
+            codes = ", ".join(applied_fix.codes)
+            print(f"FIXED [{codes}] {applied_fix.path}: {applied_fix.description}")
+
     def summarize(self, total_files: int, passed: int, failed: int, warnings: int) -> None:
         """Display summary statistics in plain text."""
         status = "✓ PASSED" if failed == 0 else "✗ FAILED"
@@ -219,6 +256,9 @@ class SummaryReporter:
     """Single-line summary reporter for quick status checks."""
 
     def report(self, file_results: FileResults, verbose: bool = False, *, show_progress: bool = False) -> None:
+        """Display nothing (summary-only reporter)."""
+
+    def report_fixes(self, fixes: list[AppliedFix]) -> None:
         """Display nothing (summary-only reporter)."""
 
     def summarize(self, total_files: int, passed: int, failed: int, warnings: int) -> None:
