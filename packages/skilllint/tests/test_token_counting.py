@@ -28,7 +28,7 @@ import pytest
 from hypothesis import given, settings, strategies as st
 
 from skilllint.plugin_validator import TOKEN_ERROR_THRESHOLD, TOKEN_WARNING_THRESHOLD, ComplexityValidator
-from skilllint.token_counter import count_tokens
+from skilllint.token_counter import _SPECIAL_TOKENS, count_tokens
 
 
 def generate_exact_token_content(target_tokens: int) -> str:
@@ -190,6 +190,45 @@ hooks: session-start
             assert result1.passed == result2.passed, "Frontmatter differences affected validation result"
             assert len(result1.errors) == len(result2.errors), "Frontmatter differences affected error count"
             assert len(result1.warnings) == len(result2.warnings), "Frontmatter differences affected warning count"
+
+
+class TestDisallowedSpecialTokens:
+    """Test literal tiktoken special-token strings in body text don't raise.
+
+    Tests: count_tokens must treat a SKILL.md body as free-form prose, never
+        as a prompt being validated against tiktoken's own special-token
+        allowlist.
+    How: Call count_tokens on text containing each literal special-token
+        string from cl100k_base's _SPECIAL_TOKENS and assert it returns a
+        plain int rather than raising ValueError.
+    Why: Regression test for issue #226 — tiktoken's encode() raises
+        ValueError("Encountered text corresponding to disallowed special
+        token ...") by default when input text contains one of these literal
+        substrings. A SKILL.md body can legitimately contain such text (e.g.
+        documentation describing tiktoken itself), so count_tokens must pass
+        disallowed_special=() through to encode().
+    """
+
+    @pytest.mark.parametrize("special_token", sorted(_SPECIAL_TOKENS))
+    def test_literal_special_token_string_does_not_raise(self, special_token: str) -> None:
+        """Test count_tokens returns an int for text containing a literal special token.
+
+        Args:
+            special_token: A literal tiktoken special-token string, e.g. "<|endoftext|>".
+        """
+        result = count_tokens(f"some text with {special_token} embedded in it")
+
+        assert isinstance(result, int)
+        assert result > 0
+
+    def test_multiple_special_tokens_in_one_body_does_not_raise(self) -> None:
+        """Test count_tokens handles several literal special-token strings in the same text."""
+        body = " ".join(f"{token} appears here." for token in sorted(_SPECIAL_TOKENS))
+
+        result = count_tokens(body)
+
+        assert isinstance(result, int)
+        assert result > 0
 
 
 class TestThresholdBoundaries:
