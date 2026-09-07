@@ -148,6 +148,22 @@ class TestExportRecording:
         normalised = html.unescape(content).replace("\xa0", " ")
         assert "My Custom Title" in normalised
 
+    def test_svg_output_has_no_trailing_whitespace(self, tmp_path: Path) -> None:
+        """export_recording strips trailing whitespace from every line of SVG output.
+
+        Rich's SVG export template contains structurally indented lines with
+        trailing whitespace (independent of the recorded terminal content).
+        The `trailing-whitespace` pre-commit/prek hook rewrites any such line
+        when a screenshot is regenerated, so the file skilllint writes must
+        already be clean or every regeneration trips the hook on first push.
+        """
+        console = self._make_console_with_output()
+        dest = tmp_path / "output.svg"
+        export_recording(console, dest, title="test title")
+        content = dest.read_text(encoding="utf-8")
+        offending = [line for line in content.splitlines() if line != line.rstrip()]
+        assert not offending, f"lines with trailing whitespace: {offending!r}"
+
     def test_unsupported_extension_raises_value_error(self, tmp_path: Path) -> None:
         """export_recording raises ValueError for unsupported file extensions."""
         console = make_recording_console()
