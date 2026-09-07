@@ -549,6 +549,42 @@ def get_validator_constraint_scopes(class_name: str) -> set[str]:
     return VALIDATOR_CONSTRAINT_SCOPES.get(class_name, {"shared", "provider_specific"})
 
 
+# Rule codes that authorise a fixer to run against a path under --fix.
+# Keyed by validator class name, the same convention as VALIDATOR_OWNERSHIP
+# and VALIDATOR_CONSTRAINT_SCOPES above. A fixer whose class is not a key
+# here gets an empty set from get_fixer_trigger_codes() and therefore never
+# runs (fail closed) -- see test_every_can_fix_validator_has_trigger_codes.
+#
+# The trigger set for a validator is not always the codes it *reports* in
+# the normal validate() pipeline:
+# - NameFormatValidator is a fix-only participant appended by
+#   _get_fixers_for_path; FM010 is reported by FrontmatterValidator, but
+#   only NameFormatValidator implements the repair.
+# - FrontmatterValidator.fix() also repairs a missing `name` field (AS001),
+#   a code owned by AsSeriesValidator in the reporting pipeline, via
+#   fix_skill_name_field() -- see skilllint#144/#117 design brief.
+FIXER_TRIGGER_CODES: dict[str, frozenset[str]] = {
+    "SymlinkTargetValidator": frozenset({"SL001"}),
+    "FrontmatterValidator": frozenset({"FM004", "FM007", "FM009", "FM010", "AS001"}),
+    "NameFormatValidator": frozenset({"FM010"}),
+    "HookValidator": frozenset({"HK005"}),
+}
+
+
+def get_fixer_trigger_codes(validator: Validator) -> frozenset[str]:
+    """Get the rule codes that authorise a validator's fixer to run.
+
+    Args:
+        validator: A validator instance being considered for --fix.
+
+    Returns:
+        Frozenset of rule codes declared in FIXER_TRIGGER_CODES for this
+        validator's class. Empty for any class not declared there, so an
+        undeclared or third-party fixer never runs (fail closed).
+    """
+    return FIXER_TRIGGER_CODES.get(type(validator).__name__, frozenset())
+
+
 def filter_validators_by_constraint_scopes(
     validators: Sequence[Validator], constraint_scopes: set[str]
 ) -> list[Validator]:
@@ -1180,6 +1216,24 @@ class ComplexityMetrics:
         if self.status == "warning":
             return f"WARNING: {self.body_tokens} tokens (>{TOKEN_WARNING_THRESHOLD})"
         return f"OK: {self.body_tokens} tokens"
+
+
+@dataclass(frozen=True)
+class AppliedFix:
+    """Record of one fix a validator applied to a file under --fix.
+
+    Attribution is per fixer invocation, not per description: when a single
+    fixer's ``fix()`` call is authorised by more than one rule code and
+    returns multiple description strings, every description from that call
+    carries the full triggering code set. Precise per-description
+    attribution would require passing findings into ``fix()`` (tracked as a
+    follow-up -- see the skilllint#144/#117 design brief, Approach C).
+    """
+
+    path: Path
+    validator: str
+    codes: tuple[str, ...]
+    description: str
 
 
 # ============================================================================
@@ -3799,6 +3853,7 @@ def _collect_validator_results(
     config_root: Path | None,
     ignore_config: IgnoreConfig,
     policy: ValidationPolicy | None = None,
+    raw_codes_out: set[str] | None = None,
 ) -> list[tuple[str, ValidationResult]]:
     """Run each validator and collect results, applying ignore filtering.
 
@@ -3810,6 +3865,11 @@ def _collect_validator_results(
             prefix matching. Pass ``None`` to skip filtering.
         ignore_config: Resolved ignore configuration.
         policy: Optional resolved token/severity policy.
+        raw_codes_out: Optional mutable out-param collecting every issue code
+            found *before* ignore filtering. ``--fix`` gating reads this set:
+            issue #144's fix policy is "ignore = suppress reporting, not
+            fixing", so the fixer gate must see codes ignore filtering would
+            otherwise remove.
 
     Returns:
         List of (validator_class_name, result) tuples.
@@ -3847,6 +3907,8 @@ def _collect_validator_results(
                 warnings=[i for i in issues if i.severity == "warning"],
                 info=[i for i in issues if i.severity == "info"],
             )
+        if raw_codes_out is not None:
+            raw_codes_out.update(str(i.code) for i in (*result.errors, *result.warnings, *result.info))
         if config_root is not None:
             result = _filter_result_by_ignore(result, path, config_root, ignore_config)
         results.append((name, result))
@@ -3871,6 +3933,7 @@ def validate_single_path(
     verbose: bool,
     per_run_cache: dict[str, tuple[IgnoreConfig, Path | None]] | None = None,
     per_run_policy_cache: dict[str, tuple[ValidationPolicy, Path | None]] | None = None,
+    fixes_out: list[AppliedFix] | None = None,
 ) -> FileResults:
     """Validate a single path and return results grouped by file.
 
@@ -3886,6 +3949,10 @@ def validate_single_path(
         per_run_policy_cache: Optional mutable cache for policy resolution,
             with the same per-run lifetime as ``per_run_cache``.  Sharing it
             avoids re-walking and re-reading config for every sibling file.
+        fixes_out: Optional mutable append-only out-param collecting one
+            AppliedFix per fix description a fixer returned. Only appended
+            to when ``fix`` is True and a fixer's declared trigger codes
+            (FIXER_TRIGGER_CODES) intersect this path's findings.
 
     Returns:
         Mapping of file path to list of (validator_class_name, result) tuples.
@@ -3921,8 +3988,17 @@ def validate_single_path(
     policy, _policy_root = _resolve_policy(path, policy_cache)
     policy = ValidationPolicy(policy.thresholds, policy.severity, ignore_config)
 
+    # raw_codes carries every issue code found before ignore filtering, so the
+    # --fix gate below sees suppressed findings too (ignore = suppress
+    # reporting, not fixing -- see the note in the fix loop).
+    raw_codes: set[str] = set()
     validator_results = _collect_validator_results(
-        validators, path, config_root=config_root, ignore_config=ignore_config, policy=policy
+        validators,
+        path,
+        config_root=config_root,
+        ignore_config=ignore_config,
+        policy=policy,
+        raw_codes_out=raw_codes if fix else None,
     )
 
     # Note: --fix still runs even for suppressed issues (ignore = suppress reporting, not fixing)
@@ -3933,12 +4009,27 @@ def validate_single_path(
         else:
             fixes_applied: list[str] = []
             for validator in _get_fixers_for_path(validators, path):
-                if validator.can_fix():
-                    try:
-                        validator_fixes = validator.fix(path)
-                        fixes_applied.extend(validator_fixes)
-                    except NotImplementedError:
-                        pass  # Validator doesn't support fixing
+                if not validator.can_fix():
+                    continue
+                # A fixer may only run when this path's findings include at
+                # least one rule code it is declared to repair (issue #144).
+                # Unmapped fixers get an empty set from get_fixer_trigger_codes
+                # and are skipped -- fail closed rather than fixing on an
+                # undeclared trigger.
+                triggered_codes = get_fixer_trigger_codes(validator) & raw_codes
+                if not triggered_codes:
+                    continue
+                try:
+                    validator_fixes = validator.fix(path)
+                except NotImplementedError:
+                    continue  # Validator doesn't support fixing
+                fixes_applied.extend(validator_fixes)
+                if fixes_out is not None and validator_fixes:
+                    codes = tuple(sorted(triggered_codes))
+                    fixes_out.extend(
+                        AppliedFix(path=path, validator=type(validator).__name__, codes=codes, description=description)
+                        for description in validator_fixes
+                    )
 
             # Re-validate after fixes
             if fixes_applied:
@@ -4448,7 +4539,9 @@ def main(
         per_run_cache: dict[str, tuple[IgnoreConfig, Path | None]] = {}
         per_run_policy_cache: dict[str, tuple[ValidationPolicy, Path | None]] = {}
 
-        def _validate_with_cache(p: Path, *, check: bool, fix: bool, verbose: bool) -> FileResults:
+        def _validate_with_cache(
+            p: Path, *, check: bool, fix: bool, verbose: bool, fixes_out: list[AppliedFix] | None = None
+        ) -> FileResults:
             return validate_single_path(
                 p,
                 check=check,
@@ -4456,6 +4549,7 @@ def main(
                 verbose=verbose,
                 per_run_cache=per_run_cache,
                 per_run_policy_cache=per_run_policy_cache,
+                fixes_out=fixes_out,
             )
 
         run_validation_loop(

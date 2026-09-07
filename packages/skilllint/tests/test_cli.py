@@ -224,9 +224,10 @@ tools: Read, Write
     def test_fix_reports_applied_fixes(self, cli_runner: CliRunner, tmp_path: Path, no_color_env: None) -> None:
         """Verify --fix mode reports which fixes were applied.
 
-        Tests: --fix mode outputs list of applied fixes
-        How: Create file with fixable issues, run --fix, check output
-        Why: Users should know what changes were made
+        Tests: --fix mode outputs list of applied fixes (skilllint#117)
+        How: Create file with a fixable multiline description, run --fix, check output
+        Why: Users should know what changes were made -- exit 0 alone does not
+            distinguish "nothing to fix" from "fixed silently".
         """
         # Create skill with fixable multiline description
         skill_dir = tmp_path / "fix-report-skill"
@@ -242,11 +243,72 @@ tools: Read, Write
 # Test Skill
 """)
 
-        result = cli_runner.invoke(plugin_validator.app, ["check", "--fix", str(skill_file)])
+        result = cli_runner.invoke(plugin_validator.app, ["check", "--fix", "--no-color", str(skill_file)])
 
-        # Command should complete successfully (fixes may or may not be needed)
-        # The key is that --fix flag is accepted and runs without error
         assert result.exit_code == 0
+        assert "FIXED" in result.stdout
+        assert "FM004" in result.stdout
+        assert "multiline" in result.stdout
+        assert str(skill_file) in result.stdout
+
+    def test_fix_summary_absent_when_nothing_fixed(
+        self, cli_runner: CliRunner, tmp_path: Path, no_color_env: None
+    ) -> None:
+        """Verify --fix prints no fix summary when the file has nothing fixable.
+
+        Tests: --fix summary reporting is silent on a clean file (skilllint#117)
+        How: Create a skill with only a non-fixable finding, run --fix, check output
+        Why: A fix summary on an untouched file would be a false positive
+        """
+        skill_dir = tmp_path / "clean-cli-skill"
+        skill_dir.mkdir()
+        skill_file = skill_dir / "SKILL.md"
+        skill_file.write_text("""---
+name: clean-cli-skill
+description: A short description without any keywords for automatic loading here.
+tools: Read, Write
+---
+
+# Test Skill
+""")
+
+        result = cli_runner.invoke(plugin_validator.app, ["check", "--fix", "--no-color", str(skill_file)])
+
+        assert result.exit_code == 0
+        assert "FIXED" not in result.stdout
+        assert "Fixes applied" not in result.stdout
+
+    def test_fix_summary_printed_before_summary_panel(
+        self, cli_runner: CliRunner, tmp_path: Path, no_color_env: None
+    ) -> None:
+        """Verify the fix summary appears before the validation summary block.
+
+        Tests: Fix summary ordering relative to reporter.summarize() (skilllint#117)
+        How: Run --fix on a fixable file, locate both markers in stdout
+        Why: ConsoleReporter.summarize() mutates console width for its panel;
+            printing the fix summary afterwards would inherit that width.
+        """
+        skill_dir = tmp_path / "fix-order-skill"
+        skill_dir.mkdir()
+        skill_file = skill_dir / "SKILL.md"
+        skill_file.write_text("""---
+name: fix-order-skill
+description: >-
+  Test skill with multiline description using fold marker
+tools: Read, Write
+---
+
+# Test Skill
+""")
+
+        result = cli_runner.invoke(
+            plugin_validator.app, ["check", "--fix", "--no-color", "--show-summary", str(skill_file)]
+        )
+
+        assert result.exit_code == 0
+        fixed_index = result.stdout.index("FIXED")
+        summary_index = result.stdout.index("=" * 60)
+        assert fixed_index < summary_index
 
     def test_fix_revalidates_after_fixing(self, cli_runner: CliRunner, tmp_path: Path, no_color_env: None) -> None:
         """Verify --fix mode re-validates after applying fixes.

@@ -17,7 +17,7 @@ import contextlib
 from io import StringIO
 from pathlib import Path
 
-from skilllint.plugin_validator import ErrorCode, ValidationIssue, ValidationResult
+from skilllint.plugin_validator import AppliedFix, ErrorCode, ValidationIssue, ValidationResult
 from skilllint.reporting import CIReporter, ConsoleReporter, SummaryReporter
 
 
@@ -176,6 +176,36 @@ class TestConsoleReporter:
         assert "Warnings: 1" in output
         assert "FAILED" in output
 
+    def test_report_fixes(self) -> None:
+        """Test report_fixes output groups fixes by file with code and description.
+
+        Tests: --fix summary reporting (skilllint#117)
+        How: Inject Console writing to StringIO, call report_fixes with one AppliedFix
+        Why: Verify the file path, rule code and fix description all appear in output
+        """
+        from rich.console import Console
+
+        buf = StringIO()
+        console = Console(file=buf, color_system=None, width=200)
+        reporter = ConsoleReporter(console=console)
+
+        fixes = [
+            AppliedFix(
+                path=Path("/tmp/test/SKILL.md"),
+                validator="FrontmatterValidator",
+                codes=("FM007",),
+                description="Converted tools from YAML array to comma-separated string",
+            )
+        ]
+        reporter.report_fixes(fixes)
+
+        output = buf.getvalue()
+        assert "Fixes applied" in output
+        assert "/tmp/test/SKILL.md" in output
+        assert "FM007" in output
+        assert "Converted tools from YAML array to comma-separated string" in output
+        assert "FrontmatterValidator" in output
+
 
 class TestCIReporter:
     """Test CIReporter plain text output.
@@ -219,6 +249,34 @@ class TestCIReporter:
         output = buf.getvalue()
         assert "\u2717 ERROR" in output
         assert "FM001" in output
+
+    def test_report_fixes(self) -> None:
+        """Test CIReporter emits a plain-text FIXED line per applied fix.
+
+        Tests: --fix summary reporting in plain text (skilllint#117)
+        How: Call report_fixes with one AppliedFix, capture stdout
+        Why: Verify greppable "FIXED [CODE] path: description" format
+        """
+        reporter = CIReporter()
+        fixes = [
+            AppliedFix(
+                path=Path("/tmp/test/My_Command.md"),
+                validator="NameFormatValidator",
+                codes=("FM010",),
+                description="Normalized name from 'My_Command' to 'my-command'",
+            )
+        ]
+
+        buf = StringIO()
+        with contextlib.redirect_stdout(buf):
+            reporter.report_fixes(fixes)
+
+        output = buf.getvalue()
+        assert "FIXED" in output
+        assert "[FM010]" in output
+        assert "/tmp/test/My_Command.md" in output
+        assert "Normalized name from 'My_Command' to 'my-command'" in output
+        assert "\x1b" not in output
 
     def test_report_warnings(self) -> None:
         """Test CIReporter shows warning format.

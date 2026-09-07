@@ -26,6 +26,8 @@ from .reporting import CIReporter, ConsoleReporter, FileResults, Reporter
 if TYPE_CHECKING:
     from rich.console import Console
 
+    from .plugin_validator import AppliedFix
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -547,6 +549,24 @@ def _ignore_path(path: Path) -> Path:
     return skill_file if path.is_dir() and skill_file.is_file() else path
 
 
+def _select_reporter(*, no_color: bool, record_console: Console | None) -> Reporter:
+    """Choose the reporter implementation for this run.
+
+    Args:
+        no_color: Disable color output (selects the plain-text CI reporter).
+        record_console: When provided, takes precedence so recorded output
+            (e.g. SVG/HTML export) always uses Rich formatting.
+
+    Returns:
+        A ConsoleReporter (recording or colored) or a CIReporter.
+    """
+    if record_console is not None:
+        return ConsoleReporter(console=record_console)
+    if no_color:
+        return CIReporter()
+    return ConsoleReporter(no_color=no_color)
+
+
 def run_validation_loop(
     *,
     expanded_paths: list[Path],
@@ -606,6 +626,7 @@ def run_validation_loop(
         return str(p.resolve()) in ignored_set
 
     all_results: FileResults = {}
+    all_fixes: list[AppliedFix] = []
     for path in expanded_paths:
         if _should_skip(_ignore_path(path)):
             continue
@@ -613,21 +634,20 @@ def run_validation_loop(
             violations = validate_file(_ignore_path(path), adapters, platform_override)
             all_results[path] = [("platform", violations_to_result(violations))]
         else:
-            file_results = validate_single_path(path, check=check, fix=fix, verbose=verbose)
+            file_results = validate_single_path(path, check=check, fix=fix, verbose=verbose, fixes_out=all_fixes)
             for file_path, validator_results in file_results.items():
                 if file_path in all_results:
                     all_results[file_path].extend(validator_results)
                 else:
                     all_results[file_path] = list(validator_results)
 
-    reporter: Reporter
-    if record_console is not None:
-        reporter = ConsoleReporter(console=record_console)
-    elif no_color:
-        reporter = CIReporter()
-    else:
-        reporter = ConsoleReporter(no_color=no_color)
+    reporter = _select_reporter(no_color=no_color, record_console=record_console)
     reporter.report(all_results, verbose=verbose, show_progress=show_progress)
+    if all_fixes:
+        # Printed before summarize(): ConsoleReporter.summarize() mutates
+        # self.console.width to fit its summary panel, so anything printed
+        # afterwards on the same console would inherit that narrowed width.
+        reporter.report_fixes(all_fixes)
 
     total_files, passed, failed, warnings = _compute_summary(all_results)
     if show_summary:
