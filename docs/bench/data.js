@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788742743578,
+  "lastUpdate": 1788744604543,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -2304,6 +2304,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 80.414,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "69efa0e7228a223867919c3ed3511f5c7400efd2",
+          "message": "fix(rule-registry): break circular import with rules package (#222)\n\nrule_registry.py imported RuleCategory/RulePlatform/ClientLoadBehavior\nfrom skilllint.rules._constants, which triggers rules/__init__.py to\nimport all 15 series modules — each of which imports back from\nrule_registry, which is still mid-initialization. Standalone\n`import skilllint.rule_registry` (and skilllint.cli_docs, which\nimports from rule_registry) raised ImportError; every in-process test\nwas masked by an autouse fixture that imports skilllint.rules first.\n\n_constants.py has no dependency on rule_registry, so relocating these\nthree Literal aliases to rule_registry.py itself (next to RuleEntry,\nwhich already uses them as field types) fully breaks the cycle with no\nnew module and no compat shim. EXPECTED_SERIES/MIN_REGISTERED_SERIES\nstay in _constants.py — they have no coupling back to rule_registry.\n\n\nClaude-Session: https://claude.ai/code/session_01G3ke4pBmhpiEuWoFTV2ax4\n\nCo-authored-by: Claude Sonnet 5 <noreply@anthropic.com>",
+          "timestamp": "2026-09-07T01:27:19Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/69efa0e7228a223867919c3ed3511f5c7400efd2"
+        },
+        "date": 1788744603210,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 9629.856,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 10209.487,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 11361.465,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 98.046,
             "unit": "files/s"
           }
         ]
