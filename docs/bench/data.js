@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788707224102,
+  "lastUpdate": 1788741607494,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -2178,6 +2178,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 114.903,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "860a391a1b9b6a8397a45a439785a7730b496a15",
+          "message": "fix(record): strip trailing whitespace from exported SVG/HTML (#218)\n\nRich's export_svg() template emits structurally-indented lines with\ntrailing whitespace, independent of the recorded terminal content.\nThe trailing-whitespace prek hook then rewrites those lines on the\nnext commit, so regenerating a recorded screenshot always fails CI\non first push (as happened with #105's docs/screenshots/rules.svg).\n\nReproduced against the real --record path before fixing: 5 lines of\ntrailing whitespace in a checked SVG, and confirmed the same template\nartifact appears even for trivial single-line output. export_recording()\nnow strips trailing whitespace per line (leading indentation and the\nfinal trailing newline are preserved) before the atomic write.\n\nFixes #137\n\n\nClaude-Session: https://claude.ai/code/session_01G3ke4pBmhpiEuWoFTV2ax4\n\nCo-authored-by: Claude Sonnet 5 <noreply@anthropic.com>",
+          "timestamp": "2026-09-07T00:37:15Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/860a391a1b9b6a8397a45a439785a7730b496a15"
+        },
+        "date": 1788741606830,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 11465.906,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 11910.557,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 12747.816,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 84.043,
             "unit": "files/s"
           }
         ]
