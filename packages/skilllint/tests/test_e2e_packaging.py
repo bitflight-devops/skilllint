@@ -162,6 +162,18 @@ class TestWheelContainsSchemas:
                 # Not all providers have __init__.py, only check if the directory exists
                 pass
 
+    def test_wheel_contains_tiktoken_encoding_data(self, built_wheel: Path) -> None:
+        """Wheel contains the bundled cl100k_base rank file (issue #224).
+
+        Token counting must work with no network access once skilllint is
+        installed from a wheel, not just from an editable/dev checkout.
+        """
+        with zipfile.ZipFile(built_wheel) as z:
+            names = z.namelist()
+            assert "skilllint/data/cl100k_base.tiktoken" in names, (
+                f"Missing bundled tiktoken data in wheel. Found: {[n for n in names if 'data' in n.lower()]}"
+            )
+
 
 # ---------------------------------------------------------------------------
 # Test: Installed CLI validates fixtures
@@ -269,6 +281,42 @@ print(json.dumps({"platform": schema.get("platform"), "has_provenance": "provena
             assert data.get("has_provenance") is True, f"Missing provenance: {data}"
         except json.JSONDecodeError:
             pytest.fail(f"Invalid JSON output: {result.stdout}")
+
+    def test_installed_cli_counts_tokens_offline(self, temp_venv: Path) -> None:
+        """Installed CLI counts tokens with no network access (issue #224).
+
+        Runs the installed CLI in a subprocess with the proxy env vars pointed
+        at a dead address and both tiktoken cache-dir env vars pointed at an
+        empty directory, so neither a network fetch nor a warm on-disk cache
+        can satisfy tiktoken.get_encoding(). Only a bundled, locally-parsed
+        encoding (skilllint.token_counter._get_encoding) can succeed here.
+        """
+        skilllint_path = self._get_skilllint_path(temp_venv)
+        fixture_path = REPO_ROOT / "packages/skilllint/tests/fixtures/claude_code/valid_skill.md"
+
+        with tempfile.TemporaryDirectory() as empty_cache_dir:
+            env = {
+                **os.environ,
+                "TIKTOKEN_CACHE_DIR": empty_cache_dir,
+                "DATA_GYM_CACHE_DIR": empty_cache_dir,
+                "HTTP_PROXY": "http://127.0.0.1:1",
+                "HTTPS_PROXY": "http://127.0.0.1:1",
+                "ALL_PROXY": "http://127.0.0.1:1",
+            }
+
+            result = subprocess.run(
+                [str(skilllint_path), "check", "--platform", "claude-code", str(fixture_path)],
+                capture_output=True,
+                text=True,
+                check=False,
+                env=env,
+            )
+
+            assert result.returncode == 0, (
+                f"Expected offline token counting to succeed.\n"
+                f"exit_code: {result.returncode}\nstdout: {result.stdout}\nstderr: {result.stderr}"
+            )
+            assert "ProxyError" not in result.stderr, f"CLI attempted a network fetch: {result.stderr}"
 
 
 # ---------------------------------------------------------------------------
