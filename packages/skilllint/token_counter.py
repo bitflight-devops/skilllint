@@ -5,7 +5,7 @@ body, total skill file collections, and other contexts all expose token counts
 to users so they can reason about context window impact.
 
 This module provides:
-- The shared tiktoken cl100k_base encoding
+- The bundled tiktoken cl100k_base encoding (no network access required)
 - Token threshold constants (re-exported from skilllint.limits)
 - Low-level token counting (count_tokens)
 - File-level counting (count_file_tokens)
@@ -18,8 +18,11 @@ imports token_counter — importing from plugin_validator back would be circular
 
 from __future__ import annotations
 
+import base64
+import functools
 import re
 from dataclasses import dataclass
+from importlib.resources import files
 from typing import TYPE_CHECKING
 
 import tiktoken
@@ -30,10 +33,86 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 # ---------------------------------------------------------------------------
-# Shared encoding
+# Bundled encoding
 # ---------------------------------------------------------------------------
+#
+# skilllint bundles the cl100k_base BPE rank file so token counting works with
+# no network access (issue #224 — sandboxed/offline agents previously failed
+# here because tiktoken.get_encoding() fetches from OpenAI's blob storage on
+# first use, and load_tiktoken_bpe() on a local path routes through tiktoken's
+# read_file_cached(), which writes a duplicate copy into TIKTOKEN_CACHE_DIR and
+# raises PermissionError when that directory is unwritable — exactly the
+# sandboxed scenario this bundling exists to avoid). We instead read the
+# bundled bytes directly and parse tiktoken's plaintext rank format ourselves.
+#
+# Source: https://openaipublic.blob.core.windows.net/encodings/cl100k_base.tiktoken
+# sha256: 223921b76ee99bde995b7ff738513eef100fb51d18c93597a113bcffe865b2a7
+# — this is tiktoken 0.14.0's own `expected_hash` for cl100k_base, asserted in
+# tiktoken_ext/openai_public.py::cl100k_base(); a byte-identical match proves
+# the bundled file is the genuine OpenAI artifact.
 
 _ENCODING_NAME = "cl100k_base"
+_ENCODING_DATA_PATH = "data/cl100k_base.tiktoken"
+
+# Copied verbatim from tiktoken_ext/openai_public.py::cl100k_base() (tiktoken
+# 0.14.0). Do not hand-retype: a single dropped regex alternative silently
+# changes token counts on most real-world text while n_vocab still looks
+# correct. See TestBundledEncodingParity in
+# packages/skilllint/tests/test_bundled_tiktoken.py for the guard.
+_PAT_STR = (
+    r"""'(?i:[sdmt]|ll|ve|re)|[^\r\n\p{L}\p{N}]?+\p{L}++|\p{N}{1,3}+"""
+    r"""| ?[^\s\p{L}\p{N}]++[\r\n]*+|\s++$|\s*[\r\n]|\s+(?!\S)|\s"""
+)
+_SPECIAL_TOKENS = {
+    "<|endoftext|>": 100257,
+    "<|fim_prefix|>": 100258,
+    "<|fim_middle|>": 100259,
+    "<|fim_suffix|>": 100260,
+    "<|endofprompt|>": 100276,
+}
+
+
+def _parse_mergeable_ranks(data: bytes) -> dict[bytes, int]:
+    """Parse tiktoken's plaintext BPE rank format: one ``<base64-token> <rank>`` per line.
+
+    Mirrors ``tiktoken.load.load_tiktoken_bpe``'s own parsing loop, without the
+    ``read_file_cached`` wrapper it normally runs through (that wrapper writes
+    a duplicate copy into ``TIKTOKEN_CACHE_DIR`` and is not needed for a file
+    already bundled with this package).
+
+    Args:
+        data: Raw bytes of a ``.tiktoken`` rank file.
+
+    Returns:
+        Mapping of decoded token bytes to their merge rank.
+    """
+    ranks: dict[bytes, int] = {}
+    for line in data.splitlines():
+        if not line:
+            continue
+        token, rank = line.split()
+        ranks[base64.b64decode(token)] = int(rank)
+    return ranks
+
+
+@functools.cache
+def _get_encoding() -> tiktoken.Encoding:
+    """Build the cl100k_base encoding from the bundled rank file.
+
+    Cached because construction costs ~0.5s (parsing ~100k BPE merge rules);
+    ``count_tokens`` is called multiple times per scanned file.
+
+    Returns:
+        The cl100k_base :class:`tiktoken.Encoding`.
+    """
+    data = files("skilllint").joinpath(_ENCODING_DATA_PATH).read_bytes()
+    return tiktoken.Encoding(
+        name=_ENCODING_NAME,
+        pat_str=_PAT_STR,
+        mergeable_ranks=_parse_mergeable_ranks(data),
+        special_tokens=_SPECIAL_TOKENS,
+    )
+
 
 # ---------------------------------------------------------------------------
 # Threshold constants (canonical source: skilllint.limits)
@@ -59,8 +138,7 @@ def count_tokens(text: str) -> int:
     Returns:
         Number of tokens in *text*.
     """
-    encoding = tiktoken.get_encoding(_ENCODING_NAME)
-    return len(encoding.encode(text))
+    return len(_get_encoding().encode(text))
 
 
 # ---------------------------------------------------------------------------

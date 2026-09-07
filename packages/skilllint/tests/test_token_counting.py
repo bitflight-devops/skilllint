@@ -24,9 +24,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from hypothesis import given, settings, strategies as st
 
 from skilllint.plugin_validator import TOKEN_ERROR_THRESHOLD, TOKEN_WARNING_THRESHOLD, ComplexityValidator
+from skilllint.token_counter import count_tokens
 
 
 def generate_exact_token_content(target_tokens: int) -> str:
@@ -41,16 +43,12 @@ def generate_exact_token_content(target_tokens: int) -> str:
     Note:
         Uses iterative approach to hit exact token count
     """
-    import tiktoken
-
-    enc = tiktoken.get_encoding("cl100k_base")
-
     # Build up content word by word
     words = []
     for i in range(target_tokens * 2):  # Overestimate to reach target
         words.append(f"word{i}")
         content = " ".join(words)
-        token_count = len(enc.encode(content))
+        token_count = count_tokens(content)
 
         if token_count == target_tokens:
             return content
@@ -58,14 +56,14 @@ def generate_exact_token_content(target_tokens: int) -> str:
             # Went over - try removing last word
             words.pop()
             content = " ".join(words)
-            token_count = len(enc.encode(content))
+            token_count = count_tokens(content)
 
             # If still over or exact match, return
             if token_count <= target_tokens:
                 # Add single characters until we hit exact count
                 while token_count < target_tokens:
                     content += "x"
-                    token_count = len(enc.encode(content))
+                    token_count = count_tokens(content)
                     if token_count == target_tokens:
                         return content
                     if token_count > target_tokens:
@@ -362,21 +360,38 @@ class TestEncodingConsistency:
     """
 
     def test_encoding_matches_cl100k_base(self, tmp_path: Path) -> None:
-        """Test ComplexityValidator uses cl100k_base encoding.
+        """Test skilllint's bundled encoding matches tiktoken's network-backed cl100k_base.
 
-        Tests: Encoding parameter handling
-        How: Create known text, verify token count matches cl100k_base
-        Why: Ensure Claude-compatible token measurement
+        Tests: Parity between skilllint's bundled cl100k_base loader (see
+            skilllint.token_counter) and tiktoken.get_encoding("cl100k_base"),
+            which fetches/verifies its ranks from OpenAI's blob storage (or a
+            warm local cache). This is the oracle for issue #224: skilllint
+            no longer needs the network to count tokens, but the counts it
+            produces must still agree with it exactly.
+        How: Build both encodings, compare token-for-token on known text.
+        Why: A dropped regex alternative or mistyped special token would
+            silently change counts while still looking plausible (see
+            token_counter.py's _PAT_STR comment) — this is the guard.
         """
         validator = ComplexityValidator()
 
         import tiktoken
 
-        enc = tiktoken.get_encoding("cl100k_base")
+        # `tiktoken.get_encoding` is the network/cache-backed oracle we are
+        # proving parity against — not something this test can control the
+        # failure modes of (ProxyError, PermissionError, hash-mismatch
+        # ValueError all documented in tiktoken's own load.py). Skip rather
+        # than fail when the oracle itself is unreachable.
+        try:
+            enc = tiktoken.get_encoding("cl100k_base")
+        except Exception as exc:  # noqa: BLE001 - oracle availability, not a code path under test
+            pytest.skip(f"tiktoken's network/cache-backed cl100k_base oracle is unavailable: {exc}")
 
         # Known test text
         test_text = "Hello world! This is a test of token counting with various symbols: @#$%^&*()"
-        len(enc.encode(test_text))
+        assert count_tokens(test_text) == len(enc.encode(test_text)), (
+            "skilllint's bundled cl100k_base encoding must match tiktoken's own encoding exactly"
+        )
 
         # Create skill file
         skill_md = tmp_path / "SKILL.md"
@@ -389,10 +404,6 @@ description: Test encoding consistency
 
         # Validate
         result = validator.validate(skill_md)
-
-        # The validator should use cl100k_base internally
-        # We can't directly check the count, but we can verify behavior is consistent
-        # by checking the result matches expected threshold behavior
 
         # With our short text, should definitely pass
         assert result.passed is True, "Short text should pass"
@@ -486,16 +497,12 @@ Just a few sentences to verify frontmatter exclusion works correctly.
         """
         validator = ComplexityValidator()
 
-        import tiktoken
-
-        enc = tiktoken.get_encoding("cl100k_base")
-
         # Generate large body content (>TOKEN_WARNING_THRESHOLD tokens)
         large_body = "This is a test sentence for the body. " * 400  # ~8 tokens * 400 = 3200 tokens
         # Add more to reach >TOKEN_WARNING_THRESHOLD
         large_body += "Additional content to reach threshold. " * 150  # ~6 tokens * 150 = 900 more
 
-        tokens_in_body = len(enc.encode(large_body))
+        tokens_in_body = count_tokens(large_body)
         assert tokens_in_body > TOKEN_WARNING_THRESHOLD, (
             f"Test setup: body should be >{TOKEN_WARNING_THRESHOLD} tokens, got {tokens_in_body}"
         )
@@ -554,10 +561,6 @@ description: Skill with no body content
         """
         validator = ComplexityValidator()
 
-        import tiktoken
-
-        enc = tiktoken.get_encoding("cl100k_base")
-
         # Known sample text (from Claude Code documentation example)
         sample_text = """# Example Skill
 
@@ -573,7 +576,7 @@ Activate this skill when you need guidance on skill creation.
 """
 
         # Verify known token count
-        expected_tokens = len(enc.encode(sample_text))
+        expected_tokens = count_tokens(sample_text)
         # This sample should be well under TOKEN_WARNING_THRESHOLD
         assert expected_tokens < 100, f"Test assumption: sample should be <100 tokens, got {expected_tokens}"
 
