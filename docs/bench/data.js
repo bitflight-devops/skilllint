@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788744604543,
+  "lastUpdate": 1788771760173,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -2346,6 +2346,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 98.046,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "41085b82d347d06560cd386c50929c75dc1540ed",
+          "message": "feat(token-counter): bundle cl100k_base.tiktoken for offline token counting (#225)\n\nskilllint.token_counter previously relied on tiktoken.get_encoding(), which\nfetches cl100k_base's BPE ranks from OpenAI's blob storage on first use and\nhas no offline fallback. Sandboxed/air-gapped agents (issue #224) could not\nrun skilllint check at all once frontmatter/body token counting kicked in.\n\nBundle the official cl100k_base.tiktoken rank file (sha256-verified against\ntiktoken 0.14.0's own hardcoded expected_hash) under packages/skilllint/data/\nand load it via importlib.resources, parsing tiktoken's plaintext rank format\ndirectly instead of going through tiktoken.load_tiktoken_bpe() — that helper\nroutes through read_file_cached(), which duplicates the 1.68MB file into\nTIKTOKEN_CACHE_DIR and raises PermissionError when that directory is\nread-only, exactly the sandboxed scenario this change targets. pat_str and\nspecial_tokens are copied verbatim from the installed tiktoken_ext's\ncl100k_base() to avoid silently diverging from the real encoding. The\nconstructed Encoding is memoized with functools.cache since building it costs\n~0.5s and count_tokens is called multiple times per scanned file.\n\nParity with tiktoken's network-backed encoding is proven directly (golden\ncounts, hash check, and a live comparison test) rather than assumed, and an\nend-to-end test installs the built wheel into a venv and runs skilllint check\nwith proxies pointed at a dead address and both tiktoken cache-dir env vars\npointed at an empty directory to prove no network/cache dependency remains.\n\nCost: wheel size grows from 218,109 to 994,634 bytes (~4.6x) to carry the\nbundled rank data; no pyproject.toml changes were needed since the existing\ndirectory include already ships non-.py package data.\n\n\nClaude-Session: https://claude.ai/code/session_01G3ke4pBmhpiEuWoFTV2ax4\n\nCo-authored-by: Claude Sonnet 5 <noreply@anthropic.com>",
+          "timestamp": "2026-09-07T09:00:03Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/41085b82d347d06560cd386c50929c75dc1540ed"
+        },
+        "date": 1788771758818,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 8677.407,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 8976.975,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 9408.121,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 111.507,
             "unit": "files/s"
           }
         ]
