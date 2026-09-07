@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788771760173,
+  "lastUpdate": 1788774225123,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -2388,6 +2388,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 111.507,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "f2605d3f4261cfd1d3f10754019b9018f73e7b2e",
+          "message": "fix(tc): pass disallowed_special=() so count_tokens never rejects literal special-token text (#227)\n\ncount_tokens counts untrusted skill-file body text for SK006/SK007 threshold\nchecks. tiktoken's encode() raises ValueError by default when text contains a\nliteral special-token string like <|endoftext|>, since it assumes the text is\na prompt being replayed through a model. A SKILL.md body is free-form prose,\nnot a prompt, so that validation must never apply here.\n\nCloses #226\n\n\nClaude-Session: https://claude.ai/code/session_01G3ke4pBmhpiEuWoFTV2ax4\n\nCo-authored-by: Claude Sonnet 5 <noreply@anthropic.com>",
+          "timestamp": "2026-09-07T09:40:43Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/f2605d3f4261cfd1d3f10754019b9018f73e7b2e"
+        },
+        "date": 1788774223878,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 11355.535,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 11618.574,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 12137.833,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 86.155,
             "unit": "files/s"
           }
         ]
