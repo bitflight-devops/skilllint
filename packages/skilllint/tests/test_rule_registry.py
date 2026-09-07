@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import subprocess
+import sys
 
 import pytest
 
@@ -218,3 +220,37 @@ def test_iter_authority_urls_silently_skips_none_reference(caplog: pytest.LogCap
     assert urls == []
     # Assert — no warning was logged for this rule
     assert not any("FM009" in record.message for record in caplog.records)
+
+
+# ---------------------------------------------------------------------------
+# Regression test: standalone import must not trip the rule_registry <->
+# rules circular import (issue #221).
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("module_name", ["skilllint.rule_registry", "skilllint.cli_docs"])
+def test_module_imports_standalone_without_prior_rules_import(module_name: str) -> None:
+    """Importing the module alone, with no prior import of skilllint.rules, succeeds.
+
+    Tests: standalone `import {module_name}` in a fresh interpreter
+    How: Runs `python -c "import {module_name}"` in a subprocess so no other
+         test or fixture (notably the autouse conftest fixture that imports
+         skilllint.rules before every test body) has already loaded
+         skilllint.rules into sys.modules. A subprocess is required: purging
+         sys.modules in-process to force a bare re-import creates a second
+         RULE_REGISTRY dict object, breaking the autouse fixture's isolation
+         for every later test in the session.
+    Why: rule_registry.py previously imported
+         `skilllint.rules._constants`, which triggers `rules/__init__.py`,
+         which imports the series modules, which import back from
+         rule_registry — a circular import that only manifests when
+         rule_registry (or a module that imports it, like cli_docs) is
+         imported before skilllint.rules. Every existing in-process test
+         passes even on the broken code because the autouse fixture always
+         imports skilllint.rules first.
+    """
+    result = subprocess.run(
+        [sys.executable, "-c", f"import {module_name}"], capture_output=True, text=True, check=False
+    )
+
+    assert result.returncode == 0, result.stderr

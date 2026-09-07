@@ -31,8 +31,6 @@ from urllib.parse import urljoin
 
 from pydantic import BaseModel, Field
 
-from skilllint.rules._constants import ClientLoadBehavior, RuleCategory, RulePlatform
-
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -83,6 +81,41 @@ def _make_issue(
     return ValidationIssue(
         field=field, severity=severity, message=message, code=code, docs_url=rule_reference(code), suggestion=suggestion
     )
+
+
+# Live value space of RuleEntry.category, grepped from every @skilllint_rule(...)
+# call site in packages/skilllint/rules/*_series.py (issue #41 item 3). Adding a
+# new category requires adding it here first, or Pydantic rejects the
+# registration at import time.
+RuleCategory = Literal[
+    "agent",
+    "codex",
+    "cursor",
+    "frontmatter",
+    "hook",
+    "link",
+    "namespace-reference",
+    "plugin",
+    "plugin-registration",
+    "progressive-disclosure",
+    "skill",
+    "symlink",
+    "token-count",
+]
+
+# Live value space of RuleEntry.platforms elements, including sites that omit
+# platforms= and take the @skilllint_rule decorator's ["agentskills"] default.
+RulePlatform = Literal["agentskills", "claude-code", "codex", "cursor"]
+
+# Live value space of RuleEntry.client_load_behavior. Populated only when the
+# client-implementation guide is explicit about what a real client does for a
+# rule's finding — "warn-and-load" (validation is lenient; the client logs a
+# warning and loads the skill anyway) or "skip-skill" (the client refuses to
+# load the skill and logs an error). None (the RuleEntry default) means the
+# guide does not say, mirroring RuleEntry.authority's None-means-unstated
+# semantics rather than adding a separate "unknown" member.
+# Source: https://agentskills.io/client-implementation/adding-skills-support#lenient-validation
+ClientLoadBehavior = Literal["warn-and-load", "skip-skill"]
 
 
 class RuleAuthority(BaseModel):

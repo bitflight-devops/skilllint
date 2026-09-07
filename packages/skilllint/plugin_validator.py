@@ -4813,8 +4813,7 @@ from rich.panel import Panel as _Panel
 from rich.table import Table as _Table
 
 from skilllint.fixture_loader import FIXTURES_ROOT as _FIXTURES_ROOT, discover_fixtures as _discover_fixtures
-from skilllint.rule_registry import get_rule as _get_rule, list_rules as _list_rules
-from skilllint.rules._constants import RuleCategory, RulePlatform
+from skilllint.rule_registry import RuleCategory, RulePlatform, get_rule as _get_rule, list_rules as _list_rules
 from skilllint.rules.pa_series import PluginAgentFrontmatterValidator
 
 
