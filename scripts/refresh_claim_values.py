@@ -6,7 +6,7 @@
 # ]
 #
 # [tool.uv.sources]
-# skilllint = { path = ".." }
+# skilllint = { path = "..", editable = true }
 # ///
 """L3 drift check: re-extract vendor-backed provenance claims and diff them.
 

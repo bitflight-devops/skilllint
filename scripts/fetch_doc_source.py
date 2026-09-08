@@ -8,7 +8,7 @@
 # ]
 #
 # [tool.uv.sources]
-# skilllint = { path = ".." }
+# skilllint = { path = "..", editable = true }
 # ///
 """CLI wrapper for skilllint.vendor_cache — fetch, query, and verify cached documentation."""
 

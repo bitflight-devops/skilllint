@@ -8,7 +8,7 @@
 # ]
 #
 # [tool.uv.sources]
-# skilllint = { path = ".." }
+# skilllint = { path = "..", editable = true }
 # ///
 """Fetch platform documentation for schema auditing.
 
