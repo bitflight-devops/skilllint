@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788774225123,
+  "lastUpdate": 1788843607676,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -2430,6 +2430,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 86.155,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "1ea03b672e450b8967c863c2b9bb0449deb09890",
+          "message": "fix(scripts): mark skilllint path source editable in standalone PEP 723 scripts (#228)\n\nWithout editable=true, `uv run --script` built a frozen copy of skilllint\ninto a per-script cache environment. vendor_io.VENDOR_DIR is computed from\nits own __file__, so every standalone invocation of these five scripts\n(fetch_doc_source.py, fetch_platform_docs.py, fetch_spec_schema.py,\nassert_rules_completeness.py, refresh_claim_values.py) resolved paths\nagainst that frozen cache copy instead of the real repo checkout.\n\nConfirmed: .claude/vendor/ was stuck at a 2026-03-23 snapshot despite the\ndocumented refresh command being run, because fetch_platform_docs.py wrote\nto a phantom .claude/vendor under ~/.cache/uv/environments-v2/ instead.\n`uv run skilllint docs fetch` (the installed CLI, via the project's own\neditable .venv) was unaffected — only the standalone --script invocation\nform hit this.\n\n\nClaude-Session: https://claude.ai/code/session_01G3ke4pBmhpiEuWoFTV2ax4\n\nCo-authored-by: Claude Sonnet 5 <noreply@anthropic.com>",
+          "timestamp": "2026-09-08T04:57:34Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/1ea03b672e450b8967c863c2b9bb0449deb09890"
+        },
+        "date": 1788843606491,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 8050.846,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 8418.247,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 9117.207,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 118.908,
             "unit": "files/s"
           }
         ]
