@@ -8,7 +8,7 @@
 # ]
 #
 # [tool.uv.sources]
-# skilllint = { path = ".." }
+# skilllint = { path = "..", editable = true }
 # ///
 
 """Fetch agentskills.io specification and generate JSON Schema.

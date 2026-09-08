@@ -6,7 +6,7 @@
 # ]
 #
 # [tool.uv.sources]
-# skilllint = { path = ".." }
+# skilllint = { path = "..", editable = true }
 # ///
 """CI assertion script: verify that skilllint rules output meets MIN_REGISTERED_SERIES.
 
