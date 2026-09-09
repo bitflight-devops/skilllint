@@ -21,6 +21,7 @@ import typer
 from git import Repo
 from git.exc import InvalidGitRepositoryError, NoSuchPathError
 
+from .adapters import PlatformAdapter, matches_file
 from .reporting import CIReporter, ConsoleReporter, FileResults, Reporter
 
 if TYPE_CHECKING:
@@ -350,8 +351,37 @@ def _discover_validatable_paths(directory: Path) -> list[Path]:
     return _discover_bare_paths(directory)
 
 
+def _platform_matching_paths(paths: list[Path], directory: Path, adapter: PlatformAdapter | None) -> list[Path]:
+    if adapter is None:
+        return paths
+    return [path for path in paths if path.is_file() and matches_file(adapter, path.relative_to(directory))]
+
+
+def _discover_platform_paths(directory: Path, adapter: PlatformAdapter) -> list[Path]:
+    return sorted(
+        candidate
+        for candidate in _glob_excluding(directory, "**/*")
+        if candidate.is_file() and matches_file(adapter, candidate.relative_to(directory))
+    )
+
+
+def _validate_filter_options(filter_glob: str | None, filter_type: str | None) -> None:
+    if filter_glob is not None and filter_type is not None:
+        typer.echo("Error: --filter and --filter-type are mutually exclusive", err=True)
+        raise typer.Exit(2) from None
+
+    if filter_type is not None and filter_type not in FILTER_TYPE_MAP:
+        valid = ", ".join(FILTER_TYPE_MAP)
+        typer.echo(f"Error: --filter-type must be one of: {valid}", err=True)
+        raise typer.Exit(2) from None
+
+
 def _resolve_filter_and_expand_paths(
-    paths: list[Path], filter_glob: str | None, filter_type: str | None
+    paths: list[Path],
+    filter_glob: str | None,
+    filter_type: str | None,
+    *,
+    platform_adapter: PlatformAdapter | None = None,
 ) -> tuple[list[Path], bool]:
     """Resolve filter options and expand directory paths.
 
@@ -364,14 +394,7 @@ def _resolve_filter_and_expand_paths(
     Raises:
         typer.Exit: On invalid filter options.
     """
-    if filter_glob is not None and filter_type is not None:
-        typer.echo("Error: --filter and --filter-type are mutually exclusive", err=True)
-        raise typer.Exit(2) from None
-
-    if filter_type is not None and filter_type not in FILTER_TYPE_MAP:
-        valid = ", ".join(FILTER_TYPE_MAP)
-        typer.echo(f"Error: --filter-type must be one of: {valid}", err=True)
-        raise typer.Exit(2) from None
+    _validate_filter_options(filter_glob, filter_type)
 
     expanded_paths: list[Path] = []
     is_batch = False
@@ -387,16 +410,22 @@ def _resolve_filter_and_expand_paths(
             resolved_glob = filter_glob
         if resolved_glob is not None and path.is_dir():
             matched = sorted(path.glob(resolved_glob))
+            matched = _platform_matching_paths(matched, path, platform_adapter)
             if filter_type == "skills":
                 matched = [match.parent for match in matched]
             expanded_paths.extend(matched)
             is_batch = True
         elif resolved_glob is None and path.is_dir():
-            expanded_paths.extend(_discover_validatable_paths(path))
+            if platform_adapter is None:
+                expanded_paths.extend(_discover_validatable_paths(path))
+            else:
+                expanded_paths.extend(_discover_platform_paths(path, platform_adapter))
             is_batch = True
         else:
             expanded_paths.append(path)
-    return expanded_paths, is_batch
+    if platform_adapter is None:
+        return expanded_paths, is_batch
+    return list(dict.fromkeys(expanded_paths)), is_batch
 
 
 # ---------------------------------------------------------------------------
@@ -542,7 +571,7 @@ def _compute_scan_base(paths: list[Path]) -> Path | None:
 # This avoids circular imports: plugin_validator imports scan_runtime,
 # and passes its own functions as callbacks when calling run_validation_loop.
 ValidateSinglePathFn = Callable[..., "FileResults"]
-ValidateFileFn = Callable[[Path, dict[str, object], str | None], list[dict]]
+ValidateFileFn = Callable[[Path, dict[str, PlatformAdapter], str | None], list[dict]]
 ViolationsToResultFn = Callable[[list[dict]], Any]
 
 
@@ -583,7 +612,7 @@ def run_validation_loop(
     validate_single_path: ValidateSinglePathFn,
     validate_file: ValidateFileFn,
     violations_to_result: ViolationsToResultFn,
-    adapters: dict[str, object],
+    adapters: dict[str, PlatformAdapter],
     record_console: Console | None = None,
     include_gitignore: bool = False,
 ) -> NoReturn:

@@ -18,6 +18,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from skilllint.adapters.codex import CodexAdapter
+from skilllint.adapters.cursor import CursorAdapter
 from skilllint.scan_runtime import (
     DEFAULT_SCAN_PATTERNS,
     FILTER_TYPE_MAP,
@@ -356,6 +358,55 @@ class TestResolveFilterAndExpandPaths:
 
         assert expanded == [skill_file], f"Expected [{skill_file}], got {expanded}"
         assert is_batch is False, "Expected is_batch=False for single file"
+
+    def test_platform_directory_discovers_only_matching_files_recursively(self, tmp_path: Path) -> None:
+        nested = tmp_path / "nested"
+        nested.mkdir()
+        agents = nested / "AGENTS.md"
+        rules = nested / "tool.rules"
+        mdc = nested / "rule.mdc"
+        ignored = nested / "notes.txt"
+        for path in (agents, rules, mdc, ignored):
+            path.write_text("")
+
+        codex_paths, _ = _resolve_filter_and_expand_paths([tmp_path], None, None, platform_adapter=CodexAdapter())
+        cursor_paths, _ = _resolve_filter_and_expand_paths([tmp_path], None, None, platform_adapter=CursorAdapter())
+        filtered_paths, _ = _resolve_filter_and_expand_paths(
+            [tmp_path], "**/*.rules", None, platform_adapter=CodexAdapter()
+        )
+
+        assert codex_paths == [agents, rules]
+        assert cursor_paths == [mdc]
+        assert filtered_paths == [rules]
+
+    def test_platform_directory_uses_custom_adapter_matcher_and_deduplicates_roots(self, tmp_path: Path) -> None:
+        class CustomAdapter:
+            def id(self) -> str:
+                return "custom"
+
+            def path_patterns(self) -> list[str]:
+                return ["**/*.custom"]
+
+            def applicable_rules(self) -> set[str]:
+                return set()
+
+            def constraint_scopes(self) -> set[str]:
+                return set()
+
+            def validate(self, path: Path) -> list[dict]:
+                return []
+
+        nested = tmp_path / "nested"
+        nested.mkdir()
+        custom_file = nested / "rule.custom"
+        custom_file.write_text("")
+
+        paths, is_batch = _resolve_filter_and_expand_paths(
+            [tmp_path, nested], None, None, platform_adapter=CustomAdapter()
+        )
+
+        assert paths == [custom_file]
+        assert is_batch is True
 
     def test_filter_type_resolves_to_glob(self, tmp_path: Path) -> None:
         """_resolve_filter_and_expand_paths resolves --filter-type to glob pattern.
