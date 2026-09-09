@@ -1036,7 +1036,7 @@ def _is_suppressed(ignore_config: IgnoreConfig, file_path: Path, config_root: Pa
     if not ignore_config:
         return False
     try:
-        rel = file_path.relative_to(config_root)
+        rel = file_path.resolve().relative_to(config_root.resolve())
     except ValueError:
         return False
     rel_str = rel.as_posix()
