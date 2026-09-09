@@ -540,3 +540,53 @@ print(json.dumps({
 
         assert result.returncode == 0, result.stderr
         assert result.stdout.replace("\n", "") == str(cache_file)
+
+    def test_installed_docs_cache_uses_linked_worktree_when_cross_root_primary_is_undiscoverable(
+        self, temp_venv: Path
+    ) -> None:
+        with (
+            tempfile.TemporaryDirectory(dir=Path.home()) as primary_dir,
+            tempfile.TemporaryDirectory(dir="/tmp") as git_dir_parent,
+            tempfile.TemporaryDirectory(dir="/var/tmp") as linked_parent,
+        ):
+            primary = Path(primary_dir)
+            git_dir = Path(git_dir_parent) / "git-dir"
+            linked = Path(linked_parent) / "linked"
+            subprocess.run(
+                ["git", "init", "--initial-branch=main", f"--separate-git-dir={git_dir}"],
+                cwd=primary,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            subprocess.run(
+                ["git", "config", "user.email", "test@example.com"],
+                cwd=primary,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            subprocess.run(
+                ["git", "config", "user.name", "Test"], cwd=primary, check=True, capture_output=True, text=True
+            )
+            (primary / "README.md").write_text("# test\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=primary, check=True, capture_output=True, text=True)
+            subprocess.run(["git", "commit", "-m", "initial"], cwd=primary, check=True, capture_output=True, text=True)
+            subprocess.run(
+                ["git", "worktree", "add", str(linked)], cwd=primary, check=True, capture_output=True, text=True
+            )
+            cache_file = linked / ".claude/vendor/sources/page-2026.md"
+            cache_file.parent.mkdir(parents=True)
+            cache_file.write_text("cached\n", encoding="utf-8")
+
+            result = subprocess.run(
+                [str(self._get_skilllint_path(temp_venv)), "docs", "latest", "page"],
+                cwd=linked,
+                capture_output=True,
+                text=True,
+                check=False,
+                env={key: value for key, value in os.environ.items() if key != "PYTHONPATH"},
+            )
+
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.replace("\n", "") == str(cache_file)
