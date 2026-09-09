@@ -211,12 +211,16 @@ def _is_network_error(exc: Exception) -> bool:
     return isinstance(exc, (httpx.ConnectError, httpx.TimeoutException, httpx.HTTPError))
 
 
-def _age_hours(fetched_at_iso: str) -> float:
+def _age_hours(fetched_at_iso: str | None) -> float:
     """Return age in hours between *fetched_at_iso* and now (UTC)."""
+    if not isinstance(fetched_at_iso, str):
+        return float("inf")
     try:
         fetched_at = datetime.fromisoformat(fetched_at_iso)
     except (ValueError, TypeError):
         # Treat unparseable timestamps as maximally stale.
+        return float("inf")
+    if fetched_at.tzinfo is None or fetched_at.utcoffset() is None:
         return float("inf")
     now = datetime.now(UTC)
     delta = now - fetched_at
@@ -365,8 +369,10 @@ def fetch_or_cached(url: str, *, ttl_hours: float = 4.0, force: bool = False) ->
 
     if cached_path is not None:
         sidecar = load_sidecar(cached_path)
-        fetched_at = sidecar.get("fetched_at", "") if not force and sidecar else ""
-        if not force and _age_hours(fetched_at) < ttl_hours:
+        fetched_at = sidecar.get("fetched_at") if sidecar else None
+        age = _age_hours(fetched_at)
+
+        if not force and age < ttl_hours:
             return CacheResult(path=cached_path, status=CacheStatus.FRESH, page_name=page_name, url=url)
 
         # Stale — attempt refresh.
