@@ -127,7 +127,39 @@ def _shared_checkout_root(start: Path) -> Path:
     except OSError:
         return start
 
-    return resolved_git_dir.parent
+    primary_checkout = resolved_git_dir.parent
+    if not (primary_checkout / ".git").exists() and not _is_bare_git_dir(resolved_git_dir):
+        return _checkout_with_git_dir_or_none(start, resolved_git_dir) or start
+    return primary_checkout
+
+
+def _is_bare_git_dir(git_dir: Path) -> bool:
+    config = _read_git_internal_file_or_none(git_dir / "config")
+    if config is None:
+        return False
+    return any("".join(line.split()).lower() == "bare=true" for line in config.splitlines())
+
+
+def _checkout_with_git_dir_or_none(start: Path, git_dir: Path) -> Path | None:
+    try:
+        candidates = tuple(start.parent.iterdir())
+    except OSError:
+        return None
+
+    prefix = "gitdir: "
+    for candidate in candidates:
+        pointer = _read_git_internal_file_or_none(candidate / ".git")
+        if pointer is None or not pointer.startswith(prefix):
+            continue
+        candidate_git_dir = Path(pointer[len(prefix) :].strip())
+        if not candidate_git_dir.is_absolute():
+            candidate_git_dir = candidate / candidate_git_dir
+        try:
+            if candidate_git_dir.resolve(strict=True) == git_dir:
+                return candidate
+        except OSError:
+            continue
+    return None
 
 
 def _runtime_cache_root(cwd: Path | None = None) -> Path:
