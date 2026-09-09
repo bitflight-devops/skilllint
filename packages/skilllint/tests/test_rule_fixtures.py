@@ -110,16 +110,6 @@ def _fixture_id(case: FixtureCase) -> str:
 _IS_WINDOWS = sys.platform == "win32"
 
 
-def _needs_git(case: FixtureCase) -> bool:
-    """Return True if this fixture requires git infrastructure (PR003/PR004)."""
-    return case.rule_id.upper() in {"PR003", "PR004"}
-
-
-def _git_available() -> bool:
-    """Return True if git is available on PATH."""
-    return shutil.which("git") is not None
-
-
 # ---------------------------------------------------------------------------
 # pytest fixtures
 # ---------------------------------------------------------------------------
@@ -209,7 +199,6 @@ def test_rule_fixture(prepared_fixture: Path, case: FixtureCase) -> None:
 
     Skip conditions:
         - Tier-5 fixtures on Windows (POSIX permissions / symlinks not supported).
-        - Git-dependent fixtures (PR003/PR004) when git is not on PATH.
 
     Args:
         prepared_fixture: Path to the copied, set-up fixture directory.
@@ -218,9 +207,6 @@ def test_rule_fixture(prepared_fixture: Path, case: FixtureCase) -> None:
     # --- Skip conditions ---
     if case.tier >= 5 and _IS_WINDOWS:
         pytest.skip(f"Tier-5 fixture {case.rule_id}/{case.name} requires POSIX filesystem semantics")
-
-    if _needs_git(case) and not _git_available():
-        pytest.skip(f"Fixture {case.rule_id}/{case.name} requires git on PATH")
 
     # --- Act ---
     issues = _collect_issues(prepared_fixture)

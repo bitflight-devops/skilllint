@@ -81,7 +81,7 @@ def _readme_series_from_table() -> set[str]:
 
     section = section_match.group(1)
 
-    # Match rule codes like FM001-FM010, SK001-SK009, PA001 at the start of table cells
+    # Match rule codes like FM001-FM010, SK001-SK008, PA001 at the start of table cells
     matches = re.findall(r"\|\s*([A-Z]{2})\d{3}", section)
     return set(matches)
 
