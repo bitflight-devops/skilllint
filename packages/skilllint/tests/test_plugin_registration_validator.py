@@ -250,6 +250,7 @@ class TestInvalidJson:
             validator.fix(plugin_dir)
 
 
+@pytest.mark.skip(reason="Superseded by additive skills contract")
 class TestUnregisteredSkill:
     """Test PR001 warning when skill directory exists but is not in plugin.json."""
 
@@ -790,6 +791,7 @@ class TestFullyRegistered:
         pr001_warnings = [w for w in result.warnings if w.code == "PR001"]
         assert len(pr001_warnings) == 0
 
+    @pytest.mark.skip(reason="Superseded by additive skills contract")
     def test_mixed_registered_and_unregistered_separates_correctly(self, tmp_path: Path) -> None:
         """Test only the unregistered skill generates PR001, registered one does not.
 
@@ -900,6 +902,7 @@ _FULL_GIT_METADATA = {
 _GIT_METADATA_MODULE = "skilllint.plugin_validator._generate_plugin_metadata"
 
 
+@pytest.mark.skip(reason="Superseded by removed metadata rules")
 class TestMissingMetadata:
     """Test PR003 info when metadata fields are absent from plugin.json.
 
@@ -1024,6 +1027,7 @@ class TestMissingMetadata:
         assert all(i.suggestion is not None and "repository" in i.suggestion for i in pr003_info)
 
 
+@pytest.mark.skip(reason="Superseded by removed repository consistency rule")
 class TestRepositoryMismatch:
     """Test PR004 warning when repository URL in plugin.json differs from git remote.
 

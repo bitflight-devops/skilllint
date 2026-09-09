@@ -70,7 +70,7 @@ Run `skilllint rules` for the full rule listing, or `skilllint rule <ID>` for a 
 | Series | Domain |
 |--------|--------|
 | FM001–FM010 | YAML frontmatter validity (FM008 removed) |
-| SK004–SK009 | Skill description and token budget |
+| SK004–SK008 | Skill description and token budget |
 | AS001, AS006, AS008–AS009 | SKILL.md conformance with the AgentSkills open standard |
 | AG001–AG003 | Claude Code agent `tools`, MCP references, and discarded `skills` values |
 | LK001 | Internal markdown links |

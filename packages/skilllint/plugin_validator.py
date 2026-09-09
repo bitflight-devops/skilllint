@@ -89,15 +89,7 @@ from skilllint.rules.pl_series import (
     check_pl006,
     claude_validation_failure_issue,
 )
-from skilllint.rules.pr_series import (
-    check_pr001,
-    check_pr002,
-    check_pr003,
-    check_pr004,
-    check_pr005,
-    find_actual_capabilities,
-    parse_registered_paths,
-)
+from skilllint.rules.pr_series import check_pr001, check_pr002, check_pr005
 from skilllint.rules.sk_series import check_sk004, check_sk005
 from skilllint.rules.sl_series import check_sl001, iter_symlinks
 from skilllint.rules.tc_series import check_tc001
@@ -366,14 +358,11 @@ class ErrorCode(StrEnum):
     FM009 = "FM009"  # Unquoted description with colons
     FM010 = "FM010"  # Name pattern invalid (not lowercase-hyphens)
 
-    # Skill (SK004-SK009)
-
     SK004 = "SK004"  # Description too short (minimum 20 characters)
     SK005 = "SK005"  # Description missing trigger phrases
     SK006 = "SK006"  # Token count exceeds TOKEN_WARNING_THRESHOLD
     SK007 = "SK007"  # Token count exceeds TOKEN_ERROR_THRESHOLD (must split)
     SK008 = "SK008"  # Skill directory name violates naming convention
-    SK009 = "SK009"  # Plugin uses manual skill selection (overrides auto-discovery)
 
     # Link (LK001)
     LK001 = "LK001"  # Broken internal link (file does not exist)
@@ -411,11 +400,8 @@ class ErrorCode(StrEnum):
     # Token Count (TC001)
     TC001 = "TC001"  # Token count info (total, frontmatter, body)
 
-    # Plugin Registration (PR001-PR005)
     PR001 = "PR001"  # Capability exists but not explicitly registered in plugin.json
     PR002 = "PR002"  # Registered capability path does not exist
-    PR003 = "PR003"  # Plugin metadata fields (repository, homepage, author) not populated
-    PR004 = "PR004"  # Plugin metadata repository URL mismatches git remote URL
     PR005 = "PR005"  # Registered command path is a skill directory (contains SKILL.md)
 
     # Plugin Agent Frontmatter (PA001)
@@ -447,13 +433,12 @@ FM001, FM002, FM003, FM004, FM005, FM006, FM007, FM009, FM010 = (
     ErrorCode.FM009,
     ErrorCode.FM010,
 )
-SK004, SK005, SK006, SK007, SK008, SK009 = (
+SK004, SK005, SK006, SK007, SK008 = (
     ErrorCode.SK004,
     ErrorCode.SK005,
     ErrorCode.SK006,
     ErrorCode.SK007,
     ErrorCode.SK008,
-    ErrorCode.SK009,
 )
 LK001 = ErrorCode.LK001
 PD001, PD002, PD003 = ErrorCode.PD001, ErrorCode.PD002, ErrorCode.PD003
@@ -475,13 +460,7 @@ HK001, HK002, HK003, HK004, HK005 = (
 )
 NR001, NR002 = ErrorCode.NR001, ErrorCode.NR002
 SL001 = ErrorCode.SL001
-PR001, PR002, PR003, PR004, PR005 = (
-    ErrorCode.PR001,
-    ErrorCode.PR002,
-    ErrorCode.PR003,
-    ErrorCode.PR004,
-    ErrorCode.PR005,
-)
+PR001, PR002, PR005 = (ErrorCode.PR001, ErrorCode.PR002, ErrorCode.PR005)
 PA001 = ErrorCode.PA001
 AG001, AG002, AG003 = ErrorCode.AG001, ErrorCode.AG002, ErrorCode.AG003
 
@@ -2999,114 +2978,12 @@ def _git_file_has_execute_bit(file_path: Path) -> bool | None:
     return blob.mode == GIT_MODE_EXECUTABLE
 
 
-def _get_git_remote_url(repo_dir: Path) -> str | None:
-    """Extract the remote URL for the git repository at repo_dir.
-
-    Args:
-        repo_dir: Root of a git repository (directory containing .git/).
-
-    Returns:
-        Remote URL string with .git suffix stripped, or None if unavailable.
-    """
-    try:
-        repo = Repo(str(repo_dir))
-        remote_url = repo.remotes.origin.url
-    except (InvalidGitRepositoryError, NoSuchPathError, AttributeError, ValueError):
-        return None
-
-    if not remote_url:
-        return None
-
-    return remote_url.removesuffix(".git")
-
-
-def _get_git_author() -> dict[str, str] | None:
-    """Extract author info from git config.
-
-    Returns:
-        Dict with 'name' and optionally 'email', or None if unavailable.
-    """
-    try:
-        repo = Repo(search_parent_directories=True)
-        reader = repo.config_reader()
-        name = reader.get_value("user", "name", default="")
-    except (InvalidGitRepositoryError, NoSuchPathError, KeyError):
-        return None
-
-    if not name:
-        return None
-
-    try:
-        email = repo.config_reader().get_value("user", "email", default="")
-    except KeyError:
-        email = ""
-
-    author: dict[str, str] = {"name": str(name)}
-    if email:
-        author["email"] = str(email)
-    return author
-
-
-def _generate_plugin_metadata(plugin_dir: Path) -> dict[str, YamlValue]:
-    """Generate plugin.json metadata from git and file structure.
-
-    Args:
-        plugin_dir: Path to the plugin directory.
-
-    Returns:
-        Dict with repository, homepage, and author fields populated from git.
-        Empty dict if git is unavailable or not in a repo.
-    """
-    metadata: dict[str, YamlValue] = {}
-
-    current = plugin_dir
-    while current != current.parent:
-        if (current / ".git").exists():
-            repo_url = _get_git_remote_url(current)
-            if repo_url:
-                metadata["repository"] = repo_url
-                relative_path = plugin_dir.relative_to(current)
-                metadata["homepage"] = f"{repo_url}/tree/main/{relative_path}"
-            break
-        current = current.parent
-
-    author = _get_git_author()
-    if author:
-        metadata["author"] = author
-
-    return metadata
-
-
-def _sk009_message(unlisted: set[Path]) -> str:
-    """Build the SK009 info message based on unlisted disk skills.
-
-    Args:
-        unlisted: Skills present on disk but absent from the explicit skills array.
-
-    Returns:
-        Human-readable message describing the manual-selection state.
-    """
-    if unlisted:
-        paths = ", ".join(sorted(f"./{s}" for s in unlisted))
-        return (
-            "Plugin uses manual skill selection — new skills added to skills/ "
-            f"will not be auto-loaded. The following skills are present on disk but not listed: {paths}"
-        )
-    return "Plugin uses manual skill selection — all skills/ are explicitly registered."
-
-
 class PluginRegistrationValidator:
     """Validates capability registration against plugin.json.
 
-    Checks that all capability files are registered and all registered paths
-    exist. Also validates plugin.json metadata against git-derived values.
+    Checks that replaced default components are registered and declared paths
+    exist. Detection lives in ``skilllint.rules.pr_series``.
 
-    PR001-PR005 detection lives in ``skilllint.rules.pr_series``; this class
-    packages those results, adds SK009, and owns the git-metadata lookup.
-
-    Open/Closed: new capability types can be added by extending
-    ``find_actual_capabilities()`` in ``rules/pr_series.py`` and adding entries
-    in validate().
     """
 
     def validate(self, path: Path) -> ValidationResult:
@@ -3149,30 +3026,6 @@ class PluginRegistrationValidator:
         warnings.extend(check_pr001(plugin_config, plugin_dir))
         errors.extend(check_pr002(plugin_config, plugin_dir))
         info.extend(check_pr005(plugin_config, plugin_dir))
-
-        # SK009 — manual skill selection mode (informational)
-        if "skills" in plugin_config:
-            actual_skills, _actual_agents, _actual_commands = find_actual_capabilities(plugin_dir)
-            registered_skills = parse_registered_paths(plugin_config, plugin_dir, "skills")
-            info.append(
-                ValidationIssue(
-                    field="plugin.json",
-                    severity="info",
-                    message=_sk009_message(actual_skills - registered_skills),
-                    code=SK009,
-                    docs_url=generate_docs_url(SK009),
-                    suggestion=(
-                        "To switch to auto-discovery mode, remove the 'skills' field from "
-                        "plugin.json. Claude Code will discover all skills under ./skills/ "
-                        "automatically."
-                    ),
-                )
-            )
-
-        # Metadata checks — detection lives in skilllint.rules.pr_series.
-        git_metadata = _generate_plugin_metadata(plugin_dir)
-        info.extend(check_pr003(plugin_config, git_metadata))
-        warnings.extend(check_pr004(plugin_config, git_metadata))
 
         return ValidationResult(passed=len(errors) == 0, errors=errors, warnings=warnings, info=info)
 
@@ -3848,7 +3701,11 @@ def _get_validators_for_path(path: Path) -> list[Validator]:
         if file_type == FileType.SKILL:
             validators.extend([ComplexityValidator(), InternalLinkValidator(), ProgressiveDisclosureValidator()])
     elif file_type == FileType.PLUGIN:
-        validators.extend((PluginStructureValidator(), PluginAgentFrontmatterValidator()))
+        validators.extend((
+            PluginStructureValidator(),
+            PluginRegistrationValidator(),
+            PluginAgentFrontmatterValidator(),
+        ))
     elif file_type == FileType.HOOK_CONFIG:
         validators.append(HookValidator())
     elif file_type == FileType.HOOK_SCRIPT:

@@ -157,6 +157,31 @@ description: Test skill with invalid name format
         assert "Cannot use both" in result.stdout or "Cannot use both" in result.stderr
 
 
+class TestPluginRegistrationRoutes:
+    @pytest.mark.parametrize("route", ["root", "manifest", "parent"])
+    def test_pr001_warns_once_for_an_ignored_default_agent(
+        self, cli_runner: CliRunner, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, no_color_env: None, route: str
+    ) -> None:
+        plugin = tmp_path / "plugin"
+        (plugin / ".claude-plugin").mkdir(parents=True)
+        (plugin / ".claude-plugin" / "plugin.json").write_text('{"name":"plugin","agents":[]}')
+        (plugin / "agents").mkdir()
+        (plugin / "agents" / "unlisted.md").write_text(
+            "---\nname: unlisted\ndescription: An agent for route coverage\n---\n"
+        )
+        target = {"root": plugin, "manifest": plugin / ".claude-plugin" / "plugin.json", "parent": tmp_path}[route]
+        monkeypatch.setattr(
+            plugin_validator.PluginStructureValidator,
+            "validate",
+            lambda _self, _path: plugin_validator.ValidationResult(passed=True, errors=[], warnings=[], info=[]),
+        )
+
+        result = cli_runner.invoke(plugin_validator.app, ["check", "--no-color", str(target)])
+
+        assert result.exit_code == 0, result.stdout
+        assert result.stdout.count("[PR001]") == 1
+
+
 class TestCheckFlag:
     """Test --check flag behavior (validate only, no fixes)."""
 

@@ -43,6 +43,7 @@ import sys
 from pathlib import Path
 
 import msgspec.json
+import pytest
 
 # ---------------------------------------------------------------------------
 # Module imports — auto_sync_manifests.py has a hyphen-containing filename so
@@ -780,6 +781,7 @@ class TestReconcileModeBOnlyRemovesDeletedSkills:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.skip(reason="Superseded by additive skills contract")
 class TestSK009ManualSkillSelectionInfo:
     """SK009 fires as INFO when plugin.json has an explicit 'skills' field.
 
