@@ -1387,7 +1387,7 @@ def _pydantic_error_to_validation_issue(error: ErrorDetails) -> ValidationIssue:
             # over-length name (#139); _check_name_field_format's duplicate
             # guard then suppresses the second FM010 source.
             code = FM010
-    elif "Input should be" in msg and "literal" in msg.lower():
+    elif error.get("type") == "literal_error":
         code = FM006
         valid_values = _get_pydantic_ctx_val(error, "expected")
         msg = f"Invalid value. Must be one of: {valid_values}"
