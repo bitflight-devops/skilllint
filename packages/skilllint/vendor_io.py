@@ -38,6 +38,11 @@ from typing import Any
 
 import httpx
 
+
+class EmptyResponseError(ValueError):
+    """Raised when a successful HTTP response has no body."""
+
+
 # ---------------------------------------------------------------------------
 # Directory constants
 # ---------------------------------------------------------------------------
@@ -238,7 +243,7 @@ def fetch_url_text(url: str, *, timeout: float = 30.0, follow_redirects: bool = 
         response.raise_for_status()
         text = response.text
         if not text:
-            raise ValueError(f"Empty response body from {url!r}")
+            raise EmptyResponseError(f"Empty response body from {url!r}")
         return text
 
 

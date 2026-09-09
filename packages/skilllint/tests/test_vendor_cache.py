@@ -42,7 +42,7 @@ from skilllint.vendor_cache import (
     read_section,
     verify_integrity,
 )
-from skilllint.vendor_io import sha256_hex
+from skilllint.vendor_io import EmptyResponseError, sha256_hex
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -582,6 +582,21 @@ class TestFetchOrCachedNew:
 
         assert exc_info.value.url == url
 
+    def test_fetch_or_cached_raises_no_cache_error_when_empty_response_has_no_cache(
+        self, tmp_path: Path, mocker: MockerFixture
+    ) -> None:
+        mocker.patch("skilllint.vendor_cache.SOURCES_DIR", tmp_path)
+        url = "https://example.com/docs/en/empty.md"
+        mocker.patch(
+            "skilllint.vendor_cache.fetch_url_text", side_effect=EmptyResponseError(f"Empty response body from {url!r}")
+        )
+
+        with pytest.raises(NoCacheError) as exc_info:
+            fetch_or_cached(url)
+
+        assert exc_info.value.url == url
+        assert exc_info.value.reason == f"Empty response body from {url!r}"
+
 
 class TestFetchOrCachedForce:
     """Tests for fetch_or_cached — force=True bypasses the TTL check."""
@@ -695,6 +710,32 @@ class TestFetchOrCachedForce:
         # Assert
         assert result.status == CacheStatus.STALE
         assert result.path == md_path
+
+    def test_fetch_or_cached_force_serves_stale_when_response_is_empty(
+        self, tmp_path: Path, mocker: MockerFixture
+    ) -> None:
+        mocker.patch("skilllint.vendor_cache.SOURCES_DIR", tmp_path)
+        url = "https://example.com/docs/settings.md"
+        content = "# Settings\n"
+        md_path = _write_md(tmp_path, "settings-2026-03-23-1400.md", content)
+        sidecar_path = _write_sidecar(
+            md_path,
+            url=url,
+            sha256=hashlib.sha256(content.encode()).hexdigest(),
+            byte_count=len(content.encode()),
+            fetched_at=_fresh_fetched_at(),
+        )
+        original_sidecar = sidecar_path.read_bytes()
+        mocker.patch(
+            "skilllint.vendor_cache.fetch_url_text", side_effect=EmptyResponseError(f"Empty response body from {url!r}")
+        )
+
+        result = fetch_or_cached(url, force=True)
+
+        assert result.status == CacheStatus.STALE
+        assert result.path == md_path
+        assert md_path.read_text(encoding="utf-8") == content
+        assert sidecar_path.read_bytes() == original_sidecar
 
 
 # ---------------------------------------------------------------------------
