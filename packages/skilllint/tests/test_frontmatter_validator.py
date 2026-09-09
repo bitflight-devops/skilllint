@@ -233,6 +233,51 @@ echo "test"
 class TestFrontmatterAutoFix:
     """Test auto-fix functionality."""
 
+    @pytest.mark.parametrize(
+        ("relative_path", "field_name"),
+        [
+            ("skills/tool-list/SKILL.md", "allowed-tools"),
+            ("commands/tool-list.md", "allowed-tools"),
+            ("agents/tool-list.md", "tools"),
+            ("agents/tool-list.md", "disallowedTools"),
+        ],
+    )
+    def test_fix_normalizes_declared_tool_list_without_changing_unrelated_bytes(
+        self, tmp_path: Path, relative_path: str, field_name: str
+    ) -> None:
+        capability_file = tmp_path / relative_path
+        capability_file.parent.mkdir(parents=True)
+        capability_file.write_text(
+            "---\n"
+            "name: tool-list\n"
+            "description: Use this component when testing declared tool-list fixes.\n"
+            "marker: maintain-this-byte\n"
+            f"{field_name}:\n"
+            "  - Read\n"
+            "  - Grep\n"
+            "---\n"
+            "\nBody bytes remain unchanged.\n",
+            encoding="utf-8",
+        )
+        validator = FrontmatterValidator()
+
+        before = capability_file.read_bytes()
+        before_result = validator.validate(capability_file)
+
+        first_fixes = validator.fix(capability_file)
+        first_content = capability_file.read_bytes()
+        after_first_result = validator.validate(capability_file)
+        second_fixes = validator.fix(capability_file)
+
+        assert any(issue.code == "FM007" and issue.field == field_name for issue in before_result.warnings)
+        assert first_fixes != []
+        assert first_content != before
+        assert b"marker: maintain-this-byte\n" in first_content
+        assert first_content.endswith(b"\nBody bytes remain unchanged.\n")
+        assert not any(issue.code == "FM007" and issue.field == field_name for issue in after_first_result.warnings)
+        assert second_fixes == []
+        assert capability_file.read_bytes() == first_content
+
     def test_autofix_yaml_array_to_csv(self, tmp_path: Path) -> None:
         """Test auto-fix converts YAML arrays to CSV strings (FM007).
 
