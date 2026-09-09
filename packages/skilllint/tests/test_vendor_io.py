@@ -955,6 +955,24 @@ class TestSharedCheckoutRoot:
 
         assert result == bare_worktree
 
+    def test_separate_git_dir_nested_in_unrelated_checkout_uses_its_primary(self, tmp_path: Path) -> None:
+        unrelated = tmp_path / "unrelated"
+        unrelated.mkdir()
+        _init_repo_with_commit(unrelated)
+        primary = tmp_path / "primary"
+        primary.mkdir()
+        git_dir = unrelated / "project.git"
+        _run_git(["init", "--initial-branch=main", f"--separate-git-dir={git_dir}"], cwd=primary)
+        _run_git(["config", "user.email", "test@example.com"], cwd=primary)
+        _run_git(["config", "user.name", "Test"], cwd=primary)
+        (primary / "file.txt").write_text("content\n", encoding="utf-8")
+        _run_git(["add", "."], cwd=primary)
+        _run_git(["commit", "-m", "initial commit"], cwd=primary)
+        linked = tmp_path / "linked"
+        _run_git(["worktree", "add", str(linked)], cwd=primary)
+
+        assert _shared_checkout_root(linked) == primary.resolve()
+
     def test_malformed_gitdir_content_returns_start_unchanged(self, tmp_path: Path) -> None:
         """A .git file with unreadable/garbage gitdir content returns start unchanged.
 

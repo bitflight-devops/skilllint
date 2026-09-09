@@ -129,7 +129,7 @@ def _shared_checkout_root(start: Path) -> Path:
         return start
 
     primary_checkout = resolved_git_dir.parent
-    if (primary_checkout / ".git").exists():
+    if _checkout_points_to_git_dir(primary_checkout, resolved_git_dir):
         return primary_checkout
     return (
         start
@@ -143,6 +143,28 @@ def _is_bare_git_dir(git_dir: Path) -> bool:
     if config is None:
         return False
     return any("".join(line.split()).lower() == "bare=true" for line in config.splitlines())
+
+
+def _checkout_points_to_git_dir(checkout: Path, git_dir: Path) -> bool:
+    git_entry = checkout / ".git"
+    if git_entry.is_dir():
+        try:
+            return git_entry.resolve(strict=True) == git_dir
+        except OSError:
+            return False
+
+    pointer = _read_git_internal_file_or_none(git_entry)
+    prefix = "gitdir: "
+    if pointer is None or not pointer.startswith(prefix):
+        return False
+
+    target = Path(pointer[len(prefix) :].strip())
+    if not target.is_absolute():
+        target = checkout / target
+    try:
+        return target.resolve(strict=True) == git_dir
+    except OSError:
+        return False
 
 
 def _checkout_pointing_to_git_dir_or_none(start: Path, git_dir: Path) -> Path | None:
