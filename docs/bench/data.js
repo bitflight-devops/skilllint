@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788843607676,
+  "lastUpdate": 1788996360159,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -2472,6 +2472,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 118.908,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "stack@bitflight.io"
+          },
+          "committer": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "stack@bitflight.io"
+          },
+          "id": "c7e4ee9f1134d75d6006f90bcaae45b0d242485c",
+          "message": "Merge branch 'team/team-ada89d5b/AK'\n\n* team/team-ada89d5b/AK:\n  test(rules): bind registration stubs to public emitters\n  fix(registry): reconcile and wire plugin registration rules\n  fix(validation): classify literal errors as FM006",
+          "timestamp": "2026-09-09T12:12:30Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/c7e4ee9f1134d75d6006f90bcaae45b0d242485c"
+        },
+        "date": 1788996359457,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 7103.501,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 7275.344,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 7578.204,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 137.588,
             "unit": "files/s"
           }
         ]
