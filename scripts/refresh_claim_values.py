@@ -128,6 +128,10 @@ def _refresh_one(claim_id: str, claim: dict, fetch_cache: dict[str, CacheResult]
         sys.exit(2)
 
     extracted = extractor(section_text)
+    if not extracted:
+        print(f"ERROR: {claim_id}: extraction from '{heading}' produced no values", file=sys.stderr)
+        sys.exit(2)
+
     current = sorted(claim["expected_value"])
 
     if extracted == current:
