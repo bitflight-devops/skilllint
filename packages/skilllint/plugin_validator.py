@@ -131,7 +131,7 @@ _rt_yaml.width = 10000  # prevent line wrapping
 
 # Platform adapter registry — loaded once at module level.
 # Keys are adapter IDs (e.g. "claude_code", "cursor", "codex").
-ADAPTERS: dict[str, object] = {a.id(): a for a in load_adapters()}
+ADAPTERS: dict[str, PlatformAdapter] = {a.id(): a for a in load_adapters()}
 
 
 def _safe_load_yaml(text: str) -> YamlValue:
@@ -4570,7 +4570,12 @@ def main(
     record_console = _make_recording_console(no_color=no_color) if record is not None else None
 
     def _run_validation_command() -> None:
-        expanded_paths, is_batch = _resolve_filter_and_expand_paths(paths, filter_glob, filter_type)
+        expanded_paths, is_batch = _resolve_filter_and_expand_paths(
+            paths,
+            filter_glob,
+            filter_type,
+            platform_adapter=ADAPTERS[platform_override] if platform_override is not None else None,
+        )
         if platform_override is not None:
             expanded_paths = [_normalize_skill_folder(path) for path in expanded_paths]
 
