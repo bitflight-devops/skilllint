@@ -14,11 +14,14 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+import skilllint.plugin_validator as plugin_validator
 from skilllint.frontmatter_core import SkillFrontmatter
 from skilllint.plugin_validator import FrontmatterValidator
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    from typer.testing import CliRunner
 
 
 class TestFrontmatterValidatorBasic:
@@ -243,7 +246,7 @@ class TestFrontmatterAutoFix:
         ],
     )
     def test_fix_normalizes_declared_tool_list_without_changing_unrelated_bytes(
-        self, tmp_path: Path, relative_path: str, field_name: str
+        self, cli_runner: CliRunner, tmp_path: Path, relative_path: str, field_name: str
     ) -> None:
         capability_file = tmp_path / relative_path
         capability_file.parent.mkdir(parents=True)
@@ -251,7 +254,7 @@ class TestFrontmatterAutoFix:
             "---\n"
             "name: tool-list\n"
             "description: Use this component when testing declared tool-list fixes.\n"
-            "marker: maintain-this-byte\n"
+            "marker: maintain-this-byte # preserve this YAML comment\n"
             f"{field_name}:\n"
             "  - Read\n"
             "  - Grep\n"
@@ -259,23 +262,24 @@ class TestFrontmatterAutoFix:
             "\nBody bytes remain unchanged.\n",
             encoding="utf-8",
         )
-        validator = FrontmatterValidator()
-
         before = capability_file.read_bytes()
-        before_result = validator.validate(capability_file)
-
-        first_fixes = validator.fix(capability_file)
+        check_result = cli_runner.invoke(plugin_validator.app, ["check", str(capability_file)])
+        after_check_content = capability_file.read_bytes()
+        first_fix_result = cli_runner.invoke(plugin_validator.app, ["check", "--fix", str(capability_file)])
         first_content = capability_file.read_bytes()
-        after_first_result = validator.validate(capability_file)
-        second_fixes = validator.fix(capability_file)
+        after_first_check_result = cli_runner.invoke(plugin_validator.app, ["check", str(capability_file)])
+        second_fix_result = cli_runner.invoke(plugin_validator.app, ["check", "--fix", str(capability_file)])
 
-        assert any(issue.code == "FM007" and issue.field == field_name for issue in before_result.warnings)
-        assert first_fixes != []
+        assert check_result.exit_code == 0
+        assert "[FM007]" in check_result.stdout
+        assert after_check_content == before
+        assert first_fix_result.exit_code == 0
         assert first_content == before.replace(
             f"{field_name}:\n  - Read\n  - Grep\n".encode(), f"{field_name}: Read, Grep\n".encode()
         )
-        assert not any(issue.code == "FM007" and issue.field == field_name for issue in after_first_result.warnings)
-        assert second_fixes == []
+        assert after_first_check_result.exit_code == 0
+        assert "[FM007]" not in after_first_check_result.stdout
+        assert second_fix_result.exit_code == 0
         assert capability_file.read_bytes() == first_content
 
     def test_autofix_yaml_array_to_csv(self, tmp_path: Path) -> None:
