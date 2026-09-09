@@ -23,6 +23,8 @@ from pathlib import Path
 from re import Pattern
 from typing import Any
 
+import pytest
+
 REPO_ROOT = Path(__file__).parent.parent.parent.parent
 SCHEMAS_DIR = REPO_ROOT / "packages" / "skilllint" / "schemas"
 REGISTRY_PATH = SCHEMAS_DIR / "provenance-registry.json"
@@ -61,27 +63,99 @@ def _iter_claims() -> list[tuple[str, dict[str, Any]]]:
     return [*registry["claims"].items(), *opinions["opinions"].items()]
 
 
+def _resolve_schema_json_location(claim_id: str, location: dict[str, str]) -> object:
+    recorded_file = location["file"]
+    schema_path = REPO_ROOT / recorded_file
+    assert schema_path.is_file(), f"{claim_id}: assertion_location.file '{recorded_file}' does not exist"
+
+    symbol = location["symbol"]
+    assert symbol.startswith("$."), f"{claim_id}: schema locator '{symbol}' must start with '$.'"
+    target: object = json.loads(schema_path.read_text(encoding="utf-8"))
+    for part in symbol.removeprefix("$.").split("."):
+        assert isinstance(target, dict), f"{claim_id}: '{symbol}' cannot traverse '{part}'"
+        assert part in target, f"{claim_id}: '{symbol}' has no segment '{part}'"
+        target = target[part]
+
+    if location["source_type"] == "schema_json_enum":
+        assert isinstance(target, list), f"{claim_id}: schema_json_enum '{symbol}' must resolve to a JSON array"
+    return target
+
+
+@pytest.mark.parametrize(
+    ("source_type", "symbol", "expected_value"),
+    [
+        ("schema_json_field", "$.properties.name.maxLength", 64),
+        ("schema_json_enum", "$.required", ["name", "description"]),
+    ],
+)
+def test_schema_json_locators_resolve_values(source_type: str, symbol: str, expected_value: object) -> None:
+    location = {
+        "file": "packages/skilllint/schemas/agentskills_io/v1.json",
+        "symbol": symbol,
+        "source_type": source_type,
+    }
+
+    assert _resolve_schema_json_location("schema locator", location) == expected_value
+
+
+@pytest.mark.parametrize(
+    ("location", "expected_value"),
+    [
+        (
+            {
+                "file": "packages/skilllint/schemas/does-not-exist.json",
+                "symbol": "$.properties.name.maxLength",
+                "source_type": "schema_json_field",
+            },
+            64,
+        ),
+        (
+            {
+                "file": "packages/skilllint/schemas/agentskills_io/v1.json",
+                "symbol": "$.properties.name.doesNotExist",
+                "source_type": "schema_json_field",
+            },
+            64,
+        ),
+        (
+            {
+                "file": "packages/skilllint/schemas/agentskills_io/v1.json",
+                "symbol": "$.required",
+                "source_type": "schema_json_enum",
+            },
+            ["name"],
+        ),
+    ],
+)
+def test_schema_json_locators_reject_corrupted_values(location: dict[str, str], expected_value: object) -> None:
+    with pytest.raises(AssertionError):
+        assert _resolve_schema_json_location("corrupted schema locator", location) == expected_value
+
+
 def test_claim_locators_resolve_and_values_match() -> None:
-    """Every python_constant assertion_location must import, resolve, and match."""
     for claim_id, claim in _iter_claims():
         location = claim["assertion_location"]
         source_type = location["source_type"]
         assert source_type in _KNOWN_SOURCE_TYPES, f"{claim_id}: unrecognized source_type '{source_type}'"
-        if source_type != "python_constant":
-            continue
 
-        recorded_file = location["file"]
-        assert (REPO_ROOT / recorded_file).is_file(), (
-            f"{claim_id}: assertion_location.file '{recorded_file}' does not exist"
-        )
+        match source_type:
+            case "python_constant":
+                recorded_file = location["file"]
+                assert (REPO_ROOT / recorded_file).is_file(), (
+                    f"{claim_id}: assertion_location.file '{recorded_file}' does not exist"
+                )
 
-        module_name = recorded_file.removeprefix("packages/").removesuffix(".py").replace("/", ".")
-        target: object = importlib.import_module(module_name)
-        for part in location["symbol"].split("."):
-            assert hasattr(target, part), (
-                f"{claim_id}: {recorded_file} has no symbol '{location['symbol']}' (missing '{part}')"
-            )
-            target = getattr(target, part)
+                module_name = recorded_file.removeprefix("packages/").removesuffix(".py").replace("/", ".")
+                target: object = importlib.import_module(module_name)
+                for part in location["symbol"].split("."):
+                    assert hasattr(target, part), (
+                        f"{claim_id}: {recorded_file} has no symbol '{location['symbol']}' (missing '{part}')"
+                    )
+                    target = getattr(target, part)
+            case "schema_json_field" | "schema_json_enum":
+                target = _resolve_schema_json_location(claim_id, location)
+            case _:
+                raise AssertionError(f"{claim_id}: unrecognized source_type '{source_type}'")
 
         assert "expected_value" in claim, f"{claim_id}: missing expected_value"
         actual = _normalize(target)
