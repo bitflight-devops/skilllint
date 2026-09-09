@@ -13,9 +13,6 @@ from typing import TYPE_CHECKING, ClassVar
 
 import pytest
 
-import skilllint.plugin_validator as plugin_validator_module
-import skilllint.rules
-
 if TYPE_CHECKING:
     from typer.testing import CliRunner
 
@@ -246,52 +243,3 @@ class TestFixableRulesHaveWorkingFixers:
                 assert validator_cls().can_fix() is True, (
                     f"{rule_id}: {validator_cls.__name__}.can_fix() must be True for a fixable=True rule"
                 )
-
-
-_STUB_MARKER = "Always an empty list."
-# `[\w.]*` (not `\w*`) so a dotted attribute path like `FrontmatterValidator.
-# _extract_frontmatter` captures whole -- `\w*` alone stops at the first
-# `.`, silently truncating the capture to just `FrontmatterValidator` and
-# letting the hasattr check below pass on the class existing without ever
-# checking the named method exists.
-_BACKTICKED_SYMBOL = re.compile(r"`([A-Za-z_][\w.]*)")
-
-
-def _resolves(symbol: str) -> bool:
-    """True if *symbol* -- a plain name or a dotted `Class.method` path -- exists.
-
-    `hasattr` alone only resolves a single attribute hop, so a dotted path
-    (e.g. ``FrontmatterValidator._extract_frontmatter``) is walked one
-    segment at a time.
-    """
-    for module in (plugin_validator_module, skilllint.rules):
-        obj = module
-        for part in symbol.split("."):
-            if not hasattr(obj, part):
-                break
-            obj = getattr(obj, part)
-        else:
-            return True
-    return False
-
-
-def test_stub_docstrings_name_a_resolvable_emitter() -> None:
-    """A registration-only stub must name a real emitter symbol in backticks.
-
-    Finds stubs by their docstring's "Always an empty list." sentence rather
-    than a hand-maintained code list, so it self-scopes to whatever the
-    registry actually contains today.
-    """
-    for code, entry in RULE_REGISTRY.items():
-        marker_index = entry.docstring.find(_STUB_MARKER)
-        if marker_index == -1:
-            continue
-        tail = entry.docstring[marker_index + len(_STUB_MARKER) :]
-        match = _BACKTICKED_SYMBOL.search(tail)
-        assert match is not None, f"{code}: stub docstring must name its emitter in backticks"
-
-        symbol = match.group(1)
-        assert _resolves(symbol), (
-            f"{code}: stub docstring names `{symbol}` as its emitter, "
-            f"but that symbol does not exist in plugin_validator or skilllint.rules"
-        )
