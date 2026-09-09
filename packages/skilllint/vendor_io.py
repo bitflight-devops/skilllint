@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -133,7 +134,7 @@ def _shared_checkout_root(start: Path) -> Path:
     return (
         start
         if _is_bare_git_dir(resolved_git_dir)
-        else _checkout_with_git_dir_or_none(start, resolved_git_dir) or start
+        else _checkout_pointing_to_git_dir_or_none(start, resolved_git_dir) or start
     )
 
 
@@ -144,14 +145,14 @@ def _is_bare_git_dir(git_dir: Path) -> bool:
     return any("".join(line.split()).lower() == "bare=true" for line in config.splitlines())
 
 
-def _checkout_with_git_dir_or_none(start: Path, git_dir: Path) -> Path | None:
-    try:
-        candidates = tuple(start.parent.iterdir())
-    except OSError:
+def _checkout_pointing_to_git_dir_or_none(start: Path, git_dir: Path) -> Path | None:
+    search_root = Path(os.path.commonpath((start, git_dir)))
+    if search_root == search_root.parent:
         return None
-
     prefix = "gitdir: "
-    for candidate in candidates:
+    for directory, subdirectories, _files in os.walk(search_root):
+        subdirectories[:] = [name for name in subdirectories if name != ".git"]
+        candidate = Path(directory)
         pointer = _read_git_internal_file_or_none(candidate / ".git")
         if pointer is None or not pointer.startswith(prefix):
             continue
