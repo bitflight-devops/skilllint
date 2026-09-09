@@ -97,6 +97,15 @@ class TestDocsFetch:
         assert result.exit_code == 0
         assert str(_TEST_PATH) in result.output
 
+    def test_fetch_stdout_is_a_single_capturable_path(self, cli_runner: CliRunner, mocker: MockerFixture) -> None:
+        mock_fetch = mocker.patch("skilllint.cli_docs.fetch_or_cached")
+        mock_fetch.return_value = _cache_result(CacheStatus.NEW, Path("/tmp/" + "directory-" * 20 + "settings.md"))
+
+        result = cli_runner.invoke(plugin_validator.app, ["docs", "fetch", _TEST_URL])
+
+        assert result.exit_code == 0
+        assert result.stdout == f"{mock_fetch.return_value.path}\n"
+
     def test_fresh_cache_hit_exits_zero(self, cli_runner: CliRunner, mocker: MockerFixture) -> None:
         """Cache hit within TTL (FRESH status) exits 0 and prints the path.
 

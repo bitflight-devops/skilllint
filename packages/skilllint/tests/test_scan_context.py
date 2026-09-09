@@ -828,14 +828,13 @@ class TestDiscoverPluginPaths:
         """Manifest mode resolves a declared skill directory to its SKILL.md child.
 
         Tests: _discover_plugin_paths — manifest-driven skills path resolution
-        How: Declare skills=["skills/review"] in manifest, assert that
-             tmp_path / "skills" / "review" / "SKILL.md" is in the result
+        How: Create and declare skills/review, then assert it is in the result
         Why: Skill entries in plugin.json are directory references; the function
-             resolves them to their SKILL.md child unconditionally. Using the path
-             name rather than is_dir() means resolution works even when the skill
-             directory does not yet exist on disk (missing = lint error, not silence).
+             includes existing declared component paths for file validation.
         """
         # Arrange
+        (tmp_path / "skills" / "review").mkdir(parents=True)
+        (tmp_path / "skills" / "review" / "SKILL.md").write_text("# Review")
         manifest = PluginManifest(plugin_root=tmp_path, skills=["skills/review"])
 
         # Act
@@ -861,17 +860,14 @@ class TestDiscoverPluginPaths:
         # Assert
         assert tmp_path in result
 
-    def test_manifest_driven_includes_declared_skill_dir_even_when_skill_md_missing(self, tmp_path: Path) -> None:
-        """Declared skill directory is included even when its SKILL.md does not exist.
+    def test_manifest_driven_skips_missing_declared_skill_dir(self, tmp_path: Path) -> None:
+        """Missing declared skill directories are left to root-level validation.
 
-        Tests: _discover_plugin_paths — manifest-driven unconditional inclusion for skills
+        Tests: _discover_plugin_paths — manifest-driven existing-path filtering for skills
         How: Declare skills=["skills/ghost-skill"] in manifest without creating the
-             directory or SKILL.md; assert skills/ghost-skill/SKILL.md is in the result
-        Why: Missing declared files are lint errors that downstream validators should
-             flag. Silently dropping them would hide the error entirely. This is the
-             intentional design difference between manifest-driven and convention-driven
-             mode: convention uses globs (only existing files appear), manifest-driven
-             adds declared paths unconditionally.
+             directory or SKILL.md; assert skills/ghost-skill is absent from the result
+        Why: Root-level registration validation reports missing declarations without
+             sending nonexistent paths to the CLI's file validator.
         """
         # Arrange — skill directory and SKILL.md deliberately not created
         manifest = PluginManifest(plugin_root=tmp_path, skills=["skills/ghost-skill"])
@@ -879,17 +875,15 @@ class TestDiscoverPluginPaths:
         # Act
         result = _discover_plugin_paths(manifest)
 
-        # Assert — path present despite not existing on disk
-        assert tmp_path / "skills" / "ghost-skill" in result
+        assert tmp_path / "skills" / "ghost-skill" not in result
 
-    def test_manifest_driven_includes_declared_agent_even_when_file_missing(self, tmp_path: Path) -> None:
-        """Declared agent file is included even when it does not exist on disk.
+    def test_manifest_driven_skips_missing_declared_agent(self, tmp_path: Path) -> None:
+        """Missing declared agent files are left to root-level validation.
 
-        Tests: _discover_plugin_paths — manifest-driven unconditional inclusion for agents
+        Tests: _discover_plugin_paths — manifest-driven existing-path filtering for agents
         How: Declare agents=["agents/ghost.md"] without creating the file;
-             assert agents/ghost.md is in the result
-        Why: Same intentional design as skills — a declared-but-missing path is a
-             validation error for downstream validators, not a silent omission.
+             assert agents/ghost.md is absent from the result
+        Why: Root-level registration validation reports the missing declaration.
         """
         # Arrange — agent file deliberately not created
         manifest = PluginManifest(plugin_root=tmp_path, agents=["agents/ghost.md"])
@@ -897,8 +891,7 @@ class TestDiscoverPluginPaths:
         # Act
         result = _discover_plugin_paths(manifest)
 
-        # Assert — path present despite not existing on disk
-        assert tmp_path / "agents" / "ghost.md" in result
+        assert tmp_path / "agents" / "ghost.md" not in result
 
     def test_result_is_sorted_and_deduplicated(self, tmp_path: Path) -> None:
         """Return value is a sorted list with no duplicate entries.
