@@ -747,28 +747,6 @@ class TestDirectoryConstants:
 class TestRuntimeCacheRoot:
     """Tests for cache ownership outside a source checkout."""
 
-    def test_source_checkout_uses_its_own_shared_root(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        """A source checkout keeps cache ownership at its shared checkout root."""
-        source_root = tmp_path / "source"
-        source_root.mkdir()
-        (source_root / "pyproject.toml").touch()
-        monkeypatch.setattr(vendor_io, "PROJECT_ROOT", source_root)
-
-        assert _runtime_cache_root(tmp_path / "elsewhere") == source_root
-
-    def test_installed_wheel_in_git_subdirectory_uses_project_root(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """An installed wheel invoked below a Git checkout owns the checkout cache."""
-        repo = tmp_path / "repo"
-        repo.mkdir()
-        _init_repo_with_commit(repo)
-        cwd = repo / "nested"
-        cwd.mkdir()
-        monkeypatch.setattr(vendor_io, "PROJECT_ROOT", tmp_path / "site-packages")
-
-        assert _runtime_cache_root(cwd) == repo.resolve()
-
     def test_installed_wheel_in_linked_worktree_uses_primary_checkout(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -791,6 +769,42 @@ class TestRuntimeCacheRoot:
         monkeypatch.setattr(vendor_io, "PROJECT_ROOT", tmp_path / "site-packages")
 
         assert _runtime_cache_root(cwd) == cwd.resolve()
+
+    @pytest.mark.parametrize(
+        ("is_installed", "uses_linked_worktree"),
+        [
+            pytest.param(False, False, id="source"),
+            pytest.param(False, True, id="linked-worktree"),
+            pytest.param(True, False, id="wheel"),
+            pytest.param(True, False, id="uvx"),
+        ],
+    )
+    def test_execution_mode_root_matrix_reuses_project_owner(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, is_installed: bool, uses_linked_worktree: bool
+    ) -> None:
+        # Given
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        _init_repo_with_commit(repo)
+        invocation_root = repo
+        if uses_linked_worktree:
+            invocation_root = tmp_path / "linked"
+            _run_git(["worktree", "add", str(invocation_root)], cwd=repo)
+        invocation_cwd = invocation_root / "nested"
+        if not is_installed and not uses_linked_worktree:
+            invocation_cwd = tmp_path / "outside-source"
+        invocation_cwd.mkdir()
+        project_root = tmp_path / "site-packages" if is_installed else invocation_root
+        project_root.mkdir(exist_ok=True)
+        if not is_installed:
+            (project_root / "pyproject.toml").touch()
+        monkeypatch.setattr(vendor_io, "PROJECT_ROOT", project_root)
+
+        # When
+        result = _runtime_cache_root(invocation_cwd)
+
+        # Then
+        assert result == repo.resolve()
 
 
 # ---------------------------------------------------------------------------

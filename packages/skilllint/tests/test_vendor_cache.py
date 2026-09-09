@@ -462,6 +462,77 @@ class TestFetchOrCachedFresh:
         assert datetime.fromisoformat(repaired["fetched_at"]).tzinfo is not None
 
 
+@pytest.mark.parametrize(
+    (
+        "cached_content",
+        "is_fresh",
+        "remote_content",
+        "network_fails",
+        "expected_status",
+        "expected_pairs",
+        "expected_fetches",
+    ),
+    [
+        pytest.param(None, False, "# New\n", False, CacheStatus.NEW, 1, 1, id="new"),
+        pytest.param("# Cached\n", True, "unused", False, CacheStatus.FRESH, 1, 0, id="fresh"),
+        pytest.param("# Same\n", False, "# Same\n", False, CacheStatus.UNCHANGED, 1, 1, id="unchanged"),
+        pytest.param("# Old\n", False, "# New\n", False, CacheStatus.REFRESHED, 2, 1, id="refreshed"),
+        pytest.param("# Cached\n", False, "unused", True, CacheStatus.STALE, 1, 1, id="stale"),
+        pytest.param(None, False, "unused", True, None, 0, 1, id="no-cache"),
+    ],
+)
+def test_public_cache_lifecycle_preserves_complete_pairs(
+    tmp_path: Path,
+    mocker: MockerFixture,
+    cached_content: str | None,
+    is_fresh: bool,
+    remote_content: str,
+    network_fails: bool,
+    expected_status: CacheStatus | None,
+    expected_pairs: int,
+    expected_fetches: int,
+) -> None:
+    # Given
+    mocker.patch("skilllint.vendor_cache.SOURCES_DIR", tmp_path)
+    url = "https://example.com/docs/matrix.md"
+    match cached_content:
+        case str(content):
+            md_path = _write_md(tmp_path, "matrix-2026-01-01-0000.md", content)
+            _write_sidecar(
+                md_path,
+                url=url,
+                sha256=sha256_hex(content),
+                byte_count=len(content.encode()),
+                fetched_at=_fresh_fetched_at() if is_fresh else _stale_fetched_at(),
+            )
+        case None:
+            pass
+    mock_fetch = mocker.patch(
+        "skilllint.vendor_cache.fetch_url_text",
+        return_value=remote_content,
+        side_effect=httpx.ConnectError("offline") if network_fails else None,
+    )
+
+    # When / Then
+    match expected_status:
+        case None:
+            with pytest.raises(NoCacheError):
+                fetch_or_cached(url)
+        case CacheStatus() as status:
+            result = fetch_or_cached(url)
+            assert result.status is status
+
+    markdown_paths = sorted(tmp_path.glob("*.md"))
+    sidecar_paths = sorted(tmp_path.glob("*.meta.json"))
+    assert len(markdown_paths) == len(sidecar_paths) == expected_pairs
+    for markdown_path in markdown_paths:
+        content = markdown_path.read_text(encoding="utf-8")
+        sidecar = json.loads(markdown_path.with_suffix(".meta.json").read_text(encoding="utf-8"))
+        assert sidecar["sha256"] == sha256_hex(content)
+        assert sidecar["byte_count"] == len(content.encode())
+    assert mock_fetch.call_count == expected_fetches
+
+
 class TestFetchOrCachedStale:
     """Tests for fetch_or_cached — stale cache scenarios."""
 
@@ -661,6 +732,62 @@ class TestFetchOrCachedStale:
 
         # Assert
         assert result.status == CacheStatus.STALE
+
+    @pytest.mark.parametrize("failure", [401, 403, 404, 500, 503, "transport"])
+    def test_cached_http_and_transport_failures_preserve_stale_pair(
+        self, tmp_path: Path, mocker: MockerFixture, failure: int | str
+    ) -> None:
+        # Given
+        mocker.patch("skilllint.vendor_cache.SOURCES_DIR", tmp_path)
+        url = "https://example.com/docs/failure-matrix.md"
+        content = "# Cached\nStill usable.\n"
+        md_path = _write_md(tmp_path, "failure-matrix-2026-01-01-0000.md", content)
+        sidecar_path = _write_sidecar(
+            md_path,
+            url=url,
+            sha256=sha256_hex(content),
+            byte_count=len(content.encode()),
+            fetched_at=_stale_fetched_at(),
+        )
+        original_markdown = md_path.read_bytes()
+        original_sidecar = sidecar_path.read_bytes()
+        match failure:
+            case "transport":
+                error = httpx.ConnectError("offline")
+            case int(status_code):
+                request = httpx.Request("GET", url)
+                response = httpx.Response(status_code, request=request)
+                error = httpx.HTTPStatusError(str(status_code), request=request, response=response)
+        mocker.patch("skilllint.vendor_cache.fetch_url_text", side_effect=error)
+
+        # When
+        result = fetch_or_cached(url)
+
+        # Then
+        assert result.status is CacheStatus.STALE
+        assert result.path == md_path
+        assert md_path.read_bytes() == original_markdown
+        assert sidecar_path.read_bytes() == original_sidecar
+        assert list(tmp_path.glob("*.md")) == [md_path]
+        assert list(tmp_path.glob("*.meta.json")) == [sidecar_path]
+
+    def test_fetched_markdown_exposes_real_heading_and_rejects_fenced_fake(
+        self, tmp_path: Path, mocker: MockerFixture
+    ) -> None:
+        # Given
+        mocker.patch("skilllint.vendor_cache.SOURCES_DIR", tmp_path)
+        url = "https://example.com/docs/headings.md"
+        content = "# Real Heading\nBody.\n\n```bash\n# Fenced Fake\n```\n"
+        mocker.patch("skilllint.vendor_cache.fetch_url_text", return_value=content)
+
+        # When
+        result = fetch_or_cached(url)
+
+        # Then
+        assert result.status is CacheStatus.NEW
+        assert [section.heading for section in list_sections(result.path)] == ["Real Heading"]
+        assert read_section(result.path, "Real Heading") == content
+        assert read_section(result.path, "Fenced Fake") is None
 
 
 class TestFetchOrCachedNew:
