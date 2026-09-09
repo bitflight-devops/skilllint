@@ -2344,9 +2344,9 @@ class FrontmatterValidator:
             normalized_dict["skills"] = original_data["skills"]
         tool_fields = {"tools", "disallowedTools", "allowed-tools"}
         for field_name in tool_fields:
-            val = normalized_dict.get(field_name)
-            if isinstance(val, list):
-                normalized_dict[field_name] = ", ".join(str(x) for x in val)
+            original_value = original_data.get(field_name)
+            if isinstance(original_value, list):
+                normalized_dict[field_name] = ", ".join(str(x) for x in original_value)
                 fixes.append(f"Converted {field_name} from YAML array to comma-separated string")
         for key, value in normalized_dict.items():
             if key in tool_fields:
