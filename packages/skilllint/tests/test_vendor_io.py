@@ -653,21 +653,64 @@ class TestLoadSidecar:
         assert result is None
 
     @given(
-        url=st.one_of(
-            st.none(),
-            st.integers(),
-            st.lists(st.text()),
-            st.sampled_from(("", "not a url", "ftp://example.com", "/relative")),
-        ),
-        fetched_at=st.one_of(st.none(), st.integers(), st.sampled_from(("2026-03-23T14:00:00", "invalid"))),
-        sha256=st.one_of(st.integers(), st.sampled_from(("a" * 63, "g" * 64))),
-        byte_count=st.one_of(st.text(), st.integers(max_value=-1)),
+        invalid_field=st.one_of(
+            st.tuples(
+                st.just("url"),
+                st.one_of(
+                    st.none(),
+                    st.integers(),
+                    st.lists(st.text()),
+                    st.sampled_from(("", "not a url", "ftp://example.com", "/relative")),
+                ),
+            ),
+            st.tuples(
+                st.just("fetched_at"),
+                st.one_of(st.none(), st.integers(), st.sampled_from(("2026-03-23T14:00:00", "invalid"))),
+            ),
+            st.tuples(
+                st.just("sha256"),
+                st.one_of(st.none(), st.integers(), st.sampled_from(("a" * 63, "a" * 65, "A" * 64, "g" * 64))),
+            ),
+            st.tuples(
+                st.just("byte_count"),
+                st.one_of(
+                    st.text(),
+                    st.floats(allow_nan=False, allow_infinity=False),
+                    st.booleans(),
+                    st.integers(max_value=-1),
+                ),
+            ),
+        )
     )
-    def test_parse_sidecar_metadata_rejects_invalid_field_values(
-        self, url: str | int | list[str] | None, fetched_at: str | int | None, sha256: str | int, byte_count: str | int
+    def test_parse_sidecar_metadata_rejects_each_invalid_field_with_other_fields_valid(
+        self, invalid_field: tuple[str, str | int | float | bool | list[str] | None]
     ) -> None:
         # Given
-        sidecar_json = json.dumps({"url": url, "fetched_at": fetched_at, "sha256": sha256, "byte_count": byte_count})
+        sidecar: dict[str, str | int | float | bool | list[str] | None] = {
+            "url": "https://example.com/page.md",
+            "fetched_at": "2026-03-23T14:00:00+00:00",
+            "sha256": "a" * 64,
+            "byte_count": 3,
+        }
+        field, value = invalid_field
+        sidecar[field] = value
+        sidecar_json = json.dumps(sidecar)
+
+        # When
+        result = parse_sidecar_metadata(sidecar_json)
+
+        # Then
+        assert result is None
+
+    @given(byte_count=st.one_of(st.text(), st.floats(allow_nan=False, allow_infinity=False), st.booleans()))
+    def test_parse_sidecar_metadata_rejects_wrong_type_byte_count(self, byte_count: str | float | bool) -> None:
+        # Given
+        sidecar_json = json.dumps({
+            "url": "https://example.com/page.md",
+            "fetched_at": "2026-03-23T14:00:00+00:00",
+            "sha256": "a" * 64,
+            "byte_count": byte_count,
+        })
 
         # When
         result = parse_sidecar_metadata(sidecar_json)
