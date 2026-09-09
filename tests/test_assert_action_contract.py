@@ -10,6 +10,7 @@ SCRIPT = Path(__file__).parents[1] / "scripts" / "assert_action_contract.py"
 
 def test_assert_action_contract_accepts_matching_outcome() -> None:
     environment = os.environ | {
+        "CASE": "clean",
         "ACTION_RESULT": "passed",
         "ACTION_EXIT_CODE": "0",
         "ACTION_INSPECTED_COUNT": "1",
@@ -27,10 +28,12 @@ def test_assert_action_contract_accepts_matching_outcome() -> None:
     result = subprocess.run([sys.executable, SCRIPT], env=environment, capture_output=True, text=True, check=False)
 
     assert result.returncode == 0, result.stderr
+    assert result.stdout == "case=clean result=passed exit-code=0\n"
 
 
 def test_assert_action_contract_rejects_missing_expected_finding() -> None:
     environment = os.environ | {
+        "CASE": "validation-error",
         "ACTION_RESULT": "failed",
         "ACTION_EXIT_CODE": "1",
         "ACTION_INSPECTED_COUNT": "1",

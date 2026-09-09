@@ -18,7 +18,7 @@ inputs:
     description: >
       Platform adapter to use for validation.
       Supported values: claude-code, cursor, codex.
-      Leave empty to validate against all platforms.
+      Leave empty to use the default validation route.
     required: false
     default: ""
 

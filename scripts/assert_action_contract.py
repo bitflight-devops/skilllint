@@ -30,6 +30,7 @@ def main() -> int:
     if failures:
         print("\n".join(failures), file=sys.stderr)
         return 1
+    print(f"case={os.environ['CASE']} result={os.environ['ACTION_RESULT']} exit-code={os.environ['ACTION_EXIT_CODE']}")
     return 0
 
 
