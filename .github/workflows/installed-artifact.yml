@@ -1,0 +1,54 @@
+name: Installed artifact matrix
+
+on:
+  pull_request:
+
+jobs:
+  build:
+    name: installed-artifact (build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.0.1
+      - run: uv build --out-dir dist
+      - uses: actions/upload-artifact@v7.0.1
+        with:
+          name: installed-artifacts
+          path: dist/
+
+  wheel:
+    name: installed-artifact (wheel, Python ${{ matrix.python }})
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.0.1
+      - uses: actions/download-artifact@v8.0.1
+        with:
+          name: installed-artifacts
+          path: dist
+      - run: uv run --python ${{ matrix.python }} --script scripts/assert_installed_artifact.py --wheel dist/*.whl --evidence-out evidence --head-sha ${{ github.event.pull_request.head.sha }} --requested-python ${{ matrix.python }} --job "installed-artifact (wheel, Python ${{ matrix.python }})"
+      - uses: actions/upload-artifact@v7.0.1
+        with:
+          name: installed-artifact-wheel-${{ matrix.python }}
+          path: evidence/wheel.json
+
+  sdist:
+    name: installed-artifact (sdist, Python 3.11)
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.0.1
+      - uses: actions/download-artifact@v8.0.1
+        with:
+          name: installed-artifacts
+          path: dist
+      - run: uv run --python 3.11 --script scripts/assert_installed_artifact.py --sdist dist/*.tar.gz --evidence-out evidence --head-sha ${{ github.event.pull_request.head.sha }} --requested-python 3.11 --job "installed-artifact (sdist, Python 3.11)"
+      - uses: actions/upload-artifact@v7.0.1
+        with:
+          name: installed-artifact-sdist-3.11
+          path: evidence/sdist.json
