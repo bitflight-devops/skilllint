@@ -428,6 +428,28 @@ class TestFetchOrCachedFresh:
         assert result.status == CacheStatus.UNCHANGED
         assert result.path == md_path
 
+    def test_fetch_or_cached_repairs_list_sidecar_when_content_is_unchanged(
+        self, tmp_path: Path, mocker: MockerFixture
+    ) -> None:
+        # Given
+        mocker.patch("skilllint.vendor_cache.SOURCES_DIR", tmp_path)
+        url = "https://example.com/docs/list-sidecar.md"
+        content = "# Cached\nSome content."
+        md_path = _write_md(tmp_path, "list-sidecar-2026-03-23-1000.md", content)
+        sidecar_path = md_path.with_suffix(".meta.json")
+        sidecar_path.write_text("[]", encoding="utf-8")
+        mock_fetch = mocker.patch("skilllint.vendor_cache.fetch_url_text", return_value=content)
+
+        # When
+        result = fetch_or_cached(url, ttl_hours=4.0)
+
+        # Then
+        mock_fetch.assert_called_once_with(url)
+        assert result.status == CacheStatus.UNCHANGED
+        repaired = json.loads(sidecar_path.read_text(encoding="utf-8"))
+        assert repaired["url"] == url
+        assert datetime.fromisoformat(repaired["fetched_at"]).tzinfo is not None
+
 
 class TestFetchOrCachedStale:
     """Tests for fetch_or_cached — stale cache scenarios."""
