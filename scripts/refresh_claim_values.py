@@ -163,11 +163,7 @@ def main() -> int:
         changed = _refresh_one(claim_id, claim, fetch_cache) or changed
 
     if changed:
-        # ensure_ascii=False: keep non-ASCII characters elsewhere in the
-        # registry (e.g. the top-level description's em dash) as literal
-        # UTF-8 instead of \uXXXX escapes, so a drift PR's diff is limited
-        # to the claim(s) that actually changed.
-        REGISTRY_PATH.write_text(json.dumps(registry, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        REGISTRY_PATH.write_text(json.dumps(registry, indent=2) + "\n", encoding="utf-8")
         print(f"Wrote drift to {REGISTRY_PATH}")
         return 1
 

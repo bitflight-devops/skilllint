@@ -21,6 +21,7 @@ AUTHORITY_URL = "https://example.test/hooks.md"
 
 def _registry() -> dict[str, object]:
     return {
+        "description": "Registry — exact bytes",
         "claims": {
             "HK002.valid_event_types": {
                 "authority": {"authority_url": AUTHORITY_URL},
@@ -32,7 +33,7 @@ def _registry() -> dict[str, object]:
                 "expected_value": ["command"],
                 "x-audited": {"date": "2026-01-01", "source": "old.md"},
             },
-        }
+        },
     }
 
 
@@ -84,15 +85,19 @@ def test_refresh_writes_only_drifted_claim(monkeypatch: pytest.MonkeyPatch, tmp_
         tmp_path,
         lambda _path, heading: "### NewEvent\n" if heading == "Hook events" else '| `type` | `"command"` |',
     )
+    before = registry_path.read_bytes()
 
     result = refresh.main()
 
-    saved = json.loads(registry_path.read_text(encoding="utf-8"))
+    after = registry_path.read_bytes()
+    saved = json.loads(after)
     claims = saved["claims"]
     assert result == 1
     assert calls == [AUTHORITY_URL]
     assert claims["HK002.valid_event_types"]["expected_value"] == ["NewEvent"]
     assert claims["HK003.valid_hook_types"]["expected_value"] == ["command"]
+    assert b'"description": "Registry \\u2014 exact bytes"' in before
+    assert b'"description": "Registry \\u2014 exact bytes"' in after
 
 
 def test_refresh_accepts_usable_stale_cache(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
