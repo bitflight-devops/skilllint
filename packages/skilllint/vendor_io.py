@@ -128,9 +128,13 @@ def _shared_checkout_root(start: Path) -> Path:
         return start
 
     primary_checkout = resolved_git_dir.parent
-    if not (primary_checkout / ".git").exists() and not _is_bare_git_dir(resolved_git_dir):
-        return _checkout_with_git_dir_or_none(start, resolved_git_dir) or start
-    return primary_checkout
+    if (primary_checkout / ".git").exists():
+        return primary_checkout
+    return (
+        start
+        if _is_bare_git_dir(resolved_git_dir)
+        else _checkout_with_git_dir_or_none(start, resolved_git_dir) or start
+    )
 
 
 def _is_bare_git_dir(git_dir: Path) -> bool:
