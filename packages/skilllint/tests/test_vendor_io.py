@@ -568,19 +568,19 @@ class TestWriteSidecar:
 class TestLoadSidecar:
     """Tests for load_sidecar — .meta.json loader."""
 
-    def test_load_sidecar_valid_sidecar_returns_dict(self, tmp_path: Path) -> None:
-        """load_sidecar returns the parsed dict for a valid .meta.json file.
+    def test_load_sidecar_valid_sidecar_returns_metadata(self, tmp_path: Path) -> None:
+        """load_sidecar returns validated metadata for a valid .meta.json file.
 
         Tests: load_sidecar happy path
         How: Write a .meta.json file, call load_sidecar for the .md path.
-        Why: Cache freshness checks depend on reading back the stored fetched_at value.
+        Why: Cache freshness checks require a validated, aware fetched_at value.
         """
         # Arrange
         md_path = tmp_path / "page.md"
         sidecar_data = {
             "url": "https://example.com/",
             "fetched_at": "2026-03-23T14:00:00+00:00",
-            "sha256": "abc",
+            "sha256": "a" * 64,
             "byte_count": 3,
         }
         md_path.with_suffix(".meta.json").write_text(json.dumps(sidecar_data), encoding="utf-8")
@@ -589,7 +589,53 @@ class TestLoadSidecar:
         result = load_sidecar(md_path)
 
         # Assert
-        assert result == sidecar_data
+        assert result is not None
+        assert result.url == sidecar_data["url"]
+        assert result.sha256 == sidecar_data["sha256"]
+        assert result.byte_count == sidecar_data["byte_count"]
+
+    def test_load_sidecar_returns_concrete_metadata_with_aware_timestamp(self, tmp_path: Path) -> None:
+        # Given
+        md_path = tmp_path / "page.md"
+        md_path.with_suffix(".meta.json").write_text(
+            json.dumps({
+                "url": "https://example.com/page.md",
+                "fetched_at": "2026-03-23T14:00:00+00:00",
+                "sha256": "a" * 64,
+                "byte_count": 3,
+            }),
+            encoding="utf-8",
+        )
+
+        # When
+        result = load_sidecar(md_path)
+
+        # Then
+        assert result is not None
+        assert result.url == "https://example.com/page.md"
+        assert result.fetched_at.tzinfo is not None
+
+    @pytest.mark.parametrize(
+        "sidecar_json",
+        [
+            '{"url":"https://example.com/page.md","fetched_at":"2026-03-23T14:00:00","sha256":"abc","byte_count":3}',
+            '{"url":"https://example.com/page.md","fetched_at":1,"sha256":"abc","byte_count":3}',
+            '{"url":"https://example.com/page.md","fetched_at":"2026-03-23T14:00:00+00:00","sha256":"abc"}',
+            '{"url":1,"fetched_at":"2026-03-23T14:00:00+00:00","sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","byte_count":3}',
+            '{"url":"https://example.com/page.md","fetched_at":"2026-03-23T14:00:00+00:00","sha256":"abc","byte_count":3}',
+        ],
+        ids=["naive-timestamp", "wrong-timestamp-type", "missing-byte-count", "wrong-url-type", "wrong-sha256"],
+    )
+    def test_load_sidecar_invalid_metadata_returns_none(self, tmp_path: Path, sidecar_json: str) -> None:
+        # Given
+        md_path = tmp_path / "page.md"
+        md_path.with_suffix(".meta.json").write_text(sidecar_json, encoding="utf-8")
+
+        # When
+        result = load_sidecar(md_path)
+
+        # Then
+        assert result is None
 
     def test_load_sidecar_missing_sidecar_returns_none(self, tmp_path: Path) -> None:
         """load_sidecar returns None when no .meta.json file exists.
