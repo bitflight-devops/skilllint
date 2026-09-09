@@ -589,4 +589,4 @@ print(json.dumps({
             )
 
         assert result.returncode == 0, result.stderr
-        assert result.stdout.replace("\n", "") == str(cache_file)
+        assert result.stdout.replace("\n", "") == str(cache_file.resolve())
