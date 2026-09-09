@@ -111,9 +111,10 @@ def _load_plugin_json(plugin_root: Path) -> dict | None:
     """
     manifest_path = plugin_root / ".claude-plugin" / "plugin.json"
     try:
-        return json.loads(manifest_path.read_text(encoding="utf-8"))
+        raw = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return None
+    return raw if isinstance(raw, dict) else None
 
 
 def _parse_plugin_manifest(plugin_root: Path) -> PluginManifest:
@@ -134,6 +135,8 @@ def _parse_plugin_manifest(plugin_root: Path) -> PluginManifest:
 
     def _extract(key: str) -> list[str] | None:
         value = raw.get(key)
+        if isinstance(value, str):
+            return [value]
         if isinstance(value, list):
             return value
         return None
@@ -152,9 +155,8 @@ def _discover_plugin_paths(manifest: PluginManifest) -> list[Path]:
 
     Never recurses into skills/*/agents/ or skills/*/commands/.
 
-    In manifest-driven mode, declared paths are added unconditionally regardless
-    of whether they exist on disk. This is intentional: a missing declared file
-    is a validation error that downstream validators (e.g. PL001) should flag.
+    In manifest-driven mode, existing declared paths are added. Missing entries
+    remain the responsibility of root-level registration validation.
     Convention-driven mode uses glob matching so only existing files appear.
 
     Args:
@@ -167,7 +169,6 @@ def _discover_plugin_paths(manifest: PluginManifest) -> list[Path]:
     root = manifest.plugin_root
 
     if manifest.is_manifest_driven:
-        # Intentionally no existence check — missing declared paths are a lint error.
         # Skills entries may be directories (e.g. "./skills/my-skill/") or
         # direct SKILL.md paths. Preserve direct files; folder declarations are
         # folder-backed targets so the validator bridge can resolve SKILL.md.
@@ -175,12 +176,13 @@ def _discover_plugin_paths(manifest: PluginManifest) -> list[Path]:
             skill_paths: dict[Path, Path] = {}
             for rel in manifest.skills:
                 resolved = root / rel
-                skill_paths.setdefault(_ignore_path(resolved), resolved)
+                if resolved.exists():
+                    skill_paths.setdefault(_ignore_path(resolved), resolved)
             discovered.update(skill_paths.values())
         # Agents and commands entries should be direct file paths.
         for path_list in (manifest.agents, manifest.commands):
             if path_list is not None:
-                discovered.update(root / rel for rel in path_list)
+                discovered.update(root / rel for rel in path_list if (root / rel).exists())
     else:
         discovered.update(_glob_excluding(root, "agents/*.md"))
         discovered.update(_glob_excluding(root, "commands/*.md"))

@@ -20,6 +20,7 @@ Coverage:
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -158,14 +159,36 @@ description: Test skill with invalid name format
 
 
 class TestPluginRegistrationRoutes:
-    @pytest.mark.parametrize("route", ["root", "manifest", "parent"])
-    def test_pr001_warns_once_for_an_ignored_default_agent(
-        self, cli_runner: CliRunner, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, no_color_env: None, route: str
+    def test_non_object_plugin_manifest_reports_pl002_without_crashing(
+        self, cli_runner: CliRunner, tmp_path: Path, no_color_env: None
     ) -> None:
         plugin = tmp_path / "plugin"
         (plugin / ".claude-plugin").mkdir(parents=True)
-        (plugin / ".claude-plugin" / "plugin.json").write_text('{"name":"plugin","agents":[]}')
+        (plugin / ".claude-plugin" / "plugin.json").write_text("[]")
+
+        result = cli_runner.invoke(plugin_validator.app, ["check", "--no-color", str(plugin)])
+
+        assert result.exit_code == 1, result.stdout
+        assert "[PL002]" in result.stdout
+
+    @pytest.mark.parametrize("route", ["root", "manifest", "parent"])
+    @pytest.mark.parametrize("agents", ["./agents/registered.md", ["./agents/registered.md"]])
+    def test_pr001_warns_once_for_an_ignored_default_agent(
+        self,
+        cli_runner: CliRunner,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        no_color_env: None,
+        route: str,
+        agents: str | list[str],
+    ) -> None:
+        plugin = tmp_path / "plugin"
+        (plugin / ".claude-plugin").mkdir(parents=True)
+        (plugin / ".claude-plugin" / "plugin.json").write_text(json.dumps({"name": "plugin", "agents": agents}))
         (plugin / "agents").mkdir()
+        (plugin / "agents" / "registered.md").write_text(
+            "---\nname: registered\ndescription: A registered agent for route coverage\n---\n"
+        )
         (plugin / "agents" / "unlisted.md").write_text(
             "---\nname: unlisted\ndescription: An agent for route coverage\n---\n"
         )
@@ -180,6 +203,64 @@ class TestPluginRegistrationRoutes:
 
         assert result.exit_code == 0, result.stdout
         assert result.stdout.count("[PR001]") == 1
+
+    @pytest.mark.parametrize("route", ["root", "manifest", "parent"])
+    @pytest.mark.parametrize("commands", ["./commands/missing.md", ["./commands/missing.md"]])
+    def test_pr002_is_reported_once_for_a_missing_declared_command(
+        self,
+        cli_runner: CliRunner,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        no_color_env: None,
+        route: str,
+        commands: str | list[str],
+    ) -> None:
+        plugin = tmp_path / "plugin"
+        (plugin / ".claude-plugin").mkdir(parents=True)
+        (plugin / ".claude-plugin" / "plugin.json").write_text(json.dumps({"name": "plugin", "commands": commands}))
+        target = {"root": plugin, "manifest": plugin / ".claude-plugin" / "plugin.json", "parent": tmp_path}[route]
+        monkeypatch.setattr(
+            plugin_validator.PluginStructureValidator,
+            "validate",
+            lambda _self, _path: plugin_validator.ValidationResult(passed=True, errors=[], warnings=[], info=[]),
+        )
+
+        result = cli_runner.invoke(plugin_validator.app, ["check", "--no-color", str(target)])
+
+        assert result.exit_code == 1, result.stdout
+        assert result.stdout.count("[PR002]") == 1
+        assert "ERROR [PR002]" in result.stdout
+
+    @pytest.mark.parametrize("route", ["root", "manifest", "parent"])
+    @pytest.mark.parametrize("commands", ["./commands/skill-command", ["./commands/skill-command"]])
+    def test_pr005_is_reported_once_for_declared_command_skill_directory(
+        self,
+        cli_runner: CliRunner,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        no_color_env: None,
+        route: str,
+        commands: str | list[str],
+    ) -> None:
+        plugin = tmp_path / "plugin"
+        (plugin / ".claude-plugin").mkdir(parents=True)
+        (plugin / ".claude-plugin" / "plugin.json").write_text(json.dumps({"name": "plugin", "commands": commands}))
+        (plugin / "commands" / "skill-command").mkdir(parents=True)
+        (plugin / "commands" / "skill-command" / "SKILL.md").write_text(
+            "---\nname: skill-command\ndescription: Use when testing a valid command-shaped skill fixture\n---\n\n# Command Skill\n"
+        )
+        target = {"root": plugin, "manifest": plugin / ".claude-plugin" / "plugin.json", "parent": tmp_path}[route]
+        monkeypatch.setattr(
+            plugin_validator.PluginStructureValidator,
+            "validate",
+            lambda _self, _path: plugin_validator.ValidationResult(passed=True, errors=[], warnings=[], info=[]),
+        )
+
+        result = cli_runner.invoke(plugin_validator.app, ["check", "--no-color", "--verbose", str(target)])
+
+        assert result.exit_code == 0, result.stdout
+        assert result.stdout.count("[PR005]") == 1
+        assert "INFO [PR005]" in result.stdout
 
 
 class TestCheckFlag:

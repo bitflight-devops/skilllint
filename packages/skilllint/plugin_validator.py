@@ -3022,6 +3022,19 @@ class PluginRegistrationValidator:
             )
             return ValidationResult(passed=False, errors=errors, warnings=warnings, info=info)
 
+        if not isinstance(plugin_config, dict):
+            errors.append(
+                ValidationIssue(
+                    field="plugin.json",
+                    severity="error",
+                    message="Invalid JSON: plugin.json top level must be an object",
+                    code=PL002,
+                    docs_url=generate_docs_url(PL002),
+                    suggestion="Use a JSON object for plugin.json",
+                )
+            )
+            return ValidationResult(passed=False, errors=errors, warnings=warnings, info=info)
+
         # Registration checks — detection lives in skilllint.rules.pr_series.
         warnings.extend(check_pr001(plugin_config, plugin_dir))
         errors.extend(check_pr002(plugin_config, plugin_dir))
