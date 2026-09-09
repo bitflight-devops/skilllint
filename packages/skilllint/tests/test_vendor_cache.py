@@ -275,6 +275,17 @@ class TestFindLatest:
         assert result is not None
         assert result.name == "mypage-2026-01-01-1200.md"
 
+    def test_find_latest_prefers_collision_suffix_over_legacy_minute_name(self, tmp_path: Path) -> None:
+        # Given
+        _write_md(tmp_path, "mypage-2026-01-01-1200.md", "legacy")
+        collision = _write_md(tmp_path, "mypage-2026-01-01-1200-1.md", "newer")
+
+        # When
+        result = find_latest("mypage", sources_dir=tmp_path)
+
+        # Then
+        assert result == collision
+
     def test_find_latest_ignores_meta_json_files(self, tmp_path: Path) -> None:
         """find_latest ignores .meta.json sidecar files when scanning.
 
@@ -465,6 +476,40 @@ class TestFetchOrCachedStale:
         assert result.status == CacheStatus.REFRESHED
         assert result.path != md_path  # new timestamped file was written
         assert result.path.read_text(encoding="utf-8") == new_content
+
+    def test_fetch_or_cached_retains_changed_same_minute_refreshes(self, tmp_path: Path, mocker: MockerFixture) -> None:
+        # Given
+        mocker.patch("skilllint.vendor_cache.SOURCES_DIR", tmp_path)
+        fixed_time = datetime(2026, 9, 9, 12, 34, tzinfo=UTC)
+        mock_datetime = mocker.patch("skilllint.vendor_cache.datetime")
+        mock_datetime.now.return_value = fixed_time
+        mock_datetime.fromisoformat.side_effect = datetime.fromisoformat
+        url = "https://example.com/docs/history.md"
+        old_content = "# Old\n"
+        first_content = "# First\n"
+        second_content = "# Second\n"
+        old_path = _write_md(tmp_path, "history-2026-01-01-0000.md", old_content)
+        _write_sidecar(
+            old_path,
+            url=url,
+            sha256=hashlib.sha256(old_content.encode()).hexdigest(),
+            byte_count=len(old_content.encode()),
+            fetched_at=_stale_fetched_at(),
+        )
+        mocker.patch("skilllint.vendor_cache.fetch_url_text", side_effect=[first_content, second_content])
+
+        # When
+        first = fetch_or_cached(url)
+        second = fetch_or_cached(url, force=True)
+
+        # Then
+        assert first.status == CacheStatus.REFRESHED
+        assert second.status == CacheStatus.REFRESHED
+        assert first.path.name == "history-2026-09-09-1234.md"
+        assert second.path.name == "history-2026-09-09-1234-1.md"
+        assert first.path.read_text(encoding="utf-8") == first_content
+        assert second.path.read_text(encoding="utf-8") == second_content
+        assert find_latest("history", sources_dir=tmp_path) == second.path
 
     def test_fetch_or_cached_returns_unchanged_when_content_identical(
         self, tmp_path: Path, mocker: MockerFixture
