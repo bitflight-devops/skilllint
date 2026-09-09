@@ -159,6 +159,18 @@ description: Test skill with invalid name format
 
 
 class TestPluginRegistrationRoutes:
+    def test_non_object_plugin_manifest_reports_pl002_without_crashing(
+        self, cli_runner: CliRunner, tmp_path: Path, no_color_env: None
+    ) -> None:
+        plugin = tmp_path / "plugin"
+        (plugin / ".claude-plugin").mkdir(parents=True)
+        (plugin / ".claude-plugin" / "plugin.json").write_text("[]")
+
+        result = cli_runner.invoke(plugin_validator.app, ["check", "--no-color", str(plugin)])
+
+        assert result.exit_code == 1, result.stdout
+        assert "[PL002]" in result.stdout
+
     @pytest.mark.parametrize("route", ["root", "manifest", "parent"])
     @pytest.mark.parametrize("agents", ["./agents/registered.md", ["./agents/registered.md"]])
     def test_pr001_warns_once_for_an_ignored_default_agent(
