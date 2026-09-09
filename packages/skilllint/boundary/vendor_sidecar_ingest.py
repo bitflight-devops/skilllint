@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_serializer, field_validator
 
@@ -15,7 +16,20 @@ class SidecarMetadata(BaseModel):
     url: str
     fetched_at: datetime
     sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
-    byte_count: int
+    byte_count: int = Field(ge=0)
+
+    @field_validator("url")
+    @classmethod
+    def url_must_be_absolute_http(cls, value: str) -> str:
+        """Reject sidecars whose provenance is not an absolute HTTP(S) URL.
+
+        Returns:
+            The validated source URL without normalization.
+        """
+        parsed = urlsplit(value)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("url must be an absolute HTTP(S) URL")
+        return value
 
     @field_validator("fetched_at")
     @classmethod

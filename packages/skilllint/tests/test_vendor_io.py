@@ -21,13 +21,15 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import httpx
 import pytest
+from hypothesis import given, strategies as st
 
+from skilllint.boundary.vendor_sidecar_ingest import parse_sidecar_metadata
 from skilllint.vendor_io import (
     PROJECT_ROOT,
     SOURCES_DIR,
@@ -615,6 +617,64 @@ class TestLoadSidecar:
         assert result.url == "https://example.com/page.md"
         assert result.fetched_at.tzinfo is not None
 
+    @given(
+        url=st.sampled_from(("https://example.com/page.md", "http://example.net/docs?version=1")),
+        fetched_at=st.datetimes(timezones=st.just(UTC)),
+        sha256=st.text(alphabet="0123456789abcdef", min_size=64, max_size=64),
+        byte_count=st.integers(min_value=0),
+    )
+    def test_parse_sidecar_metadata_accepts_valid_aware_sidecars(
+        self, url: str, fetched_at: datetime, sha256: str, byte_count: int
+    ) -> None:
+        # Given
+        sidecar_json = json.dumps({
+            "url": url,
+            "fetched_at": fetched_at.isoformat(),
+            "sha256": sha256,
+            "byte_count": byte_count,
+        })
+
+        # When
+        result = parse_sidecar_metadata(sidecar_json)
+
+        # Then
+        assert result is not None
+        assert result.url == url
+        assert result.fetched_at == fetched_at
+        assert result.sha256 == sha256
+        assert result.byte_count == byte_count
+
+    @given(st.sampled_from(("{", "[]", "null")))
+    def test_parse_sidecar_metadata_rejects_malformed_or_non_object_json(self, sidecar_json: str) -> None:
+        # Given / When
+        result = parse_sidecar_metadata(sidecar_json)
+
+        # Then
+        assert result is None
+
+    @given(
+        url=st.one_of(
+            st.none(),
+            st.integers(),
+            st.lists(st.text()),
+            st.sampled_from(("", "not a url", "ftp://example.com", "/relative")),
+        ),
+        fetched_at=st.one_of(st.none(), st.integers(), st.sampled_from(("2026-03-23T14:00:00", "invalid"))),
+        sha256=st.one_of(st.integers(), st.sampled_from(("a" * 63, "g" * 64))),
+        byte_count=st.one_of(st.text(), st.integers(max_value=-1)),
+    )
+    def test_parse_sidecar_metadata_rejects_invalid_field_values(
+        self, url: str | int | list[str] | None, fetched_at: str | int | None, sha256: str | int, byte_count: str | int
+    ) -> None:
+        # Given
+        sidecar_json = json.dumps({"url": url, "fetched_at": fetched_at, "sha256": sha256, "byte_count": byte_count})
+
+        # When
+        result = parse_sidecar_metadata(sidecar_json)
+
+        # Then
+        assert result is None
+
     @pytest.mark.parametrize(
         "sidecar_json",
         [
@@ -623,8 +683,20 @@ class TestLoadSidecar:
             '{"url":"https://example.com/page.md","fetched_at":"2026-03-23T14:00:00+00:00","sha256":"abc"}',
             '{"url":1,"fetched_at":"2026-03-23T14:00:00+00:00","sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","byte_count":3}',
             '{"url":"https://example.com/page.md","fetched_at":"2026-03-23T14:00:00+00:00","sha256":"abc","byte_count":3}',
+            '{"url":"","fetched_at":"2026-03-23T14:00:00+00:00","sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","byte_count":3}',
+            '{"url":"not a url","fetched_at":"2026-03-23T14:00:00+00:00","sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","byte_count":3}',
+            '{"url":"https://example.com/page.md","fetched_at":"2026-03-23T14:00:00+00:00","sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","byte_count":-1}',
         ],
-        ids=["naive-timestamp", "wrong-timestamp-type", "missing-byte-count", "wrong-url-type", "wrong-sha256"],
+        ids=[
+            "naive-timestamp",
+            "wrong-timestamp-type",
+            "missing-byte-count",
+            "wrong-url-type",
+            "wrong-sha256",
+            "empty-url",
+            "invalid-url",
+            "negative-byte-count",
+        ],
     )
     def test_load_sidecar_invalid_metadata_returns_none(self, tmp_path: Path, sidecar_json: str) -> None:
         # Given
