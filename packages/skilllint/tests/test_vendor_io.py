@@ -953,12 +953,7 @@ class TestSharedCheckoutRoot:
         # Act
         result = _shared_checkout_root(bare_worktree)
 
-        # Assert — the bare repo's directory has no working-tree parent of its
-        # own, so the resolved commondir's parent is the bare repo's *parent*
-        # directory. This is the algorithm's defined, deterministic behaviour
-        # for this topology, not a meaningful "primary checkout" in the
-        # linked-worktree sense.
-        assert result == bare.resolve().parent
+        assert result == bare_worktree
 
     def test_malformed_gitdir_content_returns_start_unchanged(self, tmp_path: Path) -> None:
         """A .git file with unreadable/garbage gitdir content returns start unchanged.
