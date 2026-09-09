@@ -625,6 +625,20 @@ class TestLoadSidecar:
         # Assert
         assert result is None
 
+    @pytest.mark.parametrize(
+        "sidecar_json", ["[]", "null", "1", '"metadata"'], ids=["list", "null", "number", "string"]
+    )
+    def test_load_sidecar_wrong_top_level_shape_returns_none(self, tmp_path: Path, sidecar_json: str) -> None:
+        # Given
+        md_path = tmp_path / "page.md"
+        md_path.with_suffix(".meta.json").write_text(sidecar_json, encoding="utf-8")
+
+        # When
+        result = load_sidecar(md_path)
+
+        # Then
+        assert result is None
+
 
 # ---------------------------------------------------------------------------
 # UTC timestamp

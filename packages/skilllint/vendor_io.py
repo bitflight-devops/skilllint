@@ -296,7 +296,8 @@ def load_sidecar(md_path: Path) -> dict[str, Any] | None:
         md_path: Path to the content file whose sidecar to load.
 
     Returns:
-        Parsed sidecar dict, or None if the sidecar is missing or corrupt.
+        Parsed sidecar dict, or None if the sidecar is missing, corrupt, or not a JSON object.
     """
     sidecar_path = md_path.with_suffix(".meta.json")
-    return load_json_or_none(sidecar_path)
+    sidecar = load_json_or_none(sidecar_path)
+    return sidecar if isinstance(sidecar, dict) else None
