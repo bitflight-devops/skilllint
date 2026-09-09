@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -93,7 +94,7 @@ def _require(condition: bool, detail: str) -> None:
 
 def _assert_import(
     installed: Path, python: Path, workspace: Path, env: dict[str, str], version: str
-) -> tuple[str, str, str]:
+) -> tuple[str, str, str, str]:
     imported = _run(
         [
             str(python),
@@ -113,7 +114,7 @@ def _assert_import(
     _require(Path(data.path).is_relative_to(installed), data.path)
     _require(data.module_version == version, str(data))
     _require(data.distribution_version == version, str(data))
-    return data.interpreter, data.python, data.path
+    return data.interpreter, data.python, data.path, data.distribution_version
 
 
 def _assert_aliases(installed: Path, workspace: Path, env: dict[str, str]) -> dict[str, int]:
@@ -143,7 +144,7 @@ def _assert_offline_tokens(installed: Path, workspace: Path, env: dict[str, str]
     return True
 
 
-def _assert_diagnostic(installed: Path, workspace: Path, env: dict[str, str]) -> int:
+def _assert_diagnostic(installed: Path, workspace: Path, env: dict[str, str]) -> tuple[str, int]:
     skill = workspace / "invalid" / "SKILL.md"
     skill.parent.mkdir()
     skill.write_text(
@@ -154,8 +155,10 @@ def _assert_diagnostic(installed: Path, workspace: Path, env: dict[str, str]) ->
         [str(_executable(installed, "skilllint")), "check", "--platform", "claude-code", str(skill)], workspace, env
     )
     _require(result.returncode == 1, result.stderr)
-    _require("FM010" in result.stdout + result.stderr, result.stdout + result.stderr)
-    return result.returncode
+    match = re.search(r"\b(FM\d{3})\b", result.stdout + result.stderr)
+    if match is None:
+        raise RuntimeError(result.stdout + result.stderr)
+    return match.group(1), result.returncode
 
 
 def _assert_cache_root(installed: Path, workspace: Path, env: dict[str, str]) -> str:
@@ -184,27 +187,25 @@ def _assert_installed_artifact(artifact: Path, *, head_sha: str, requested_pytho
         offline_env = _environment(root / "cache")
         install = _run(["uv", "pip", "install", str(artifact), "--python", str(python)], workspace, clean_env)
         _require(install.returncode == 0, install.stderr)
-        actual_interpreter, actual_python, import_path = _assert_import(
+        actual_interpreter, actual_python, import_path, installed_version = _assert_import(
             installed, python, workspace, clean_env, _expected_version(artifact)
         )
         alias_exits = _assert_aliases(installed, workspace, clean_env)
-        offline_token_result = _assert_offline_tokens(installed, workspace, offline_env)
-        diagnostic_exit = _assert_diagnostic(installed, workspace, clean_env)
-        cache_root = _assert_cache_root(installed, workspace, clean_env)
+        quickstart_diagnostic, diagnostic_exit = _assert_diagnostic(installed, workspace, clean_env)
         return _ArtifactEvidence(
             head_sha=head_sha,
             requested_python=requested_python,
             actual_interpreter=actual_interpreter,
             actual_python=actual_python,
-            installed_version=_expected_version(artifact),
+            installed_version=installed_version,
             artifact_type=_artifact_type(artifact),
             artifact_name=artifact.name,
             import_path=import_path,
             alias_exits=alias_exits,
-            quickstart_diagnostic="FM010",
+            quickstart_diagnostic=quickstart_diagnostic,
             diagnostic_exit=diagnostic_exit,
-            offline_token_result=offline_token_result,
-            cache_root=cache_root,
+            offline_token_result=_assert_offline_tokens(installed, workspace, offline_env),
+            cache_root=_assert_cache_root(installed, workspace, clean_env),
             job=job,
             mode="artifact",
         )

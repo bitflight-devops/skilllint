@@ -78,4 +78,6 @@ def test_installed_artifact_writes_observed_evidence(built_artifacts: tuple[Path
         for record in records
     )
     assert all(record["diagnostic_exit"] == 1 for record in records)
+    assert all(record["quickstart_diagnostic"] == "FM010" for record in records)
+    assert all(record["installed_version"] for record in records)
     assert all(record["offline_token_result"] is True for record in records)
