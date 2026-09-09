@@ -271,9 +271,9 @@ class TestFrontmatterAutoFix:
 
         assert any(issue.code == "FM007" and issue.field == field_name for issue in before_result.warnings)
         assert first_fixes != []
-        assert first_content != before
-        assert b"marker: maintain-this-byte\n" in first_content
-        assert first_content.endswith(b"\nBody bytes remain unchanged.\n")
+        assert first_content == before.replace(
+            f"{field_name}:\n  - Read\n  - Grep\n".encode(), f"{field_name}: Read, Grep\n".encode()
+        )
         assert not any(issue.code == "FM007" and issue.field == field_name for issue in after_first_result.warnings)
         assert second_fixes == []
         assert capability_file.read_bytes() == first_content

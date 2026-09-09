@@ -51,6 +51,7 @@ from git.exc import InvalidGitRepositoryError, NoSuchPathError
 from git.index.fun import entry_key
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from ruamel.yaml import YAML, YAMLError
+from ruamel.yaml.nodes import MappingNode, SequenceNode
 from ruamel.yaml.scalarstring import DoubleQuotedScalarString
 
 import skilllint.rules  # ruff: ignore[unused-import] — ensures all 15 series modules register into RULE_REGISTRY
@@ -216,6 +217,31 @@ def _dump_yaml(data: dict[str, YamlValue]) -> str:
     buf = StringIO()
     _rt_yaml.dump(prepared, buf)
     return buf.getvalue()
+
+
+def _replace_list_valued_tool_fields(frontmatter_text: str, data: dict[str, YamlValue]) -> str:
+    document = _rt_yaml.compose(frontmatter_text)
+    if not isinstance(document, MappingNode):
+        return frontmatter_text
+
+    replacements: list[tuple[int, int, str]] = []
+    for key_node, value_node in document.value:
+        field_name = key_node.value
+        value = data.get(field_name)
+        if (
+            field_name in {"tools", "disallowedTools", "allowed-tools"}
+            and isinstance(value, list)
+            and isinstance(value_node, SequenceNode)
+        ):
+            replacements.append((
+                key_node.end_mark.index,
+                value_node.end_mark.index,
+                f": {', '.join(str(item) for item in value)}",
+            ))
+
+    for start, end, replacement in reversed(replacements):
+        frontmatter_text = f"{frontmatter_text[:start]}{replacement}{frontmatter_text[end:]}"
+    return frontmatter_text
 
 
 def _fix_unquoted_colons(frontmatter_text: str) -> tuple[str, list[str], list[str]]:
@@ -2363,6 +2389,7 @@ class FrontmatterValidator:
 
     def _compute_normalized_fixes(
         self,
+        content: str,
         original_data: dict[str, YamlValue],
         frontmatter_text: str,
         body: str,
@@ -2395,6 +2422,15 @@ class FrontmatterValidator:
         )
         if not fixes:
             return None
+        tool_list_fixes = {
+            f"Converted {field_name} from YAML array to comma-separated string"
+            for field_name in ("tools", "disallowedTools", "allowed-tools")
+            if isinstance(original_data.get(field_name), list)
+        }
+        if set(fixes) == tool_list_fixes:
+            return content.replace(
+                frontmatter_text, _replace_list_valued_tool_fields(frontmatter_text, original_data), 1
+            ), fixes
         return f"---\n{_dump_yaml(normalized_dict)}---\n{body}", fixes
 
     def _apply_fixes(self, content: str, file_type: FileType, file_path: Path | None = None) -> tuple[str, list[str]]:
@@ -2422,7 +2458,13 @@ class FrontmatterValidator:
 
         if isinstance(original_data, dict):
             computed = self._compute_normalized_fixes(
-                original_data, frontmatter_text, body, file_type=file_type, file_path=file_path, colon_fixes=colon_fixes
+                content,
+                original_data,
+                frontmatter_text,
+                body,
+                file_type=file_type,
+                file_path=file_path,
+                colon_fixes=colon_fixes,
             )
             if computed is not None:
                 result_content, result_fixes = computed
