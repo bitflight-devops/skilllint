@@ -47,6 +47,7 @@ from marko.block import Heading as MarkoHeading
 
 from skilllint.vendor_io import (
     SOURCES_DIR,
+    EmptyResponseError,
     fetch_url_text,
     load_sidecar,
     read_text_or_none,
@@ -377,7 +378,7 @@ def fetch_or_cached(url: str, *, ttl_hours: float = 4.0, force: bool = False) ->
         try:
             new_content = fetch_url_text(url)
         except Exception as exc:
-            if _is_network_error(exc):
+            if _is_network_error(exc) or isinstance(exc, EmptyResponseError):
                 return CacheResult(path=cached_path, status=CacheStatus.STALE, page_name=page_name, url=url)
             raise
 
@@ -402,7 +403,7 @@ def fetch_or_cached(url: str, *, ttl_hours: float = 4.0, force: bool = False) ->
     try:
         new_content = fetch_url_text(url)
     except Exception as exc:
-        if _is_network_error(exc):
+        if _is_network_error(exc) or isinstance(exc, EmptyResponseError):
             if cached_path is not None:
                 # force=True but network down; serve stale.
                 return CacheResult(path=cached_path, status=CacheStatus.STALE, page_name=page_name, url=url)
