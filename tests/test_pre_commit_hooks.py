@@ -118,9 +118,20 @@ def test_skilllint_fix_hook_edits_once_then_is_idempotent(staged_repository: Pat
     assert skill_file.read_text(encoding="utf-8") == after_first_run
 
 
-def test_prek_smoke_runs_published_check_hook(staged_repository: Path) -> None:
+def test_pre_commit_smoke_runs_published_check_hook(staged_repository: Path) -> None:
     result = _run(
-        ["uv", "run", "prek", "try-repo", str(REPO_ROOT), "skilllint", "--files", "skills/my-skill/SKILL.md"],
+        [
+            "uv",
+            "run",
+            "--with",
+            "pre-commit",
+            "pre-commit",
+            "try-repo",
+            str(REPO_ROOT),
+            "skilllint",
+            "--files",
+            "skills/my-skill/SKILL.md",
+        ],
         staged_repository,
     )
 
