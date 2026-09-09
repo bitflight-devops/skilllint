@@ -412,7 +412,7 @@ def fetch_or_cached(url: str, *, ttl_hours: float = 4.0, force: bool = False) ->
             # Content unchanged — touch sidecar only.
             if (
                 sidecar is not None
-                and isinstance(sidecar.get("url"), str)
+                and sidecar.get("url") == url
                 and verify_integrity(cached_path).status is IntegrityStatus.INTACT
             ):
                 sidecar["fetched_at"] = utc_now_iso()

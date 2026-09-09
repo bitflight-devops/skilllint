@@ -480,6 +480,35 @@ class TestFetchOrCachedFresh:
         assert result.status == CacheStatus.UNCHANGED
         assert verify_integrity(md_path).status == IntegrityStatus.INTACT
 
+    @pytest.mark.parametrize(
+        "stored_url", ["", "https://example.com/docs/different-source.md"], ids=["empty", "mismatched"]
+    )
+    def test_fetch_or_cached_repairs_wrong_sidecar_url_to_an_intact_pair(
+        self, tmp_path: Path, mocker: MockerFixture, stored_url: str
+    ) -> None:
+        # Given
+        mocker.patch("skilllint.vendor_cache.SOURCES_DIR", tmp_path)
+        url = "https://example.com/docs/provenance.md"
+        content = "# Cached\nSome content."
+        md_path = _write_md(tmp_path, "provenance-2026-03-23-1000.md", content)
+        sidecar_path = _write_sidecar(
+            md_path,
+            url=stored_url,
+            sha256=hashlib.sha256(content.encode()).hexdigest(),
+            byte_count=len(content.encode()),
+            fetched_at=_stale_fetched_at(),
+        )
+        mock_fetch = mocker.patch("skilllint.vendor_cache.fetch_url_text", return_value=content)
+
+        # When
+        result = fetch_or_cached(url, ttl_hours=4.0)
+
+        # Then
+        mock_fetch.assert_called_once_with(url)
+        assert result.status == CacheStatus.UNCHANGED
+        assert json.loads(sidecar_path.read_text(encoding="utf-8"))["url"] == url
+        assert verify_integrity(md_path).status == IntegrityStatus.INTACT
+
 
 @pytest.mark.parametrize(
     (
