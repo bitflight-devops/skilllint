@@ -768,6 +768,24 @@ class TestRuntimeCacheRoot:
 
         assert _runtime_cache_root(worktree) == repo.resolve()
 
+    def test_installed_wheel_in_separate_git_dir_worktree_uses_primary_checkout(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        repo = tmp_path / "repo"
+        git_dir = tmp_path / "git-dir"
+        repo.mkdir()
+        _run_git(["init", "--initial-branch=main", f"--separate-git-dir={git_dir}"], cwd=repo)
+        _run_git(["config", "user.email", "test@example.com"], cwd=repo)
+        _run_git(["config", "user.name", "Test"], cwd=repo)
+        (repo / "file.txt").write_text("content\n", encoding="utf-8")
+        _run_git(["add", "."], cwd=repo)
+        _run_git(["commit", "-m", "initial commit"], cwd=repo)
+        worktree = tmp_path / "linked"
+        _run_git(["worktree", "add", str(worktree)], cwd=repo)
+        monkeypatch.setattr(vendor_io, "PROJECT_ROOT", tmp_path / "site-packages")
+
+        assert _runtime_cache_root(worktree) == repo.resolve()
+
     def test_installed_wheel_outside_git_uses_canonical_cwd(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
