@@ -145,6 +145,35 @@ description: Test skill with invalid name format
         assert result.exit_code == 2
         assert "Cannot use both" in result.stdout or "Cannot use both" in result.stderr
 
+    def test_exit_2_on_fix_with_platform_without_modifying_file(
+        self, cli_runner: CliRunner, tmp_path: Path, no_color_env: None
+    ) -> None:
+        """--fix with --platform is rejected before it can modify its target."""
+        skill_dir = tmp_path / "platform-fix-skill"
+        skill_dir.mkdir()
+        skill_file = skill_dir / "SKILL.md"
+        original_content = (
+            "---\n"
+            "name: platform-fix-skill\n"
+            "description: Use when testing the platform fix conflict.\n"
+            "tools:\n"
+            "  - Read\n"
+            "  - Write\n"
+            "---\n\n"
+            "# Skill\n"
+        )
+        skill_file.write_text(original_content, encoding="utf-8")
+
+        result = cli_runner.invoke(
+            plugin_validator.app, ["check", "--fix", "--platform", "claude-code", str(skill_file)]
+        )
+
+        assert result.exit_code == 2
+        assert (
+            "Cannot use --fix with --platform" in result.stdout or "Cannot use --fix with --platform" in result.stderr
+        )
+        assert skill_file.read_text(encoding="utf-8") == original_content
+
 
 class TestCheckFlag:
     """Test --check flag behavior (validate only, no fixes)."""

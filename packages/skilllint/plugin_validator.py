@@ -4558,6 +4558,14 @@ def main(
     if not paths:
         _show_help_and_exit(ctx, code=0)
 
+    if check and fix:
+        typer.echo("Error: Cannot use both --check and --fix flags", err=True)
+        raise typer.Exit(2) from None
+
+    if fix and platform:
+        typer.echo("Error: Cannot use --fix with --platform", err=True)
+        raise typer.Exit(2) from None
+
     # Validate that all provided paths exist; report non-existent ones
     bad_paths = [str(p) for p in paths if not p.exists()]
     if bad_paths:
@@ -4581,10 +4589,6 @@ def main(
 
         if tokens_only:
             _handle_tokens_only(expanded_paths, batch=is_batch)
-
-        if check and fix:
-            typer.echo("Error: Cannot use both --check and --fix flags", err=True)
-            raise typer.Exit(2) from None
 
         # One shared cache per scan run — prevents re-walking the directory
         # tree for every file when many files share the same config root.
