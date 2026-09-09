@@ -1,0 +1,143 @@
+name: Action integration
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  action-contract:
+    name: Composite Action contract
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Clean fixture
+        id: clean
+        uses: ./
+        with:
+          paths: packages/skilllint/tests/fixtures/claude_code/valid_skill.md
+          platform: claude-code
+          python-version: "3.11"
+          version: "1.19.2"
+
+      - name: Assert clean fixture
+        env:
+          ACTION_RESULT: ${{ steps.clean.outputs.result }}
+          ACTION_EXIT_CODE: ${{ steps.clean.outputs.exit-code }}
+          ACTION_INSPECTED_COUNT: ${{ steps.clean.outputs.inspected-count }}
+          ACTION_FINDINGS: ${{ steps.clean.outputs.findings }}
+          ACTION_TOOL_PYTHON: ${{ steps.clean.outputs.tool-python }}
+          ACTION_TOOL_VERSION: ${{ steps.clean.outputs.tool-version }}
+          EXPECTED_RESULT: passed
+          EXPECTED_EXIT_CODE: "0"
+          EXPECTED_INSPECTED_COUNT: "1"
+          EXPECTED_FINDING: ""
+          EXPECTED_PYTHON_VERSION: "3.11"
+          EXPECTED_PACKAGE_VERSION: "1.19.2"
+        run: python scripts/assert_action_contract.py
+
+      - name: Warning-only fixture
+        id: warning
+        uses: ./
+        with:
+          paths: tests/fixtures/action/agents/warning-agent.md
+          python-version: "3.11"
+          version: "1.19.2"
+
+      - name: Assert warning-only fixture
+        env:
+          ACTION_RESULT: ${{ steps.warning.outputs.result }}
+          ACTION_EXIT_CODE: ${{ steps.warning.outputs.exit-code }}
+          ACTION_INSPECTED_COUNT: ${{ steps.warning.outputs.inspected-count }}
+          ACTION_FINDINGS: ${{ steps.warning.outputs.findings }}
+          ACTION_TOOL_PYTHON: ${{ steps.warning.outputs.tool-python }}
+          ACTION_TOOL_VERSION: ${{ steps.warning.outputs.tool-version }}
+          EXPECTED_RESULT: passed
+          EXPECTED_EXIT_CODE: "0"
+          EXPECTED_INSPECTED_COUNT: "1"
+          EXPECTED_FINDING: AG003
+          EXPECTED_PYTHON_VERSION: "3.11"
+          EXPECTED_PACKAGE_VERSION: "1.19.2"
+        run: python scripts/assert_action_contract.py
+
+      - name: Zero-selected-file fixture
+        id: zero-selected
+        uses: ./
+        with:
+          paths: packages/skilllint/tests/fixtures/claude_code
+          filter: "*.does-not-exist"
+          python-version: "3.11"
+          version: "1.19.2"
+
+      - name: Assert zero-selected-file fixture
+        env:
+          ACTION_RESULT: ${{ steps.zero-selected.outputs.result }}
+          ACTION_EXIT_CODE: ${{ steps.zero-selected.outputs.exit-code }}
+          ACTION_INSPECTED_COUNT: ${{ steps.zero-selected.outputs.inspected-count }}
+          ACTION_FINDINGS: ${{ steps.zero-selected.outputs.findings }}
+          ACTION_TOOL_PYTHON: ${{ steps.zero-selected.outputs.tool-python }}
+          ACTION_TOOL_VERSION: ${{ steps.zero-selected.outputs.tool-version }}
+          EXPECTED_RESULT: passed
+          EXPECTED_EXIT_CODE: "0"
+          EXPECTED_INSPECTED_COUNT: "0"
+          EXPECTED_FINDING: ""
+          EXPECTED_PYTHON_VERSION: "3.11"
+          EXPECTED_PACKAGE_VERSION: "1.19.2"
+        run: python scripts/assert_action_contract.py
+
+      - name: Validation fixture
+        id: validation
+        continue-on-error: true
+        uses: ./
+        with:
+          paths: packages/skilllint/tests/fixtures/claude_code/invalid-skill/SKILL.md
+          platform: claude-code
+          python-version: "3.11"
+          version: "1.19.2"
+
+      - name: Assert validation fixture
+        env:
+          ACTION_RESULT: ${{ steps.validation.outputs.result }}
+          ACTION_EXIT_CODE: ${{ steps.validation.outputs.exit-code }}
+          ACTION_INSPECTED_COUNT: ${{ steps.validation.outputs.inspected-count }}
+          ACTION_FINDINGS: ${{ steps.validation.outputs.findings }}
+          ACTION_TOOL_PYTHON: ${{ steps.validation.outputs.tool-python }}
+          ACTION_TOOL_VERSION: ${{ steps.validation.outputs.tool-version }}
+          EXPECTED_RESULT: failed
+          EXPECTED_EXIT_CODE: "1"
+          EXPECTED_INSPECTED_COUNT: "1"
+          EXPECTED_FINDING: FM010
+          EXPECTED_PYTHON_VERSION: "3.11"
+          EXPECTED_PACKAGE_VERSION: "1.19.2"
+        run: python scripts/assert_action_contract.py
+
+      - name: Invalid usage fixture
+        id: usage
+        continue-on-error: true
+        uses: ./
+        with:
+          paths: packages/skilllint/tests/fixtures/claude_code/valid_skill.md
+          check-only: "true"
+          fix: "true"
+          python-version: "3.11"
+          version: "1.19.2"
+
+      - name: Assert invalid usage fixture
+        env:
+          ACTION_RESULT: ${{ steps.usage.outputs.result }}
+          ACTION_EXIT_CODE: ${{ steps.usage.outputs.exit-code }}
+          ACTION_INSPECTED_COUNT: ${{ steps.usage.outputs.inspected-count }}
+          ACTION_FINDINGS: ${{ steps.usage.outputs.findings }}
+          ACTION_TOOL_PYTHON: ${{ steps.usage.outputs.tool-python }}
+          ACTION_TOOL_VERSION: ${{ steps.usage.outputs.tool-version }}
+          EXPECTED_RESULT: failed
+          EXPECTED_EXIT_CODE: "2"
+          EXPECTED_INSPECTED_COUNT: ""
+          EXPECTED_FINDING: ""
+          EXPECTED_PYTHON_VERSION: "3.11"
+          EXPECTED_PACKAGE_VERSION: "1.19.2"
+        run: python scripts/assert_action_contract.py

@@ -96,6 +96,22 @@ outputs:
       0 = all checks passed, 1 = validation errors found, 2 = usage/configuration error.
     value: ${{ steps.run-skilllint.outputs.exit-code }}
 
+  inspected-count:
+    description: "Number of files inspected by skilllint."
+    value: ${{ steps.run-skilllint.outputs.inspected-count }}
+
+  findings:
+    description: "Distinct finding codes emitted by skilllint."
+    value: ${{ steps.run-skilllint.outputs.findings }}
+
+  tool-python:
+    description: "Python runtime used by the installed skilllint tool."
+    value: ${{ steps.run-skilllint.outputs.tool-python }}
+
+  tool-version:
+    description: "Version reported by the installed skilllint tool."
+    value: ${{ steps.run-skilllint.outputs.tool-version }}
+
 runs:
   using: "composite"
   steps:
@@ -114,11 +130,12 @@ runs:
       shell: bash
       env:
         INPUT_VERSION: ${{ inputs.version }}
+        INPUT_PYTHON_VERSION: ${{ inputs.python-version }}
       run: |
         if [ "${INPUT_VERSION}" = "latest" ]; then
-          uv tool install skilllint
+          uv tool install --python "${INPUT_PYTHON_VERSION}" skilllint
         else
-          uv tool install "skilllint==${INPUT_VERSION}"
+          uv tool install --python "${INPUT_PYTHON_VERSION}" "skilllint==${INPUT_VERSION}"
         fi
 
     - name: Run skilllint check
@@ -178,10 +195,19 @@ runs:
         # Paths (space-separated, split into individual arguments)
         read -ra PATH_ARGS <<< "${INPUT_PATHS}"
 
-        skilllint check "${ARGS[@]}" "${PATH_ARGS[@]}"
+        OUTPUT_FILE="$(mktemp)"
+        skilllint check "${ARGS[@]}" "${PATH_ARGS[@]}" >"${OUTPUT_FILE}" 2>&1
         EXIT_CODE=$?
 
+        cat "${OUTPUT_FILE}"
+
         echo "exit-code=${EXIT_CODE}" >> "$GITHUB_OUTPUT"
+        echo "inspected-count=$(sed -n 's/^Total files: \([0-9][0-9]*\)$/\1/p' "${OUTPUT_FILE}" | tail -n 1)" >> "$GITHUB_OUTPUT"
+        echo "findings=$(grep -oE '\[[A-Z]{2}[0-9]{3}\]' "${OUTPUT_FILE}" | tr -d '[]' | sort -u | xargs)" >> "$GITHUB_OUTPUT"
+        TOOL_PATH="$(command -v skilllint)"
+        TOOL_PYTHON="$(sed -n '1s/^#!//p' "${TOOL_PATH}")"
+        echo "tool-python=$("${TOOL_PYTHON}" --version)" >> "$GITHUB_OUTPUT"
+        echo "tool-version=$(skilllint --version)" >> "$GITHUB_OUTPUT"
         if [ "${EXIT_CODE}" -eq 0 ]; then
           echo "result=passed" >> "$GITHUB_OUTPUT"
         else
