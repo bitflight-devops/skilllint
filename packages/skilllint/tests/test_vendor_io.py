@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -970,6 +971,46 @@ class TestSharedCheckoutRoot:
         _run_git(["commit", "-m", "initial commit"], cwd=primary)
         linked = tmp_path / "linked"
         _run_git(["worktree", "add", str(linked)], cwd=primary)
+
+        assert _shared_checkout_root(linked) == linked.resolve()
+
+    def test_separate_git_dir_falls_back_without_recursively_scanning_ancestors(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        linked = tmp_path / "linked"
+        linked.mkdir()
+        git_dir = tmp_path / "git-dir"
+        git_dir.mkdir()
+        worktree_git_dir = git_dir / "worktrees" / "linked"
+        worktree_git_dir.mkdir(parents=True)
+        (linked / ".git").write_text(f"gitdir: {worktree_git_dir}\n", encoding="utf-8")
+        (worktree_git_dir / "commondir").write_text("../..\n", encoding="utf-8")
+
+        monkeypatch.setattr(
+            os,
+            "walk",
+            lambda *_args, **_kwargs: pytest.fail("cache-root resolution must not recursively scan ancestors"),
+        )
+
+        assert _shared_checkout_root(linked) == linked.resolve()
+
+    def test_separate_git_dir_falls_back_when_commonpath_is_unavailable(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        linked = tmp_path / "linked"
+        linked.mkdir()
+        git_dir = tmp_path / "git-dir"
+        git_dir.mkdir()
+        worktree_git_dir = git_dir / "worktrees" / "linked"
+        worktree_git_dir.mkdir(parents=True)
+        (linked / ".git").write_text(f"gitdir: {worktree_git_dir}\n", encoding="utf-8")
+        (worktree_git_dir / "commondir").write_text("../..\n", encoding="utf-8")
+
+        monkeypatch.setattr(
+            os.path,
+            "commonpath",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("paths are on different drives")),
+        )
 
         assert _shared_checkout_root(linked) == linked.resolve()
 
