@@ -921,6 +921,24 @@ class TestRuntimeCacheRoot:
 
         assert _runtime_cache_root(worktree) == repo.resolve()
 
+    def test_installed_wheel_in_separate_git_dir_worktree_uses_primary_checkout(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        repo = tmp_path / "repo"
+        git_dir = tmp_path / "git-dir"
+        repo.mkdir()
+        _run_git(["init", "--initial-branch=main", f"--separate-git-dir={git_dir}"], cwd=repo)
+        _run_git(["config", "user.email", "test@example.com"], cwd=repo)
+        _run_git(["config", "user.name", "Test"], cwd=repo)
+        (repo / "file.txt").write_text("content\n", encoding="utf-8")
+        _run_git(["add", "."], cwd=repo)
+        _run_git(["commit", "-m", "initial commit"], cwd=repo)
+        worktree = tmp_path / "linked"
+        _run_git(["worktree", "add", str(worktree)], cwd=repo)
+        monkeypatch.setattr(vendor_io, "PROJECT_ROOT", tmp_path / "site-packages")
+
+        assert _runtime_cache_root(worktree) == repo.resolve()
+
     def test_installed_wheel_outside_git_uses_canonical_cwd(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -1124,12 +1142,25 @@ class TestSharedCheckoutRoot:
         # Act
         result = _shared_checkout_root(bare_worktree)
 
-        # Assert — the bare repo's directory has no working-tree parent of its
-        # own, so the resolved commondir's parent is the bare repo's *parent*
-        # directory. This is the algorithm's defined, deterministic behaviour
-        # for this topology, not a meaningful "primary checkout" in the
-        # linked-worktree sense.
-        assert result == bare.resolve().parent
+        assert result == bare_worktree
+
+    def test_separate_git_dir_nested_in_unrelated_checkout_uses_its_primary(self, tmp_path: Path) -> None:
+        unrelated = tmp_path / "unrelated"
+        unrelated.mkdir()
+        _init_repo_with_commit(unrelated)
+        primary = tmp_path / "primary"
+        primary.mkdir()
+        git_dir = unrelated / "project.git"
+        _run_git(["init", "--initial-branch=main", f"--separate-git-dir={git_dir}"], cwd=primary)
+        _run_git(["config", "user.email", "test@example.com"], cwd=primary)
+        _run_git(["config", "user.name", "Test"], cwd=primary)
+        (primary / "file.txt").write_text("content\n", encoding="utf-8")
+        _run_git(["add", "."], cwd=primary)
+        _run_git(["commit", "-m", "initial commit"], cwd=primary)
+        linked = tmp_path / "linked"
+        _run_git(["worktree", "add", str(linked)], cwd=primary)
+
+        assert _shared_checkout_root(linked) == primary.resolve()
 
     def test_malformed_gitdir_content_returns_start_unchanged(self, tmp_path: Path) -> None:
         """A .git file with unreadable/garbage gitdir content returns start unchanged.
