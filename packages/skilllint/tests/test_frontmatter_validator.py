@@ -360,6 +360,19 @@ class TestFrontmatterAutoFix:
         assert validator.fix(agent_md) == []
         assert agent_md.read_text(encoding="utf-8") == original
 
+    def test_fix_leaves_empty_tool_list_entries_unchanged(self, tmp_path: Path) -> None:
+        agent_md = tmp_path / "agents" / "tool-list.md"
+        agent_md.parent.mkdir()
+        original = (
+            '---\nname: tool-list\ndescription: Empty tool-list verification.\ntools: ["", Workflow]\n---\nBody.\n'
+        )
+        agent_md.write_text(original, encoding="utf-8")
+
+        validator = FrontmatterValidator()
+
+        assert validator.fix(agent_md) == []
+        assert agent_md.read_text(encoding="utf-8") == original
+
     @pytest.mark.parametrize(
         ("relative_path", "field_name"),
         [

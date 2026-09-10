@@ -2413,7 +2413,11 @@ class FrontmatterValidator:
         tool_fields = {"tools", "disallowedTools", "allowed-tools"}
         for field_name in tool_fields:
             original_value = original_data.get(field_name)
-            if isinstance(original_value, list):
+            if isinstance(original_value, list) and all(
+                str(value) and "," not in str(value) and not re.search(r"\s", str(value))
+                for value in original_value
+                if value is not None
+            ):
                 normalized_dict[field_name] = ", ".join(str(x) for x in original_value if x is not None)
                 fixes.append(f"Converted {field_name} from YAML array to comma-separated string")
         for key, value in normalized_dict.items():
