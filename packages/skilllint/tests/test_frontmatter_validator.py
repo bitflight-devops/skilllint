@@ -267,6 +267,32 @@ class TestFrontmatterAutoFix:
         assert validator.validate(agent_md).errors == []
 
     @pytest.mark.parametrize(
+        "tool_yaml",
+        ["defaults: &defaults {tools: [Read, Grep]}\n<<: *defaults", "? tools\n: [Read, Grep]", 'tools: ["*"]'],
+    )
+    def test_fix_preserves_yaml_syntax_for_nonstandard_tool_lists(self, tmp_path: Path, tool_yaml: str) -> None:
+        agent_md = tmp_path / "agents" / "tool-list.md"
+        agent_md.parent.mkdir()
+        agent_md.write_text(
+            "---\n"
+            "name: tool-list\n"
+            "description: Use this agent when testing tool-list YAML.\n"
+            f"{tool_yaml}\n"
+            "---\n"
+            "Body.\n",
+            encoding="utf-8",
+        )
+
+        validator = FrontmatterValidator()
+        validator.fix(agent_md)
+
+        fixed = agent_md.read_text(encoding="utf-8")
+        assert validator.validate(agent_md).errors == []
+        assert all(issue.code != "FM007" for issue in validator.validate(agent_md).warnings)
+        assert validator.fix(agent_md) == []
+        assert agent_md.read_text(encoding="utf-8") == fixed
+
+    @pytest.mark.parametrize(
         ("relative_path", "field_name"),
         [
             ("skills/tool-list/SKILL.md", "allowed-tools"),

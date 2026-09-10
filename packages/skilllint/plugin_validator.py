@@ -234,14 +234,20 @@ def _replace_list_valued_tool_fields(frontmatter_text: str, data: dict[str, Yaml
             and isinstance(value, list)
             and isinstance(value_node, SequenceNode)
         ):
+            separator = frontmatter_text[key_node.end_mark.index : value_node.start_mark.index]
             if (
                 value_node.start_mark.index < key_node.end_mark.index
                 or "&" in frontmatter_text[key_node.end_mark.index : value_node.end_mark.index]
+                or not separator.startswith(":")
             ):
                 return None
-            replacement_value = ", ".join(str(item) for item in value) or "''"
+            scalar_buffer = StringIO()
+            _rt_yaml.dump({"value": ", ".join(str(item) for item in value)}, scalar_buffer)
+            replacement_value = scalar_buffer.getvalue().removeprefix("value: ").rstrip()
             replacements.append((key_node.end_mark.index, value_node.end_mark.index, f": {replacement_value}"))
 
+    if not replacements:
+        return None
     for start, end, replacement in reversed(replacements):
         frontmatter_text = f"{frontmatter_text[:start]}{replacement}{frontmatter_text[end:]}"
     return frontmatter_text
