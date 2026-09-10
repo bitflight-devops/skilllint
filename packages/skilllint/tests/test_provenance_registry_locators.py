@@ -205,6 +205,27 @@ def test_claim_locators_reject_scalar_type_changes(monkeypatch: pytest.MonkeyPat
         test_claim_locators_resolve_and_values_match()
 
 
+def test_claim_locators_reject_non_string_expected_enum_members(monkeypatch: pytest.MonkeyPatch) -> None:
+    claims = [
+        (
+            "schema.numeric_enum_member",
+            {
+                "assertion_location": {
+                    "file": "packages/skilllint/schemas/agentskills_io/v1.json",
+                    "symbol": "$.required",
+                    "source_type": "schema_json_enum",
+                },
+                "expected_value": [1],
+            },
+        )
+    ]
+    monkeypatch.setattr(sys.modules[__name__], "_iter_claims", lambda: claims)
+    monkeypatch.setattr(sys.modules[__name__], "_resolve_schema_json_location", lambda _claim, _location: ["1"])
+
+    with pytest.raises(AssertionError, match="only strings"):
+        test_claim_locators_resolve_and_values_match()
+
+
 def test_claim_locators_resolve_and_values_match() -> None:
     for claim_id, claim in _iter_claims():
         location = claim["assertion_location"]
@@ -231,6 +252,12 @@ def test_claim_locators_resolve_and_values_match() -> None:
                 raise AssertionError(f"{claim_id}: unrecognized source_type '{source_type}'")
 
         assert "expected_value" in claim, f"{claim_id}: missing expected_value"
+        if source_type == "schema_json_enum":
+            expected_members = claim["expected_value"]
+            assert isinstance(expected_members, list), f"{claim_id}: schema_json_enum expected_value must be an array"
+            assert all(isinstance(member, str) for member in expected_members), (
+                f"{claim_id}: schema_json_enum expected_value must contain only strings"
+            )
         actual = _normalize(target)
         expected = _normalize(claim["expected_value"])
         assert type(actual) is type(expected), (
