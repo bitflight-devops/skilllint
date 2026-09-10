@@ -3019,18 +3019,8 @@ class PluginRegistrationValidator:
 
         try:
             plugin_config = msgspec.json.decode(plugin_json_path.read_bytes())
-        except msgspec.DecodeError as e:
-            errors.append(
-                ValidationIssue(
-                    field="plugin.json",
-                    severity="error",
-                    message=f"Invalid JSON: {e}",
-                    code=PL002,
-                    docs_url=generate_docs_url(PL002),
-                    suggestion="Fix JSON syntax errors",
-                )
-            )
-            return ValidationResult(passed=False, errors=errors, warnings=warnings, info=info)
+        except msgspec.DecodeError:
+            return ValidationResult(passed=True, errors=errors, warnings=warnings, info=info)
 
         if not isinstance(plugin_config, dict):
             errors.append(

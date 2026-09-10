@@ -171,6 +171,18 @@ description: Test skill with invalid name format
 
 
 class TestPluginRegistrationRoutes:
+    def test_malformed_plugin_manifest_reports_pl002_once(
+        self, cli_runner: CliRunner, tmp_path: Path, no_color_env: None
+    ) -> None:
+        plugin = tmp_path / "plugin"
+        (plugin / ".claude-plugin").mkdir(parents=True)
+        (plugin / ".claude-plugin" / "plugin.json").write_text("{")
+
+        result = cli_runner.invoke(plugin_validator.app, ["check", "--no-color", str(plugin)])
+
+        assert result.exit_code == 1, result.stdout
+        assert result.stdout.count("[PL002]") == 1
+
     def test_absolute_agent_directory_reports_pl004_without_crashing(
         self, cli_runner: CliRunner, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, no_color_env: None
     ) -> None:
