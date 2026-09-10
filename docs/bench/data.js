@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788996360159,
+  "lastUpdate": 1789003847543,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -2514,6 +2514,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 137.588,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "stack@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "0945cf4204e7782aa3cbad9c42ddff5040ce3481",
+          "message": "Merge pull request #247 from bitflight-devops/team/team-ada89d5b/Y\n\ntest(provenance): make HK002/HK003 refresh outcomes deterministic",
+          "timestamp": "2026-09-10T01:27:51Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/0945cf4204e7782aa3cbad9c42ddff5040ce3481"
+        },
+        "date": 1789003846923,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 11333.88,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 12006.012,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 13108.786,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 83.375,
             "unit": "files/s"
           }
         ]
