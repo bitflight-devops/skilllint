@@ -439,14 +439,7 @@ class TestFetchOrCachedStale:
         assert result.status == CacheStatus.UNCHANGED
         assert result.path == md_path  # same path, no new file
 
-    def test_fetch_or_cached_unchanged_updates_sidecar_fetched_at(self, tmp_path: Path, mocker: MockerFixture) -> None:
-        """fetch_or_cached touches the sidecar fetched_at when content is unchanged.
-
-        Tests: fetch_or_cached sidecar touch on UNCHANGED
-        How: Record the old fetched_at, trigger UNCHANGED, assert sidecar was updated.
-        Why: Updating fetched_at resets the TTL clock so the next call also gets a
-             fresh hit instead of repeatedly re-fetching unchanged content.
-        """
+    def test_fetch_or_cached_unchanged_rebuilds_sidecar(self, tmp_path: Path, mocker: MockerFixture) -> None:
         # Arrange
         mocker.patch("skilllint.vendor_cache.SOURCES_DIR", tmp_path)
         url = "https://example.com/docs/touchpage.md"
@@ -456,9 +449,9 @@ class TestFetchOrCachedStale:
         md_path = _write_md(tmp_path, "touchpage-2026-01-01-0000.md", content)
         sidecar_path = _write_sidecar(
             md_path,
-            url=url,
-            sha256=hashlib.sha256(content.encode()).hexdigest(),
-            byte_count=len(content.encode()),
+            url="https://example.com/docs/stale-provenance.md",
+            sha256="stale",
+            byte_count=0,
             fetched_at=old_fetched_at,
         )
 
@@ -470,6 +463,9 @@ class TestFetchOrCachedStale:
         # Assert
         updated = json.loads(sidecar_path.read_text(encoding="utf-8"))
         assert updated["fetched_at"] != old_fetched_at
+        assert updated["url"] == url
+        assert updated["sha256"] == hashlib.sha256(content.encode()).hexdigest()
+        assert updated["byte_count"] == len(content.encode())
 
     def test_fetch_or_cached_returns_stale_when_network_unavailable(
         self, tmp_path: Path, mocker: MockerFixture

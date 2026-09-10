@@ -209,7 +209,7 @@ Result status returned by `fetch_or_cached()`.
 |-------|-------------|
 | `FRESH` | Within TTL; served from on-disk cache without a network request |
 | `REFRESHED` | Was stale; re-fetched successfully; content changed on remote |
-| `UNCHANGED` | Was stale; re-fetched successfully; content identical to cached copy; sidecar touched with new timestamp |
+| `UNCHANGED` | Was stale; re-fetched successfully; content identical to cached copy; sidecar rebuilt from fetched metadata |
 | `STALE` | Was stale and network unavailable; served from cache anyway |
 | `NEW` | First fetch; no prior cache existed |
 
@@ -442,7 +442,7 @@ def fetch_or_cached(url: str, *, ttl_hours: float = 4.0, force: bool = False) ->
    - **Fresh (age < TTL)**: Return status=`FRESH`, path=cached file
    - **Stale (age >= TTL)**: Attempt network fetch
      - Network OK, content changed: Write new timestamped file, return status=`REFRESHED`
-     - Network OK, content identical: Update `fetched_at` in sidecar only, return status=`UNCHANGED`
+     - Network OK, content identical: Rebuild the sidecar from fetched metadata, return status=`UNCHANGED`
      - Network failure (ConnectError, TimeoutException, HTTPError): Serve stale copy, return status=`STALE`
 
 4. **If cached file exists and force=True**:

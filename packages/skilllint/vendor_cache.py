@@ -323,8 +323,8 @@ def fetch_or_cached(url: str, *, ttl_hours: float = 4.0, force: bool = False) ->
 
           - Network OK, content changed → write a new timestamped file →
             :attr:`CacheStatus.REFRESHED`.
-          - Network OK, content identical → update ``fetched_at`` in the
-            existing sidecar only → :attr:`CacheStatus.UNCHANGED`.
+          - Network OK, content identical → rebuild the existing sidecar from
+            the fetched content → :attr:`CacheStatus.UNCHANGED`.
           - Network failure (connect error, timeout, HTTP error) → return the
             stale copy as :attr:`CacheStatus.STALE`.
 
