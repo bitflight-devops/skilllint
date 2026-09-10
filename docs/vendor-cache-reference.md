@@ -860,7 +860,7 @@ Write a `.meta.json` sidecar alongside a saved file.
 **Signature**
 
 ```python
-def write_sidecar(md_path: Path, *, url: str, content: str) -> Path:
+def write_sidecar(md_path: Path, *, url: str, content: str, fetched_at: datetime | None = None) -> Path:
 ```
 
 **Parameters**
@@ -870,6 +870,7 @@ def write_sidecar(md_path: Path, *, url: str, content: str) -> Path:
 | `md_path` | `Path` | Path to the saved content file (typically a `.md` file) |
 | `url` | `str` | The URL the content was fetched from |
 | `content` | `str` | The raw text content that was saved |
+| `fetched_at` | `datetime \| None` | Timestamp to record; defaults to the current UTC time |
 
 **Returns**
 
@@ -894,7 +895,7 @@ Load the `.meta.json` sidecar for a given file path.
 **Signature**
 
 ```python
-def load_sidecar(md_path: Path) -> dict[str, Any] | None:
+def load_sidecar(md_path: Path) -> SidecarMetadata | None:
 ```
 
 **Parameters**
@@ -905,7 +906,8 @@ def load_sidecar(md_path: Path) -> dict[str, Any] | None:
 
 **Returns**
 
-`dict[str, Any] | None` — Parsed sidecar dict, or `None` if the sidecar is missing or corrupt
+`SidecarMetadata | None` — Validated sidecar metadata, or `None` if the sidecar is missing or malformed.
+Use its `url`, `fetched_at`, `sha256`, and `byte_count` attributes rather than mapping access.
 
 #### utc_now_iso
 

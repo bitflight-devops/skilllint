@@ -53,7 +53,6 @@ from skilllint.vendor_io import (
     read_text_or_none,
     sha256_hex,
     utc_now_iso,
-    write_json,
     write_sidecar,
 )
 
@@ -213,12 +212,9 @@ def _is_network_error(exc: Exception) -> bool:
     return isinstance(exc, (httpx.ConnectError, httpx.TimeoutException, httpx.HTTPError))
 
 
-def _age_hours(fetched_at_iso: str) -> float:
-    """Return age in hours between *fetched_at_iso* and now (UTC)."""
-    try:
-        fetched_at = datetime.fromisoformat(fetched_at_iso)
-    except (ValueError, TypeError):
-        # Treat unparseable timestamps as maximally stale.
+def _age_hours(fetched_at: datetime | None) -> float:
+    """Return age in hours between validated *fetched_at* and now (UTC)."""
+    if fetched_at is None:
         return float("inf")
     now = datetime.now(UTC)
     delta = now - fetched_at
@@ -367,7 +363,7 @@ def fetch_or_cached(url: str, *, ttl_hours: float = 4.0, force: bool = False) ->
 
     if cached_path is not None:
         sidecar = load_sidecar(cached_path)
-        fetched_at = sidecar.get("fetched_at", "") if sidecar else ""
+        fetched_at = sidecar.fetched_at if sidecar else None
         age = _age_hours(fetched_at)
 
         if not force and age < ttl_hours:
@@ -385,10 +381,14 @@ def fetch_or_cached(url: str, *, ttl_hours: float = 4.0, force: bool = False) ->
         old_content = read_text_or_none(cached_path) or ""
         if sha256_hex(new_content) == sha256_hex(old_content):
             # Content unchanged — touch sidecar only.
-            if sidecar is not None:
-                sidecar["fetched_at"] = utc_now_iso()
-                sidecar_path = cached_path.with_suffix(".meta.json")
-                write_json(sidecar_path, sidecar)
+            if (
+                sidecar is not None
+                and sidecar.url == url
+                and verify_integrity(cached_path).status is IntegrityStatus.INTACT
+            ):
+                write_sidecar(
+                    cached_path, url=url, content=new_content, fetched_at=datetime.fromisoformat(utc_now_iso())
+                )
             else:
                 write_sidecar(cached_path, url=url, content=new_content)
             return CacheResult(path=cached_path, status=CacheStatus.UNCHANGED, page_name=page_name, url=url)
@@ -646,8 +646,8 @@ def verify_integrity(file_path: Path) -> IntegrityResult:
             expected_bytes=None,
         )
 
-    expected_sha256: str | None = sidecar.get("sha256")
-    expected_bytes: int | None = sidecar.get("byte_count")
+    expected_sha256 = sidecar.sha256
+    expected_bytes = sidecar.byte_count
 
     if computed_sha256 == expected_sha256 and computed_bytes == expected_bytes:
         status = IntegrityStatus.INTACT
