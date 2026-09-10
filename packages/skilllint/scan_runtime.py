@@ -377,7 +377,9 @@ def _discover_platform_paths(directory: Path, adapter: PlatformAdapter) -> list[
         discovered.update(
             target
             for target in semantic_targets
-            if (target / ".claude-plugin" / "marketplace.json").is_file() or _is_skill_folder(target)
+            if (target / ".claude-plugin" / "marketplace.json").is_file()
+            or _is_skill_folder(target)
+            or target.name == "SKILL.md"
         )
     return sorted(discovered)
 

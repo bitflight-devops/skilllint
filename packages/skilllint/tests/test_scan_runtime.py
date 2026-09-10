@@ -593,6 +593,20 @@ class TestResolveFilterAndExpandPaths:
         assert plugin_dir / "skills" / "folder/SKILL.md" not in discovered
         assert direct in discovered
 
+    def test_platform_discovery_preserves_manifest_declared_custom_skill_file(self, tmp_path: Path) -> None:
+        plugin_dir = tmp_path / "my-plugin"
+        (plugin_dir / ".claude-plugin").mkdir(parents=True)
+        custom_skill = plugin_dir / "components" / "foo" / "SKILL.md"
+        custom_skill.parent.mkdir(parents=True)
+        custom_skill.write_text("---\ndescription: custom\n---\n# Custom\n")
+        (plugin_dir / ".claude-plugin" / "plugin.json").write_text(
+            '{"name": "my-plugin", "skills": ["components/foo/SKILL.md"]}'
+        )
+
+        discovered, _ = _resolve_filter_and_expand_paths([plugin_dir], None, None, platform_adapter=ClaudeCodeAdapter())
+
+        assert discovered == [plugin_dir, custom_skill]
+
     def test_platform_validation_normalizes_skill_folder(self, tmp_path: Path) -> None:
         import typer
 
