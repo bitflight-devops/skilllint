@@ -67,7 +67,11 @@ def _executable(venv_path: Path, name: str) -> Path:
 
 def _environment(cache_directory: Path) -> dict[str, str]:
     return {
-        **{key: value for key, value in os.environ.items() if key != "PYTHONPATH"},
+        **{
+            key: value
+            for key, value in os.environ.items()
+            if key.upper() not in {"NO_PROXY", "PYTHONPATH", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"}
+        },
         "ALL_PROXY": "http://127.0.0.1:1",
         "DATA_GYM_CACHE_DIR": str(cache_directory),
         "HTTP_PROXY": "http://127.0.0.1:1",
