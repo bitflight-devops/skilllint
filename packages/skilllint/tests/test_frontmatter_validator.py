@@ -301,7 +301,7 @@ class TestFrontmatterAutoFix:
             "description: Use this agent when testing tool-list YAML.\n"
             "tools:\n"
             "  # required for search\n"
-            "  - Grep # search tool\n"
+            "  - Grep # #TODO\n"
             "  - Read\n"
             "---\n"
             "Body.\n",
@@ -313,7 +313,7 @@ class TestFrontmatterAutoFix:
 
         fixed = agent_md.read_text(encoding="utf-8")
         assert "# required for search" in fixed
-        assert "# search tool" in fixed
+        assert "# #TODO" in fixed
         assert all(issue.code != "FM007" for issue in validator.validate(agent_md).warnings)
 
     @pytest.mark.parametrize(

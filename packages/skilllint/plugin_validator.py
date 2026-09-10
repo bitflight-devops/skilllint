@@ -257,7 +257,7 @@ def _replace_list_valued_tool_fields(frontmatter_text: str, data: dict[str, Yaml
 
 def _comment_lines(comment_data: object) -> list[str]:
     if isinstance(comment_data, CommentToken):
-        return [line.lstrip("# ") for line in comment_data.value.splitlines()]
+        return [line.removeprefix("#").removeprefix(" ") for line in comment_data.value.splitlines()]
     if isinstance(comment_data, list):
         return [line for item in comment_data for line in _comment_lines(item)]
     if isinstance(comment_data, tuple):
