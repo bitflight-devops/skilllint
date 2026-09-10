@@ -326,7 +326,15 @@ class TestCLIProviderIntegration:
     def test_cli_platform_cursor_exits_success(self) -> None:
         """skilllint check --platform cursor on valid fixtures exits 0."""
         result = subprocess.run(
-            [sys.executable, "-m", "skilllint.plugin_validator", "check", "--platform", "cursor", str(CURSOR_FIXTURES)],
+            [
+                sys.executable,
+                "-m",
+                "skilllint.plugin_validator",
+                "check",
+                "--platform",
+                "cursor",
+                str(CURSOR_FIXTURES / "valid_rule.mdc"),
+            ],
             capture_output=True,
             text=True,
             check=False,
