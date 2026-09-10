@@ -354,7 +354,7 @@ def _discover_validatable_paths(directory: Path) -> list[Path]:
 def _platform_matching_paths(paths: list[Path], directory: Path, adapter: PlatformAdapter | None) -> list[Path]:
     if adapter is None:
         return paths
-    return [path for path in paths if path.is_file() and matches_file(adapter, path.relative_to(directory))]
+    return [path for path in paths if path.is_file() and matches_file(adapter, path)]
 
 
 def _discover_platform_paths(directory: Path, adapter: PlatformAdapter) -> list[Path]:

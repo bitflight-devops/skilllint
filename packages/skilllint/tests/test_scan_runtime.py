@@ -426,12 +426,16 @@ class TestResolveFilterAndExpandPaths:
         (direct_skill / "SKILL.md").write_text("# Direct skill\n")
 
         provider_paths, _ = _resolve_filter_and_expand_paths([provider], None, None, platform_adapter=CodexAdapter())
+        filtered_provider_paths, _ = _resolve_filter_and_expand_paths(
+            [provider], None, "skills", platform_adapter=CodexAdapter()
+        )
         plugin_paths, _ = _resolve_filter_and_expand_paths([plugin], None, None, platform_adapter=ClaudeCodeAdapter())
         direct_skill_paths, _ = _resolve_filter_and_expand_paths(
             [direct_skill], None, None, platform_adapter=CursorAdapter()
         )
 
         assert provider_paths == [provider_skill]
+        assert filtered_provider_paths == [provider_skill]
         assert plugin_paths == [plugin]
         assert direct_skill_paths == [direct_skill]
 
