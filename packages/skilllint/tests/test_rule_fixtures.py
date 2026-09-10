@@ -38,6 +38,8 @@ from skilllint.scan_runtime import _discover_validatable_paths, _load_plugin_jso
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from pytest_mock import MockerFixture
+
 # ---------------------------------------------------------------------------
 # Module-level fixture discovery
 # ---------------------------------------------------------------------------
@@ -140,6 +142,16 @@ def _clear_plugin_json_cache() -> None:
             as a defensive measure against future refactors that reuse paths.
     """
     _load_plugin_json.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def _controlled_claude_plugin_validation(mocker: MockerFixture) -> None:
+    mocker.patch(
+        "skilllint.plugin_validator._run_claude_plugin_validate",
+        return_value=subprocess.CompletedProcess(
+            args=["claude", "plugin", "validate"], returncode=0, stdout="validation passed", stderr=""
+        ),
+    )
 
 
 @pytest.fixture
