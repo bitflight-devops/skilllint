@@ -31,40 +31,6 @@
         "source": "packages/skilllint/schemas/agentskills_io/v1.json"
       }
     },
-    "FM001.required_fields": {
-      "rule_code": "FM001",
-      "claim_name": "required_fields",
-      "description": "Required Agent Skills frontmatter fields",
-      "claim_type": "enum_set",
-      "authority": {
-        "vendor_file": "packages/skilllint/schemas/agentskills_io/v1.json",
-        "anchor_selector": null,
-        "authority_url": "https://agentskills.io/specification"
-      },
-      "extraction": {
-        "prompt_template": "Extract the required skill frontmatter field names from the JSON schema. Return a JSON array of strings. {{section}}",
-        "output_schema": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "post_processing": "sort"
-      },
-      "assertion_location": {
-        "file": "packages/skilllint/schemas/agentskills_io/v1.json",
-        "symbol": "$.required",
-        "source_type": "schema_json_enum"
-      },
-      "expected_value": [
-        "name",
-        "description"
-      ],
-      "x-audited": {
-        "date": "2026-03-14",
-        "source": "packages/skilllint/schemas/agentskills_io/v1.json"
-      }
-    },
     "FM007.tool_field_names": {
       "rule_code": "FM007",
       "claim_name": "tool_field_names",

@@ -86,7 +86,7 @@ def _resolve_schema_json_location(claim_id: str, location: dict[str, str]) -> ob
     ("source_type", "symbol", "expected_value"),
     [
         ("schema_json_field", "$.properties.name.maxLength", 64),
-        ("schema_json_enum", "$.required", ["name", "description"]),
+        ("schema_json_enum", "$.required", ["description", "name"]),
     ],
 )
 def test_schema_json_locators_resolve_values(source_type: str, symbol: str, expected_value: object) -> None:
@@ -96,7 +96,14 @@ def test_schema_json_locators_resolve_values(source_type: str, symbol: str, expe
         "source_type": source_type,
     }
 
-    assert _resolve_schema_json_location("schema locator", location) == expected_value
+    actual = _resolve_schema_json_location("schema locator", location)
+    assert _normalize(actual) == _normalize(expected_value)
+
+
+def test_registry_does_not_attribute_agentskills_required_fields_to_fm001() -> None:
+    registry = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
+
+    assert "FM001.required_fields" not in registry["claims"]
 
 
 @pytest.mark.parametrize(
