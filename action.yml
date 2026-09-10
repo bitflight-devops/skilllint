@@ -215,7 +215,7 @@ runs:
 
         echo "exit-code=${EXIT_CODE}" >> "$GITHUB_OUTPUT"
         echo "inspected-count=${INSPECTED_COUNT}" >> "$GITHUB_OUTPUT"
-        echo "findings=$(grep -oE '[A-Z]{2}[0-9]{3}' "${OUTPUT_FILE}" | sort -u | xargs)" >> "$GITHUB_OUTPUT"
+        echo "findings=$(grep -oE '\[[A-Z]{2}[0-9]{3}(, [A-Z]{2}[0-9]{3})*\]' "${OUTPUT_FILE}" | tr -d '[],' | tr ' ' '\n' | sort -u | xargs)" >> "$GITHUB_OUTPUT"
         TOOL_PATH="$(command -v skilllint)"
         TOOL_PYTHON="$(sed -n '1s/^#!//p' "${TOOL_PATH}")"
         echo "tool-python=$("${TOOL_PYTHON}" --version)" >> "$GITHUB_OUTPUT"
