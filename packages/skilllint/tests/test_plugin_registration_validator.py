@@ -304,6 +304,20 @@ class TestUnregisteredAgent:
         pr001_warnings = [w for w in result.warnings if w.code == "PR001"]
         assert len(pr001_warnings) == 0
 
+    def test_normalized_registered_agent_directory_has_no_pr001(self, tmp_path: Path) -> None:
+        plugin_dir = _make_plugin(
+            tmp_path,
+            plugin_json_content=msgspec.json.encode({
+                "name": "test-plugin",
+                "agents": ["./aliases/../agents"],
+            }).decode(),
+        )
+        _add_agent(plugin_dir, "my-agent")
+
+        result = PluginRegistrationValidator().validate(plugin_dir)
+
+        assert not [warning for warning in result.warnings if warning.code == "PR001"]
+
     def test_no_pr001_for_unregistered_agent_when_agents_field_absent(self, tmp_path: Path) -> None:
         """Test no PR001 warning for an agent when 'agents' is absent from plugin.json.
 

@@ -3772,12 +3772,16 @@ def _collect_validator_results(
         List of (validator_class_name, result) tuples.
     """
     results: list[tuple[str, ValidationResult]] = []
+    reported_plugin_structure_codes: set[str] = set()
     for validator in validators:
         name = type(validator).__name__
         if policy is not None and isinstance(validator, (ComplexityValidator, AsSeriesValidator)):
             result = validator.validate(path, policy)
         else:
             result = validator.validate(path)
+        if name == "PluginRegistrationValidator" and "PL004" in reported_plugin_structure_codes:
+            errors = [issue for issue in result.errors if issue.code != "PL004"]
+            result = ValidationResult(passed=not errors, errors=errors, warnings=result.warnings, info=result.info)
         if policy is not None and policy.severity:
 
             def remap(issue: ValidationIssue) -> ValidationIssue:
@@ -3808,6 +3812,8 @@ def _collect_validator_results(
             raw_codes_out.update(str(i.code) for i in (*result.errors, *result.warnings, *result.info))
         if config_root is not None:
             result = _filter_result_by_ignore(result, path, config_root, ignore_config)
+        if name == "PluginStructureValidator":
+            reported_plugin_structure_codes.update(str(issue.code) for issue in result.errors)
         results.append((name, result))
     return results
 

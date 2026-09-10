@@ -875,16 +875,19 @@ class TestDiscoverPluginPaths:
 
         assert tmp_path / "skills" / "ghost-skill" not in result
 
-    @pytest.mark.parametrize("reference", ["../external/agents", "/tmp/skilllint-external-agents"])
-    def test_manifest_driven_skips_agent_directory_outside_plugin_root(self, tmp_path: Path, reference: str) -> None:
-        external_agents = tmp_path.parent / "external" / "agents"
-        if reference.startswith("/"):
-            external_agents = Path(reference)
+    @pytest.mark.parametrize("absolute_reference", [False, True])
+    def test_manifest_driven_skips_agent_directory_outside_plugin_root(
+        self, tmp_path: Path, absolute_reference: bool
+    ) -> None:
+        external_agents = tmp_path / "external" / "agents"
+        reference = str(external_agents) if absolute_reference else "../external/agents"
+        plugin_root = tmp_path / "plugin"
+        plugin_root.mkdir()
         external_agents.mkdir(parents=True, exist_ok=True)
         external_file = external_agents / "reviewer.md"
         external_file.write_text("---\ndescription: reviewer\n---\n")
 
-        result = _discover_plugin_paths(PluginManifest(plugin_root=tmp_path, agents=[reference]))
+        result = _discover_plugin_paths(PluginManifest(plugin_root=plugin_root, agents=[reference]))
 
         assert external_file not in result
 

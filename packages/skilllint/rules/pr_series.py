@@ -87,18 +87,20 @@ def _registered_component_files(manifest: dict[str, YamlValue], plugin_dir: Path
     from skilllint.plugin_validator import FRONTMATTER_EXEMPT_FILENAMES  # noqa: PLC0415
 
     registered: set[Path] = set()
+    root = plugin_dir.resolve()
     for reference in _component_paths(manifest, plugin_dir, field):
         target = plugin_dir / reference
-        if not target.resolve().is_relative_to(plugin_dir.resolve()):
+        resolved = target.resolve()
+        if not resolved.is_relative_to(root):
             continue
-        if target.is_dir():
+        if resolved.is_dir():
             registered.update(
-                file.relative_to(plugin_dir)
-                for file in target.glob("*.md")
+                file.resolve().relative_to(root)
+                for file in resolved.glob("*.md")
                 if file.name not in FRONTMATTER_EXEMPT_FILENAMES
             )
         else:
-            registered.add(reference)
+            registered.add(resolved.relative_to(root))
     return registered
 
 
