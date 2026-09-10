@@ -9,6 +9,7 @@ Implementation: plugin_validator.py lines 1936-2074
 
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -216,6 +217,9 @@ def test_validate_with_claude_os_error(mocker: MockerFixture, sample_plugin_dir:
 
 @pytest.mark.slow
 def test_real_claude_plugin_validation_reports_external_state(sample_plugin_dir: Path) -> None:
+    if os.environ.get("SKILLLINT_RUN_CLAUDE_PLUGIN_INTEGRATION") != "1":
+        pytest.skip("Claude plugin validation is an explicit opt-in integration test")
+
     if not is_claude_available():
         pytest.skip("Claude CLI unavailable (real-vendor integration)")
 
@@ -227,7 +231,21 @@ def test_real_claude_plugin_validation_reports_external_state(sample_plugin_dir:
     assert success, f"Claude plugin validation rejected this plugin: {output}"
 
 
-def test_real_claude_plugin_validation_rejection_is_not_skipped(mocker: MockerFixture, sample_plugin_dir: Path) -> None:
+def test_real_claude_plugin_validation_requires_explicit_opt_in(
+    mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch, sample_plugin_dir: Path
+) -> None:
+    monkeypatch.delenv("SKILLLINT_RUN_CLAUDE_PLUGIN_INTEGRATION", raising=False)
+    mocker.patch(f"{__name__}.is_claude_available", return_value=True)
+    mocker.patch(f"{__name__}.validate_with_claude", return_value=(True, ""))
+
+    with pytest.raises(pytest.skip.Exception, match="opt-in"):
+        test_real_claude_plugin_validation_reports_external_state(sample_plugin_dir)
+
+
+def test_real_claude_plugin_validation_rejection_is_not_skipped(
+    mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch, sample_plugin_dir: Path
+) -> None:
+    monkeypatch.setenv("SKILLLINT_RUN_CLAUDE_PLUGIN_INTEGRATION", "1")
     mocker.patch(f"{__name__}.is_claude_available", return_value=True)
     mocker.patch(f"{__name__}.validate_with_claude", return_value=(False, "Claude rejected this plugin"))
 
@@ -238,7 +256,10 @@ def test_real_claude_plugin_validation_rejection_is_not_skipped(mocker: MockerFi
     assert "rejected" in str(outcome.value).lower()
 
 
-def test_real_claude_plugin_validation_timeout_is_skipped(mocker: MockerFixture, sample_plugin_dir: Path) -> None:
+def test_real_claude_plugin_validation_timeout_is_skipped(
+    mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch, sample_plugin_dir: Path
+) -> None:
+    monkeypatch.setenv("SKILLLINT_RUN_CLAUDE_PLUGIN_INTEGRATION", "1")
     mocker.patch(f"{__name__}.is_claude_available", return_value=True)
     mocker.patch(
         f"{__name__}.validate_with_claude", return_value=(False, "Claude plugin validation timed out after 30 seconds")
