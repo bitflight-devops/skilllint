@@ -244,7 +244,7 @@ def _replace_list_valued_tool_fields(frontmatter_text: str, data: dict[str, Yaml
             ):
                 return None
             scalar_buffer = StringIO()
-            _rt_yaml.dump({"value": ", ".join(str(item) for item in value)}, scalar_buffer)
+            _rt_yaml.dump({"value": ", ".join(str(item) for item in value if item is not None)}, scalar_buffer)
             replacement_value = scalar_buffer.getvalue().removeprefix("value: ").rstrip()
             replacements.append((key_node.end_mark.index, value_node.end_mark.index, f": {replacement_value}"))
 
@@ -2414,7 +2414,7 @@ class FrontmatterValidator:
         for field_name in tool_fields:
             original_value = original_data.get(field_name)
             if isinstance(original_value, list):
-                normalized_dict[field_name] = ", ".join(str(x) for x in original_value)
+                normalized_dict[field_name] = ", ".join(str(x) for x in original_value if x is not None)
                 fixes.append(f"Converted {field_name} from YAML array to comma-separated string")
         for key, value in normalized_dict.items():
             if key in tool_fields:

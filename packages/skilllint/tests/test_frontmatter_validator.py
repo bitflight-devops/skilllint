@@ -316,6 +316,22 @@ class TestFrontmatterAutoFix:
         assert "# #TODO" in fixed
         assert all(issue.code != "FM007" for issue in validator.validate(agent_md).warnings)
 
+    def test_fix_drops_null_tool_list_entries(self, tmp_path: Path) -> None:
+        agent_md = tmp_path / "agents" / "tool-list.md"
+        agent_md.parent.mkdir()
+        agent_md.write_text(
+            "---\nname: tool-list\ndescription: Null tool-list entry verification.\ntools: [Read, null]\n---\nBody.\n",
+            encoding="utf-8",
+        )
+
+        validator = FrontmatterValidator()
+        validator.fix(agent_md)
+
+        fixed = agent_md.read_text(encoding="utf-8")
+        assert "tools: Read" in fixed
+        assert "None" not in fixed
+        assert all(issue.code != "FM007" for issue in validator.validate(agent_md).warnings)
+
     @pytest.mark.parametrize(
         ("relative_path", "field_name"),
         [
