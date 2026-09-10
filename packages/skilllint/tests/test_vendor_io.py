@@ -1046,6 +1046,14 @@ class TestSharedCheckoutRoot:
         # Assert
         assert result == weird_dir
 
+    @pytest.mark.parametrize("content", [b"gitdir: \xff\n", b"gitdir: bad\x00path\n"])
+    def test_invalid_gitdir_bytes_return_start_unchanged(self, tmp_path: Path, content: bytes) -> None:
+        weird_dir = tmp_path / "weird-bytes"
+        weird_dir.mkdir()
+        (weird_dir / ".git").write_bytes(content)
+
+        assert _shared_checkout_root(weird_dir) == weird_dir
+
     def test_gitdir_pointing_nowhere_returns_start_unchanged(self, tmp_path: Path) -> None:
         """A .git file pointing at a nonexistent gitdir returns start unchanged.
 

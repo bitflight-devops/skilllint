@@ -70,7 +70,7 @@ def _read_git_internal_file_or_none(path: Path) -> str | None:
     """
     try:
         return path.read_text(encoding="utf-8").strip()
-    except OSError:
+    except (OSError, UnicodeDecodeError, ValueError):
         return None
 
 
