@@ -332,6 +332,34 @@ class TestFrontmatterAutoFix:
         assert "None" not in fixed
         assert all(issue.code != "FM007" for issue in validator.validate(agent_md).warnings)
 
+    def test_fix_falls_back_when_merged_tool_field_has_no_source_node(self, tmp_path: Path) -> None:
+        agent_md = tmp_path / "agents" / "tool-list.md"
+        agent_md.parent.mkdir()
+        agent_md.write_text(
+            "---\nname: tool-list\ndescription: Merged tool-list verification.\n"
+            "defaults: &d {tools: [Read, Grep]}\n<<: *d\ndisallowedTools: [Write]\n---\nBody.\n",
+            encoding="utf-8",
+        )
+
+        validator = FrontmatterValidator()
+        validator.fix(agent_md)
+
+        assert all(issue.code != "FM007" for issue in validator.validate(agent_md).warnings)
+
+    def test_fix_leaves_unrepresentable_tool_list_entries_unchanged(self, tmp_path: Path) -> None:
+        agent_md = tmp_path / "agents" / "tool-list.md"
+        agent_md.parent.mkdir()
+        original = (
+            "---\nname: tool-list\ndescription: Atomic tool-list verification.\n"
+            'tools: ["Bash(git log:*)"]\n---\nBody.\n'
+        )
+        agent_md.write_text(original, encoding="utf-8")
+
+        validator = FrontmatterValidator()
+
+        assert validator.fix(agent_md) == []
+        assert agent_md.read_text(encoding="utf-8") == original
+
     @pytest.mark.parametrize(
         ("relative_path", "field_name"),
         [
