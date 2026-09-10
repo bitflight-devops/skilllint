@@ -23,6 +23,7 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import httpx
@@ -45,8 +46,6 @@ from skilllint.vendor_cache import (
 from skilllint.vendor_io import EmptyResponseError, sha256_hex
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from pytest_mock import MockerFixture
 
 
@@ -490,6 +489,39 @@ class TestFetchOrCachedStale:
 
         assert result.status == CacheStatus.REFRESHED
         assert result.path != md_path
+        assert result.path.read_bytes() == fetched_content.encode()
+        assert verify_integrity(result.path).status == IntegrityStatus.INTACT
+
+    def test_fetch_or_cached_refresh_preserves_fetched_bytes_when_text_write_translates_newlines(
+        self, tmp_path: Path, mocker: MockerFixture
+    ) -> None:
+        mocker.patch("skilllint.vendor_cache.SOURCES_DIR", tmp_path)
+        url = "https://example.com/docs/windows-refresh.md"
+        old_content = "# Old\n"
+        fetched_content = "# New\n"
+        md_path = _write_md(tmp_path, "windows-refresh-2026-01-01-0000.md", old_content)
+        _write_sidecar(
+            md_path,
+            url=url,
+            sha256=hashlib.sha256(old_content.encode()).hexdigest(),
+            byte_count=len(old_content.encode()),
+            fetched_at=_stale_fetched_at(),
+        )
+        original_write_text = Path.write_text
+
+        def write_text_with_windows_newlines(
+            path: Path, data: str, encoding: str | None = None, errors: str | None = None, newline: str | None = None
+        ) -> int:
+            if path.suffix == ".md":
+                data = data.replace("\n", "\r\n")
+            return original_write_text(path, data, encoding=encoding, errors=errors, newline=newline)
+
+        mocker.patch.object(Path, "write_text", new=write_text_with_windows_newlines)
+        mocker.patch("skilllint.vendor_cache.fetch_url_text", return_value=fetched_content)
+
+        result = fetch_or_cached(url, ttl_hours=4.0)
+
+        assert result.status == CacheStatus.REFRESHED
         assert result.path.read_bytes() == fetched_content.encode()
         assert verify_integrity(result.path).status == IntegrityStatus.INTACT
 

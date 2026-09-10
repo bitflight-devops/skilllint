@@ -384,7 +384,7 @@ def fetch_or_cached(url: str, *, ttl_hours: float = 4.0, force: bool = False) ->
 
         # Content changed — write new file.
         new_path = _new_path()
-        new_path.write_text(new_content, encoding="utf-8")
+        new_path.write_bytes(new_content.encode())
         write_sidecar(new_path, url=url, content=new_content)
         return CacheResult(path=new_path, status=CacheStatus.REFRESHED, page_name=page_name, url=url)
 
@@ -400,7 +400,7 @@ def fetch_or_cached(url: str, *, ttl_hours: float = 4.0, force: bool = False) ->
         raise
 
     new_path = _new_path()
-    new_path.write_text(new_content, encoding="utf-8")
+    new_path.write_bytes(new_content.encode())
     write_sidecar(new_path, url=url, content=new_content)
     return CacheResult(path=new_path, status=CacheStatus.NEW, page_name=page_name, url=url)
 
