@@ -23,6 +23,9 @@ def main() -> int:
     missing_findings = [finding for finding in expected_findings if finding not in action_findings]
     if missing_findings:
         failures.append(f"findings: missing {missing_findings!r}, got {os.environ['ACTION_FINDINGS']!r}")
+    unexpected_findings = sorted(action_findings - set(expected_findings))
+    if unexpected_findings:
+        failures.append(f"findings: unexpected {unexpected_findings!r}, got {os.environ['ACTION_FINDINGS']!r}")
     expected_python = f"Python {os.environ['EXPECTED_PYTHON_VERSION']}"
     if not os.environ["ACTION_TOOL_PYTHON"].startswith(expected_python):
         failures.append(f"tool Python: expected {expected_python!r}, got {os.environ['ACTION_TOOL_PYTHON']!r}")

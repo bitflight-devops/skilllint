@@ -16,7 +16,7 @@ jobs:
       matrix:
         include:
           - case: clean
-            paths: packages/skilllint/tests/fixtures/claude_code/valid_skill.md
+            paths: packages/skilllint/tests/fixtures/claude_code/valid_skill.md packages/skilllint/tests/fixtures/claude_code/invalid_skill.md
             platform: claude-code
             filter: ""
             check_only: "false"
@@ -25,7 +25,7 @@ jobs:
             show_summary: "false"
             expected_result: passed
             expected_exit_code: "0"
-            expected_inspected_count: "1"
+            expected_inspected_count: "2"
             expected_finding: ""
             allow_failure: false
           - case: warning
@@ -37,7 +37,7 @@ jobs:
             expected_result: passed
             expected_exit_code: "0"
             expected_inspected_count: "1"
-            expected_finding: FM004 FM007
+            expected_finding: FM004 FM007 SK005
             allow_failure: false
           - case: zero-files
             paths: packages/skilllint/tests/fixtures/claude_code
