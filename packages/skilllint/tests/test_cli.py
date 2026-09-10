@@ -171,6 +171,32 @@ description: Test skill with invalid name format
 
 
 class TestPluginRegistrationRoutes:
+    @pytest.mark.parametrize("reference", ["../external/agents", "/tmp/skilllint-external-agents"])
+    def test_escaping_agent_directory_is_not_fixed(
+        self, cli_runner: CliRunner, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, no_color_env: None, reference: str
+    ) -> None:
+        plugin = tmp_path / "plugin"
+        external_agents = tmp_path.parent / "external" / "agents"
+        if reference.startswith("/"):
+            external_agents = Path(reference)
+        (plugin / ".claude-plugin").mkdir(parents=True)
+        external_agents.mkdir(parents=True, exist_ok=True)
+        sentinel = external_agents / "reviewer.md"
+        original = "---\ndescription: reviewer\ntools:\n  - Read\n---\n"
+        sentinel.write_text(original)
+        (plugin / ".claude-plugin" / "plugin.json").write_text(json.dumps({"name": "plugin", "agents": reference}))
+        monkeypatch.setattr(
+            plugin_validator.PluginStructureValidator,
+            "validate",
+            lambda _self, _path: plugin_validator.ValidationResult(passed=True, errors=[], warnings=[], info=[]),
+        )
+
+        result = cli_runner.invoke(plugin_validator.app, ["check", "--no-color", "--fix", str(plugin)])
+
+        assert result.exit_code == 1, result.stdout
+        assert "[PL004]" in result.stdout
+        assert sentinel.read_text() == original
+
     def test_malformed_plugin_manifest_reports_pl002_once(
         self, cli_runner: CliRunner, tmp_path: Path, no_color_env: None
     ) -> None:

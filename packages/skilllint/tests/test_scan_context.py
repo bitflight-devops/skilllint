@@ -8,7 +8,8 @@ Coverage scope:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, no_type_check
+from pathlib import Path
+from typing import no_type_check
 
 import pytest
 
@@ -24,9 +25,6 @@ from skilllint.scan_runtime import (
     _resolve_filter_and_expand_paths,
     detect_scan_context,
 )
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 @no_type_check
@@ -876,6 +874,19 @@ class TestDiscoverPluginPaths:
         result = _discover_plugin_paths(manifest)
 
         assert tmp_path / "skills" / "ghost-skill" not in result
+
+    @pytest.mark.parametrize("reference", ["../external/agents", "/tmp/skilllint-external-agents"])
+    def test_manifest_driven_skips_agent_directory_outside_plugin_root(self, tmp_path: Path, reference: str) -> None:
+        external_agents = tmp_path.parent / "external" / "agents"
+        if reference.startswith("/"):
+            external_agents = Path(reference)
+        external_agents.mkdir(parents=True, exist_ok=True)
+        external_file = external_agents / "reviewer.md"
+        external_file.write_text("---\ndescription: reviewer\n---\n")
+
+        result = _discover_plugin_paths(PluginManifest(plugin_root=tmp_path, agents=[reference]))
+
+        assert external_file not in result
 
     def test_manifest_driven_skips_missing_declared_agent(self, tmp_path: Path) -> None:
         """Missing declared agent files are left to root-level validation.

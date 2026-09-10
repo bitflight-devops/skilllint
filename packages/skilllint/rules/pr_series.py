@@ -120,8 +120,8 @@ def _registered_component_files(manifest: dict[str, YamlValue], plugin_dir: Path
 def check_pr001(manifest: dict[str, YamlValue], plugin_dir: Path) -> list[ValidationIssue]:
     """## PR001 — Capability exists but not explicitly registered
 
-    A skill, agent, or command directory was found on the filesystem but is
-    not listed in the corresponding array in ``plugin.json``.
+    An agent or command file was found in its default directory but is not
+    listed in the corresponding array in ``plugin.json``.
 
     Per the vendor path-behavior rules, an explicit ``agents`` or
     ``commands`` array *replaces* default directory discovery: once either
@@ -130,25 +130,16 @@ def check_pr001(manifest: dict[str, YamlValue], plugin_dir: Path) -> list[Valida
     there is a genuine gap.  When the field is absent, the default directory
     is auto-discovered wholesale and PR001 is suppressed.
 
-    ``skills`` behaves differently: the default ``./skills/`` directory is
-    *always* scanned, whether or not ``skills`` is declared (additive, not
-    replacing).  An unregistered standard-path skill therefore always loads.
-    PR001 still flags it once the plugin has opted into explicit
-    registration by declaring the ``skills`` array (even empty), as a
-    consistency nudge, but is suppressed while no ``skills`` array is
-    declared at all.
-
     **Source:** ``PluginRegistrationValidator.validate`` in
     ``plugin_validator.py`` — scans the filesystem for actual capability
-    directories and compares against the registered paths from
-    ``plugin.json``.
+    files and compares them with the registered paths from ``plugin.json``.
 
     **Fix:** Add the unregistered capability path to the appropriate array in
     ``plugin.json``:
 
     ```json
     {
-      "skills": ["./skills/my-skill"]
+      "agents": ["./agents/my-agent.md"]
     }
     ```
 
@@ -157,8 +148,8 @@ def check_pr001(manifest: dict[str, YamlValue], plugin_dir: Path) -> list[Valida
         plugin_dir: Plugin directory containing ``.claude-plugin/plugin.json``.
 
     Returns:
-        One warning per capability found on disk but absent from the matching
-        registration array, ordered skills, agents, then commands.
+        One warning per agent or command file absent from its matching
+        registration array.
 
     <!-- examples: PR001 -->
     """

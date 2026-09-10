@@ -150,6 +150,8 @@ def _discover_manifest_skill_paths(root: Path, paths: list[str]) -> set[Path]:
     discovered: dict[Path, Path] = {}
     for rel in paths:
         resolved = root / rel
+        if not resolved.resolve().is_relative_to(root.resolve()):
+            continue
         if resolved.is_dir():
             direct_skill = resolved / "SKILL.md"
             if direct_skill.is_file():
@@ -192,6 +194,8 @@ def _discover_plugin_paths(manifest: PluginManifest) -> list[Path]:
             if path_list is not None:
                 for rel in path_list:
                     resolved = root / rel
+                    if not resolved.resolve().is_relative_to(root.resolve()):
+                        continue
                     if resolved.is_dir():
                         discovered.update(_glob_excluding(resolved, "*.md"))
                     elif resolved.exists():
