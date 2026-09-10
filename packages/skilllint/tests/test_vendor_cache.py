@@ -528,7 +528,7 @@ class TestFetchOrCachedStale:
             url=url,
             sha256=hashlib.sha256(b"older suffix two").hexdigest(),
             byte_count=len(b"older suffix two"),
-            fetched_at=_stale_fetched_at(),
+            fetched_at="2026-01-01T00:00:00+00:00",
         )
         mocker.patch("skilllint.vendor_cache.fetch_url_text", return_value="new refresh")
 
