@@ -768,7 +768,7 @@ class TestRuntimeCacheRoot:
 
         assert _runtime_cache_root(worktree) == repo.resolve()
 
-    def test_installed_wheel_in_separate_git_dir_worktree_uses_primary_checkout(
+    def test_installed_wheel_in_separate_git_dir_worktree_uses_linked_worktree(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         repo = tmp_path / "repo"
@@ -784,7 +784,7 @@ class TestRuntimeCacheRoot:
         _run_git(["worktree", "add", str(worktree)], cwd=repo)
         monkeypatch.setattr(vendor_io, "PROJECT_ROOT", tmp_path / "site-packages")
 
-        assert _runtime_cache_root(worktree) == repo.resolve()
+        assert _runtime_cache_root(worktree) == worktree.resolve()
 
     def test_installed_wheel_outside_git_uses_canonical_cwd(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -955,7 +955,7 @@ class TestSharedCheckoutRoot:
 
         assert result == bare_worktree
 
-    def test_separate_git_dir_nested_in_unrelated_checkout_uses_its_primary(self, tmp_path: Path) -> None:
+    def test_separate_git_dir_nested_in_unrelated_checkout_uses_linked_worktree(self, tmp_path: Path) -> None:
         unrelated = tmp_path / "unrelated"
         unrelated.mkdir()
         _init_repo_with_commit(unrelated)
@@ -971,7 +971,7 @@ class TestSharedCheckoutRoot:
         linked = tmp_path / "linked"
         _run_git(["worktree", "add", str(linked)], cwd=primary)
 
-        assert _shared_checkout_root(linked) == primary.resolve()
+        assert _shared_checkout_root(linked) == linked.resolve()
 
     def test_malformed_gitdir_content_returns_start_unchanged(self, tmp_path: Path) -> None:
         """A .git file with unreadable/garbage gitdir content returns start unchanged.

@@ -32,7 +32,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -131,18 +130,7 @@ def _shared_checkout_root(start: Path) -> Path:
     primary_checkout = resolved_git_dir.parent
     if _checkout_points_to_git_dir(primary_checkout, resolved_git_dir):
         return primary_checkout
-    return (
-        start
-        if _is_bare_git_dir(resolved_git_dir)
-        else _checkout_pointing_to_git_dir_or_none(start, resolved_git_dir) or start
-    )
-
-
-def _is_bare_git_dir(git_dir: Path) -> bool:
-    config = _read_git_internal_file_or_none(git_dir / "config")
-    if config is None:
-        return False
-    return any("".join(line.split()).lower() == "bare=true" for line in config.splitlines())
+    return start
 
 
 def _checkout_points_to_git_dir(checkout: Path, git_dir: Path) -> bool:
@@ -165,28 +153,6 @@ def _checkout_points_to_git_dir(checkout: Path, git_dir: Path) -> bool:
         return target.resolve(strict=True) == git_dir
     except OSError:
         return False
-
-
-def _checkout_pointing_to_git_dir_or_none(start: Path, git_dir: Path) -> Path | None:
-    search_root = Path(os.path.commonpath((start, git_dir)))
-    if search_root == search_root.parent:
-        return None
-    prefix = "gitdir: "
-    for directory, subdirectories, _files in os.walk(search_root):
-        subdirectories[:] = [name for name in subdirectories if name != ".git"]
-        candidate = Path(directory)
-        pointer = _read_git_internal_file_or_none(candidate / ".git")
-        if pointer is None or not pointer.startswith(prefix):
-            continue
-        candidate_git_dir = Path(pointer[len(prefix) :].strip())
-        if not candidate_git_dir.is_absolute():
-            candidate_git_dir = candidate / candidate_git_dir
-        try:
-            if candidate_git_dir.resolve(strict=True) == git_dir:
-                return candidate
-        except OSError:
-            continue
-    return None
 
 
 def _runtime_cache_root(cwd: Path | None = None) -> Path:
