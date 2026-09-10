@@ -544,6 +544,9 @@ print(json.dumps({
     def test_installed_docs_cache_uses_linked_worktree_when_cross_root_primary_is_undiscoverable(
         self, temp_venv: Path
     ) -> None:
+        if sys.platform == "win32":
+            pytest.skip("Cross-root topology requires POSIX /tmp and /var/tmp roots")
+
         with (
             tempfile.TemporaryDirectory(dir=Path.home()) as primary_dir,
             tempfile.TemporaryDirectory(dir="/tmp") as git_dir_parent,
