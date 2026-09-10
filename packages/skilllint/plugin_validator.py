@@ -81,6 +81,7 @@ from skilllint.rules.lk_series import check_lk001
 from skilllint.rules.nr_series import check_nr001, check_nr002
 from skilllint.rules.pd_series import check_pd001, check_pd002, check_pd003
 from skilllint.rules.pl_series import (
+    _check_pl004_manifest_paths,
     check_pl001,
     check_pl002,
     check_pl003,
@@ -3045,6 +3046,7 @@ class PluginRegistrationValidator:
             return ValidationResult(passed=False, errors=errors, warnings=warnings, info=info)
 
         # Registration checks — detection lives in skilllint.rules.pr_series.
+        errors.extend(_check_pl004_manifest_paths(plugin_config, plugin_dir))
         warnings.extend(check_pr001(plugin_config, plugin_dir))
         errors.extend(check_pr002(plugin_config, plugin_dir))
         info.extend(check_pr005(plugin_config, plugin_dir))

@@ -89,6 +89,8 @@ def _registered_component_files(manifest: dict[str, YamlValue], plugin_dir: Path
     registered: set[Path] = set()
     for reference in _component_paths(manifest, plugin_dir, field):
         target = plugin_dir / reference
+        if not target.resolve().is_relative_to(plugin_dir.resolve()):
+            continue
         if target.is_dir():
             registered.update(
                 file.relative_to(plugin_dir)
@@ -258,7 +260,7 @@ def check_pr002(manifest: dict[str, YamlValue], plugin_dir: Path) -> list[Valida
         )
         for ref in _component_paths(manifest, plugin_dir, "skills")
         if not (
-            (plugin_dir / ref).is_file()
+            ((plugin_dir / ref).is_file() and ref.name == "SKILL.md")
             or (plugin_dir / ref / "SKILL.md").is_file()
             or any((plugin_dir / ref).glob("*/SKILL.md"))
         )

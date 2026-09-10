@@ -171,6 +171,71 @@ description: Test skill with invalid name format
 
 
 class TestPluginRegistrationRoutes:
+    def test_absolute_agent_directory_reports_pl004_without_crashing(
+        self, cli_runner: CliRunner, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, no_color_env: None
+    ) -> None:
+        plugin = tmp_path / "plugin"
+        external_agents = tmp_path / "external-agents"
+        (plugin / ".claude-plugin").mkdir(parents=True)
+        external_agents.mkdir()
+        (external_agents / "reviewer.md").write_text(
+            "---\nname: reviewer\ndescription: Use when reviewing an external agent fixture\n---\n"
+        )
+        (plugin / ".claude-plugin" / "plugin.json").write_text(
+            json.dumps({"name": "plugin", "agents": [str(external_agents)]})
+        )
+        monkeypatch.setattr(
+            plugin_validator.PluginStructureValidator,
+            "validate",
+            lambda _self, _path: plugin_validator.ValidationResult(passed=True, errors=[], warnings=[], info=[]),
+        )
+
+        result = cli_runner.invoke(plugin_validator.app, ["check", "--no-color", str(plugin)])
+
+        assert result.exit_code == 1, result.stdout
+        assert "[PL004]" in result.stdout
+
+    def test_parent_skills_directory_enqueues_child_skill_markdown(
+        self, cli_runner: CliRunner, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, no_color_env: None
+    ) -> None:
+        plugin = tmp_path / "plugin"
+        (plugin / ".claude-plugin").mkdir(parents=True)
+        (plugin / ".claude-plugin" / "plugin.json").write_text('{"name":"plugin","skills":"./custom-skills"}')
+        (plugin / "custom-skills" / "example").mkdir(parents=True)
+        (plugin / "custom-skills" / "example" / "SKILL.md").write_text(
+            "---\nname: example\ndescription: Use when testing child skill discovery\n---\n\n# Example\n"
+        )
+        monkeypatch.setattr(
+            plugin_validator.PluginStructureValidator,
+            "validate",
+            lambda _self, _path: plugin_validator.ValidationResult(passed=True, errors=[], warnings=[], info=[]),
+        )
+
+        result = cli_runner.invoke(plugin_validator.app, ["check", "--no-color", str(plugin)])
+
+        assert result.exit_code == 0, result.stdout
+
+    def test_direct_non_skill_file_reports_pr002(
+        self, cli_runner: CliRunner, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, no_color_env: None
+    ) -> None:
+        plugin = tmp_path / "plugin"
+        (plugin / ".claude-plugin").mkdir(parents=True)
+        (plugin / ".claude-plugin" / "plugin.json").write_text(
+            '{"name":"plugin","skills":"./skills/example/README.md"}'
+        )
+        (plugin / "skills" / "example").mkdir(parents=True)
+        (plugin / "skills" / "example" / "README.md").write_text("# Not a skill\n")
+        monkeypatch.setattr(
+            plugin_validator.PluginStructureValidator,
+            "validate",
+            lambda _self, _path: plugin_validator.ValidationResult(passed=True, errors=[], warnings=[], info=[]),
+        )
+
+        result = cli_runner.invoke(plugin_validator.app, ["check", "--no-color", str(plugin)])
+
+        assert result.exit_code == 1, result.stdout
+        assert "[PR002]" in result.stdout
+
     def test_non_object_plugin_manifest_reports_pl002_without_crashing(
         self, cli_runner: CliRunner, tmp_path: Path, no_color_env: None
     ) -> None:

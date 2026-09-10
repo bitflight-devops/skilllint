@@ -50,6 +50,7 @@ plugin_validator at module level.
 from __future__ import annotations
 
 import re
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import msgspec
@@ -57,8 +58,6 @@ import msgspec
 from skilllint.rule_registry import _make_issue, skilllint_rule
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from skilllint.plugin_validator import ValidationIssue, YamlValue
 
 # ---------------------------------------------------------------------------
@@ -472,9 +471,8 @@ def check_pl004(claude_output: str) -> list[ValidationIssue]:
     paths to be relative paths that begin with ``./`` to prevent accidental
     absolute-path references.
 
-    Detection is **subprocess-derived only**: the combined stdout/stderr of
-    ``claude plugin validate`` is matched against
-    ``path.*must.*start.*with.*\./|invalid.*path.*format``.
+    Detection combines local manifest-path inspection with matching the
+    corresponding ``claude plugin validate`` output.
 
     **Fix:** Prefix all component paths in ``plugin.json`` with ``./``:
 
@@ -493,6 +491,35 @@ def check_pl004(claude_output: str) -> list[ValidationIssue]:
     <!-- examples: PL004 -->
     """
     return _claude_output_issues("PL004", claude_output)
+
+
+def _check_pl004_manifest_paths(manifest: dict[str, YamlValue], plugin_dir: Path) -> list[ValidationIssue]:
+    issues: list[ValidationIssue] = []
+    root = plugin_dir.resolve()
+    for field in ("skills", "agents", "commands"):
+        value = manifest.get(field)
+        entries = (
+            [value]
+            if isinstance(value, str)
+            else [item for item in value if isinstance(item, str)]
+            if isinstance(value, list)
+            else []
+        )
+        for entry in entries:
+            permitted_root_skill = field == "skills" and entry == "."
+            target = (plugin_dir / entry).resolve()
+            if permitted_root_skill or (entry.startswith("./") and target.is_relative_to(root)):
+                continue
+            issues.append(
+                _make_issue(
+                    field="plugin.json",
+                    severity="error",
+                    message=f"Registered {field} path '{entry}' must be relative to the plugin root and start with './'",
+                    code="PL004",
+                    suggestion=f"Replace '{entry}' with a path under ./{field}/",
+                )
+            )
+    return issues
 
 
 # ---------------------------------------------------------------------------

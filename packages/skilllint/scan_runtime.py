@@ -146,6 +146,22 @@ def _parse_plugin_manifest(plugin_root: Path) -> PluginManifest:
     )
 
 
+def _discover_manifest_skill_paths(root: Path, paths: list[str]) -> set[Path]:
+    discovered: dict[Path, Path] = {}
+    for rel in paths:
+        resolved = root / rel
+        if resolved.is_dir():
+            direct_skill = resolved / "SKILL.md"
+            if direct_skill.is_file():
+                discovered.setdefault(_ignore_path(resolved), resolved)
+            else:
+                for child_skill in _glob_excluding(resolved, "*/SKILL.md"):
+                    discovered.setdefault(_ignore_path(child_skill), child_skill)
+        elif resolved.is_file() and resolved.name == "SKILL.md":
+            discovered.setdefault(_ignore_path(resolved), resolved)
+    return set(discovered.values())
+
+
 def _discover_plugin_paths(manifest: PluginManifest) -> list[Path]:
     """Discover validatable files in a plugin directory.
 
@@ -169,16 +185,8 @@ def _discover_plugin_paths(manifest: PluginManifest) -> list[Path]:
     root = manifest.plugin_root
 
     if manifest.is_manifest_driven:
-        # Skills entries may be directories (e.g. "./skills/my-skill/") or
-        # direct SKILL.md paths. Preserve direct files; folder declarations are
-        # folder-backed targets so the validator bridge can resolve SKILL.md.
         if manifest.skills is not None:
-            skill_paths: dict[Path, Path] = {}
-            for rel in manifest.skills:
-                resolved = root / rel
-                if resolved.exists():
-                    skill_paths.setdefault(_ignore_path(resolved), resolved)
-            discovered.update(skill_paths.values())
+            discovered.update(_discover_manifest_skill_paths(root, manifest.skills))
         # Agents and commands entries should be direct file paths.
         for path_list in (manifest.agents, manifest.commands):
             if path_list is not None:
