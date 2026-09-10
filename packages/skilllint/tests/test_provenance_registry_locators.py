@@ -79,6 +79,9 @@ def _resolve_schema_json_location(claim_id: str, location: dict[str, str]) -> ob
 
     if location["source_type"] == "schema_json_enum":
         assert isinstance(target, list), f"{claim_id}: schema_json_enum '{symbol}' must resolve to a JSON array"
+        assert all(isinstance(member, str) for member in target), (
+            f"{claim_id}: schema_json_enum '{symbol}' must contain only strings"
+        )
     return target
 
 
@@ -149,6 +152,16 @@ def test_fm010_claim_tracks_the_enforced_name_length_constant() -> None:
 def test_schema_json_locators_reject_corrupted_values(location: dict[str, str], expected_value: object) -> None:
     with pytest.raises(AssertionError):
         assert _resolve_schema_json_location("corrupted schema locator", location) == expected_value
+
+
+def test_schema_json_enum_locators_reject_non_string_members(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    schema_path = tmp_path / "schema.json"
+    schema_path.write_text('{"required": [1]}', encoding="utf-8")
+    monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", tmp_path)
+    location = {"file": "schema.json", "symbol": "$.required", "source_type": "schema_json_enum"}
+
+    with pytest.raises(AssertionError, match="only strings"):
+        _resolve_schema_json_location("schema enum locator", location)
 
 
 def test_claim_locator_mismatch_reports_schema_file(monkeypatch: pytest.MonkeyPatch) -> None:
