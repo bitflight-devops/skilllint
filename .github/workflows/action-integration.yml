@@ -59,7 +59,7 @@ jobs:
             expected_result: failed
             expected_exit_code: "1"
             expected_inspected_count: "1"
-            expected_finding: FM010
+            expected_finding: FM010 SK005
             allow_failure: true
           - case: usage-error
             paths: packages/skilllint/tests/fixtures/claude_code/valid_skill.md
@@ -82,7 +82,7 @@ jobs:
             expected_result: failed
             expected_exit_code: "1"
             expected_inspected_count: "1"
-            expected_finding: FM010
+            expected_finding: FM010 SK005
             allow_failure: true
     steps:
       - name: Checkout code
