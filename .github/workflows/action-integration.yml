@@ -66,6 +66,7 @@ jobs:
             filter: ""
             check_only: "true"
             fix: "true"
+            show_summary: "false"
             expected_result: failed
             expected_exit_code: "2"
             expected_inspected_count: ""

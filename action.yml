@@ -202,7 +202,7 @@ runs:
         cat "${OUTPUT_FILE}"
 
         INSPECTED_COUNT="$(sed -n 's/^Total files: \([0-9][0-9]*\)$/\1/p' "${OUTPUT_FILE}" | tail -n 1)"
-        if [ -z "${INSPECTED_COUNT}" ] && { [ "${INPUT_SHOW_SUMMARY}" != "true" ] || [ "${INPUT_TOKENS_ONLY}" = "true" ] || [ "${INPUT_NO_COLOR}" != "true" ]; }; then
+        if [ "${EXIT_CODE}" -ne 2 ] && [ -z "${INSPECTED_COUNT}" ] && { [ "${INPUT_SHOW_SUMMARY}" != "true" ] || [ "${INPUT_TOKENS_ONLY}" = "true" ] || [ "${INPUT_NO_COLOR}" != "true" ]; }; then
           COUNT_ARGS=()
           for ARG in "${ARGS[@]}"; do
             if [ "${ARG}" != "--check" ] && [ "${ARG}" != "--fix" ] && [ "${ARG}" != "--tokens-only" ]; then
