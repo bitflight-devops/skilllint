@@ -647,6 +647,23 @@ class TestFetchOrCachedForce:
         mock_fetch.assert_called_once_with(url)
         assert result.status == CacheStatus.REFRESHED
 
+    def test_fetch_or_cached_force_refreshes_when_sidecar_is_not_an_object(
+        self, tmp_path: Path, mocker: MockerFixture
+    ) -> None:
+        # Given
+        mocker.patch("skilllint.vendor_cache.SOURCES_DIR", tmp_path)
+        url = "https://example.com/docs/malformed-sidecar.md"
+        cached_path = _write_md(tmp_path, "malformed-sidecar-2026-03-23-1000.md", "# Cached\n")
+        cached_path.with_suffix(".meta.json").write_text("[1]", encoding="utf-8")
+        mock_fetch = mocker.patch("skilllint.vendor_cache.fetch_url_text", return_value="# Refreshed\n")
+
+        # When
+        result = fetch_or_cached(url, force=True)
+
+        # Then
+        mock_fetch.assert_called_once_with(url)
+        assert result.status == CacheStatus.REFRESHED
+
     def test_fetch_or_cached_force_keeps_identical_content_at_existing_path(
         self, tmp_path: Path, mocker: MockerFixture
     ) -> None:

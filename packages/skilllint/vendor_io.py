@@ -221,9 +221,10 @@ def load_json_or_none(path: Path) -> dict[str, Any] | None:
         Parsed dict, or None if the file does not exist or contains invalid JSON.
     """
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8"))
     except (FileNotFoundError, json.JSONDecodeError, OSError):
         return None
+    return data if isinstance(data, dict) else None
 
 
 # ---------------------------------------------------------------------------
