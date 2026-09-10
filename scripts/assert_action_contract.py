@@ -18,9 +18,11 @@ def main() -> int:
         for name, actual, expected in checks
         if os.environ[actual] != os.environ[expected]
     ]
-    expected_finding = os.environ["EXPECTED_FINDING"]
-    if expected_finding and expected_finding not in os.environ["ACTION_FINDINGS"].split():
-        failures.append(f"finding: expected {expected_finding!r}, got {os.environ['ACTION_FINDINGS']!r}")
+    expected_findings = os.environ["EXPECTED_FINDING"].split()
+    action_findings = set(os.environ["ACTION_FINDINGS"].split())
+    missing_findings = [finding for finding in expected_findings if finding not in action_findings]
+    if missing_findings:
+        failures.append(f"findings: missing {missing_findings!r}, got {os.environ['ACTION_FINDINGS']!r}")
     expected_python = f"Python {os.environ['EXPECTED_PYTHON_VERSION']}"
     if not os.environ["ACTION_TOOL_PYTHON"].startswith(expected_python):
         failures.append(f"tool Python: expected {expected_python!r}, got {os.environ['ACTION_TOOL_PYTHON']!r}")

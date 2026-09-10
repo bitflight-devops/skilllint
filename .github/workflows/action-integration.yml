@@ -21,21 +21,22 @@ jobs:
             filter: ""
             check_only: "false"
             fix: "false"
+            show_summary: "false"
             expected_result: passed
             expected_exit_code: "0"
             expected_inspected_count: "1"
             expected_finding: ""
             allow_failure: false
           - case: warning
-            paths: tests/fixtures/action/agents/warning-agent.md
+            paths: tests/fixtures/action/skills/fixable-skill
             platform: ""
             filter: ""
             check_only: "false"
-            fix: "false"
+            fix: "true"
             expected_result: passed
             expected_exit_code: "0"
             expected_inspected_count: "1"
-            expected_finding: AG003
+            expected_finding: FM004 FM007
             allow_failure: false
           - case: zero-files
             paths: packages/skilllint/tests/fixtures/claude_code
@@ -95,6 +96,7 @@ jobs:
           filter: ${{ matrix.filter }}
           check-only: ${{ matrix.check_only }}
           fix: ${{ matrix.fix }}
+          show-summary: ${{ matrix.show_summary || 'true' }}
           python-version: "3.11"
           version: "1.19.2"
 

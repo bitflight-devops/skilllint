@@ -52,3 +52,25 @@ def test_assert_action_contract_rejects_missing_expected_finding() -> None:
 
     assert result.returncode == 1
     assert "FM010" in result.stderr
+
+
+def test_assert_action_contract_accepts_all_expected_grouped_fix_codes() -> None:
+    environment = os.environ | {
+        "CASE": "warning",
+        "ACTION_RESULT": "passed",
+        "ACTION_EXIT_CODE": "0",
+        "ACTION_INSPECTED_COUNT": "1",
+        "ACTION_FINDINGS": "FM004 FM007",
+        "ACTION_TOOL_PYTHON": "Python 3.11.9",
+        "ACTION_TOOL_VERSION": "1.19.2",
+        "EXPECTED_RESULT": "passed",
+        "EXPECTED_EXIT_CODE": "0",
+        "EXPECTED_INSPECTED_COUNT": "1",
+        "EXPECTED_FINDING": "FM004 FM007",
+        "EXPECTED_PYTHON_VERSION": "3.11",
+        "EXPECTED_PACKAGE_VERSION": "1.19.2",
+    }
+
+    result = subprocess.run([sys.executable, SCRIPT], env=environment, capture_output=True, text=True, check=False)
+
+    assert result.returncode == 0, result.stderr
