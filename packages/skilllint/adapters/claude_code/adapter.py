@@ -33,10 +33,12 @@ class ClaudeCodeAdapter:
             ".claude/**/*.md",
             "plugin.json",
             "hooks.json",
+            "skills/*/SKILL.md",
             "agents/*.md",
             "agents/**/*.md",
             "commands/*.md",
             "commands/**/*.md",
+            "CLAUDE.md",
         ]
 
     def applicable_rules(self) -> set[str]:
