@@ -2444,17 +2444,17 @@ class FrontmatterValidator:
             for field_name in ("tools", "disallowedTools", "allowed-tools")
             if isinstance(original_data.get(field_name), list)
         }
+        tool_values = {
+            field_name: value
+            for field_name, value in normalized_dict.items()
+            if field_name in {"tools", "disallowedTools", "allowed-tools"}
+            and isinstance(original_data.get(field_name), list)
+            and isinstance(value, str)
+        }
         if set(fixes) == tool_list_fixes:
             rewritten_frontmatter = _replace_list_valued_tool_fields(frontmatter_text, original_data)
             if rewritten_frontmatter is not None:
                 return content.replace(frontmatter_text, rewritten_frontmatter, 1), fixes
-            tool_values = {
-                field_name: value
-                for field_name, value in normalized_dict.items()
-                if field_name in {"tools", "disallowedTools", "allowed-tools"}
-                and isinstance(original_data.get(field_name), list)
-                and isinstance(value, str)
-            }
         if len(tool_values) == len(fixes):
             yaml = _dump_tool_list_fixes(frontmatter_text, tool_values)
             if yaml is not None:

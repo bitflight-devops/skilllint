@@ -369,6 +369,28 @@ description: >-
         content = skill_md.read_text()
         assert ">-" not in content
 
+    def test_autofix_multiline_description_and_tool_list(self, tmp_path: Path) -> None:
+        skill_md = tmp_path / "SKILL.md"
+        skill_md.write_text("""---
+description: >-
+  A multiline description
+  for a skill.
+tools:
+  - Read
+  - Grep
+---
+
+# Content
+""")
+
+        fixes = FrontmatterValidator().fix(skill_md)
+
+        content = skill_md.read_text()
+        assert any("multiline" in fix.lower() for fix in fixes)
+        assert any("YAML array" in fix for fix in fixes)
+        assert ">-" not in content
+        assert "tools: Read, Grep" in content
+
     def test_autofix_unquoted_colon(self, tmp_path: Path) -> None:
         """Test auto-fix quotes descriptions with colons (FM009).
 
