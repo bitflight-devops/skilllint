@@ -894,7 +894,7 @@ Load the `.meta.json` sidecar for a given file path.
 **Signature**
 
 ```python
-def load_sidecar(md_path: Path) -> dict[str, Any] | None:
+def load_sidecar(md_path: Path) -> SidecarMetadata | None:
 ```
 
 **Parameters**
@@ -905,7 +905,8 @@ def load_sidecar(md_path: Path) -> dict[str, Any] | None:
 
 **Returns**
 
-`dict[str, Any] | None` — Parsed sidecar dict, or `None` if the sidecar is missing or corrupt
+`SidecarMetadata | None` — Validated sidecar metadata, or `None` if the sidecar is missing or malformed.
+Use its `url`, `fetched_at`, `sha256`, and `byte_count` attributes rather than mapping access.
 
 #### utc_now_iso
 
