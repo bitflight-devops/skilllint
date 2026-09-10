@@ -445,7 +445,13 @@ def fetch_or_cached(url: str, *, ttl_hours: float = 4.0, force: bool = False) ->
      - Network OK, content identical: Update `fetched_at` in sidecar only, return status=`UNCHANGED`
      - Network failure (ConnectError, TimeoutException, HTTPError): Serve stale copy, return status=`STALE`
 
-4. **If no cached file or force=True**:
+4. **If cached file exists and force=True**:
+   - Attempt network fetch without checking freshness
+   - Network OK, content changed: Write new timestamped file, return status=`REFRESHED`
+   - Network OK, content identical: Update the existing sidecar, return status=`UNCHANGED`
+   - Network failure: Serve stale copy, return status=`STALE`
+
+5. **If no cached file exists**:
    - Attempt network fetch
    - Network OK: Write new timestamped file, return status=`NEW`
    - Network failure: Raise `NoCacheError`
