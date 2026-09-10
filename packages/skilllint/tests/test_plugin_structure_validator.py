@@ -174,13 +174,7 @@ class TestSubprocessExecution:
                 kwargs = call[1] if len(call) > 1 else {}
                 assert kwargs.get("shell", False) is False
 
-    def test_timeout_set(self, mocker: MockerFixture, tmp_path: Path) -> None:
-        """Test subprocess has timeout configured.
-
-        Tests: Timeout configuration
-        How: Mock subprocess.run, verify timeout parameter
-        Why: Prevent hanging on unresponsive claude CLI
-        """
+    def test_subprocess_has_no_undocumented_timeout(self, mocker: MockerFixture, tmp_path: Path) -> None:
         mocker.patch("shutil.which", return_value="/usr/local/bin/claude")
 
         mock_run = mocker.patch("subprocess.run")
@@ -195,12 +189,10 @@ class TestSubprocessExecution:
         validator = PluginStructureValidator()
         validator.validate(plugin_dir)
 
-        # Verify timeout was set
         if mock_run.called:
             for call in mock_run.call_args_list:
                 kwargs = call[1] if len(call) > 1 else {}
-                assert "timeout" in kwargs
-                assert kwargs["timeout"] > 0
+                assert "timeout" not in kwargs
 
 
 class TestClaudeOutputParsing:
@@ -311,7 +303,7 @@ class TestTimeoutHandling:
         pl002 = [issue for issue in result.errors if issue.code == "PL002"]
         assert result.passed is False
         assert len(pl002) == 1
-        assert pl002[0].message == "Claude plugin validation timed out after 3 seconds"
+        assert pl002[0].message == "Claude plugin validation timed out after 30 seconds"
 
     def test_controlled_success_emits_no_pl002(self, mocker: MockerFixture, tmp_path: Path) -> None:
         mocker.patch("shutil.which", return_value="/usr/local/bin/claude")

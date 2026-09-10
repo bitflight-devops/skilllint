@@ -624,8 +624,6 @@ def filter_validators_by_constraint_scopes(
     return filtered
 
 
-# Claude CLI timeout retained as the public PL002 contract: https://github.com/bitflight-devops/skilllint/issues/266
-CLAUDE_TIMEOUT = 3
 GIT_MODE_EXECUTABLE = 0o100755  # Git mode for executable files (100755)
 
 # Filenames exempt from frontmatter requirement (case-sensitive)
@@ -644,7 +642,6 @@ def _run_claude_plugin_validate(claude_path: str, plugin_dir: Path) -> subproces
         [claude_path, "plugin", "validate", str(plugin_dir)],
         capture_output=True,
         text=True,
-        timeout=CLAUDE_TIMEOUT,
         check=False,
         env=subprocess_env,
     )
@@ -3162,12 +3159,12 @@ class PluginStructureValidator:
                 # Validation failed - parse errors from output
                 self._parse_claude_errors(result.stdout, result.stderr, errors, warnings, info)
 
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as error:
             errors.append(
                 ValidationIssue(
                     field="(plugin-validation)",
                     severity="error",
-                    message=f"Claude plugin validation timed out after {CLAUDE_TIMEOUT} seconds",
+                    message=f"Claude plugin validation timed out after {error.timeout} seconds",
                     code=PL002,
                     docs_url=generate_docs_url(PL002),
                 )
@@ -3498,7 +3495,6 @@ def validate_with_claude(plugin_dir: Path) -> tuple[bool, str]:
     Security requirements:
     - NEVER uses shell=True (command injection risk)
     - Passes command as list: [cmd_path, arg1, arg2]
-    - Sets timeout to prevent hanging
     - Gets full command path via shutil.which()
 
     Args:
@@ -3526,8 +3522,8 @@ def validate_with_claude(plugin_dir: Path) -> tuple[bool, str]:
 
     try:
         result = _run_claude_plugin_validate(claude_path, plugin_dir)
-    except subprocess.TimeoutExpired:
-        return (False, f"Claude plugin validation timed out after {CLAUDE_TIMEOUT} seconds")
+    except subprocess.TimeoutExpired as error:
+        return (False, f"Claude plugin validation timed out after {error.timeout} seconds")
     except (FileNotFoundError, OSError) as e:
         # FileNotFoundError: Claude CLI not found (should be caught by shutil.which)
         # OSError: Other subprocess errors (permission denied, etc.)

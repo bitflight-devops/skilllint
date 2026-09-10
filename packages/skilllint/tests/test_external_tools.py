@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from skilllint.plugin_validator import CLAUDE_TIMEOUT, get_staged_files, is_claude_available, validate_with_claude
+from skilllint.plugin_validator import get_staged_files, is_claude_available, validate_with_claude
 
 if TYPE_CHECKING:
     from pytest_mock import MockerFixture
@@ -161,7 +161,7 @@ def test_validate_with_claude_timeout(mocker: MockerFixture, sample_plugin_dir: 
     # Arrange: Mock claude available but times out
     mocker.patch("skilllint.plugin_validator.shutil.which", return_value="/usr/local/bin/claude")
     mock_run = mocker.patch("skilllint.plugin_validator.subprocess.run")
-    mock_run.side_effect = subprocess.TimeoutExpired(cmd=["claude", "plugin", "validate"], timeout=CLAUDE_TIMEOUT)
+    mock_run.side_effect = subprocess.TimeoutExpired(cmd=["claude", "plugin", "validate"], timeout=30)
 
     # Act: Validate plugin
     success, output = validate_with_claude(sample_plugin_dir)
@@ -169,7 +169,7 @@ def test_validate_with_claude_timeout(mocker: MockerFixture, sample_plugin_dir: 
     # Assert: Returns failure with timeout message
     assert success is False
     assert "timed out" in output.lower()
-    assert str(CLAUDE_TIMEOUT) in output
+    assert "30" in output
 
 
 def test_validate_with_claude_file_not_found(mocker: MockerFixture, sample_plugin_dir: Path) -> None:
@@ -219,12 +219,33 @@ def test_real_claude_plugin_validation_reports_external_state(sample_plugin_dir:
     if not is_claude_available():
         pytest.skip("Claude CLI unavailable (real-vendor integration)")
 
-    success, _output = validate_with_claude(sample_plugin_dir)
+    success, output = validate_with_claude(sample_plugin_dir)
 
-    if not success:
-        pytest.skip("Claude plugin validation unavailable, slow, or rejected (real-vendor integration)")
+    if not success and "timed out" in output.lower():
+        pytest.skip("Claude plugin validation timed out (real-vendor integration)")
 
-    assert success
+    assert success, f"Claude plugin validation rejected this plugin: {output}"
+
+
+def test_real_claude_plugin_validation_rejection_is_not_skipped(mocker: MockerFixture, sample_plugin_dir: Path) -> None:
+    mocker.patch(f"{__name__}.is_claude_available", return_value=True)
+    mocker.patch(f"{__name__}.validate_with_claude", return_value=(False, "Claude rejected this plugin"))
+
+    with pytest.raises((AssertionError, pytest.skip.Exception)) as outcome:
+        test_real_claude_plugin_validation_reports_external_state(sample_plugin_dir)
+
+    assert isinstance(outcome.value, AssertionError)
+    assert "rejected" in str(outcome.value).lower()
+
+
+def test_real_claude_plugin_validation_timeout_is_skipped(mocker: MockerFixture, sample_plugin_dir: Path) -> None:
+    mocker.patch(f"{__name__}.is_claude_available", return_value=True)
+    mocker.patch(
+        f"{__name__}.validate_with_claude", return_value=(False, "Claude plugin validation timed out after 30 seconds")
+    )
+
+    with pytest.raises(pytest.skip.Exception, match="timed out"):
+        test_real_claude_plugin_validation_reports_external_state(sample_plugin_dir)
 
 
 # ============================================================================
@@ -298,13 +319,7 @@ def test_validate_with_claude_uses_full_path(mocker: MockerFixture, sample_plugi
     assert call_args[0] == claude_path
 
 
-def test_validate_with_claude_sets_timeout(mocker: MockerFixture, sample_plugin_dir: Path) -> None:
-    """Test validate_with_claude sets timeout parameter.
-
-    Tests: Subprocess timeout configuration
-    How: Mock subprocess.run, verify timeout parameter set
-    Why: Prevent hanging on stuck commands
-    """
+def test_validate_with_claude_has_no_undocumented_timeout(mocker: MockerFixture, sample_plugin_dir: Path) -> None:
     # Arrange: Mock claude available
     mocker.patch("skilllint.plugin_validator.shutil.which", return_value="/usr/local/bin/claude")
     mock_run = mocker.patch("skilllint.plugin_validator.subprocess.run")
@@ -313,11 +328,9 @@ def test_validate_with_claude_sets_timeout(mocker: MockerFixture, sample_plugin_
     # Act: Validate plugin
     validate_with_claude(sample_plugin_dir)
 
-    # Assert: Timeout parameter set to CLAUDE_TIMEOUT
     mock_run.assert_called_once()
     call_kwargs = mock_run.call_args[1]
-    assert "timeout" in call_kwargs
-    assert call_kwargs["timeout"] == CLAUDE_TIMEOUT
+    assert "timeout" not in call_kwargs
 
 
 # ============================================================================
