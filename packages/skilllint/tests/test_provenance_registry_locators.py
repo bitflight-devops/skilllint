@@ -106,6 +106,17 @@ def test_registry_does_not_attribute_agentskills_required_fields_to_fm001() -> N
     assert "FM001.required_fields" not in registry["claims"]
 
 
+def test_fm010_claim_tracks_the_enforced_name_length_constant() -> None:
+    registry = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
+    location = registry["claims"]["FM010.max_name_length"]["assertion_location"]
+
+    assert location == {
+        "file": "packages/skilllint/_spec_constants.py",
+        "symbol": "MAX_NAME_LENGTH",
+        "source_type": "python_constant",
+    }
+
+
 @pytest.mark.parametrize(
     ("location", "expected_value"),
     [

@@ -21,9 +21,9 @@
         "post_processing": null
       },
       "assertion_location": {
-        "file": "packages/skilllint/schemas/agentskills_io/v1.json",
-        "symbol": "$.properties.name.maxLength",
-        "source_type": "schema_json_field"
+        "file": "packages/skilllint/_spec_constants.py",
+        "symbol": "MAX_NAME_LENGTH",
+        "source_type": "python_constant"
       },
       "expected_value": 64,
       "x-audited": {
