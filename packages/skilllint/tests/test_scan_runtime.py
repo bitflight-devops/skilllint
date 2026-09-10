@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from skilllint.adapters.claude_code import ClaudeCodeAdapter
 from skilllint.adapters.codex import CodexAdapter
 from skilllint.adapters.cursor import CursorAdapter
 from skilllint.scan_runtime import (
@@ -407,6 +408,32 @@ class TestResolveFilterAndExpandPaths:
 
         assert paths == [custom_file]
         assert is_batch is True
+
+    def test_platform_directory_preserves_semantic_targets_for_provider_plugin_and_skill_inputs(
+        self, tmp_path: Path
+    ) -> None:
+        provider = tmp_path / ".agents"
+        provider_skill = provider / "skills" / "provider-skill"
+        provider_skill.mkdir(parents=True)
+        (provider_skill / "SKILL.md").write_text("# Provider skill\n")
+
+        plugin = tmp_path / "plugin"
+        (plugin / ".claude-plugin").mkdir(parents=True)
+        (plugin / ".claude-plugin" / "plugin.json").write_text("{}")
+
+        direct_skill = tmp_path / ".cursor" / "skills" / "direct-skill"
+        direct_skill.mkdir(parents=True)
+        (direct_skill / "SKILL.md").write_text("# Direct skill\n")
+
+        provider_paths, _ = _resolve_filter_and_expand_paths([provider], None, None, platform_adapter=CodexAdapter())
+        plugin_paths, _ = _resolve_filter_and_expand_paths([plugin], None, None, platform_adapter=ClaudeCodeAdapter())
+        direct_skill_paths, _ = _resolve_filter_and_expand_paths(
+            [direct_skill], None, None, platform_adapter=CursorAdapter()
+        )
+
+        assert provider_paths == [provider_skill]
+        assert plugin_paths == [plugin]
+        assert direct_skill_paths == [direct_skill]
 
     def test_filter_type_resolves_to_glob(self, tmp_path: Path) -> None:
         """_resolve_filter_and_expand_paths resolves --filter-type to glob pattern.
