@@ -421,6 +421,10 @@ class TestResolveFilterAndExpandPaths:
         (plugin / ".claude-plugin").mkdir(parents=True)
         (plugin / ".claude-plugin" / "plugin.json").write_text("{}")
 
+        marketplace = tmp_path / "marketplace"
+        (marketplace / ".claude-plugin").mkdir(parents=True)
+        (marketplace / ".claude-plugin" / "marketplace.json").write_text("{}")
+
         direct_skill = tmp_path / ".cursor" / "skills" / "direct-skill"
         direct_skill.mkdir(parents=True)
         (direct_skill / "SKILL.md").write_text("# Direct skill\n")
@@ -430,6 +434,9 @@ class TestResolveFilterAndExpandPaths:
             [provider], None, "skills", platform_adapter=CodexAdapter()
         )
         plugin_paths, _ = _resolve_filter_and_expand_paths([plugin], None, None, platform_adapter=ClaudeCodeAdapter())
+        marketplace_paths, _ = _resolve_filter_and_expand_paths(
+            [marketplace], None, None, platform_adapter=ClaudeCodeAdapter()
+        )
         direct_skill_paths, _ = _resolve_filter_and_expand_paths(
             [direct_skill], None, None, platform_adapter=CursorAdapter()
         )
@@ -437,6 +444,7 @@ class TestResolveFilterAndExpandPaths:
         assert provider_paths == [provider_skill]
         assert filtered_provider_paths == [provider_skill]
         assert plugin_paths == [plugin]
+        assert marketplace_paths == [marketplace]
         assert direct_skill_paths == [direct_skill]
 
     def test_filter_type_resolves_to_glob(self, tmp_path: Path) -> None:

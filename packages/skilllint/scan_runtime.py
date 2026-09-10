@@ -372,6 +372,10 @@ def _discover_platform_paths(directory: Path, adapter: PlatformAdapter) -> list[
             candidate,
         )
         discovered.add(target)
+    if adapter.id() == "claude_code":
+        discovered.update(
+            target for target in semantic_targets if (target / ".claude-plugin" / "marketplace.json").is_file()
+        )
     return sorted(discovered)
 
 
