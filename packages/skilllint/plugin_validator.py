@@ -624,8 +624,8 @@ def filter_validators_by_constraint_scopes(
     return filtered
 
 
-# Claude CLI timeout
-CLAUDE_TIMEOUT = 3  # seconds
+# Claude CLI timeout retained as the public PL002 contract: https://github.com/bitflight-devops/skilllint/issues/266
+CLAUDE_TIMEOUT = 3
 GIT_MODE_EXECUTABLE = 0o100755  # Git mode for executable files (100755)
 
 # Filenames exempt from frontmatter requirement (case-sensitive)
@@ -636,6 +636,18 @@ FRONTMATTER_EXEMPT_FILENAMES: frozenset[str] = frozenset({
     "CLAUDE.md",
     "README.md",
 })
+
+
+def _run_claude_plugin_validate(claude_path: str, plugin_dir: Path) -> subprocess.CompletedProcess[str]:
+    subprocess_env = {key: value for key, value in os.environ.items() if key != "CLAUDECODE"}
+    return subprocess.run(
+        [claude_path, "plugin", "validate", str(plugin_dir)],
+        capture_output=True,
+        text=True,
+        timeout=CLAUDE_TIMEOUT,
+        check=False,
+        env=subprocess_env,
+    )
 
 
 def _git_bash_path() -> str | None:
@@ -3142,18 +3154,8 @@ class PluginStructureValidator:
         # On Windows, ensure CLAUDE_CODE_GIT_BASH_PATH is set if git-bash can be found
         _git_bash_path()
 
-        # Run claude plugin validate
-        # Unset CLAUDECODE so the subprocess is not treated as a nested CLI session.
-        subprocess_env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
         try:
-            result = subprocess.run(
-                [claude_path, "plugin", "validate", str(plugin_dir)],
-                capture_output=True,
-                text=True,
-                timeout=CLAUDE_TIMEOUT,
-                check=False,
-                env=subprocess_env,
-            )
+            result = _run_claude_plugin_validate(claude_path, plugin_dir)
 
             # Parse output for errors
             if result.returncode != 0:
@@ -3522,18 +3524,8 @@ def validate_with_claude(plugin_dir: Path) -> tuple[bool, str]:
     if not plugin_json.exists():
         return True, "Not a plugin directory (skipped)"
 
-    # Run claude plugin validate with security best practices
-    # Unset CLAUDECODE so the subprocess is not treated as a nested CLI session.
-    subprocess_env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
     try:
-        result = subprocess.run(
-            [claude_path, "plugin", "validate", str(plugin_dir)],
-            capture_output=True,
-            text=True,
-            timeout=CLAUDE_TIMEOUT,
-            check=False,  # Handle non-zero exit code ourselves
-            env=subprocess_env,
-        )
+        result = _run_claude_plugin_validate(claude_path, plugin_dir)
     except subprocess.TimeoutExpired:
         return (False, f"Claude plugin validation timed out after {CLAUDE_TIMEOUT} seconds")
     except (FileNotFoundError, OSError) as e:

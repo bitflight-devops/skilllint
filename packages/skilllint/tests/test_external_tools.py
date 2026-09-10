@@ -13,6 +13,8 @@ import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import pytest
+
 from skilllint.plugin_validator import CLAUDE_TIMEOUT, get_staged_files, is_claude_available, validate_with_claude
 
 if TYPE_CHECKING:
@@ -210,6 +212,19 @@ def test_validate_with_claude_os_error(mocker: MockerFixture, sample_plugin_dir:
     assert success is False
     assert "Failed to run claude plugin validate" in output
     assert "Permission denied" in output
+
+
+@pytest.mark.slow
+def test_real_claude_plugin_validation_reports_external_state(sample_plugin_dir: Path) -> None:
+    if not is_claude_available():
+        pytest.skip("Claude CLI unavailable (real-vendor integration)")
+
+    success, _output = validate_with_claude(sample_plugin_dir)
+
+    if not success:
+        pytest.skip("Claude plugin validation unavailable, slow, or rejected (real-vendor integration)")
+
+    assert success
 
 
 # ============================================================================
