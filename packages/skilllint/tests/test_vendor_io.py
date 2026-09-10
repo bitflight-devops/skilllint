@@ -797,6 +797,18 @@ class TestRuntimeCacheRoot:
 
         assert _runtime_cache_root(cwd) == cwd.resolve()
 
+    def test_installed_wheel_with_unavailable_cwd_keeps_cache_root_relative(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(vendor_io, "PROJECT_ROOT", tmp_path / "site-packages")
+
+        def unavailable_cwd() -> Path:
+            raise FileNotFoundError("working directory was removed")
+
+        monkeypatch.setattr(vendor_io.Path, "cwd", unavailable_cwd)
+
+        assert _runtime_cache_root() == Path()
+
 
 # ---------------------------------------------------------------------------
 # Worktree detection

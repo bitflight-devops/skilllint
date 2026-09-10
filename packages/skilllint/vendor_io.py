@@ -159,7 +159,10 @@ def _runtime_cache_root(cwd: Path | None = None) -> Path:
     if (PROJECT_ROOT / "pyproject.toml").is_file():
         return _shared_checkout_root(PROJECT_ROOT)
 
-    start = (cwd or Path.cwd()).resolve()
+    try:
+        start = (cwd or Path.cwd()).resolve()
+    except OSError:
+        return Path()
     for candidate in (start, *start.parents):
         if (candidate / ".git").exists():
             return _shared_checkout_root(candidate)
