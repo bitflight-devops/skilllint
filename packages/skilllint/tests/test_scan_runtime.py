@@ -423,6 +423,12 @@ class TestResolveFilterAndExpandPaths:
         plugin_skill = plugin / "skills" / "plugin-skill"
         plugin_skill.mkdir(parents=True)
         (plugin_skill / "SKILL.md").write_text("# Plugin skill\n")
+        plugin_agent = plugin / "agents" / "plugin-agent.md"
+        plugin_agent.parent.mkdir()
+        plugin_agent.write_text("# Agent\n")
+        plugin_command = plugin / "commands" / "plugin-command.md"
+        plugin_command.parent.mkdir()
+        plugin_command.write_text("# Command\n")
         cursor_rule = plugin / ".cursor" / "bad.mdc"
         cursor_rule.parent.mkdir()
         cursor_rule.write_text("type: invalid\n")
@@ -452,7 +458,7 @@ class TestResolveFilterAndExpandPaths:
 
         assert provider_paths == [provider_skill]
         assert filtered_provider_paths == [provider_skill]
-        assert plugin_paths == [plugin, plugin_skill]
+        assert plugin_paths == [plugin, plugin_agent, plugin_command, plugin_skill]
         assert cursor_plugin_paths == [cursor_rule]
         assert marketplace_paths == [marketplace]
         assert direct_skill_paths == [direct_skill]
