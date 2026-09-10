@@ -653,6 +653,35 @@ class TestFetchOrCachedStale:
         assert second.path.read_text(encoding="utf-8") == second_content
         assert find_latest("history", sources_dir=tmp_path) == second.path
 
+    def test_fetch_or_cached_allocates_after_existing_same_minute_suffix_gap(
+        self, tmp_path: Path, mocker: MockerFixture
+    ) -> None:
+        # Given
+        mocker.patch("skilllint.vendor_cache.SOURCES_DIR", tmp_path)
+        fixed_time = datetime(2026, 9, 10, 0, 36, tzinfo=UTC)
+        mock_datetime = mocker.patch("skilllint.vendor_cache.datetime")
+        mock_datetime.now.return_value = fixed_time
+        mock_datetime.fromisoformat.side_effect = datetime.fromisoformat
+        url = "https://example.com/docs/history-gap.md"
+        _write_md(tmp_path, "history-gap-2026-09-10-0036.md", "base")
+        old_path = _write_md(tmp_path, "history-gap-2026-09-10-0036-2.md", "older suffix two")
+        _write_sidecar(
+            old_path,
+            url=url,
+            sha256=hashlib.sha256(b"older suffix two").hexdigest(),
+            byte_count=len(b"older suffix two"),
+            fetched_at=_stale_fetched_at(),
+        )
+        mocker.patch("skilllint.vendor_cache.fetch_url_text", return_value="new refresh")
+
+        # When
+        result = fetch_or_cached(url)
+
+        # Then
+        assert result.status == CacheStatus.REFRESHED
+        assert result.path.name == "history-gap-2026-09-10-0036-3.md"
+        assert find_latest("history-gap", sources_dir=tmp_path) == result.path
+
     def test_fetch_or_cached_returns_unchanged_when_content_identical(
         self, tmp_path: Path, mocker: MockerFixture
     ) -> None:
