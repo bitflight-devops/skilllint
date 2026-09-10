@@ -33,7 +33,7 @@ so a CI workflow can open a PR). Exits 0 when nothing changed.
 Exit codes:
     0 -- no drift; every checked claim's expected_value already matches
     1 -- drift found and written to provenance-registry.json
-    2 -- a claim's vendor document could not be fetched and no cache exists
+    2 -- a claim's vendor document could not be used to extract values
     3 -- unexpected error (distinct from 1 so CI can't mistake a crash for
          "drift found and written" -- see main())
 """

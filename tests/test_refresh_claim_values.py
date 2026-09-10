@@ -173,3 +173,12 @@ def test_wrapper_propagates_refresh_exit_code(tmp_path: Path, exit_code: int) ->
 
     assert result.returncode == 0
     assert output.read_text(encoding="utf-8") == f"exit_code={exit_code}\n"
+
+
+def test_failure_wrapper_describes_all_exit_two_causes() -> None:
+    result = subprocess.run(
+        ["bash", "scripts/fail_claim_refresh.sh", "2"], cwd=REPO_ROOT, capture_output=True, text=True, check=False
+    )
+
+    assert result.returncode == 1
+    assert "could not be used to refresh values" in result.stdout
