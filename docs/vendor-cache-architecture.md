@@ -55,7 +55,7 @@ Example: a page cached 6 hours ago with a 4-hour TTL is refreshed, new content i
 
 **UNCHANGED**
 
-The cached file is older than the TTL. A network fetch is attempted. The fetch succeeds but the remote content is byte-for-byte identical to the cached version (verified by SHA-256 hash). Only the sidecar's `fetched_at` timestamp is updated—no new file is written.
+The cached file is older than the TTL. A network fetch is attempted. The fetch succeeds but the remote content is byte-for-byte identical to the cached version (verified by SHA-256 hash). The complete sidecar is rebuilt with the fetched URL, timestamp, SHA-256 hash, and byte count—no new file is written and the cached Markdown file is preserved.
 
 This is an optimization to avoid accumulating duplicate files when vendor documentation hasn't changed.
 
