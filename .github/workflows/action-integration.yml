@@ -21,6 +21,7 @@ jobs:
             filter: ""
             check_only: "false"
             fix: "false"
+            tokens_only: "true"
             show_summary: "false"
             expected_result: passed
             expected_exit_code: "0"
@@ -97,6 +98,7 @@ jobs:
           filter: ${{ matrix.filter }}
           check-only: ${{ matrix.check_only }}
           fix: ${{ matrix.fix }}
+          tokens-only: ${{ matrix.tokens_only || 'false' }}
           show-summary: ${{ matrix.show_summary || 'true' }}
           python-version: "3.11"
           version: "1.19.2"
