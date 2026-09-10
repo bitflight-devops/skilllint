@@ -420,6 +420,12 @@ class TestResolveFilterAndExpandPaths:
         plugin = tmp_path / "plugin"
         (plugin / ".claude-plugin").mkdir(parents=True)
         (plugin / ".claude-plugin" / "plugin.json").write_text("{}")
+        plugin_skill = plugin / "skills" / "plugin-skill"
+        plugin_skill.mkdir(parents=True)
+        (plugin_skill / "SKILL.md").write_text("# Plugin skill\n")
+        cursor_rule = plugin / ".cursor" / "bad.mdc"
+        cursor_rule.parent.mkdir()
+        cursor_rule.write_text("type: invalid\n")
 
         marketplace = tmp_path / "marketplace"
         (marketplace / ".claude-plugin").mkdir(parents=True)
@@ -434,6 +440,9 @@ class TestResolveFilterAndExpandPaths:
             [provider], None, "skills", platform_adapter=CodexAdapter()
         )
         plugin_paths, _ = _resolve_filter_and_expand_paths([plugin], None, None, platform_adapter=ClaudeCodeAdapter())
+        cursor_plugin_paths, _ = _resolve_filter_and_expand_paths(
+            [plugin], None, None, platform_adapter=CursorAdapter()
+        )
         marketplace_paths, _ = _resolve_filter_and_expand_paths(
             [marketplace], None, None, platform_adapter=ClaudeCodeAdapter()
         )
@@ -443,7 +452,8 @@ class TestResolveFilterAndExpandPaths:
 
         assert provider_paths == [provider_skill]
         assert filtered_provider_paths == [provider_skill]
-        assert plugin_paths == [plugin]
+        assert plugin_paths == [plugin, plugin_skill]
+        assert cursor_plugin_paths == [cursor_rule]
         assert marketplace_paths == [marketplace]
         assert direct_skill_paths == [direct_skill]
 

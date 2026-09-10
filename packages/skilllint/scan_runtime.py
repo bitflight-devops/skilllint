@@ -368,13 +368,16 @@ def _discover_platform_paths(directory: Path, adapter: PlatformAdapter) -> list[
                 semantic_target
                 for semantic_target in semantic_targets
                 if candidate == semantic_target or candidate.is_relative_to(semantic_target)
+                if adapter.id() == "claude_code" or not (semantic_target / ".claude-plugin" / "plugin.json").is_file()
             ),
             candidate,
         )
         discovered.add(target)
     if adapter.id() == "claude_code":
         discovered.update(
-            target for target in semantic_targets if (target / ".claude-plugin" / "marketplace.json").is_file()
+            target
+            for target in semantic_targets
+            if (target / ".claude-plugin" / "marketplace.json").is_file() or _is_skill_folder(target)
         )
     return sorted(discovered)
 
