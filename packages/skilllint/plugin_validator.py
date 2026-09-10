@@ -51,6 +51,7 @@ from git.exc import InvalidGitRepositoryError, NoSuchPathError
 from git.index.fun import entry_key
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from ruamel.yaml import YAML, YAMLError
+from ruamel.yaml.comments import CommentedMap, CommentedSeq
 from ruamel.yaml.nodes import MappingNode, SequenceNode
 from ruamel.yaml.scalarstring import DoubleQuotedScalarString
 
@@ -219,10 +220,10 @@ def _dump_yaml(data: dict[str, YamlValue]) -> str:
     return buf.getvalue()
 
 
-def _replace_list_valued_tool_fields(frontmatter_text: str, data: dict[str, YamlValue]) -> str:
+def _replace_list_valued_tool_fields(frontmatter_text: str, data: dict[str, YamlValue]) -> str | None:
     document = _rt_yaml.compose(frontmatter_text)
     if not isinstance(document, MappingNode):
-        return frontmatter_text
+        return None
 
     replacements: list[tuple[int, int, str]] = []
     for key_node, value_node in document.value:
@@ -233,15 +234,31 @@ def _replace_list_valued_tool_fields(frontmatter_text: str, data: dict[str, Yaml
             and isinstance(value, list)
             and isinstance(value_node, SequenceNode)
         ):
-            replacements.append((
-                key_node.end_mark.index,
-                value_node.end_mark.index,
-                f": {', '.join(str(item) for item in value)}",
-            ))
+            if (
+                value_node.start_mark.index < key_node.end_mark.index
+                or "&" in frontmatter_text[key_node.end_mark.index : value_node.end_mark.index]
+            ):
+                return None
+            replacement_value = ", ".join(str(item) for item in value) or "''"
+            replacements.append((key_node.end_mark.index, value_node.end_mark.index, f": {replacement_value}"))
 
     for start, end, replacement in reversed(replacements):
         frontmatter_text = f"{frontmatter_text[:start]}{replacement}{frontmatter_text[end:]}"
     return frontmatter_text
+
+
+def _dump_tool_list_fixes(frontmatter_text: str, tool_values: dict[str, str]) -> str | None:
+    data = _rt_yaml.load(frontmatter_text)
+    if not isinstance(data, CommentedMap):
+        return None
+    for field_name, value in tool_values.items():
+        original_value = data.get(field_name)
+        if isinstance(original_value, CommentedSeq) and original_value.anchor.value is not None:
+            original_value.yaml_set_anchor(original_value.anchor.value, always_dump=True)
+        data[field_name] = value
+    buffer = StringIO()
+    _rt_yaml.dump(data, buffer)
+    return buffer.getvalue()
 
 
 def _fix_unquoted_colons(frontmatter_text: str) -> tuple[str, list[str], list[str]]:
@@ -2428,9 +2445,20 @@ class FrontmatterValidator:
             if isinstance(original_data.get(field_name), list)
         }
         if set(fixes) == tool_list_fixes:
-            return content.replace(
-                frontmatter_text, _replace_list_valued_tool_fields(frontmatter_text, original_data), 1
-            ), fixes
+            rewritten_frontmatter = _replace_list_valued_tool_fields(frontmatter_text, original_data)
+            if rewritten_frontmatter is not None:
+                return content.replace(frontmatter_text, rewritten_frontmatter, 1), fixes
+            tool_values = {
+                field_name: value
+                for field_name, value in normalized_dict.items()
+                if field_name in {"tools", "disallowedTools", "allowed-tools"}
+                and isinstance(original_data.get(field_name), list)
+                and isinstance(value, str)
+            }
+        if len(tool_values) == len(fixes):
+            yaml = _dump_tool_list_fixes(frontmatter_text, tool_values)
+            if yaml is not None:
+                return f"---\n{yaml}---\n{body}", fixes
         return f"---\n{_dump_yaml(normalized_dict)}---\n{body}", fixes
 
     def _apply_fixes(self, content: str, file_type: FileType, file_path: Path | None = None) -> tuple[str, list[str]]:

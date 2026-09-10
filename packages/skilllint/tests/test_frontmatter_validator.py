@@ -237,6 +237,36 @@ class TestFrontmatterAutoFix:
     """Test auto-fix functionality."""
 
     @pytest.mark.parametrize(
+        ("tool_yaml", "expected_yaml"),
+        [
+            ("tools: []", "tools: ''"),
+            ("defaults: &shared [Read, Grep]\ntools: *shared", "defaults: &shared [Read, Grep]\ntools: Read, Grep"),
+            ("tools: &shared [Read, Grep]\nskills: *shared", "tools: Read, Grep\nskills: &shared [Read, Grep]"),
+        ],
+    )
+    def test_fix_preserves_tool_list_yaml_alias_contract(
+        self, tmp_path: Path, tool_yaml: str, expected_yaml: str
+    ) -> None:
+        agent_md = tmp_path / "agents" / "tool-list.md"
+        agent_md.parent.mkdir()
+        agent_md.write_text(
+            "---\n"
+            "name: tool-list\n"
+            "description: Use this agent when testing tool-list YAML.\n"
+            f"{tool_yaml}\n"
+            "---\n"
+            "Body.\n",
+            encoding="utf-8",
+        )
+
+        validator = FrontmatterValidator()
+        validator.fix(agent_md)
+
+        fixed = agent_md.read_text(encoding="utf-8")
+        assert expected_yaml in fixed
+        assert validator.validate(agent_md).errors == []
+
+    @pytest.mark.parametrize(
         ("relative_path", "field_name"),
         [
             ("skills/tool-list/SKILL.md", "allowed-tools"),
