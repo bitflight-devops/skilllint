@@ -54,6 +54,7 @@ from ruamel.yaml import YAML, YAMLError
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
 from ruamel.yaml.nodes import MappingNode, SequenceNode
 from ruamel.yaml.scalarstring import DoubleQuotedScalarString
+from ruamel.yaml.tokens import CommentToken
 
 import skilllint.rules  # ruff: ignore[unused-import] — ensures all 15 series modules register into RULE_REGISTRY
 from skilllint.adapters import PlatformAdapter, load_adapters, matches_file
@@ -238,6 +239,7 @@ def _replace_list_valued_tool_fields(frontmatter_text: str, data: dict[str, Yaml
             if (
                 value_node.start_mark.index < key_node.end_mark.index
                 or "&" in frontmatter_text[key_node.end_mark.index : value_node.end_mark.index]
+                or "#" in frontmatter_text[key_node.end_mark.index : value_node.end_mark.index]
                 or not separator.startswith(":")
             ):
                 return None
@@ -253,14 +255,31 @@ def _replace_list_valued_tool_fields(frontmatter_text: str, data: dict[str, Yaml
     return frontmatter_text
 
 
+def _comment_lines(comment_data: object) -> list[str]:
+    if isinstance(comment_data, CommentToken):
+        return [line.lstrip("# ") for line in comment_data.value.splitlines()]
+    if isinstance(comment_data, list):
+        return [line for item in comment_data for line in _comment_lines(item)]
+    if isinstance(comment_data, tuple):
+        return [line for item in comment_data for line in _comment_lines(item)]
+    if isinstance(comment_data, dict):
+        return [line for item in comment_data.values() for line in _comment_lines(item)]
+    return []
+
+
 def _dump_tool_list_fixes(frontmatter_text: str, tool_values: dict[str, str]) -> str | None:
     data = _rt_yaml.load(frontmatter_text)
     if not isinstance(data, CommentedMap):
         return None
     for field_name, value in tool_values.items():
         original_value = data.get(field_name)
+        comment_lines = _comment_lines(data.ca.items.get(field_name))
         if isinstance(original_value, CommentedSeq) and original_value.anchor.value is not None:
             original_value.yaml_set_anchor(original_value.anchor.value, always_dump=True)
+        if isinstance(original_value, CommentedSeq):
+            comment_lines.extend(_comment_lines(original_value.ca.items))
+        if comment_lines:
+            data.yaml_set_comment_before_after_key(field_name, before="\n".join(comment_lines))
         data[field_name] = value
     buffer = StringIO()
     _rt_yaml.dump(data, buffer)

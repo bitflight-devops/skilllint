@@ -292,6 +292,30 @@ class TestFrontmatterAutoFix:
         assert validator.fix(agent_md) == []
         assert agent_md.read_text(encoding="utf-8") == fixed
 
+    def test_fix_preserves_comments_inside_tool_list(self, tmp_path: Path) -> None:
+        agent_md = tmp_path / "agents" / "tool-list.md"
+        agent_md.parent.mkdir()
+        agent_md.write_text(
+            "---\n"
+            "name: tool-list\n"
+            "description: Use this agent when testing tool-list YAML.\n"
+            "tools:\n"
+            "  # required for search\n"
+            "  - Grep # search tool\n"
+            "  - Read\n"
+            "---\n"
+            "Body.\n",
+            encoding="utf-8",
+        )
+
+        validator = FrontmatterValidator()
+        validator.fix(agent_md)
+
+        fixed = agent_md.read_text(encoding="utf-8")
+        assert "# required for search" in fixed
+        assert "# search tool" in fixed
+        assert all(issue.code != "FM007" for issue in validator.validate(agent_md).warnings)
+
     @pytest.mark.parametrize(
         ("relative_path", "field_name"),
         [
