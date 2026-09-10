@@ -184,6 +184,27 @@ def test_claim_locator_mismatch_reports_schema_file(monkeypatch: pytest.MonkeyPa
         test_claim_locators_resolve_and_values_match()
 
 
+def test_claim_locators_reject_scalar_type_changes(monkeypatch: pytest.MonkeyPatch) -> None:
+    claims = [
+        (
+            "schema.boolean_drift",
+            {
+                "assertion_location": {
+                    "file": "packages/skilllint/schemas/agentskills_io/v1.json",
+                    "symbol": "$.properties.enabled.default",
+                    "source_type": "schema_json_field",
+                },
+                "expected_value": 1,
+            },
+        )
+    ]
+    monkeypatch.setattr(sys.modules[__name__], "_iter_claims", lambda: claims)
+    monkeypatch.setattr(sys.modules[__name__], "_resolve_schema_json_location", lambda _claim, _location: True)
+
+    with pytest.raises(AssertionError, match="type"):
+        test_claim_locators_resolve_and_values_match()
+
+
 def test_claim_locators_resolve_and_values_match() -> None:
     for claim_id, claim in _iter_claims():
         location = claim["assertion_location"]
@@ -212,6 +233,10 @@ def test_claim_locators_resolve_and_values_match() -> None:
         assert "expected_value" in claim, f"{claim_id}: missing expected_value"
         actual = _normalize(target)
         expected = _normalize(claim["expected_value"])
+        assert type(actual) is type(expected), (
+            f"{claim_id}: {recorded_file}.{location['symbol']} has type {type(actual).__name__}, "
+            f"but expected_value has type {type(expected).__name__}"
+        )
         assert actual == expected, (
             f"{claim_id}: {recorded_file}.{location['symbol']} is {actual!r}, but expected_value says {expected!r}"
         )
