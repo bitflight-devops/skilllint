@@ -467,6 +467,32 @@ class TestFetchOrCachedStale:
         assert updated["sha256"] == hashlib.sha256(content.encode()).hexdigest()
         assert updated["byte_count"] == len(content.encode())
 
+    def test_fetch_or_cached_refreshes_when_cached_line_endings_differ(
+        self, tmp_path: Path, mocker: MockerFixture
+    ) -> None:
+        mocker.patch("skilllint.vendor_cache.SOURCES_DIR", tmp_path)
+        url = "https://example.com/docs/line-endings.md"
+        cached_bytes = b"# Same\r\nIdentical content.\r\n"
+        fetched_content = "# Same\nIdentical content.\n"
+
+        md_path = tmp_path / "line-endings-2026-01-01-0000.md"
+        md_path.write_bytes(cached_bytes)
+        _write_sidecar(
+            md_path,
+            url=url,
+            sha256=hashlib.sha256(cached_bytes).hexdigest(),
+            byte_count=len(cached_bytes),
+            fetched_at=_stale_fetched_at(),
+        )
+        mocker.patch("skilllint.vendor_cache.fetch_url_text", return_value=fetched_content)
+
+        result = fetch_or_cached(url, ttl_hours=4.0)
+
+        assert result.status == CacheStatus.REFRESHED
+        assert result.path != md_path
+        assert result.path.read_bytes() == fetched_content.encode()
+        assert verify_integrity(result.path).status == IntegrityStatus.INTACT
+
     def test_fetch_or_cached_returns_stale_when_network_unavailable(
         self, tmp_path: Path, mocker: MockerFixture
     ) -> None:

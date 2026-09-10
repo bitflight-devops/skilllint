@@ -378,11 +378,7 @@ def fetch_or_cached(url: str, *, ttl_hours: float = 4.0, force: bool = False) ->
                 return CacheResult(path=cached_path, status=CacheStatus.STALE, page_name=page_name, url=url)
             raise
 
-        try:
-            old_content = read_text_or_none(cached_path) or ""
-        except UnicodeDecodeError:
-            old_content = ""
-        if sha256_hex(new_content) == sha256_hex(old_content):
+        if cached_path.read_bytes() == new_content.encode():
             write_sidecar(cached_path, url=url, content=new_content)
             return CacheResult(path=cached_path, status=CacheStatus.UNCHANGED, page_name=page_name, url=url)
 
