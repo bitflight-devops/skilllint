@@ -19,6 +19,7 @@ from __future__ import annotations
 import importlib
 import json
 import re
+import sys
 from pathlib import Path
 from re import Pattern
 from typing import Any
@@ -132,15 +133,35 @@ def test_schema_json_locators_reject_corrupted_values(location: dict[str, str], 
         assert _resolve_schema_json_location("corrupted schema locator", location) == expected_value
 
 
+def test_claim_locator_mismatch_reports_schema_file(monkeypatch: pytest.MonkeyPatch) -> None:
+    claims = [
+        (
+            "FM010.max_name_length",
+            {
+                "assertion_location": {
+                    "file": "packages/skilllint/schemas/agentskills_io/v1.json",
+                    "symbol": "$.properties.name.maxLength",
+                    "source_type": "schema_json_field",
+                },
+                "expected_value": 65,
+            },
+        )
+    ]
+    monkeypatch.setattr(sys.modules[__name__], "_iter_claims", lambda: claims)
+
+    with pytest.raises(AssertionError, match=r"agentskills_io/v1\.json"):
+        test_claim_locators_resolve_and_values_match()
+
+
 def test_claim_locators_resolve_and_values_match() -> None:
     for claim_id, claim in _iter_claims():
         location = claim["assertion_location"]
         source_type = location["source_type"]
+        recorded_file = location["file"]
         assert source_type in _KNOWN_SOURCE_TYPES, f"{claim_id}: unrecognized source_type '{source_type}'"
 
         match source_type:
             case "python_constant":
-                recorded_file = location["file"]
                 assert (REPO_ROOT / recorded_file).is_file(), (
                     f"{claim_id}: assertion_location.file '{recorded_file}' does not exist"
                 )
