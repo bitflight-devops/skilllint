@@ -669,7 +669,7 @@ class TestFetchOrCachedForce:
     ) -> None:
         # Given
         mocker.patch("skilllint.vendor_cache.SOURCES_DIR", tmp_path)
-        mocker.patch("skilllint.vendor_cache.utc_now_iso", return_value="2026-09-09T00:00:00+00:00")
+        mocker.patch("skilllint.vendor_io.utc_now_iso", return_value="2026-09-09T00:00:00+00:00")
         url = "https://example.com/docs/identical.md"
         content = "# Identical\nCached content.\n"
         md_path = _write_md(tmp_path, "identical-2026-03-23-1000.md", content)
@@ -697,6 +697,65 @@ class TestFetchOrCachedForce:
         assert len(list(tmp_path.glob("identical-*.md"))) == 1
         assert len(list(tmp_path.glob("identical-*.meta.json"))) == 1
         assert json.loads(sidecar_path.read_text(encoding="utf-8"))["fetched_at"] == "2026-09-09T00:00:00+00:00"
+
+    def test_fetch_or_cached_force_replaces_unreadable_cached_content(
+        self, tmp_path: Path, mocker: MockerFixture
+    ) -> None:
+        # Given
+        mocker.patch("skilllint.vendor_cache.SOURCES_DIR", tmp_path)
+        url = "https://example.com/docs/unreadable.md"
+        md_path = tmp_path / "unreadable-2026-03-23-1000.md"
+        md_path.write_bytes(b"\xff")
+        _write_sidecar(md_path, url=url, sha256="stale", byte_count=1, fetched_at=_fresh_fetched_at())
+        mocker.patch("skilllint.vendor_cache.fetch_url_text", return_value="# Repaired\n")
+
+        # When
+        result = fetch_or_cached(url, force=True)
+
+        # Then
+        assert result.status == CacheStatus.REFRESHED
+        assert result.path.read_text(encoding="utf-8") == "# Repaired\n"
+
+    def test_fetch_or_cached_force_bypasses_naive_sidecar_timestamp(
+        self, tmp_path: Path, mocker: MockerFixture
+    ) -> None:
+        # Given
+        mocker.patch("skilllint.vendor_cache.SOURCES_DIR", tmp_path)
+        url = "https://example.com/docs/naive.md"
+        content = "# Cached\n"
+        md_path = _write_md(tmp_path, "naive-2026-03-23-1000.md", content)
+        _write_sidecar(
+            md_path,
+            url=url,
+            sha256=hashlib.sha256(content.encode()).hexdigest(),
+            byte_count=len(content.encode()),
+            fetched_at="2026-09-09T00:00:00",
+        )
+        mock_fetch = mocker.patch("skilllint.vendor_cache.fetch_url_text", return_value=content)
+
+        # When
+        result = fetch_or_cached(url, force=True)
+
+        # Then
+        mock_fetch.assert_called_once_with(url)
+        assert result.status == CacheStatus.UNCHANGED
+
+    def test_fetch_or_cached_force_repairs_integrity_metadata_for_identical_content(
+        self, tmp_path: Path, mocker: MockerFixture
+    ) -> None:
+        # Given
+        mocker.patch("skilllint.vendor_cache.SOURCES_DIR", tmp_path)
+        url = "https://example.com/docs/integrity.md"
+        content = "# Cached\n"
+        md_path = _write_md(tmp_path, "integrity-2026-03-23-1000.md", content)
+        _write_sidecar(md_path, url=url, sha256="stale", byte_count=0, fetched_at=_fresh_fetched_at())
+        mocker.patch("skilllint.vendor_cache.fetch_url_text", return_value=content)
+
+        # When
+        fetch_or_cached(url, force=True)
+
+        # Then
+        assert verify_integrity(md_path).status == IntegrityStatus.INTACT
 
     def test_fetch_or_cached_force_serves_stale_when_network_fails(self, tmp_path: Path, mocker: MockerFixture) -> None:
         """fetch_or_cached with force=True falls back to STALE when network fails.
