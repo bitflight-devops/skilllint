@@ -218,7 +218,7 @@ runs:
         echo "exit-code=${EXIT_CODE}" >> "$GITHUB_OUTPUT"
         echo "inspected-count=${INSPECTED_COUNT}" >> "$GITHUB_OUTPUT"
         FINDINGS_OUTPUT="$(sed -E $'s/\033\[[0-?]*[ -\/]*[@-~]//g' "${OUTPUT_FILE}")"
-        echo "findings=$(grep -oE '(^[[:space:]]*(✗ (ERROR|WARN|INFO)|⚠ (WARN|INFO)|❌|⚠|i INFO) |^FIXED )\[[A-Z]{2}[0-9]{3}(, [A-Z]{2}[0-9]{3})*\]' <<< "${FINDINGS_OUTPUT}" | sed -E 's/^.*\[//; s/\]$//' | tr -d ',' | tr ' ' '\n' | sort -u | xargs)" >> "$GITHUB_OUTPUT"
+        echo "findings=$(grep -oE '(^[[:space:]]*(✗ (ERROR|WARN|INFO)|⚠ (WARN|INFO)|❌|⚠|🔧|i INFO) |^FIXED )\[[A-Z]{2}[0-9]{3}(, [A-Z]{2}[0-9]{3})*\]' <<< "${FINDINGS_OUTPUT}" | sed -E 's/^.*\[//; s/\]$//' | tr -d ',' | tr ' ' '\n' | sort -u | xargs)" >> "$GITHUB_OUTPUT"
         TOOL_PATH="$(command -v skilllint)"
         TOOL_PYTHON="$(sed -n '1s/^#!//p' "${TOOL_PATH}")"
         echo "tool-python=$("${TOOL_PYTHON}" --version)" >> "$GITHUB_OUTPUT"
