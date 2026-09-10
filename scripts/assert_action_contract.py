@@ -29,8 +29,8 @@ def main() -> int:
     expected_python = f"Python {os.environ['EXPECTED_PYTHON_VERSION']}"
     if not os.environ["ACTION_TOOL_PYTHON"].startswith(expected_python):
         failures.append(f"tool Python: expected {expected_python!r}, got {os.environ['ACTION_TOOL_PYTHON']!r}")
-    expected_version = os.environ["EXPECTED_PACKAGE_VERSION"]
-    if not os.environ["ACTION_TOOL_VERSION"].endswith(expected_version):
+    expected_version = f"skilllint {os.environ['EXPECTED_PACKAGE_VERSION']}"
+    if os.environ["ACTION_TOOL_VERSION"] != expected_version:
         failures.append(f"tool version: expected {expected_version!r}, got {os.environ['ACTION_TOOL_VERSION']!r}")
     if failures:
         print("\n".join(failures), file=sys.stderr)

@@ -16,7 +16,7 @@ def test_assert_action_contract_accepts_matching_outcome() -> None:
         "ACTION_INSPECTED_COUNT": "1",
         "ACTION_FINDINGS": "",
         "ACTION_TOOL_PYTHON": "Python 3.11.9",
-        "ACTION_TOOL_VERSION": "1.19.2",
+        "ACTION_TOOL_VERSION": "skilllint 1.19.2",
         "EXPECTED_RESULT": "passed",
         "EXPECTED_EXIT_CODE": "0",
         "EXPECTED_INSPECTED_COUNT": "1",
@@ -39,7 +39,7 @@ def test_assert_action_contract_rejects_missing_expected_finding() -> None:
         "ACTION_INSPECTED_COUNT": "1",
         "ACTION_FINDINGS": "SK005",
         "ACTION_TOOL_PYTHON": "Python 3.11.9",
-        "ACTION_TOOL_VERSION": "1.19.2",
+        "ACTION_TOOL_VERSION": "skilllint 1.19.2",
         "EXPECTED_RESULT": "failed",
         "EXPECTED_EXIT_CODE": "1",
         "EXPECTED_INSPECTED_COUNT": "1",
@@ -77,6 +77,29 @@ def test_assert_action_contract_rejects_unexpected_finding() -> None:
     assert "unexpected" in result.stderr
 
 
+def test_assert_action_contract_rejects_version_suffix_match() -> None:
+    environment = os.environ | {
+        "CASE": "clean",
+        "ACTION_RESULT": "passed",
+        "ACTION_EXIT_CODE": "0",
+        "ACTION_INSPECTED_COUNT": "1",
+        "ACTION_FINDINGS": "",
+        "ACTION_TOOL_PYTHON": "Python 3.11.9",
+        "ACTION_TOOL_VERSION": "skilllint 11.19.2",
+        "EXPECTED_RESULT": "passed",
+        "EXPECTED_EXIT_CODE": "0",
+        "EXPECTED_INSPECTED_COUNT": "1",
+        "EXPECTED_FINDING": "",
+        "EXPECTED_PYTHON_VERSION": "3.11",
+        "EXPECTED_PACKAGE_VERSION": "1.19.2",
+    }
+
+    result = subprocess.run([sys.executable, SCRIPT], env=environment, capture_output=True, text=True, check=False)
+
+    assert result.returncode == 1
+    assert "tool version" in result.stderr
+
+
 def test_assert_action_contract_accepts_all_expected_grouped_fix_codes() -> None:
     environment = os.environ | {
         "CASE": "warning",
@@ -85,7 +108,7 @@ def test_assert_action_contract_accepts_all_expected_grouped_fix_codes() -> None
         "ACTION_INSPECTED_COUNT": "1",
         "ACTION_FINDINGS": "FM004 FM007",
         "ACTION_TOOL_PYTHON": "Python 3.11.9",
-        "ACTION_TOOL_VERSION": "1.19.2",
+        "ACTION_TOOL_VERSION": "skilllint 1.19.2",
         "EXPECTED_RESULT": "passed",
         "EXPECTED_EXIT_CODE": "0",
         "EXPECTED_INSPECTED_COUNT": "1",

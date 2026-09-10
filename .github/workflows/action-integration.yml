@@ -56,6 +56,7 @@ jobs:
             filter: ""
             check_only: "false"
             fix: "false"
+            no_color: "false"
             expected_result: failed
             expected_exit_code: "1"
             expected_inspected_count: "1"
@@ -98,6 +99,7 @@ jobs:
           filter: ${{ matrix.filter }}
           check-only: ${{ matrix.check_only }}
           fix: ${{ matrix.fix }}
+          no-color: ${{ matrix.no_color || 'true' }}
           tokens-only: ${{ matrix.tokens_only || 'false' }}
           show-summary: ${{ matrix.show_summary || 'true' }}
           python-version: "3.11"
