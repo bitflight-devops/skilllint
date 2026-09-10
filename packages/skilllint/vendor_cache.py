@@ -234,7 +234,18 @@ def _collision_safe_path(page_name: str, directory: Path, timestamp: str) -> Pat
     if not timestamped_path.exists():
         return timestamped_path
 
-    collision = 1
+    suffix_prefix = f"{page_name}-{timestamp}-"
+    collision = (
+        max(
+            (
+                int(path.stem.removeprefix(suffix_prefix))
+                for path in directory.glob(f"{suffix_prefix}*.md")
+                if path.stem.removeprefix(suffix_prefix).isdecimal()
+            ),
+            default=0,
+        )
+        + 1
+    )
     while True:
         candidate = directory / f"{page_name}-{timestamp}-{collision}.md"
         if not candidate.exists():
