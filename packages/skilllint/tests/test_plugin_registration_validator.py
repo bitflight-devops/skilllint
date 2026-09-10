@@ -452,6 +452,20 @@ class TestUnregisteredCommand:
 class TestMissingRegisteredFile:
     """Test PR002 error when plugin.json lists paths that do not exist."""
 
+    def test_registered_direct_skill_file_does_not_produce_pr002(self, tmp_path: Path) -> None:
+        plugin_dir = _make_plugin(
+            tmp_path,
+            plugin_json_content=msgspec.json.encode({
+                "name": "test-plugin",
+                "skills": ["./skills/example/SKILL.md"],
+            }).decode(),
+        )
+        _add_skill(plugin_dir, "example")
+
+        result = PluginRegistrationValidator().validate(plugin_dir)
+
+        assert [issue for issue in result.errors if issue.code == "PR002"] == []
+
     def test_registered_skill_not_on_disk_produces_pr002(self, tmp_path: Path) -> None:
         """Test PR002 error when registered skill SKILL.md does not exist on disk.
 

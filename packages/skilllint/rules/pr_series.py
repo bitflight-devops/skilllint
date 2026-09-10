@@ -257,7 +257,11 @@ def check_pr002(manifest: dict[str, YamlValue], plugin_dir: Path) -> list[Valida
             suggestion=f"Remove from plugin.json or create {ref}/SKILL.md",
         )
         for ref in _component_paths(manifest, plugin_dir, "skills")
-        if not ((plugin_dir / ref / "SKILL.md").is_file() or any((plugin_dir / ref).glob("*/SKILL.md")))
+        if not (
+            (plugin_dir / ref).is_file()
+            or (plugin_dir / ref / "SKILL.md").is_file()
+            or any((plugin_dir / ref).glob("*/SKILL.md"))
+        )
     )
 
     issues.extend(

@@ -182,7 +182,12 @@ def _discover_plugin_paths(manifest: PluginManifest) -> list[Path]:
         # Agents and commands entries should be direct file paths.
         for path_list in (manifest.agents, manifest.commands):
             if path_list is not None:
-                discovered.update(root / rel for rel in path_list if (root / rel).exists())
+                for rel in path_list:
+                    resolved = root / rel
+                    if resolved.is_dir():
+                        discovered.update(_glob_excluding(resolved, "*.md"))
+                    elif resolved.exists():
+                        discovered.add(resolved)
     else:
         discovered.update(_glob_excluding(root, "agents/*.md"))
         discovered.update(_glob_excluding(root, "commands/*.md"))

@@ -183,6 +183,26 @@ class TestPluginRegistrationRoutes:
         assert result.exit_code == 1, result.stdout
         assert "[PL002]" in result.stdout
 
+    def test_scalar_command_directory_expands_to_its_markdown_children(
+        self, cli_runner: CliRunner, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, no_color_env: None
+    ) -> None:
+        plugin = tmp_path / "plugin"
+        (plugin / ".claude-plugin").mkdir(parents=True)
+        (plugin / ".claude-plugin" / "plugin.json").write_text('{"name":"plugin","commands":"./commands"}')
+        (plugin / "commands").mkdir()
+        (plugin / "commands" / "example.md").write_text(
+            "---\ndescription: Use when exercising scalar command-directory discovery\n---\n\n# Example\n"
+        )
+        monkeypatch.setattr(
+            plugin_validator.PluginStructureValidator,
+            "validate",
+            lambda _self, _path: plugin_validator.ValidationResult(passed=True, errors=[], warnings=[], info=[]),
+        )
+
+        result = cli_runner.invoke(plugin_validator.app, ["check", "--no-color", str(plugin)])
+
+        assert result.exit_code == 0, result.stdout
+
     @pytest.mark.parametrize("route", ["root", "manifest", "parent"])
     @pytest.mark.parametrize("agents", ["./agents/registered.md", ["./agents/registered.md"]])
     def test_pr001_warns_once_for_an_ignored_default_agent(
