@@ -905,6 +905,21 @@ class TestDiscoverPluginPaths:
 
         assert escaping_link not in result
 
+    def test_manifest_driven_skips_skill_symlink_target_outside_plugin_root(self, tmp_path: Path) -> None:
+        plugin_root = tmp_path / "plugin"
+        plugin_root.mkdir()
+        external_skill = tmp_path / "external-skill"
+        external_skill.mkdir()
+        (external_skill / "SKILL.md").write_text("# External\n")
+        skills_dir = plugin_root / "custom-skills"
+        skills_dir.mkdir()
+        escaping_link = skills_dir / "external-skill"
+        escaping_link.symlink_to(external_skill, target_is_directory=True)
+
+        result = _discover_plugin_paths(PluginManifest(plugin_root=plugin_root, skills=["./custom-skills"]))
+
+        assert escaping_link / "SKILL.md" not in result
+
     def test_manifest_driven_skips_missing_declared_agent(self, tmp_path: Path) -> None:
         """Missing declared agent files are left to root-level validation.
 

@@ -154,11 +154,12 @@ def _discover_manifest_skill_paths(root: Path, paths: list[str]) -> set[Path]:
             continue
         if resolved.is_dir():
             direct_skill = resolved / "SKILL.md"
-            if direct_skill.is_file():
+            if direct_skill.is_file() and direct_skill.resolve().is_relative_to(root.resolve()):
                 discovered.setdefault(_ignore_path(resolved), resolved)
             else:
                 for child_skill in _glob_excluding(resolved, "*/SKILL.md"):
-                    discovered.setdefault(_ignore_path(child_skill), child_skill)
+                    if child_skill.resolve().is_relative_to(root.resolve()):
+                        discovered.setdefault(_ignore_path(child_skill), child_skill)
         elif resolved.is_file() and resolved.name == "SKILL.md":
             discovered.setdefault(_ignore_path(resolved), resolved)
     return set(discovered.values())
