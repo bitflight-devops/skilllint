@@ -636,7 +636,7 @@ class TestFetchOrCachedStale:
             url=url,
             sha256=hashlib.sha256(old_content.encode()).hexdigest(),
             byte_count=len(old_content.encode()),
-            fetched_at=_stale_fetched_at(),
+            fetched_at=(fixed_time - timedelta(hours=8)).isoformat(),
         )
         mocker.patch("skilllint.vendor_cache.fetch_url_text", side_effect=[first_content, second_content])
 
