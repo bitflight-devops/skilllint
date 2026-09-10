@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789007111447,
+  "lastUpdate": 1789010475628,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -2598,6 +2598,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 86.932,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "stack@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "a1adf2120ae8a6161e03ddc558c235b4ab38689d",
+          "message": "Merge pull request #251 from bitflight-devops/team/team-ada89d5b/Z\n\nfix(cache): classify forced refreshes against existing content",
+          "timestamp": "2026-09-10T03:18:10Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/a1adf2120ae8a6161e03ddc558c235b4ab38689d"
+        },
+        "date": 1789010475138,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 10978.452,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 11341.828,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 12031.368,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 88.257,
             "unit": "files/s"
           }
         ]
