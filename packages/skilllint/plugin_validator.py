@@ -3789,8 +3789,9 @@ def _collect_validator_results(
             result = validator.validate(path, policy)
         else:
             result = validator.validate(path)
-        if name == "PluginRegistrationValidator" and "PL004" in reported_plugin_structure_codes:
-            errors = [issue for issue in result.errors if issue.code != "PL004"]
+        duplicate_plugin_codes = reported_plugin_structure_codes.intersection({"PL002", "PL004"})
+        if name == "PluginRegistrationValidator" and duplicate_plugin_codes:
+            errors = [issue for issue in result.errors if issue.code not in duplicate_plugin_codes]
             result = ValidationResult(passed=not errors, errors=errors, warnings=result.warnings, info=result.info)
         if policy is not None and policy.severity:
 

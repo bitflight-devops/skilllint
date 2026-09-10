@@ -197,7 +197,11 @@ def _discover_plugin_paths(manifest: PluginManifest) -> list[Path]:
                     if not resolved.resolve().is_relative_to(root.resolve()):
                         continue
                     if resolved.is_dir():
-                        discovered.update(_glob_excluding(resolved, "*.md"))
+                        discovered.update(
+                            child
+                            for child in _glob_excluding(resolved, "*.md")
+                            if child.resolve().is_relative_to(root.resolve())
+                        )
                     elif resolved.exists():
                         discovered.add(resolved)
     else:
