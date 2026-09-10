@@ -373,6 +373,20 @@ class TestFrontmatterAutoFix:
         assert validator.fix(agent_md) == []
         assert agent_md.read_text(encoding="utf-8") == original
 
+    def test_fix_preserves_flow_mapping_tool_list_semantics(self, tmp_path: Path) -> None:
+        agent_md = tmp_path / "agents" / "tool-list.md"
+        agent_md.parent.mkdir()
+        agent_md.write_text(
+            "---\n{name: flow-agent, description: Flow tool-list verification., tools: [Read, Grep]}\n---\nBody.\n",
+            encoding="utf-8",
+        )
+
+        validator = FrontmatterValidator()
+        validator.fix(agent_md)
+
+        assert validator.validate(agent_md).errors == []
+        assert all(issue.code != "FM007" for issue in validator.validate(agent_md).warnings)
+
     @pytest.mark.parametrize(
         ("relative_path", "field_name"),
         [

@@ -223,7 +223,7 @@ def _dump_yaml(data: dict[str, YamlValue]) -> str:
 
 def _replace_list_valued_tool_fields(frontmatter_text: str, data: dict[str, YamlValue]) -> str | None:
     document = _rt_yaml.compose(frontmatter_text)
-    if not isinstance(document, MappingNode):
+    if not isinstance(document, MappingNode) or document.flow_style:
         return None
 
     replacements: list[tuple[int, int, str]] = []
