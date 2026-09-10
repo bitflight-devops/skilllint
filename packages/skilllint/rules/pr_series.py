@@ -97,7 +97,7 @@ def _registered_component_files(manifest: dict[str, YamlValue], plugin_dir: Path
             registered.update(
                 file.resolve().relative_to(root)
                 for file in resolved.glob("*.md")
-                if file.name not in FRONTMATTER_EXEMPT_FILENAMES
+                if file.name not in FRONTMATTER_EXEMPT_FILENAMES and file.resolve().is_relative_to(root)
             )
         else:
             registered.add(resolved.relative_to(root))

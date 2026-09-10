@@ -318,6 +318,21 @@ class TestUnregisteredAgent:
 
         assert not [warning for warning in result.warnings if warning.code == "PR001"]
 
+    def test_registered_directory_skips_external_symlink_child(self, tmp_path: Path) -> None:
+        plugin_dir = _make_plugin(
+            tmp_path,
+            plugin_json_content=msgspec.json.encode({"name": "test-plugin", "commands": ["./custom"]}).decode(),
+        )
+        external_file = tmp_path / "external.md"
+        external_file.write_text("# External\n")
+        custom_dir = plugin_dir / "custom"
+        custom_dir.mkdir()
+        (custom_dir / "external.md").symlink_to(external_file)
+
+        result = PluginRegistrationValidator().validate(plugin_dir)
+
+        assert result.passed is True
+
     def test_no_pr001_for_unregistered_agent_when_agents_field_absent(self, tmp_path: Path) -> None:
         """Test no PR001 warning for an agent when 'agents' is absent from plugin.json.
 
