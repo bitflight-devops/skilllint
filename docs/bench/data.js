@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789010475628,
+  "lastUpdate": 1789014648058,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -2640,6 +2640,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 88.257,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "stack@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "b03ece5a7f5199b407dec4ed6f7663eeee976aaa",
+          "message": "Merge pull request #269 from bitflight-devops/remediation/t25-pl002-timeout-determinism\n\ntest(PL002): make plugin-validation timeout deterministic",
+          "timestamp": "2026-09-10T04:27:45Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/b03ece5a7f5199b407dec4ed6f7663eeee976aaa"
+        },
+        "date": 1789014647463,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 9561.526,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 9922.23,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 10622.893,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 100.885,
             "unit": "files/s"
           }
         ]
