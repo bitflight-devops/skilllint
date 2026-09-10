@@ -1029,4 +1029,4 @@ When `force=True`, the freshness check is skipped and a network fetch is always 
 
 **No TTL on UNCHANGED status**
 
-When `fetch_or_cached()` detects that remote content is identical to the cached copy, it updates only the `fetched_at` timestamp in the sidecar (status=`UNCHANGED`). The existing `.md` file is not rewritten. This optimizes for network efficiency: the metadata is fresh (TTL resets) without rewriting unchanged content.
+When `fetch_or_cached()` detects that remote content is identical to the cached copy, it rebuilds the sidecar from the fetched content (including `url`, `fetched_at`, `sha256`, and `byte_count`) and returns status=`UNCHANGED`. The existing `.md` file is not rewritten. This refreshes both freshness and integrity metadata without rewriting unchanged content.
