@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789003847543,
+  "lastUpdate": 1789007111447,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -2556,6 +2556,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 83.375,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "stack@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "3b82a153614a17ace79340d8237063c39f84c76e",
+          "message": "Merge pull request #262 from bitflight-devops/team/team-ada89d5b/AJ\n\ntest(packaging): prove installed artifact matrix",
+          "timestamp": "2026-09-10T02:22:01Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/3b82a153614a17ace79340d8237063c39f84c76e"
+        },
+        "date": 1789007110878,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 11182.711,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 11514.81,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 12112.8,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 86.932,
             "unit": "files/s"
           }
         ]
