@@ -972,17 +972,9 @@ class TestRuntimeCacheRoot:
 
         assert _runtime_cache_root(cwd) == cwd.resolve()
 
-    @pytest.mark.parametrize(
-        ("is_installed", "uses_linked_worktree"),
-        [
-            pytest.param(False, False, id="source"),
-            pytest.param(False, True, id="linked-worktree"),
-            pytest.param(True, False, id="wheel"),
-            pytest.param(True, False, id="uvx"),
-        ],
-    )
-    def test_execution_mode_root_matrix_reuses_project_owner(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, is_installed: bool, uses_linked_worktree: bool
+    @pytest.mark.parametrize("uses_linked_worktree", [False, True], ids=["source", "linked-worktree"])
+    def test_source_root_matrix_reuses_project_owner(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, uses_linked_worktree: bool
     ) -> None:
         # Given
         repo = tmp_path / "repo"
@@ -993,13 +985,11 @@ class TestRuntimeCacheRoot:
             invocation_root = tmp_path / "linked"
             _run_git(["worktree", "add", str(invocation_root)], cwd=repo)
         invocation_cwd = invocation_root / "nested"
-        if not is_installed and not uses_linked_worktree:
+        if not uses_linked_worktree:
             invocation_cwd = tmp_path / "outside-source"
         invocation_cwd.mkdir()
-        project_root = tmp_path / "site-packages" if is_installed else invocation_root
-        project_root.mkdir(exist_ok=True)
-        if not is_installed:
-            (project_root / "pyproject.toml").touch()
+        project_root = invocation_root
+        (project_root / "pyproject.toml").touch()
         monkeypatch.setattr(vendor_io, "PROJECT_ROOT", project_root)
 
         # When

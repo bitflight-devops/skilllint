@@ -258,8 +258,10 @@ class TestDocsFetch:
         sidecar_paths = list(tmp_path.glob("*.meta.json"))
         assert first.returncode == second.returncode == 0
         assert first.stdout == second.stdout == f"{markdown_paths[0]}\n"
-        assert "NEW" in first.stderr
-        assert "FRESH" in second.stderr
+        assert first.stderr == "✅ NEW contract\n"
+        assert second.stderr == "✅ FRESH contract\n"
+        assert str(markdown_paths[0]) not in first.stderr
+        assert str(markdown_paths[0]) not in second.stderr
         assert len(markdown_paths) == len(sidecar_paths) == 1
 
     def test_force_flag_passes_force_true_to_fetch_or_cached(

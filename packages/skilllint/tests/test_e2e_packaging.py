@@ -472,9 +472,19 @@ print(json.dumps({
             check=False,
             env=env,
         )
+        uvx_repo = tmp_path / "uvx-repo"
+        uvx_repo.mkdir()
+        subprocess.run(
+            ["git", "init", "--initial-branch=main"], cwd=uvx_repo, check=True, capture_output=True, text=True
+        )
+        uvx_cwd = uvx_repo / "nested"
+        uvx_cwd.mkdir()
+        uvx_cache_file = uvx_repo / ".claude/vendor/sources/page-2026.md"
+        uvx_cache_file.parent.mkdir(parents=True)
+        uvx_cache_file.write_text("cached by uvx\n", encoding="utf-8")
         uvx_result = subprocess.run(
             ["uvx", "--from", str(built_wheel), "skilllint", "docs", "latest", "page"],
-            cwd=repo / "nested",
+            cwd=uvx_cwd,
             capture_output=True,
             text=True,
             check=False,
@@ -498,7 +508,7 @@ print(json.dumps({
         assert uvx_result.returncode == 0, uvx_result.stderr
         assert non_git_result.returncode == 0, non_git_result.stderr
         assert wheel_result.stdout.replace("\n", "") == str(cache_file)
-        assert uvx_result.stdout.replace("\n", "") == str(cache_file)
+        assert uvx_result.stdout.replace("\n", "") == str(uvx_cache_file)
         assert non_git_result.stdout.replace("\n", "") == str(non_git_cache_file)
 
     def test_installed_docs_cache_uses_linked_worktree_for_separate_git_dir(
