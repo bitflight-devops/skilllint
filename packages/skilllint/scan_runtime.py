@@ -372,7 +372,7 @@ def _discover_platform_paths(directory: Path, adapter: PlatformAdapter) -> list[
             ),
             candidate,
         )
-        discovered.add(target)
+        discovered.add(target if adapter.id() == "claude_code" else candidate)
     if adapter.id() == "claude_code":
         discovered.update(
             target

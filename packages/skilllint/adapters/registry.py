@@ -8,7 +8,9 @@ matches_file() checks whether a PurePath matches any of an adapter's path patter
 
 from __future__ import annotations
 
+import fnmatch
 import importlib.metadata
+import re
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -50,4 +52,20 @@ def matches_file(adapter: PlatformAdapter, path: pathlib.PurePath) -> bool:
     Returns:
         True if path matches at least one pattern, False otherwise.
     """
-    return any(path.match(pattern) for pattern in adapter.path_patterns())
+
+    def pattern_matches(pattern: str) -> bool:
+        parts = pattern.split("/")
+        expression = ""
+        previous_was_recursive = False
+        for part in parts:
+            if part == "**":
+                expression += "(?:[^/]+/)*"
+                previous_was_recursive = True
+                continue
+            if expression and not previous_was_recursive:
+                expression += "/"
+            expression += fnmatch.translate(part)[4:-3]
+            previous_was_recursive = False
+        return re.search(rf"(?:^|.*/){expression}$", path.as_posix()) is not None
+
+    return any(pattern_matches(pattern) for pattern in adapter.path_patterns())

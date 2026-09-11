@@ -362,21 +362,26 @@ class TestResolveFilterAndExpandPaths:
 
     def test_platform_directory_discovers_only_matching_files_recursively(self, tmp_path: Path) -> None:
         nested = tmp_path / "nested"
-        nested.mkdir()
+        nested.mkdir(parents=True)
         agents = nested / "AGENTS.md"
         rules = nested / "tool.rules"
         mdc = nested / "rule.mdc"
         ignored = nested / "notes.txt"
         for path in (agents, rules, mdc, ignored):
             path.write_text("")
+        claude_agent = tmp_path / ".claude" / "agents" / "team" / "deep" / "a.md"
+        claude_agent.parent.mkdir(parents=True)
+        claude_agent.write_text("")
 
         codex_paths, _ = _resolve_filter_and_expand_paths([tmp_path], None, None, platform_adapter=CodexAdapter())
+        claude_paths, _ = _resolve_filter_and_expand_paths([tmp_path], None, None, platform_adapter=ClaudeCodeAdapter())
         cursor_paths, _ = _resolve_filter_and_expand_paths([tmp_path], None, None, platform_adapter=CursorAdapter())
         filtered_paths, _ = _resolve_filter_and_expand_paths(
             [tmp_path], "**/*.rules", None, platform_adapter=CodexAdapter()
         )
 
         assert codex_paths == [agents, rules]
+        assert claude_paths == [claude_agent]
         assert cursor_paths == [mdc]
         assert filtered_paths == [rules]
 
@@ -397,8 +402,9 @@ class TestResolveFilterAndExpandPaths:
             def validate(self, path: Path) -> list[dict]:
                 return []
 
-        nested = tmp_path / "nested"
-        nested.mkdir()
+        nested = tmp_path / "skills" / "nested"
+        nested.mkdir(parents=True)
+        (nested / "SKILL.md").write_text("# Skill\n")
         custom_file = nested / "rule.custom"
         custom_file.write_text("")
 
@@ -606,6 +612,15 @@ class TestResolveFilterAndExpandPaths:
         discovered, _ = _resolve_filter_and_expand_paths([plugin_dir], None, None, platform_adapter=ClaudeCodeAdapter())
 
         assert discovered == [plugin_dir, custom_skill]
+
+    def test_platform_discovery_preserves_direct_claude_skill_folder(self, tmp_path: Path) -> None:
+        skill_dir = tmp_path / "direct-skill"
+        skill_dir.mkdir()
+        (skill_dir / "SKILL.md").write_text("---\ndescription: direct\n---\n# Direct\n")
+
+        discovered, _ = _resolve_filter_and_expand_paths([skill_dir], None, None, platform_adapter=ClaudeCodeAdapter())
+
+        assert discovered == [skill_dir]
 
     def test_platform_validation_normalizes_skill_folder(self, tmp_path: Path) -> None:
         import typer
