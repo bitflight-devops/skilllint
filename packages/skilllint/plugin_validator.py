@@ -255,6 +255,16 @@ def _replace_list_valued_tool_fields(frontmatter_text: str, data: dict[str, Yaml
     return frontmatter_text
 
 
+def _is_losslessly_scalar_tool_list(values: YamlValue) -> bool:
+    if not isinstance(values, list):
+        return False
+    return all(
+        str(value) and "," not in str(value) and not re.search(r"\s", str(value))
+        for value in values
+        if value is not None
+    )
+
+
 def _comment_lines(comment_data: object) -> list[str]:
     if isinstance(comment_data, CommentToken):
         return [line.removeprefix("#").removeprefix(" ") for line in comment_data.value.splitlines()]
@@ -2413,11 +2423,7 @@ class FrontmatterValidator:
         tool_fields = {"tools", "disallowedTools", "allowed-tools"}
         for field_name in tool_fields:
             original_value = original_data.get(field_name)
-            if isinstance(original_value, list) and all(
-                str(value) and "," not in str(value) and not re.search(r"\s", str(value))
-                for value in original_value
-                if value is not None
-            ):
+            if isinstance(original_value, list) and _is_losslessly_scalar_tool_list(original_value):
                 normalized_dict[field_name] = ", ".join(str(x) for x in original_value if x is not None)
                 fixes.append(f"Converted {field_name} from YAML array to comma-separated string")
         for key, value in normalized_dict.items():
@@ -2472,12 +2478,14 @@ class FrontmatterValidator:
             f"Converted {field_name} from YAML array to comma-separated string"
             for field_name in ("tools", "disallowedTools", "allowed-tools")
             if isinstance(original_data.get(field_name), list)
+            and _is_losslessly_scalar_tool_list(original_data[field_name])
         }
         tool_values = {
             field_name: value
             for field_name, value in normalized_dict.items()
             if field_name in {"tools", "disallowedTools", "allowed-tools"}
             and isinstance(original_data.get(field_name), list)
+            and _is_losslessly_scalar_tool_list(original_data[field_name])
             and isinstance(value, str)
         }
         if set(fixes) == tool_list_fixes:

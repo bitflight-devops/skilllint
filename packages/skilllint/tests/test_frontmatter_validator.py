@@ -360,6 +360,19 @@ class TestFrontmatterAutoFix:
         assert validator.fix(agent_md) == []
         assert agent_md.read_text(encoding="utf-8") == original
 
+    def test_fix_preserves_unrepresentable_tool_list_with_unrelated_fix(self, tmp_path: Path) -> None:
+        agent_md = tmp_path / "agents" / "tool-list.md"
+        agent_md.parent.mkdir()
+        agent_md.write_text(
+            "---\nname: tool-list\ndescription: 'Use: atomic tool list.'\ntools: [\"Bash(git log:*)\"]\n---\nBody.\n",
+            encoding="utf-8",
+        )
+
+        validator = FrontmatterValidator()
+        validator.fix(agent_md)
+
+        assert 'tools: ["Bash(git log:*)"]' in agent_md.read_text(encoding="utf-8")
+
     def test_fix_leaves_empty_tool_list_entries_unchanged(self, tmp_path: Path) -> None:
         agent_md = tmp_path / "agents" / "tool-list.md"
         agent_md.parent.mkdir()
