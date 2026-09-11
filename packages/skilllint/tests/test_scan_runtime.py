@@ -385,6 +385,17 @@ class TestResolveFilterAndExpandPaths:
         assert cursor_paths == [mdc]
         assert filtered_paths == [rules]
 
+    def test_filtered_platform_paths_exclude_node_modules(self, tmp_path: Path) -> None:
+        agent = tmp_path / "node_modules" / "vendor" / "agents" / "bad.md"
+        agent.parent.mkdir(parents=True)
+        agent.write_text("# Ignored\n")
+
+        discovered, _ = _resolve_filter_and_expand_paths(
+            [tmp_path], None, "agents", platform_adapter=ClaudeCodeAdapter()
+        )
+
+        assert discovered == []
+
     def test_platform_directory_uses_custom_adapter_matcher_and_deduplicates_roots(self, tmp_path: Path) -> None:
         class CustomAdapter:
             def id(self) -> str:

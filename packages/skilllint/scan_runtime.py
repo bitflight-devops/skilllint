@@ -428,7 +428,7 @@ def _resolve_filter_and_expand_paths(
         else:
             resolved_glob = filter_glob
         if resolved_glob is not None and path.is_dir():
-            matched = sorted(path.glob(resolved_glob))
+            matched = _glob_excluding(path, resolved_glob)
             matched = _platform_matching_paths(matched, path, platform_adapter)
             if filter_type == "skills":
                 matched = [match.parent for match in matched]
