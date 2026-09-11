@@ -227,6 +227,7 @@ def _replace_list_valued_tool_fields(frontmatter_text: str, data: dict[str, Yaml
         return None
 
     replacements: list[tuple[int, int, str]] = []
+    replaced_fields: set[str] = set()
     for key_node, value_node in document.value:
         field_name = key_node.value
         value = data.get(field_name)
@@ -247,8 +248,14 @@ def _replace_list_valued_tool_fields(frontmatter_text: str, data: dict[str, Yaml
             _rt_yaml.dump({"value": ", ".join(str(item) for item in value if item is not None)}, scalar_buffer)
             replacement_value = scalar_buffer.getvalue().removeprefix("value: ").rstrip()
             replacements.append((key_node.end_mark.index, value_node.end_mark.index, f": {replacement_value}"))
+            replaced_fields.add(field_name)
 
-    if not replacements:
+    requested_fields = {
+        field_name
+        for field_name in ("tools", "disallowedTools", "allowed-tools")
+        if isinstance(data.get(field_name), list)
+    }
+    if not replacements or replaced_fields != requested_fields:
         return None
     for start, end, replacement in reversed(replacements):
         frontmatter_text = f"{frontmatter_text[:start]}{replacement}{frontmatter_text[end:]}"
