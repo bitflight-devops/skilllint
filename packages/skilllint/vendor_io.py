@@ -124,7 +124,7 @@ def _shared_checkout_root(start: Path) -> Path:
 
     try:
         resolved_git_dir = commondir_path.resolve(strict=True)
-    except OSError:
+    except (OSError, ValueError):
         return start
 
     primary_checkout = resolved_git_dir.parent
