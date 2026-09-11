@@ -506,6 +506,17 @@ def _check_pl004_manifest_paths(manifest: dict[str, YamlValue], plugin_dir: Path
             else []
         )
         for entry in entries:
+            if "\x00" in entry:
+                issues.append(
+                    _make_issue(
+                        field="plugin.json",
+                        severity="error",
+                        message=f"Registered {field} path contains an invalid NUL character",
+                        code="PL004",
+                        suggestion=f"Replace '{entry}' with a path under ./{field}/",
+                    )
+                )
+                continue
             permitted_root_skill = field == "skills" and entry == "."
             target = (plugin_dir / entry).resolve()
             if permitted_root_skill or (entry.startswith("./") and target.is_relative_to(root)):

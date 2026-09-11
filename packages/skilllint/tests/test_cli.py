@@ -261,6 +261,50 @@ class TestPluginRegistrationRoutes:
         assert result.exit_code == 1, result.stdout
         assert "[PL004]" in result.stdout
 
+    def test_nul_component_path_reports_pl004_without_a_traceback(
+        self, cli_runner: CliRunner, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, no_color_env: None
+    ) -> None:
+        plugin = tmp_path / "plugin"
+        (plugin / ".claude-plugin").mkdir(parents=True)
+        (plugin / ".claude-plugin" / "plugin.json").write_text(
+            json.dumps({"name": "plugin", "skills": "./bad\x00name"})
+        )
+        monkeypatch.setattr(
+            plugin_validator.PluginStructureValidator,
+            "validate",
+            lambda _self, _path: plugin_validator.ValidationResult(passed=True, errors=[], warnings=[], info=[]),
+        )
+
+        result = cli_runner.invoke(plugin_validator.app, ["check", "--no-color", str(plugin)])
+
+        assert result.exit_code == 1, result.stdout
+        assert "[PL004]" in result.stdout
+        assert "Traceback" not in result.stdout
+
+    def test_registered_agent_symlink_is_not_reported_as_unregistered(
+        self, cli_runner: CliRunner, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, no_color_env: None
+    ) -> None:
+        plugin = tmp_path / "plugin"
+        (plugin / ".claude-plugin").mkdir(parents=True)
+        (plugin / "agents").mkdir()
+        (plugin / "shared").mkdir()
+        target = plugin / "shared" / "review.md"
+        target.write_text("---\nname: review\ndescription: Use when reviewing a symlink registration fixture\n---\n")
+        (plugin / "agents" / "review.md").symlink_to("../shared/review.md")
+        (plugin / ".claude-plugin" / "plugin.json").write_text(
+            json.dumps({"name": "plugin", "agents": "./agents/review.md"})
+        )
+        monkeypatch.setattr(
+            plugin_validator.PluginStructureValidator,
+            "validate",
+            lambda _self, _path: plugin_validator.ValidationResult(passed=True, errors=[], warnings=[], info=[]),
+        )
+
+        result = cli_runner.invoke(plugin_validator.app, ["check", "--no-color", str(plugin)])
+
+        assert result.exit_code == 0, result.stdout
+        assert "[PR001]" not in result.stdout
+
     def test_parent_skills_directory_enqueues_child_skill_markdown(
         self, cli_runner: CliRunner, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, no_color_env: None
     ) -> None:

@@ -39,23 +39,30 @@ def find_actual_capabilities(plugin_dir: Path) -> tuple[set[Path], set[Path], se
     actual_skills: set[Path] = set()
     actual_agents: set[Path] = set()
     actual_commands: set[Path] = set()
+    root = plugin_dir.resolve()
 
     skills_dir = plugin_dir / "skills"
     if skills_dir.is_dir():
         actual_skills = {
-            d.relative_to(plugin_dir) for d in skills_dir.glob("*/") if d.is_dir() and (d / "SKILL.md").exists()
+            d.resolve().relative_to(root)
+            for d in skills_dir.glob("*/")
+            if d.is_dir() and (d / "SKILL.md").exists() and d.resolve().is_relative_to(root)
         }
 
     agents_dir = plugin_dir / "agents"
     if agents_dir.is_dir():
         actual_agents = {
-            f.relative_to(plugin_dir) for f in agents_dir.glob("*.md") if f.name not in FRONTMATTER_EXEMPT_FILENAMES
+            f.resolve().relative_to(root)
+            for f in agents_dir.glob("*.md")
+            if f.name not in FRONTMATTER_EXEMPT_FILENAMES and f.resolve().is_relative_to(root)
         }
 
     commands_dir = plugin_dir / "commands"
     if commands_dir.is_dir():
         actual_commands = {
-            f.relative_to(plugin_dir) for f in commands_dir.glob("*.md") if f.name not in FRONTMATTER_EXEMPT_FILENAMES
+            f.resolve().relative_to(root)
+            for f in commands_dir.glob("*.md")
+            if f.name not in FRONTMATTER_EXEMPT_FILENAMES and f.resolve().is_relative_to(root)
         }
 
     return actual_skills, actual_agents, actual_commands
@@ -80,7 +87,7 @@ def _component_paths(manifest: dict[str, YamlValue], plugin_dir: Path, field: st
         if isinstance(value, list)
         else []
     )
-    return [Path(entry.removeprefix("./")) for entry in entries]
+    return [Path(entry.removeprefix("./")) for entry in entries if "\x00" not in entry]
 
 
 def _registered_component_files(manifest: dict[str, YamlValue], plugin_dir: Path, field: str) -> set[Path]:

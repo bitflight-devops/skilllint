@@ -822,6 +822,20 @@ class TestDiscoverPluginPaths:
         assert tmp_path / "agents" / "main.md" in result
         assert tmp_path / "agents" / "extra.md" not in result
 
+    def test_declared_commands_preserve_default_agents_and_skills(self, tmp_path: Path) -> None:
+        (tmp_path / "agents").mkdir()
+        (tmp_path / "agents" / "review.md").write_text("# Review")
+        (tmp_path / "commands").mkdir()
+        (tmp_path / "commands" / "run.md").write_text("# Run")
+        (tmp_path / "skills" / "guide").mkdir(parents=True)
+        (tmp_path / "skills" / "guide" / "SKILL.md").write_text("# Guide")
+
+        result = _discover_plugin_paths(PluginManifest(plugin_root=tmp_path, commands=["./commands/run.md"]))
+
+        assert tmp_path / "agents" / "review.md" in result
+        assert tmp_path / "commands" / "run.md" in result
+        assert tmp_path / "skills" / "guide" in result
+
     def test_manifest_driven_resolves_skill_paths(self, tmp_path: Path) -> None:
         """Manifest mode resolves a declared skill directory to its SKILL.md child.
 

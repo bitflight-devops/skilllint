@@ -136,9 +136,9 @@ def _parse_plugin_manifest(plugin_root: Path) -> PluginManifest:
     def _extract(key: str) -> list[str] | None:
         value = raw.get(key)
         if isinstance(value, str):
-            return [value]
+            return [value] if "\x00" not in value else None
         if isinstance(value, list):
-            return value
+            return [entry for entry in value if isinstance(entry, str) and "\x00" not in entry]
         return None
 
     return PluginManifest(
@@ -187,28 +187,27 @@ def _discover_plugin_paths(manifest: PluginManifest) -> list[Path]:
     discovered: set[Path] = set()
     root = manifest.plugin_root
 
-    if manifest.is_manifest_driven:
-        if manifest.skills is not None:
-            discovered.update(_discover_manifest_skill_paths(root, manifest.skills))
-        # Agents and commands entries should be direct file paths.
-        for path_list in (manifest.agents, manifest.commands):
-            if path_list is not None:
-                for rel in path_list:
-                    resolved = root / rel
-                    if not resolved.resolve().is_relative_to(root.resolve()):
-                        continue
-                    if resolved.is_dir():
-                        discovered.update(
-                            child
-                            for child in _glob_excluding(resolved, "*.md")
-                            if child.resolve().is_relative_to(root.resolve())
-                        )
-                    elif resolved.exists():
-                        discovered.add(resolved)
+    if manifest.skills is not None:
+        discovered.update(_discover_manifest_skill_paths(root, manifest.skills))
     else:
-        discovered.update(_glob_excluding(root, "agents/*.md"))
-        discovered.update(_glob_excluding(root, "commands/*.md"))
         discovered.update(path.parent for path in _glob_excluding(root, "skills/*/SKILL.md"))
+
+    for field, path_list in (("agents", manifest.agents), ("commands", manifest.commands)):
+        if path_list is None:
+            discovered.update(_glob_excluding(root, f"{field}/*.md"))
+            continue
+        for rel in path_list:
+            resolved = root / rel
+            if not resolved.resolve().is_relative_to(root.resolve()):
+                continue
+            if resolved.is_dir():
+                discovered.update(
+                    child
+                    for child in _glob_excluding(resolved, "*.md")
+                    if child.resolve().is_relative_to(root.resolve())
+                )
+            elif resolved.exists():
+                discovered.add(resolved)
 
     discovered.add(root)
 
