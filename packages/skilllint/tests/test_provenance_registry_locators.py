@@ -246,6 +246,27 @@ def test_claim_locators_reject_array_member_type_changes(monkeypatch: pytest.Mon
         test_claim_locators_resolve_and_values_match()
 
 
+def test_claim_locators_reject_non_string_field_set_members(monkeypatch: pytest.MonkeyPatch) -> None:
+    claims = [
+        (
+            "schema.field_set",
+            {
+                "claim_type": "field_set",
+                "assertion_location": {
+                    "file": "packages/skilllint/schemas/agentskills_io/v1.json",
+                    "symbol": "$.properties.name.examples",
+                    "source_type": "schema_json_field",
+                },
+                "expected_value": [1],
+            },
+        )
+    ]
+    monkeypatch.setattr(sys.modules[__name__], "_iter_claims", lambda: claims)
+    monkeypatch.setattr(sys.modules[__name__], "_resolve_schema_json_location", lambda _claim, _location: [1])
+    with pytest.raises(AssertionError, match="only strings"):
+        test_claim_locators_resolve_and_values_match()
+
+
 def test_claim_locators_resolve_and_values_match() -> None:
     for claim_id, claim in _iter_claims():
         location = claim["assertion_location"]
@@ -272,6 +293,17 @@ def test_claim_locators_resolve_and_values_match() -> None:
                 raise AssertionError(f"{claim_id}: unrecognized source_type '{source_type}'")
 
         assert "expected_value" in claim, f"{claim_id}: missing expected_value"
+        if claim.get("claim_type") in {"enum_set", "field_set"}:
+            assert isinstance(target, (list, tuple, set, frozenset)), (
+                f"{claim_id}: set claim resolved value must be a collection"
+            )
+            assert all(isinstance(member, str) for member in target), (
+                f"{claim_id}: set claim resolved value must contain only strings"
+            )
+            assert isinstance(claim["expected_value"], list), f"{claim_id}: set claim expected_value must be an array"
+            assert all(isinstance(member, str) for member in claim["expected_value"]), (
+                f"{claim_id}: set claim expected_value must contain only strings"
+            )
         if isinstance(target, list) and isinstance(claim["expected_value"], list):
             assert [type(member) for member in target] == [type(member) for member in claim["expected_value"]], (
                 f"{claim_id}: {recorded_file}.{location['symbol']} array members have different types"
