@@ -207,7 +207,7 @@ skilllint check --platform claude-code plugins/my-plugin
 | Code | Category | Description |
 |---|---|---|
 | FM001–FM007, FM009–FM010 | Frontmatter | Required fields, valid values, schema compliance |
-| SK004–SK009 | Skill | Description quality, token limits, complexity, internal links |
+| SK004–SK008 | Skill | Description quality, token limits, complexity, internal links |
 | AS001, AS006, AS008–AS009 | AgentSkills | SKILL.md conformance with the AgentSkills open standard |
 | LK001 | Links | Broken internal markdown link detection |
 | PD001–PD003 | Progressive disclosure | Directory structure for references/, examples/, scripts/ |

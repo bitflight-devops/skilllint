@@ -352,8 +352,8 @@ def fetch_or_cached(url: str, *, ttl_hours: float = 4.0, force: bool = False) ->
 
           - Network OK, content changed → write a new timestamped file →
             :attr:`CacheStatus.REFRESHED`.
-          - Network OK, content identical → update ``fetched_at`` in the
-            existing sidecar only → :attr:`CacheStatus.UNCHANGED`.
+          - Network OK, content identical → rebuild the existing sidecar from
+            the fetched content → :attr:`CacheStatus.UNCHANGED`.
           - Network failure (connect error, timeout, HTTP error) → return the
             stale copy as :attr:`CacheStatus.STALE`.
 
@@ -410,8 +410,7 @@ def fetch_or_cached(url: str, *, ttl_hours: float = 4.0, force: bool = False) ->
                 return CacheResult(path=cached_path, status=CacheStatus.STALE, page_name=page_name, url=url)
             raise
 
-        old_content = read_text_or_none(cached_path) or ""
-        if sha256_hex(new_content) == sha256_hex(old_content):
+        if cached_path.read_bytes() == new_content.encode():
             # Content unchanged — touch sidecar only.
             if (
                 sidecar is not None
@@ -427,7 +426,7 @@ def fetch_or_cached(url: str, *, ttl_hours: float = 4.0, force: bool = False) ->
 
         # Content changed — write new file.
         new_path = _new_path()
-        new_path.write_text(new_content, encoding="utf-8")
+        new_path.write_bytes(new_content.encode())
         write_sidecar(new_path, url=url, content=new_content)
         return CacheResult(path=new_path, status=CacheStatus.REFRESHED, page_name=page_name, url=url)
 
@@ -443,7 +442,7 @@ def fetch_or_cached(url: str, *, ttl_hours: float = 4.0, force: bool = False) ->
         raise
 
     new_path = _new_path()
-    new_path.write_text(new_content, encoding="utf-8")
+    new_path.write_bytes(new_content.encode())
     write_sidecar(new_path, url=url, content=new_content)
     return CacheResult(path=new_path, status=CacheStatus.NEW, page_name=page_name, url=url)
 

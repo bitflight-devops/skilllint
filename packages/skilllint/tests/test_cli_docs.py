@@ -19,6 +19,7 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import TYPE_CHECKING
+from uuid import uuid4
 
 import pytest
 
@@ -201,7 +202,7 @@ class TestDocsFetch:
         server = ThreadingHTTPServer(("127.0.0.1", 0), EmptyResponseHandler)
         thread = threading.Thread(target=server.serve_forever)
         thread.start()
-        url = f"http://127.0.0.1:{server.server_port}/empty-response"
+        url = f"http://127.0.0.1:{server.server_port}/empty-response-{uuid4().hex}"
         try:
             result = subprocess.run(
                 [sys.executable, "-m", "skilllint.plugin_validator", "docs", "fetch", url],

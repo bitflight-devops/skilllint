@@ -1,4 +1,4 @@
-"""SK-series skill quality rules (SK004-SK009).
+"""SK-series skill quality rules (SK004-SK008).
 
 Functions receive the parsed frontmatter dict, the file path, and
 additional keyword arguments as needed.
@@ -12,7 +12,6 @@ Rule IDs and default severities:
     | SK006 | Skill body exceeds token warning threshold                | warning   |
     | SK007 | Skill body exceeds token error threshold (must split)     | error     |
     | SK008 | Skill directory name violates naming convention           | error     |
-    | SK009 | Plugin uses manual skill selection (informational)        | info      |
     +-------+-----------------------------------------------------------+-----------+
 """
 
@@ -344,41 +343,4 @@ def check_sk008(frontmatter: dict[str, object], path: Path, file_type: str) -> l
     return []
 
 
-# ---------------------------------------------------------------------------
-# SK009 — Plugin uses manual skill selection (informational)
-# ---------------------------------------------------------------------------
-
-
-@skilllint_rule(
-    "SK009",
-    severity="info",
-    category="skill",
-    platforms=["agentskills"],
-    authority={"origin": "anthropic.com", "reference": _SKILLS_SPEC_URL},
-)
-def check_sk009(frontmatter: dict[str, object], path: Path, file_type: str) -> list[ValidationIssue]:
-    """## SK009 — Plugin uses manual skill selection
-
-    When the `skills` field is present in `plugin.json`, Claude Code uses
-    only the explicitly listed skills and will not auto-discover new skills
-    added to `skills/`. This is an `info` notice, not an error — manual
-    selection is a valid configuration choice.
-
-    **Source:** Claude Code plugin documentation — auto-discovery behaviour
-    when `skills` field is omitted from `plugin.json`.
-
-    **Fix (optional):** To switch to auto-discovery mode, remove the
-    `skills` field from `plugin.json`. Claude Code will then discover all
-    skills under `./skills/` automatically.
-
-    Returns:
-        Always an empty list. SK009 is emitted by `PluginRegistrationValidator`
-        in `plugin_validator.py` when `plugin.json` contains a `skills` key;
-        this function exists for rule metadata registration only.
-
-    <!-- examples: SK009 -->
-    """
-    return []
-
-
-__all__ = ["check_sk004", "check_sk005", "check_sk006", "check_sk007", "check_sk008", "check_sk009"]
+__all__ = ["check_sk004", "check_sk005", "check_sk006", "check_sk007", "check_sk008"]

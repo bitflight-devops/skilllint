@@ -501,7 +501,7 @@ print(json.dumps({
         assert uvx_result.stdout.replace("\n", "") == str(cache_file)
         assert non_git_result.stdout.replace("\n", "") == str(non_git_cache_file)
 
-    def test_installed_docs_cache_uses_separate_git_dir_primary_from_linked_worktree(
+    def test_installed_docs_cache_uses_linked_worktree_for_separate_git_dir(
         self, temp_venv: Path, tmp_path: Path
     ) -> None:
         primary = tmp_path / "primary-area" / "primary"
@@ -525,7 +525,7 @@ print(json.dumps({
         subprocess.run(["git", "commit", "-m", "initial"], cwd=primary, check=True, capture_output=True, text=True)
         linked.parent.mkdir()
         subprocess.run(["git", "worktree", "add", str(linked)], cwd=primary, check=True, capture_output=True, text=True)
-        cache_file = primary / ".claude/vendor/sources/page-2026.md"
+        cache_file = linked / ".claude/vendor/sources/page-2026.md"
         cache_file.parent.mkdir(parents=True)
         cache_file.write_text("cached\n", encoding="utf-8")
 
@@ -544,6 +544,9 @@ print(json.dumps({
     def test_installed_docs_cache_uses_linked_worktree_when_cross_root_primary_is_undiscoverable(
         self, temp_venv: Path
     ) -> None:
+        if sys.platform == "win32":
+            pytest.skip("Cross-root topology requires POSIX /tmp and /var/tmp roots")
+
         with (
             tempfile.TemporaryDirectory(dir=Path.home()) as primary_dir,
             tempfile.TemporaryDirectory(dir="/tmp") as git_dir_parent,
