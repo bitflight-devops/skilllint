@@ -25,9 +25,11 @@ from re import Pattern
 from typing import Any
 
 import pytest
+from pydantic import JsonValue, TypeAdapter
 
 REPO_ROOT = Path(__file__).parent.parent.parent.parent
 SCHEMAS_DIR = REPO_ROOT / "packages" / "skilllint" / "schemas"
+JSON_OBJECT = TypeAdapter(dict[str, JsonValue])
 REGISTRY_PATH = SCHEMAS_DIR / "provenance-registry.json"
 OPINION_CATALOG_PATH = SCHEMAS_DIR / "opinion-catalog.json"
 
@@ -71,7 +73,7 @@ def _resolve_schema_json_location(claim_id: str, location: dict[str, str]) -> ob
 
     symbol = location["symbol"]
     assert symbol.startswith("$."), f"{claim_id}: schema locator '{symbol}' must start with '$.'"
-    target: object = json.loads(schema_path.read_text(encoding="utf-8"))
+    target: object = JSON_OBJECT.validate_json(schema_path.read_text(encoding="utf-8"))
     for part in symbol.removeprefix("$.").split("."):
         assert isinstance(target, dict), f"{claim_id}: '{symbol}' cannot traverse '{part}'"
         assert part in target, f"{claim_id}: '{symbol}' has no segment '{part}'"
