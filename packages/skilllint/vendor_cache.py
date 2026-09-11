@@ -211,16 +211,39 @@ def _is_network_error(exc: Exception) -> bool:
     return isinstance(exc, (httpx.ConnectError, httpx.TimeoutException, httpx.HTTPError))
 
 
-def _age_hours(fetched_at_iso: str) -> float:
+def _age_hours(fetched_at_iso: str | None) -> float:
     """Return age in hours between *fetched_at_iso* and now (UTC)."""
+    if not isinstance(fetched_at_iso, str):
+        return float("inf")
     try:
         fetched_at = datetime.fromisoformat(fetched_at_iso)
     except (ValueError, TypeError):
         # Treat unparseable timestamps as maximally stale.
         return float("inf")
+    if fetched_at.tzinfo is None or fetched_at.utcoffset() is None:
+        return float("inf")
     now = datetime.now(UTC)
     delta = now - fetched_at
     return delta.total_seconds() / 3600.0
+
+
+def _collision_safe_path(page_name: str, directory: Path, timestamp: str) -> Path:
+    timestamped_path = directory / f"{page_name}-{timestamp}.md"
+    suffix_prefix = f"{page_name}-{timestamp}-"
+    suffixes = [
+        int(path.stem.removeprefix(suffix_prefix))
+        for path in directory.glob(f"{suffix_prefix}*.md")
+        if path.stem.removeprefix(suffix_prefix).isdecimal()
+    ]
+    if not timestamped_path.exists() and not suffixes:
+        return timestamped_path
+
+    collision = max(suffixes, default=0) + 1
+    while True:
+        candidate = directory / f"{page_name}-{timestamp}-{collision}.md"
+        if not candidate.exists():
+            return candidate
+        collision += 1
 
 
 # ---------------------------------------------------------------------------
@@ -287,9 +310,9 @@ def find_latest(page_name: str, *, sources_dir: Path | None = None) -> Path | No
 
     Scans *sources_dir* (defaults to :data:`~skilllint.vendor_io.SOURCES_DIR`)
     for files matching ``{page_name}-*.md`` (excluding ``*.meta.json`` files).
-    Returns the path whose filename sorts lexicographically last (timestamps
-    in ``YYYY-MM-DD-HHMM`` format sort correctly by lexicographic order), or
-    ``None`` if no matches exist.
+    Returns the path with the newest minute timestamp and, for paths allocated
+    within the same minute, the highest collision suffix. Legacy minute-only
+    names remain readable. Returns ``None`` if no matches exist.
 
     Args:
         page_name: Filesystem-safe page name, as returned by
@@ -304,7 +327,14 @@ def find_latest(page_name: str, *, sources_dir: Path | None = None) -> Path | No
     candidates = [p for p in directory.glob(f"{page_name}-*.md") if not p.name.endswith(".meta.json")]
     if not candidates:
         return None
-    return max(candidates, key=lambda p: p.name)
+
+    def _sort_key(path: Path) -> tuple[str, int]:
+        stem = path.stem.removeprefix(f"{page_name}-")
+        timestamp = stem[:16]
+        suffix = stem[16:].removeprefix("-")
+        return timestamp, int(suffix) if suffix.isdecimal() else 0
+
+    return max(candidates, key=_sort_key)
 
 
 def fetch_or_cached(url: str, *, ttl_hours: float = 4.0, force: bool = False) -> CacheResult:
@@ -337,7 +367,8 @@ def fetch_or_cached(url: str, *, ttl_hours: float = 4.0, force: bool = False) ->
           - Network failure → raise :exc:`NoCacheError`.
 
     File naming convention: ``{page_name}-{YYYY-MM-DD-HHMM}.md`` inside
-    :data:`~skilllint.vendor_io.SOURCES_DIR`.
+    :data:`~skilllint.vendor_io.SOURCES_DIR`; same-minute collisions append a
+    numeric suffix.
 
     Args:
         url: URL of the documentation page to fetch.
@@ -361,12 +392,14 @@ def fetch_or_cached(url: str, *, ttl_hours: float = 4.0, force: bool = False) ->
         return datetime.now(UTC).strftime("%Y-%m-%d-%H%M")
 
     def _new_path() -> Path:
-        return SOURCES_DIR / f"{page_name}-{_timestamp()}.md"
+        return _collision_safe_path(page_name, SOURCES_DIR, _timestamp())
 
     if cached_path is not None:
         sidecar = load_sidecar(cached_path)
-        fetched_at = sidecar.get("fetched_at", "") if not force and sidecar else ""
-        if not force and _age_hours(fetched_at) < ttl_hours:
+        fetched_at = sidecar.get("fetched_at") if sidecar else None
+        age = _age_hours(fetched_at)
+
+        if not force and age < ttl_hours:
             return CacheResult(path=cached_path, status=CacheStatus.FRESH, page_name=page_name, url=url)
 
         # Stale — attempt refresh.

@@ -275,6 +275,17 @@ class TestFindLatest:
         assert result is not None
         assert result.name == "mypage-2026-01-01-1200.md"
 
+    def test_find_latest_prefers_collision_suffix_over_legacy_minute_name(self, tmp_path: Path) -> None:
+        # Given
+        _write_md(tmp_path, "mypage-2026-01-01-1200.md", "legacy")
+        collision = _write_md(tmp_path, "mypage-2026-01-01-1200-1.md", "newer")
+
+        # When
+        result = find_latest("mypage", sources_dir=tmp_path)
+
+        # Then
+        assert result == collision
+
     def test_find_latest_ignores_meta_json_files(self, tmp_path: Path) -> None:
         """find_latest ignores .meta.json sidecar files when scanning.
 
@@ -366,6 +377,67 @@ class TestFetchOrCachedFresh:
         assert result.path == md_path
         assert result.url == url
 
+    @pytest.mark.parametrize(
+        "invalid_fetched_at", ["not-a-timestamp", 1, "2026-01-01T00:00:00"], ids=["malformed", "wrong-type", "naive"]
+    )
+    def test_fetch_or_cached_refreshes_invalid_sidecar_timestamp(
+        self, tmp_path: Path, mocker: MockerFixture, invalid_fetched_at: str | int
+    ) -> None:
+        # Given
+        mocker.patch("skilllint.vendor_cache.SOURCES_DIR", tmp_path)
+        url = "https://example.com/docs/invalid-timestamp.md"
+        content = "# Cached\nSome content."
+        md_path = _write_md(tmp_path, "invalid-timestamp-2026-03-23-1000.md", content)
+        sidecar_path = _write_sidecar(
+            md_path,
+            url=url,
+            sha256=hashlib.sha256(content.encode()).hexdigest(),
+            byte_count=len(content.encode()),
+            fetched_at=_fresh_fetched_at(),
+        )
+        sidecar = json.loads(sidecar_path.read_text(encoding="utf-8"))
+        sidecar["fetched_at"] = invalid_fetched_at
+        sidecar_path.write_text(json.dumps(sidecar), encoding="utf-8")
+        mock_fetch = mocker.patch("skilllint.vendor_cache.fetch_url_text", return_value=content)
+
+        # When
+        result = fetch_or_cached(url, ttl_hours=4.0)
+
+        # Then
+        mock_fetch.assert_called_once_with(url)
+        assert result.status == CacheStatus.UNCHANGED
+        assert result.path == md_path
+        assert (
+            datetime.fromisoformat(json.loads(sidecar_path.read_text(encoding="utf-8"))["fetched_at"]).tzinfo
+            is not None
+        )
+
+    def test_fetch_or_cached_refreshes_missing_sidecar_timestamp(self, tmp_path: Path, mocker: MockerFixture) -> None:
+        # Given
+        mocker.patch("skilllint.vendor_cache.SOURCES_DIR", tmp_path)
+        url = "https://example.com/docs/missing-timestamp.md"
+        content = "# Cached\nSome content."
+        md_path = _write_md(tmp_path, "missing-timestamp-2026-03-23-1000.md", content)
+        sidecar_path = _write_sidecar(
+            md_path,
+            url=url,
+            sha256=hashlib.sha256(content.encode()).hexdigest(),
+            byte_count=len(content.encode()),
+            fetched_at=_fresh_fetched_at(),
+        )
+        sidecar = json.loads(sidecar_path.read_text(encoding="utf-8"))
+        del sidecar["fetched_at"]
+        sidecar_path.write_text(json.dumps(sidecar), encoding="utf-8")
+        mock_fetch = mocker.patch("skilllint.vendor_cache.fetch_url_text", return_value=content)
+
+        # When
+        result = fetch_or_cached(url, ttl_hours=4.0)
+
+        # Then
+        mock_fetch.assert_called_once_with(url)
+        assert result.status == CacheStatus.UNCHANGED
+        assert result.path == md_path
+
 
 class TestFetchOrCachedStale:
     """Tests for fetch_or_cached — stale cache scenarios."""
@@ -404,6 +476,95 @@ class TestFetchOrCachedStale:
         assert result.status == CacheStatus.REFRESHED
         assert result.path != md_path  # new timestamped file was written
         assert result.path.read_text(encoding="utf-8") == new_content
+
+    def test_fetch_or_cached_retains_changed_same_minute_refreshes(self, tmp_path: Path, mocker: MockerFixture) -> None:
+        # Given
+        mocker.patch("skilllint.vendor_cache.SOURCES_DIR", tmp_path)
+        fixed_time = datetime(2026, 9, 9, 12, 34, tzinfo=UTC)
+        mock_datetime = mocker.patch("skilllint.vendor_cache.datetime")
+        mock_datetime.now.return_value = fixed_time
+        mock_datetime.fromisoformat.side_effect = datetime.fromisoformat
+        url = "https://example.com/docs/history.md"
+        old_content = "# Old\n"
+        first_content = "# First\n"
+        second_content = "# Second\n"
+        old_path = _write_md(tmp_path, "history-2026-01-01-0000.md", old_content)
+        _write_sidecar(
+            old_path,
+            url=url,
+            sha256=hashlib.sha256(old_content.encode()).hexdigest(),
+            byte_count=len(old_content.encode()),
+            fetched_at="2026-01-01T00:00:00+00:00",
+        )
+        mocker.patch("skilllint.vendor_cache.fetch_url_text", side_effect=[first_content, second_content])
+
+        # When
+        first = fetch_or_cached(url)
+        second = fetch_or_cached(url, force=True)
+
+        # Then
+        assert first.status == CacheStatus.REFRESHED
+        assert second.status == CacheStatus.REFRESHED
+        assert first.path.name == "history-2026-09-09-1234.md"
+        assert second.path.name == "history-2026-09-09-1234-1.md"
+        assert first.path.read_text(encoding="utf-8") == first_content
+        assert second.path.read_text(encoding="utf-8") == second_content
+        assert find_latest("history", sources_dir=tmp_path) == second.path
+
+    def test_fetch_or_cached_allocates_after_existing_same_minute_suffix_gap(
+        self, tmp_path: Path, mocker: MockerFixture
+    ) -> None:
+        # Given
+        mocker.patch("skilllint.vendor_cache.SOURCES_DIR", tmp_path)
+        fixed_time = datetime(2026, 9, 10, 0, 36, tzinfo=UTC)
+        mock_datetime = mocker.patch("skilllint.vendor_cache.datetime")
+        mock_datetime.now.return_value = fixed_time
+        mock_datetime.fromisoformat.side_effect = datetime.fromisoformat
+        url = "https://example.com/docs/history-gap.md"
+        _write_md(tmp_path, "history-gap-2026-09-10-0036.md", "base")
+        old_path = _write_md(tmp_path, "history-gap-2026-09-10-0036-2.md", "older suffix two")
+        _write_sidecar(
+            old_path,
+            url=url,
+            sha256=hashlib.sha256(b"older suffix two").hexdigest(),
+            byte_count=len(b"older suffix two"),
+            fetched_at="2026-01-01T00:00:00+00:00",
+        )
+        mocker.patch("skilllint.vendor_cache.fetch_url_text", return_value="new refresh")
+
+        # When
+        result = fetch_or_cached(url)
+
+        # Then
+        assert result.status == CacheStatus.REFRESHED
+        assert result.path.name == "history-gap-2026-09-10-0036-3.md"
+        assert find_latest("history-gap", sources_dir=tmp_path) == result.path
+
+    def test_fetch_or_cached_allocates_after_suffix_when_same_minute_base_is_missing(
+        self, tmp_path: Path, mocker: MockerFixture
+    ) -> None:
+        mocker.patch("skilllint.vendor_cache.SOURCES_DIR", tmp_path)
+        fixed_time = datetime(2026, 9, 10, 0, 36, tzinfo=UTC)
+        mock_datetime = mocker.patch("skilllint.vendor_cache.datetime")
+        mock_datetime.now.return_value = fixed_time
+        mock_datetime.fromisoformat.side_effect = datetime.fromisoformat
+        url = "https://example.com/docs/history-gap-missing-base.md"
+        old_path = _write_md(tmp_path, "history-gap-missing-base-2026-09-10-0036-2.md", "older suffix two")
+        _write_sidecar(
+            old_path,
+            url=url,
+            sha256=hashlib.sha256(b"older suffix two").hexdigest(),
+            byte_count=len(b"older suffix two"),
+            fetched_at="2026-01-01T00:00:00+00:00",
+        )
+        mocker.patch("skilllint.vendor_cache.fetch_url_text", return_value="new refresh")
+
+        result = fetch_or_cached(url)
+
+        assert result.status == CacheStatus.REFRESHED
+        assert result.path.name == "history-gap-missing-base-2026-09-10-0036-3.md"
+        assert result.path.read_text(encoding="utf-8") == "new refresh"
+        assert find_latest("history-gap-missing-base", sources_dir=tmp_path) == result.path
 
     def test_fetch_or_cached_returns_unchanged_when_content_identical(
         self, tmp_path: Path, mocker: MockerFixture
