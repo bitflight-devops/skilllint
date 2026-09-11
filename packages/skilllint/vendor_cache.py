@@ -229,21 +229,16 @@ def _age_hours(fetched_at_iso: str | None) -> float:
 
 def _collision_safe_path(page_name: str, directory: Path, timestamp: str) -> Path:
     timestamped_path = directory / f"{page_name}-{timestamp}.md"
-    if not timestamped_path.exists():
+    suffix_prefix = f"{page_name}-{timestamp}-"
+    suffixes = [
+        int(path.stem.removeprefix(suffix_prefix))
+        for path in directory.glob(f"{suffix_prefix}*.md")
+        if path.stem.removeprefix(suffix_prefix).isdecimal()
+    ]
+    if not timestamped_path.exists() and not suffixes:
         return timestamped_path
 
-    suffix_prefix = f"{page_name}-{timestamp}-"
-    collision = (
-        max(
-            (
-                int(path.stem.removeprefix(suffix_prefix))
-                for path in directory.glob(f"{suffix_prefix}*.md")
-                if path.stem.removeprefix(suffix_prefix).isdecimal()
-            ),
-            default=0,
-        )
-        + 1
-    )
+    collision = max(suffixes, default=0) + 1
     while True:
         candidate = directory / f"{page_name}-{timestamp}-{collision}.md"
         if not candidate.exists():
