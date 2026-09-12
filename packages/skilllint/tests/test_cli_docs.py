@@ -13,8 +13,13 @@ Why: The docs subcommand group is a pure CLI adapter over vendor_cache.
 
 from __future__ import annotations
 
+import subprocess
+import sys
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import TYPE_CHECKING
+from uuid import uuid4
 
 import pytest
 
@@ -91,6 +96,15 @@ class TestDocsFetch:
         # Assert
         assert result.exit_code == 0
         assert str(_TEST_PATH) in result.output
+
+    def test_fetch_stdout_is_a_single_capturable_path(self, cli_runner: CliRunner, mocker: MockerFixture) -> None:
+        mock_fetch = mocker.patch("skilllint.cli_docs.fetch_or_cached")
+        mock_fetch.return_value = _cache_result(CacheStatus.NEW, Path("/tmp/" + "directory-" * 20 + "settings.md"))
+
+        result = cli_runner.invoke(plugin_validator.app, ["docs", "fetch", _TEST_URL])
+
+        assert result.exit_code == 0
+        assert result.stdout == f"{mock_fetch.return_value.path}\n"
 
     def test_fresh_cache_hit_exits_zero(self, cli_runner: CliRunner, mocker: MockerFixture) -> None:
         """Cache hit within TTL (FRESH status) exits 0 and prints the path.
@@ -186,6 +200,34 @@ class TestDocsFetch:
         # Assert
         assert result.exit_code == 1
         assert _TEST_URL in result.output
+
+    def test_empty_successful_response_exits_one_without_traceback(self) -> None:
+        class EmptyResponseHandler(BaseHTTPRequestHandler):
+            def do_GET(self) -> None:
+                self.send_response(200)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), EmptyResponseHandler)
+        thread = threading.Thread(target=server.serve_forever)
+        thread.start()
+        url = f"http://127.0.0.1:{server.server_port}/empty-response-{uuid4().hex}"
+        try:
+            result = subprocess.run(
+                [sys.executable, "-m", "skilllint.plugin_validator", "docs", "fetch", url],
+                capture_output=True,
+                check=False,
+                text=True,
+            )
+        finally:
+            server.shutdown()
+            thread.join()
+            server.server_close()
+
+        assert result.returncode == 1
+        assert url in result.stderr
+        assert "Empty response body" in result.stderr
+        assert "Traceback" not in result.stderr
 
     def test_force_flag_passes_force_true_to_fetch_or_cached(
         self, cli_runner: CliRunner, mocker: MockerFixture

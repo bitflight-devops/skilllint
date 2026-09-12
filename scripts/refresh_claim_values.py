@@ -33,7 +33,7 @@ so a CI workflow can open a PR). Exits 0 when nothing changed.
 Exit codes:
     0 -- no drift; every checked claim's expected_value already matches
     1 -- drift found and written to provenance-registry.json
-    2 -- a claim's vendor document could not be fetched and no cache exists
+    2 -- a claim's vendor document could not be used to extract values
     3 -- unexpected error (distinct from 1 so CI can't mistake a crash for
          "drift found and written" -- see main())
 """
@@ -128,6 +128,10 @@ def _refresh_one(claim_id: str, claim: dict, fetch_cache: dict[str, CacheResult]
         sys.exit(2)
 
     extracted = extractor(section_text)
+    if not extracted:
+        print(f"ERROR: {claim_id}: extraction from '{heading}' produced no values", file=sys.stderr)
+        sys.exit(2)
+
     current = sorted(claim["expected_value"])
 
     if extracted == current:
@@ -159,11 +163,7 @@ def main() -> int:
         changed = _refresh_one(claim_id, claim, fetch_cache) or changed
 
     if changed:
-        # ensure_ascii=False: keep non-ASCII characters elsewhere in the
-        # registry (e.g. the top-level description's em dash) as literal
-        # UTF-8 instead of \uXXXX escapes, so a drift PR's diff is limited
-        # to the claim(s) that actually changed.
-        REGISTRY_PATH.write_text(json.dumps(registry, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        REGISTRY_PATH.write_text(json.dumps(registry, indent=2) + "\n", encoding="utf-8")
         print(f"Wrote drift to {REGISTRY_PATH}")
         return 1
 

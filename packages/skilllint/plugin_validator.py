@@ -81,6 +81,7 @@ from skilllint.rules.lk_series import check_lk001
 from skilllint.rules.nr_series import check_nr001, check_nr002
 from skilllint.rules.pd_series import check_pd001, check_pd002, check_pd003
 from skilllint.rules.pl_series import (
+    _check_pl004_manifest_paths,
     check_pl001,
     check_pl002,
     check_pl003,
@@ -624,8 +625,6 @@ def filter_validators_by_constraint_scopes(
     return filtered
 
 
-# Claude CLI timeout
-CLAUDE_TIMEOUT = 3  # seconds
 GIT_MODE_EXECUTABLE = 0o100755  # Git mode for executable files (100755)
 
 # Filenames exempt from frontmatter requirement (case-sensitive)
@@ -636,6 +635,17 @@ FRONTMATTER_EXEMPT_FILENAMES: frozenset[str] = frozenset({
     "CLAUDE.md",
     "README.md",
 })
+
+
+def _run_claude_plugin_validate(claude_path: str, plugin_dir: Path) -> subprocess.CompletedProcess[str]:
+    subprocess_env = {key: value for key, value in os.environ.items() if key != "CLAUDECODE"}
+    return subprocess.run(
+        [claude_path, "plugin", "validate", str(plugin_dir)],
+        capture_output=True,
+        text=True,
+        check=False,
+        env=subprocess_env,
+    )
 
 
 def _git_bash_path() -> str | None:
@@ -3009,12 +3019,12 @@ class PluginRegistrationValidator:
 
         try:
             plugin_config = msgspec.json.decode(plugin_json_path.read_bytes())
-        except msgspec.DecodeError as e:
+        except msgspec.DecodeError as error:
             errors.append(
                 ValidationIssue(
                     field="plugin.json",
                     severity="error",
-                    message=f"Invalid JSON: {e}",
+                    message=f"Invalid JSON: {error}",
                     code=PL002,
                     docs_url=generate_docs_url(PL002),
                     suggestion="Fix JSON syntax errors",
@@ -3022,7 +3032,21 @@ class PluginRegistrationValidator:
             )
             return ValidationResult(passed=False, errors=errors, warnings=warnings, info=info)
 
+        if not isinstance(plugin_config, dict):
+            errors.append(
+                ValidationIssue(
+                    field="plugin.json",
+                    severity="error",
+                    message="Invalid JSON: plugin.json top level must be an object",
+                    code=PL002,
+                    docs_url=generate_docs_url(PL002),
+                    suggestion="Use a JSON object for plugin.json",
+                )
+            )
+            return ValidationResult(passed=False, errors=errors, warnings=warnings, info=info)
+
         # Registration checks — detection lives in skilllint.rules.pr_series.
+        errors.extend(_check_pl004_manifest_paths(plugin_config, plugin_dir))
         warnings.extend(check_pr001(plugin_config, plugin_dir))
         errors.extend(check_pr002(plugin_config, plugin_dir))
         info.extend(check_pr005(plugin_config, plugin_dir))
@@ -3142,30 +3166,20 @@ class PluginStructureValidator:
         # On Windows, ensure CLAUDE_CODE_GIT_BASH_PATH is set if git-bash can be found
         _git_bash_path()
 
-        # Run claude plugin validate
-        # Unset CLAUDECODE so the subprocess is not treated as a nested CLI session.
-        subprocess_env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
         try:
-            result = subprocess.run(
-                [claude_path, "plugin", "validate", str(plugin_dir)],
-                capture_output=True,
-                text=True,
-                timeout=CLAUDE_TIMEOUT,
-                check=False,
-                env=subprocess_env,
-            )
+            result = _run_claude_plugin_validate(claude_path, plugin_dir)
 
             # Parse output for errors
             if result.returncode != 0:
                 # Validation failed - parse errors from output
                 self._parse_claude_errors(result.stdout, result.stderr, errors, warnings, info)
 
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as error:
             errors.append(
                 ValidationIssue(
                     field="(plugin-validation)",
                     severity="error",
-                    message=f"Claude plugin validation timed out after {CLAUDE_TIMEOUT} seconds",
+                    message=f"Claude plugin validation timed out after {error.timeout} seconds",
                     code=PL002,
                     docs_url=generate_docs_url(PL002),
                 )
@@ -3496,7 +3510,6 @@ def validate_with_claude(plugin_dir: Path) -> tuple[bool, str]:
     Security requirements:
     - NEVER uses shell=True (command injection risk)
     - Passes command as list: [cmd_path, arg1, arg2]
-    - Sets timeout to prevent hanging
     - Gets full command path via shutil.which()
 
     Args:
@@ -3522,20 +3535,10 @@ def validate_with_claude(plugin_dir: Path) -> tuple[bool, str]:
     if not plugin_json.exists():
         return True, "Not a plugin directory (skipped)"
 
-    # Run claude plugin validate with security best practices
-    # Unset CLAUDECODE so the subprocess is not treated as a nested CLI session.
-    subprocess_env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
     try:
-        result = subprocess.run(
-            [claude_path, "plugin", "validate", str(plugin_dir)],
-            capture_output=True,
-            text=True,
-            timeout=CLAUDE_TIMEOUT,
-            check=False,  # Handle non-zero exit code ourselves
-            env=subprocess_env,
-        )
-    except subprocess.TimeoutExpired:
-        return (False, f"Claude plugin validation timed out after {CLAUDE_TIMEOUT} seconds")
+        result = _run_claude_plugin_validate(claude_path, plugin_dir)
+    except subprocess.TimeoutExpired as error:
+        return (False, f"Claude plugin validation timed out after {error.timeout} seconds")
     except (FileNotFoundError, OSError) as e:
         # FileNotFoundError: Claude CLI not found (should be caught by shutil.which)
         # OSError: Other subprocess errors (permission denied, etc.)
@@ -3750,6 +3753,20 @@ def _get_fixers_for_path(validators: list[Validator], path: Path) -> list[Valida
     return [*validators, NameFormatValidator()]
 
 
+def _without_duplicate_plugin_errors(
+    result: ValidationResult, reported_plugin_structure_counts: dict[str, int]
+) -> ValidationResult:
+    remaining_duplicate_counts = reported_plugin_structure_counts.copy()
+    errors: list[ValidationIssue] = []
+    for issue in result.errors:
+        code = str(issue.code)
+        if code in {"PL002", "PL004"} and remaining_duplicate_counts.get(code, 0):
+            remaining_duplicate_counts[code] -= 1
+            continue
+        errors.append(issue)
+    return ValidationResult(passed=not errors, errors=errors, warnings=result.warnings, info=result.info)
+
+
 def _collect_validator_results(
     validators: list[Validator],
     path: Path,
@@ -3779,12 +3796,15 @@ def _collect_validator_results(
         List of (validator_class_name, result) tuples.
     """
     results: list[tuple[str, ValidationResult]] = []
+    reported_plugin_structure_counts: dict[str, int] = {}
     for validator in validators:
         name = type(validator).__name__
         if policy is not None and isinstance(validator, (ComplexityValidator, AsSeriesValidator)):
             result = validator.validate(path, policy)
         else:
             result = validator.validate(path)
+        if name == "PluginRegistrationValidator":
+            result = _without_duplicate_plugin_errors(result, reported_plugin_structure_counts)
         if policy is not None and policy.severity:
 
             def remap(issue: ValidationIssue) -> ValidationIssue:
@@ -3815,6 +3835,10 @@ def _collect_validator_results(
             raw_codes_out.update(str(i.code) for i in (*result.errors, *result.warnings, *result.info))
         if config_root is not None:
             result = _filter_result_by_ignore(result, path, config_root, ignore_config)
+        if name == "PluginStructureValidator":
+            for issue in result.errors:
+                code = str(issue.code)
+                reported_plugin_structure_counts[code] = reported_plugin_structure_counts.get(code, 0) + 1
         results.append((name, result))
     return results
 
