@@ -3986,7 +3986,7 @@ def _collect_validator_results(
         if config_root is not None:
             result = _filter_result_by_ignore(result, path, config_root, ignore_config)
         if name == "PluginStructureValidator":
-            for issue in result.errors:
+            for issue in (*result.errors, *result.warnings, *result.info):
                 str(issue.code)
                 duplicate_key = _plugin_error_deduplication_key(issue)
                 reported_plugin_structure_counts[duplicate_key] = (

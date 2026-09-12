@@ -480,6 +480,8 @@ def _manifest_filter_type_paths(
             continue
         if _is_foreign_provider_target(target, directory):
             continue
+        if not target.exists():
+            target = directory / ".claude-plugin" / "plugin.json"
         if target.is_dir() and filter_type in {"agents", "commands"}:
             targets.extend(
                 child for child in _glob_excluding(target, "*.md") if child.resolve().is_relative_to(directory_root)

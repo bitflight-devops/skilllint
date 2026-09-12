@@ -27,7 +27,10 @@ from skilllint.plugin_validator import (
     PL006,
     PluginStructureValidator,
     ValidationIssue,
+    ValidationPolicy,
     ValidationResult,
+    _collect_validator_results,
+    _get_validators_for_path,
     _without_duplicate_plugin_errors,
     find_marketplace_dir,
     validate_single_path,
@@ -346,6 +349,35 @@ class TestTimeoutHandling:
         )
 
         assert filtered.errors == [registration_issue]
+
+    def test_policy_remap_deduplicates_pl002_before_severity_change(
+        self, mocker: MockerFixture, tmp_path: Path
+    ) -> None:
+        plugin_dir = tmp_path / "test-plugin"
+        (plugin_dir / ".claude-plugin").mkdir(parents=True)
+        (plugin_dir / ".claude-plugin" / "plugin.json").write_text("[]")
+        duplicate = ValidationIssue(
+            field="plugin.json",
+            severity="error",
+            message="Invalid JSON: plugin.json top level must be an object",
+            code="PL002",
+        )
+        mocker.patch.object(
+            PluginStructureValidator,
+            "validate",
+            return_value=ValidationResult(passed=False, errors=[duplicate], warnings=[], info=[]),
+        )
+
+        results = _collect_validator_results(
+            _get_validators_for_path(plugin_dir),
+            plugin_dir,
+            config_root=None,
+            ignore_config={},
+            policy=ValidationPolicy({}, {"PL002": "warning"}, {}),
+        )
+        issues = [issue for _name, result in results for issue in (*result.errors, *result.warnings, *result.info)]
+
+        assert [(issue.code, issue.severity) for issue in issues if issue.code == "PL002"] == [("PL002", "warning")]
 
     def test_controlled_non_timeout_failure_retains_pl002(self, mocker: MockerFixture, tmp_path: Path) -> None:
         mocker.patch("shutil.which", return_value="/usr/local/bin/claude")

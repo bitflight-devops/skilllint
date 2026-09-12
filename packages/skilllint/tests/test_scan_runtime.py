@@ -582,6 +582,21 @@ class TestResolveFilterAndExpandPaths:
 
         assert paths == [manifest]
 
+    @pytest.mark.parametrize("filter_type", ["agents", "commands"])
+    def test_claude_filtered_manifest_scan_routes_missing_capability_to_plugin_manifest(
+        self, tmp_path: Path, filter_type: str
+    ) -> None:
+        plugin_dir = tmp_path / "plugin"
+        manifest = plugin_dir / ".claude-plugin" / "plugin.json"
+        manifest.parent.mkdir(parents=True)
+        manifest.write_text(f'{{"{filter_type}": ["custom/missing.md"]}}')
+
+        paths, _ = _resolve_filter_and_expand_paths(
+            [plugin_dir], None, filter_type, platform_adapter=ClaudeCodeAdapter()
+        )
+
+        assert paths == [manifest]
+
     @pytest.mark.parametrize(
         ("filter_type", "expected_name"),
         [("skills", "nested-skill"), ("agents", "agent.md"), ("commands", "command.md")],
