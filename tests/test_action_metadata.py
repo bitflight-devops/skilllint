@@ -22,3 +22,9 @@ def test_action_normalizes_crlf_before_reading_inspected_count() -> None:
     action = ACTION_FILE.read_text(encoding="utf-8")
 
     assert "tr -d '\\r'" in action
+
+
+def test_action_normalizes_crlf_before_counting_tokens_only_output() -> None:
+    action = ACTION_FILE.read_text(encoding="utf-8")
+
+    assert "grep -cE '^[0-9]+($|[[:blank:]])' <<< \"${NORMALIZED_OUTPUT}\"" in action
