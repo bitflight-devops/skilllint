@@ -322,6 +322,7 @@ class TestPluginRegistrationRoutes:
         assert result.exit_code == 1, result.stdout
         assert "[PL004]" in result.stdout
         assert "Traceback" not in result.stdout
+        assert "\x00" not in result.stdout
 
     def test_registered_agent_symlink_is_not_reported_as_unregistered(
         self, cli_runner: CliRunner, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, no_color_env: None

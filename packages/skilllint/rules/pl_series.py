@@ -507,13 +507,14 @@ def _check_pl004_manifest_paths(manifest: dict[str, YamlValue], plugin_dir: Path
         )
         for entry in entries:
             if "\x00" in entry:
+                display_entry = entry.replace("\x00", "\\0")
                 issues.append(
                     _make_issue(
                         field="plugin.json",
                         severity="error",
                         message=f"Registered {field} path contains an invalid NUL character",
                         code="PL004",
-                        suggestion=f"Replace '{entry}' with a path under ./{field}/",
+                        suggestion=f"Replace '{display_entry}' with a path under ./{field}/",
                     )
                 )
                 continue
