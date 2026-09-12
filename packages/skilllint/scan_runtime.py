@@ -370,7 +370,7 @@ def _platform_matching_paths(paths: list[Path], directory: Path, adapter: Platfo
             )
         )
     ]
-    return sorted({_semantic_platform_target(path, semantic_targets, adapter, directory) for path in matched})
+    return sorted({_semantic_platform_target(path, semantic_targets) for path in matched})
 
 
 def _matches_platform_path(adapter: PlatformAdapter, candidate: Path, directory: Path) -> bool:
@@ -393,9 +393,7 @@ def _matches_platform_relative_path(adapter: PlatformAdapter, candidate: Path) -
     )
 
 
-def _semantic_platform_target(
-    candidate: Path, semantic_targets: list[Path], adapter: PlatformAdapter, directory: Path
-) -> Path:
+def _semantic_platform_target(candidate: Path, semantic_targets: list[Path]) -> Path:
     if candidate.suffix != ".md":
         return candidate
     return next(
@@ -439,7 +437,7 @@ def _discover_platform_paths(directory: Path, adapter: PlatformAdapter) -> list[
     for candidate in _glob_excluding(directory, "**/*"):
         if not candidate.is_file() or not _matches_platform_path(adapter, candidate, directory):
             continue
-        discovered.add(_semantic_platform_target(candidate, semantic_targets, adapter, directory))
+        discovered.add(_semantic_platform_target(candidate, semantic_targets))
     return sorted(discovered)
 
 
