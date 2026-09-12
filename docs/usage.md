@@ -136,8 +136,7 @@ repos:
 
 `skilllint` checks without mutating files; `skilllint-fix` applies supported
 fixes and is idempotent. Use the hook's `exclude` for generated or vendored
-trees. The broad by-file-type hook remains available for non-standard layouts
-but is intentionally not a canonical recommendation.
+trees.
 
 ## Maintainer checks
 

@@ -520,6 +520,19 @@ class TestResolveFilterAndExpandPaths:
 
         assert paths == []
 
+    def test_claude_filtered_manifest_scan_expands_agent_directory(self, tmp_path: Path) -> None:
+        plugin_dir = tmp_path / "plugin"
+        manifest = plugin_dir / ".claude-plugin" / "plugin.json"
+        manifest.parent.mkdir(parents=True)
+        manifest.write_text('{"agents": ["custom/agents"]}')
+        agent = plugin_dir / "custom" / "agents" / "reviewer.md"
+        agent.parent.mkdir(parents=True)
+        agent.write_text("# Reviewer\n")
+
+        paths, _ = _resolve_filter_and_expand_paths([plugin_dir], None, "agents", platform_adapter=ClaudeCodeAdapter())
+
+        assert paths == [agent]
+
     def test_claude_filtered_manifest_scan_routes_missing_skill_to_plugin_manifest(self, tmp_path: Path) -> None:
         plugin_dir = tmp_path / "plugin"
         manifest = plugin_dir / ".claude-plugin" / "plugin.json"

@@ -476,6 +476,9 @@ def _manifest_filter_type_paths(
         target = directory / declared_path
         if _is_foreign_provider_target(target, directory):
             continue
+        if target.is_dir() and filter_type in {"agents", "commands"}:
+            targets.extend(_glob_excluding(target, "*.md"))
+            continue
         if filter_type == "skills" and not _is_skill_folder(target):
             target = directory / ".claude-plugin" / "plugin.json"
         targets.append(target)
