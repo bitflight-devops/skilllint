@@ -497,6 +497,26 @@ def _validate_filter_options(filter_glob: str | None, filter_type: str | None) -
         raise typer.Exit(2) from None
 
 
+def _manifest_filter_type_paths(
+    directory: Path, filter_type: str | None, adapter: PlatformAdapter | None
+) -> list[Path]:
+    if adapter is None or adapter.id() != "claude_code" or detect_scan_context(directory) != ScanContext.PLUGIN:
+        return []
+    manifest = _parse_plugin_manifest(directory)
+    match filter_type:
+        case "agents":
+            declared_paths = manifest.agents
+        case "commands":
+            declared_paths = manifest.commands
+        case "skills":
+            declared_paths = manifest.skills
+        case _:
+            return []
+    if declared_paths is None:
+        return []
+    return [directory / path for path in declared_paths]
+
+
 def _resolve_filter_and_expand_paths(
     paths: list[Path],
     filter_glob: str | None,
@@ -532,6 +552,7 @@ def _resolve_filter_and_expand_paths(
         if resolved_glob is not None and path.is_dir():
             matched = _glob_excluding(path, resolved_glob)
             matched = _platform_matching_paths(matched, path, platform_adapter)
+            matched.extend(_manifest_filter_type_paths(path, filter_type, platform_adapter))
             if filter_type == "skills" and platform_adapter is None:
                 matched = [match.parent for match in matched]
             expanded_paths.extend(matched)
