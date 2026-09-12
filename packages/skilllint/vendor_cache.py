@@ -215,6 +215,8 @@ def _is_network_error(exc: Exception) -> bool:
 def _age_hours(fetched_at: datetime | None) -> float:
     if fetched_at is None:
         return float("inf")
+    if fetched_at.tzinfo is None or fetched_at.utcoffset() is None:
+        return float("inf")
     now = datetime.now(UTC)
     delta = now - fetched_at
     return delta.total_seconds() / 3600.0
