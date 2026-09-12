@@ -216,7 +216,7 @@ skilllint check --platform claude-code plugins/my-plugin
 | NR001–NR002 | Namespace refs | Cross-plugin skill/agent/command references |
 | SL001 | Symlinks | Symlink hygiene within plugin directory |
 | TC001 | Token count | Token count reporting and threshold enforcement |
-| PR001–PR005 | Plugin registration | Capability registration completeness and correctness in plugin.json |
+| PR001, PR002, PR005 | Plugin registration | Capability registration completeness and correctness in plugin.json |
 | PA001 | Plugin agent | Plugin-packaged agents: `hooks` / `mcpServers` / `permissionMode` unsupported per Anthropic (ignored at load; cite sub-agents doc) |
 | AG001–AG003 | Agent frontmatter | Claude Code `agents/*.md` (any scope): unresolvable tool wildcards, MCP server casing/references, and non-string `skills` values or members discarded by the file loader; scalar strings and string-only lists are accepted |
 | CU001–CU002 | Cursor | Cursor `.mdc` frontmatter required fields and enum values |

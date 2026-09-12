@@ -8,7 +8,8 @@ Coverage scope:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, no_type_check
+from pathlib import Path
+from typing import no_type_check
 
 import pytest
 
@@ -24,9 +25,6 @@ from skilllint.scan_runtime import (
     _resolve_filter_and_expand_paths,
     detect_scan_context,
 )
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 @no_type_check
@@ -824,18 +822,42 @@ class TestDiscoverPluginPaths:
         assert tmp_path / "agents" / "main.md" in result
         assert tmp_path / "agents" / "extra.md" not in result
 
+    def test_declared_commands_preserve_default_agents_and_skills(self, tmp_path: Path) -> None:
+        (tmp_path / "agents").mkdir()
+        (tmp_path / "agents" / "review.md").write_text("# Review")
+        (tmp_path / "commands").mkdir()
+        (tmp_path / "commands" / "run.md").write_text("# Run")
+        (tmp_path / "skills" / "guide").mkdir(parents=True)
+        (tmp_path / "skills" / "guide" / "SKILL.md").write_text("# Guide")
+
+        result = _discover_plugin_paths(PluginManifest(plugin_root=tmp_path, commands=["./commands/run.md"]))
+
+        assert tmp_path / "agents" / "review.md" in result
+        assert tmp_path / "commands" / "run.md" in result
+        assert tmp_path / "skills" / "guide" in result
+
+    def test_custom_skills_declaration_preserves_default_skill_discovery(self, tmp_path: Path) -> None:
+        (tmp_path / "skills" / "standard").mkdir(parents=True)
+        (tmp_path / "skills" / "standard" / "SKILL.md").write_text("# Standard")
+        (tmp_path / "custom-skills" / "custom").mkdir(parents=True)
+        (tmp_path / "custom-skills" / "custom" / "SKILL.md").write_text("# Custom")
+
+        result = _discover_plugin_paths(PluginManifest(plugin_root=tmp_path, skills=["./custom-skills"]))
+
+        assert tmp_path / "skills" / "standard" in result
+        assert tmp_path / "custom-skills" / "custom" / "SKILL.md" in result
+
     def test_manifest_driven_resolves_skill_paths(self, tmp_path: Path) -> None:
         """Manifest mode resolves a declared skill directory to its SKILL.md child.
 
         Tests: _discover_plugin_paths — manifest-driven skills path resolution
-        How: Declare skills=["skills/review"] in manifest, assert that
-             tmp_path / "skills" / "review" / "SKILL.md" is in the result
+        How: Create and declare skills/review, then assert it is in the result
         Why: Skill entries in plugin.json are directory references; the function
-             resolves them to their SKILL.md child unconditionally. Using the path
-             name rather than is_dir() means resolution works even when the skill
-             directory does not yet exist on disk (missing = lint error, not silence).
+             includes existing declared component paths for file validation.
         """
         # Arrange
+        (tmp_path / "skills" / "review").mkdir(parents=True)
+        (tmp_path / "skills" / "review" / "SKILL.md").write_text("# Review")
         manifest = PluginManifest(plugin_root=tmp_path, skills=["skills/review"])
 
         # Act
@@ -861,17 +883,14 @@ class TestDiscoverPluginPaths:
         # Assert
         assert tmp_path in result
 
-    def test_manifest_driven_includes_declared_skill_dir_even_when_skill_md_missing(self, tmp_path: Path) -> None:
-        """Declared skill directory is included even when its SKILL.md does not exist.
+    def test_manifest_driven_skips_missing_declared_skill_dir(self, tmp_path: Path) -> None:
+        """Missing declared skill directories are left to root-level validation.
 
-        Tests: _discover_plugin_paths — manifest-driven unconditional inclusion for skills
+        Tests: _discover_plugin_paths — manifest-driven existing-path filtering for skills
         How: Declare skills=["skills/ghost-skill"] in manifest without creating the
-             directory or SKILL.md; assert skills/ghost-skill/SKILL.md is in the result
-        Why: Missing declared files are lint errors that downstream validators should
-             flag. Silently dropping them would hide the error entirely. This is the
-             intentional design difference between manifest-driven and convention-driven
-             mode: convention uses globs (only existing files appear), manifest-driven
-             adds declared paths unconditionally.
+             directory or SKILL.md; assert skills/ghost-skill is absent from the result
+        Why: Root-level registration validation reports missing declarations without
+             sending nonexistent paths to the CLI's file validator.
         """
         # Arrange — skill directory and SKILL.md deliberately not created
         manifest = PluginManifest(plugin_root=tmp_path, skills=["skills/ghost-skill"])
@@ -879,17 +898,60 @@ class TestDiscoverPluginPaths:
         # Act
         result = _discover_plugin_paths(manifest)
 
-        # Assert — path present despite not existing on disk
-        assert tmp_path / "skills" / "ghost-skill" in result
+        assert tmp_path / "skills" / "ghost-skill" not in result
 
-    def test_manifest_driven_includes_declared_agent_even_when_file_missing(self, tmp_path: Path) -> None:
-        """Declared agent file is included even when it does not exist on disk.
+    @pytest.mark.parametrize("absolute_reference", [False, True])
+    def test_manifest_driven_skips_agent_directory_outside_plugin_root(
+        self, tmp_path: Path, absolute_reference: bool
+    ) -> None:
+        external_agents = tmp_path / "external" / "agents"
+        reference = str(external_agents) if absolute_reference else "../external/agents"
+        plugin_root = tmp_path / "plugin"
+        plugin_root.mkdir()
+        external_agents.mkdir(parents=True, exist_ok=True)
+        external_file = external_agents / "reviewer.md"
+        external_file.write_text("---\ndescription: reviewer\n---\n")
 
-        Tests: _discover_plugin_paths — manifest-driven unconditional inclusion for agents
+        result = _discover_plugin_paths(PluginManifest(plugin_root=plugin_root, agents=[reference]))
+
+        assert external_file not in result
+
+    def test_manifest_driven_skips_agent_symlink_target_outside_plugin_root(self, tmp_path: Path) -> None:
+        plugin_root = tmp_path / "plugin"
+        plugin_root.mkdir()
+        external_file = tmp_path / "external.md"
+        external_file.write_text("# External\n")
+        agents_dir = plugin_root / "custom-agents"
+        agents_dir.mkdir()
+        escaping_link = agents_dir / "external.md"
+        escaping_link.symlink_to(external_file)
+
+        result = _discover_plugin_paths(PluginManifest(plugin_root=plugin_root, agents=["./custom-agents"]))
+
+        assert escaping_link not in result
+
+    def test_manifest_driven_skips_skill_symlink_target_outside_plugin_root(self, tmp_path: Path) -> None:
+        plugin_root = tmp_path / "plugin"
+        plugin_root.mkdir()
+        external_skill = tmp_path / "external-skill"
+        external_skill.mkdir()
+        (external_skill / "SKILL.md").write_text("# External\n")
+        skills_dir = plugin_root / "custom-skills"
+        skills_dir.mkdir()
+        escaping_link = skills_dir / "external-skill"
+        escaping_link.symlink_to(external_skill, target_is_directory=True)
+
+        result = _discover_plugin_paths(PluginManifest(plugin_root=plugin_root, skills=["./custom-skills"]))
+
+        assert escaping_link / "SKILL.md" not in result
+
+    def test_manifest_driven_skips_missing_declared_agent(self, tmp_path: Path) -> None:
+        """Missing declared agent files are left to root-level validation.
+
+        Tests: _discover_plugin_paths — manifest-driven existing-path filtering for agents
         How: Declare agents=["agents/ghost.md"] without creating the file;
-             assert agents/ghost.md is in the result
-        Why: Same intentional design as skills — a declared-but-missing path is a
-             validation error for downstream validators, not a silent omission.
+             assert agents/ghost.md is absent from the result
+        Why: Root-level registration validation reports the missing declaration.
         """
         # Arrange — agent file deliberately not created
         manifest = PluginManifest(plugin_root=tmp_path, agents=["agents/ghost.md"])
@@ -897,8 +959,7 @@ class TestDiscoverPluginPaths:
         # Act
         result = _discover_plugin_paths(manifest)
 
-        # Assert — path present despite not existing on disk
-        assert tmp_path / "agents" / "ghost.md" in result
+        assert tmp_path / "agents" / "ghost.md" not in result
 
     def test_result_is_sorted_and_deduplicated(self, tmp_path: Path) -> None:
         """Return value is a sorted list with no duplicate entries.
