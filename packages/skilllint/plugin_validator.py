@@ -3872,14 +3872,15 @@ def _get_fixers_for_path(validators: list[Validator], path: Path) -> list[Valida
 
 
 def _without_duplicate_plugin_errors(
-    result: ValidationResult, reported_plugin_structure_counts: dict[str, int]
+    result: ValidationResult, reported_plugin_structure_counts: dict[tuple[str, str], int]
 ) -> ValidationResult:
     remaining_duplicate_counts = reported_plugin_structure_counts.copy()
     errors: list[ValidationIssue] = []
     for issue in result.errors:
         code = str(issue.code)
-        if code in {"PL002", "PL004"} and remaining_duplicate_counts.get(code, 0):
-            remaining_duplicate_counts[code] -= 1
+        duplicate_key = (code, issue.message)
+        if code in {"PL002", "PL004"} and remaining_duplicate_counts.get(duplicate_key, 0):
+            remaining_duplicate_counts[duplicate_key] -= 1
             continue
         errors.append(issue)
     return ValidationResult(passed=not errors, errors=errors, warnings=result.warnings, info=result.info)
@@ -3914,7 +3915,7 @@ def _collect_validator_results(
         List of (validator_class_name, result) tuples.
     """
     results: list[tuple[str, ValidationResult]] = []
-    reported_plugin_structure_counts: dict[str, int] = {}
+    reported_plugin_structure_counts: dict[tuple[str, str], int] = {}
     for validator in validators:
         name = type(validator).__name__
         if policy is not None and isinstance(validator, (ComplexityValidator, AsSeriesValidator)):
@@ -3956,7 +3957,10 @@ def _collect_validator_results(
         if name == "PluginStructureValidator":
             for issue in result.errors:
                 code = str(issue.code)
-                reported_plugin_structure_counts[code] = reported_plugin_structure_counts.get(code, 0) + 1
+                duplicate_key = (code, issue.message)
+                reported_plugin_structure_counts[duplicate_key] = (
+                    reported_plugin_structure_counts.get(duplicate_key, 0) + 1
+                )
         results.append((name, result))
     return results
 

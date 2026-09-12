@@ -528,12 +528,7 @@ class TestResolveFilterAndExpandPaths:
 
     @pytest.mark.parametrize(
         ("filter_glob", "filter_type", "expected_names"),
-        [
-            ("**/*.md", None, {"reviewer.md", "run.md", "custom-skill"}),
-            (None, "agents", {"reviewer.md"}),
-            (None, "commands", {"run.md"}),
-            (None, "skills", {"custom-skill"}),
-        ],
+        [(None, "agents", {"reviewer.md"}), (None, "commands", {"run.md"}), (None, "skills", {"custom-skill"})],
     )
     def test_claude_filtered_scan_preserves_manifest_declared_custom_paths(
         self, tmp_path: Path, filter_glob: str | None, filter_type: str | None, expected_names: set[str]
@@ -558,6 +553,18 @@ class TestResolveFilterAndExpandPaths:
         )
 
         assert {path.name for path in paths} == expected_names
+
+    def test_claude_filtered_scan_preserves_agent_beside_marketplace_manifest(self, tmp_path: Path) -> None:
+        marketplace = tmp_path / ".claude-plugin" / "marketplace.json"
+        agent = tmp_path / "agents" / "agent.md"
+        marketplace.parent.mkdir()
+        marketplace.write_text('{"name": "marketplace"}')
+        agent.parent.mkdir()
+        agent.write_text("# Agent\n")
+
+        paths, _ = _resolve_filter_and_expand_paths([tmp_path], "**/*.md", None, platform_adapter=ClaudeCodeAdapter())
+
+        assert paths == [agent]
 
     def test_platform_paths_match_nested_provider_files_in_provider_context(self, tmp_path: Path) -> None:
         agent = tmp_path / "packages" / "app" / ".claude" / "agents" / "demo.md"

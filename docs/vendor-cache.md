@@ -55,7 +55,7 @@ Available` and prints no path.
 ## Query and verify
 
 ```bash
-LATEST_PATH="$(uv run skilllint docs latest "$(python -c 'from skilllint.vendor_io import derive_page_name; print(derive_page_name("https://example.com/guide.md"))')")"
+LATEST_PATH="$(uv run skilllint docs latest "$(python -c 'from skilllint.vendor_cache import derive_page_name; print(derive_page_name("https://example.com/guide.md"))')")"
 uv run skilllint docs sections "$LATEST_PATH"
 uv run skilllint docs section "$LATEST_PATH" "Usage"
 uv run skilllint docs verify "$LATEST_PATH"
@@ -86,7 +86,7 @@ implementation:
 
 ```bash
 uv run --script scripts/fetch_doc_source.py fetch "https://example.com/guide.md"
-uv run --script scripts/fetch_doc_source.py latest "example--guide"
+uv run --script scripts/fetch_doc_source.py latest "guide"
 uv run --script scripts/fetch_doc_source.py sections "$LATEST_PATH"
 uv run --script scripts/fetch_doc_source.py section "$LATEST_PATH" "Usage"
 uv run --script scripts/fetch_doc_source.py verify "$LATEST_PATH"
