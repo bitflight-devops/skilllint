@@ -97,8 +97,8 @@ standalone script is source-coupled to this checkout and uses the same cache
 implementation:
 
 ```bash
-uv run --script scripts/fetch_doc_source.py fetch "https://example.com/guide.md"
-uv run --script scripts/fetch_doc_source.py latest "guide"
+FETCHED_PATH="$(uv run --script scripts/fetch_doc_source.py fetch "https://example.com/guide.md")"
+LATEST_PATH="$(uv run --script scripts/fetch_doc_source.py latest "guide")"
 uv run --script scripts/fetch_doc_source.py sections "$LATEST_PATH"
 uv run --script scripts/fetch_doc_source.py section "$LATEST_PATH" "Usage"
 uv run --script scripts/fetch_doc_source.py verify "$LATEST_PATH"
