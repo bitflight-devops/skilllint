@@ -358,11 +358,14 @@ def _platform_matching_paths(paths: list[Path], directory: Path, adapter: Platfo
 
 
 def _discover_platform_paths(directory: Path, adapter: PlatformAdapter) -> list[Path]:
-    return sorted(
+    discovered = {
         candidate
         for candidate in _glob_excluding(directory, "**/*")
         if candidate.is_file() and matches_file(adapter, candidate.relative_to(directory))
-    )
+    }
+    if adapter.id() == "claude_code":
+        discovered.update(path for path in _discover_validatable_paths(directory) if _is_skill_folder(path))
+    return sorted(discovered)
 
 
 def _validate_filter_options(filter_glob: str | None, filter_type: str | None) -> None:

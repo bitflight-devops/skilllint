@@ -101,7 +101,7 @@ Use `bitflight-devops/skilllint` as a GitHub Action to validate skills, plugins,
 | Input | Description | Default |
 |---|---|---|
 | `paths` | Space-separated paths to validate | `.` |
-| `platform` | Platform adapter: `claude-code`, `cursor`, `codex` | _(all)_ |
+| `platform` | Platform adapter: `claude-code`, `cursor`, `codex`; omit to validate each selected file with every matching adapter | _(matching adapters)_ |
 | `fix` | Auto-fix issues where possible | `false` |
 | `check-only` | Validate only, do not auto-fix | `false` |
 | `verbose` | Show detailed output including info messages | `false` |

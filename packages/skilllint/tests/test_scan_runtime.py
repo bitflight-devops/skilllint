@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from skilllint.adapters.claude_code import ClaudeCodeAdapter
 from skilllint.adapters.codex import CodexAdapter
 from skilllint.adapters.cursor import CursorAdapter
 from skilllint.scan_runtime import (
@@ -407,6 +408,26 @@ class TestResolveFilterAndExpandPaths:
 
         assert paths == [custom_file]
         assert is_batch is True
+
+    def test_claude_platform_preserves_direct_skill_folder(self, tmp_path: Path) -> None:
+        skill_dir = tmp_path / "direct-skill"
+        skill_dir.mkdir()
+        (skill_dir / "SKILL.md").write_text("---\ndescription: Direct skill\n---\n# Direct\n")
+
+        paths, _ = _resolve_filter_and_expand_paths([skill_dir], None, None, platform_adapter=ClaudeCodeAdapter())
+
+        assert paths == [skill_dir]
+
+    def test_claude_platform_preserves_skills_from_parent_directory(self, tmp_path: Path) -> None:
+        skill_dir = tmp_path / "plugins" / "example" / "skills" / "nested-skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("---\ndescription: Nested skill\n---\n# Nested\n")
+
+        paths, _ = _resolve_filter_and_expand_paths(
+            [tmp_path / "plugins"], None, None, platform_adapter=ClaudeCodeAdapter()
+        )
+
+        assert paths == [skill_dir]
 
     def test_filter_type_resolves_to_glob(self, tmp_path: Path) -> None:
         """_resolve_filter_and_expand_paths resolves --filter-type to glob pattern.

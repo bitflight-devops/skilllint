@@ -18,7 +18,7 @@ inputs:
     description: >
       Platform adapter to use for validation.
       Supported values: claude-code, cursor, codex.
-      Leave empty to validate each file with every matching platform adapter.
+      Leave empty to validate each selected file with every matching platform adapter.
     required: false
     default: ""
 
