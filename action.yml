@@ -23,7 +23,7 @@ inputs:
     default: ""
 
   fix:
-    description: "Auto-fix issues where possible. Mutually exclusive with check-only and platform."
+    description: "Auto-fix issues where possible. Mutually exclusive with check-only."
     required: false
     default: "false"
 
