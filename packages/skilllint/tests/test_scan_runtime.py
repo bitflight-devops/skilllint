@@ -619,6 +619,26 @@ class TestResolveFilterAndExpandPaths:
 
         assert paths == [tmp_path]
 
+    def test_claude_filtered_scan_excludes_foreign_provider_agent(self, tmp_path: Path) -> None:
+        foreign_agent = tmp_path / ".agents" / "agents" / "team" / "foreign.md"
+        foreign_agent.parent.mkdir(parents=True)
+        foreign_agent.write_text("# Foreign\n")
+
+        paths, _ = _resolve_filter_and_expand_paths([tmp_path], "**/*.md", None, platform_adapter=ClaudeCodeAdapter())
+
+        assert paths == []
+
+    def test_claude_filtered_scan_preserves_marketplace_only_root(self, tmp_path: Path) -> None:
+        marketplace = tmp_path / ".claude-plugin" / "marketplace.json"
+        marketplace.parent.mkdir()
+        marketplace.write_text('{"name": "marketplace"}')
+
+        paths, _ = _resolve_filter_and_expand_paths(
+            [tmp_path], "**/marketplace.json", None, platform_adapter=ClaudeCodeAdapter()
+        )
+
+        assert paths == [tmp_path]
+
     def test_claude_platform_preserves_root_claude_file(self, tmp_path: Path) -> None:
         claude_file = tmp_path / "CLAUDE.md"
         claude_file.write_text("# Claude\n")
