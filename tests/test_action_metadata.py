@@ -49,3 +49,4 @@ def test_action_findings_accept_plain_rich_symbols() -> None:
 
     assert "⚠ (WARN|INFO)" in action
     assert "\u2139 (WARN|INFO)" in action
+    assert "|\u2139|i INFO" in action
