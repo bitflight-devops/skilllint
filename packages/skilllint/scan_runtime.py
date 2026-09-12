@@ -367,19 +367,50 @@ def _matches_platform_file(adapter: PlatformAdapter, path: Path, directory: Path
 def _discover_platform_paths(directory: Path, adapter: PlatformAdapter) -> list[Path]:
     semantic_targets = sorted(_discover_validatable_paths(directory), key=lambda path: len(path.parts), reverse=True)
     plugin_roots = [target for target in semantic_targets if (target / ".claude-plugin" / "plugin.json").is_file()]
+    plugin_manifests = {plugin_root: _parse_plugin_manifest(plugin_root) for plugin_root in plugin_roots}
+    manifest_files: dict[Path, set[Path]] = {}
+    for plugin_root, manifest in plugin_manifests.items():
+        if not manifest.is_manifest_driven:
+            continue
+        files = {plugin_root / ".claude-plugin" / "plugin.json"}
+        for target in _discover_plugin_paths(manifest):
+            if target.is_file():
+                files.add(target)
+            elif _is_skill_folder(target):
+                files.add(target / "SKILL.md")
+        manifest_files[plugin_root] = files
+    provider_roots = [
+        path for path in _glob_excluding(directory, "**/*") if path.is_dir() and path.name in KNOWN_PROVIDER_DIRS
+    ]
     discovered: set[Path] = set()
     for candidate in _glob_excluding(directory, "**/*"):
+        candidate_plugin_roots = [plugin_root for plugin_root in plugin_roots if candidate.is_relative_to(plugin_root)]
+        if any(
+            candidate not in manifest_files.get(plugin_root, set())
+            for plugin_root in candidate_plugin_roots
+            if plugin_root in manifest_files
+        ):
+            continue
         matches_scan_root = _matches_platform_file(adapter, candidate, directory)
         matches_plugin_root = any(
             candidate.is_relative_to(plugin_root) and _matches_platform_file(adapter, candidate, plugin_root)
             for plugin_root in plugin_roots
         )
+        matches_provider_root = any(
+            candidate.is_relative_to(provider_root) and _matches_platform_file(adapter, candidate, provider_root)
+            for provider_root in provider_roots
+        )
         is_unrelated_hook = (
             adapter.id() == "claude_code" and candidate.name == "hooks.json" and candidate.parent.name != "hooks"
         )
-        if not candidate.is_file() or is_unrelated_hook or not (matches_scan_root or matches_plugin_root):
+        if (
+            not candidate.is_file()
+            or is_unrelated_hook
+            or not (matches_scan_root or matches_plugin_root or matches_provider_root)
+        ):
             continue
         discovered.add(candidate)
+    discovered.update(path for files in manifest_files.values() for path in files if path.is_file())
     if adapter.id() in {"claude_code", "codex", "cursor"}:
         discovered.update(target / "SKILL.md" for target in semantic_targets if _is_skill_folder(target))
         discovered.update(target for target in semantic_targets if target.name == "SKILL.md")

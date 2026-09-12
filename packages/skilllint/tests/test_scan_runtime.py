@@ -479,6 +479,45 @@ class TestResolveFilterAndExpandPaths:
 
         assert discovered == [hook]
 
+    def test_platform_paths_honor_manifest_component_exclusions(self, tmp_path: Path) -> None:
+        plugin = tmp_path / "plugin"
+        metadata = plugin / ".claude-plugin"
+        metadata.mkdir(parents=True)
+        manifest = metadata / "plugin.json"
+        manifest.write_text('{"agents": ["agents/main.md"]}')
+        main = plugin / "agents" / "main.md"
+        main.parent.mkdir()
+        main.write_text("# Main\n")
+        extra = plugin / "agents" / "extra.md"
+        extra.write_text("# Extra\n")
+
+        discovered, _ = _resolve_filter_and_expand_paths([plugin], None, None, platform_adapter=ClaudeCodeAdapter())
+
+        assert discovered == [manifest, main]
+
+    def test_platform_paths_include_manifest_declared_custom_command(self, tmp_path: Path) -> None:
+        plugin = tmp_path / "extensions" / "plugin"
+        metadata = plugin / ".claude-plugin"
+        metadata.mkdir(parents=True)
+        manifest = metadata / "plugin.json"
+        manifest.write_text('{"commands": ["custom/commands/demo.md"]}')
+        command = plugin / "custom" / "commands" / "demo.md"
+        command.parent.mkdir(parents=True)
+        command.write_text("# Command\n")
+
+        discovered, _ = _resolve_filter_and_expand_paths([tmp_path], None, None, platform_adapter=ClaudeCodeAdapter())
+
+        assert discovered == [manifest, command]
+
+    def test_platform_paths_match_nested_provider_files_in_provider_context(self, tmp_path: Path) -> None:
+        agent = tmp_path / "packages" / "app" / ".claude" / "agents" / "demo.md"
+        agent.parent.mkdir(parents=True)
+        agent.write_text("# Agent\n")
+
+        discovered, _ = _resolve_filter_and_expand_paths([tmp_path], None, None, platform_adapter=ClaudeCodeAdapter())
+
+        assert discovered == [agent]
+
     def test_platform_directory_uses_custom_adapter_matcher_and_deduplicates_roots(self, tmp_path: Path) -> None:
         class CustomAdapter:
             def id(self) -> str:
