@@ -448,6 +448,19 @@ class TestResolveFilterAndExpandPaths:
 
         assert paths == [plugin_dir, agent, command, skill_dir]
 
+    def test_claude_platform_preserves_manifest_declared_custom_agent_path(self, tmp_path: Path) -> None:
+        plugin_dir = tmp_path / "plugin"
+        manifest = plugin_dir / ".claude-plugin" / "plugin.json"
+        manifest.parent.mkdir(parents=True)
+        manifest.write_text('{"agents": ["custom/reviewer.md"]}')
+        reviewer = plugin_dir / "custom" / "reviewer.md"
+        reviewer.parent.mkdir()
+        reviewer.write_text("# Reviewer\n")
+
+        paths, _ = _resolve_filter_and_expand_paths([plugin_dir], None, None, platform_adapter=ClaudeCodeAdapter())
+
+        assert paths == [plugin_dir, reviewer]
+
     @pytest.mark.parametrize(
         ("filter_type", "expected_name"),
         [("skills", "nested-skill"), ("agents", "agent.md"), ("commands", "command.md")],

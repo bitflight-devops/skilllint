@@ -410,8 +410,21 @@ def _semantic_platform_target(candidate: Path, semantic_targets: list[Path], ada
     )
 
 
+def _is_manifest_declared_target(target: Path, directory: Path) -> bool:
+    for plugin_root in target.parents:
+        if plugin_root != directory and not plugin_root.is_relative_to(directory):
+            break
+        if not (plugin_root / ".claude-plugin" / "plugin.json").is_file():
+            continue
+        manifest = _parse_plugin_manifest(plugin_root)
+        return manifest.is_manifest_driven and target in _discover_plugin_paths(manifest)
+    return False
+
+
 def _matches_semantic_target(adapter: PlatformAdapter, target: Path, directory: Path) -> bool:
     if any((target / ".claude-plugin" / name).is_file() for name in ("plugin.json", "marketplace.json")):
+        return True
+    if _is_manifest_declared_target(target, directory):
         return True
     foreign_provider_roots = (KNOWN_PROVIDER_DIRS | {".agents"}) - {".claude"}
     if target.is_dir():
