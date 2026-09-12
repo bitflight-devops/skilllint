@@ -237,7 +237,9 @@ class TestDocsFetch:
             sys.executable,
             "-c",
             (
-                "import sys; from pathlib import Path; import skilllint.vendor_cache as cache; "
+                "import sys, warnings; from pathlib import Path; "
+                "warnings.filterwarnings('ignore', message='.*is shallow and may cause errors'); "
+                "import skilllint.vendor_cache as cache; "
                 "cache.SOURCES_DIR = Path(sys.argv.pop(1)); "
                 "from skilllint.plugin_validator import app; app()"
             ),
