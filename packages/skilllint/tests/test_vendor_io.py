@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -768,6 +769,24 @@ class TestRuntimeCacheRoot:
 
         assert _runtime_cache_root(worktree) == repo.resolve()
 
+    def test_installed_wheel_in_separate_git_dir_worktree_uses_linked_worktree(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        repo = tmp_path / "repo"
+        git_dir = tmp_path / "git-dir"
+        repo.mkdir()
+        _run_git(["init", "--initial-branch=main", f"--separate-git-dir={git_dir}"], cwd=repo)
+        _run_git(["config", "user.email", "test@example.com"], cwd=repo)
+        _run_git(["config", "user.name", "Test"], cwd=repo)
+        (repo / "file.txt").write_text("content\n", encoding="utf-8")
+        _run_git(["add", "."], cwd=repo)
+        _run_git(["commit", "-m", "initial commit"], cwd=repo)
+        worktree = tmp_path / "linked"
+        _run_git(["worktree", "add", str(worktree)], cwd=repo)
+        monkeypatch.setattr(vendor_io, "PROJECT_ROOT", tmp_path / "site-packages")
+
+        assert _runtime_cache_root(worktree) == worktree.resolve()
+
     def test_installed_wheel_outside_git_uses_canonical_cwd(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -777,6 +796,18 @@ class TestRuntimeCacheRoot:
         monkeypatch.setattr(vendor_io, "PROJECT_ROOT", tmp_path / "site-packages")
 
         assert _runtime_cache_root(cwd) == cwd.resolve()
+
+    def test_installed_wheel_with_unavailable_cwd_keeps_cache_root_relative(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(vendor_io, "PROJECT_ROOT", tmp_path / "site-packages")
+
+        def unavailable_cwd() -> Path:
+            raise FileNotFoundError("working directory was removed")
+
+        monkeypatch.setattr(vendor_io.Path, "cwd", unavailable_cwd)
+
+        assert _runtime_cache_root() == Path()
 
 
 # ---------------------------------------------------------------------------
@@ -935,12 +966,65 @@ class TestSharedCheckoutRoot:
         # Act
         result = _shared_checkout_root(bare_worktree)
 
-        # Assert — the bare repo's directory has no working-tree parent of its
-        # own, so the resolved commondir's parent is the bare repo's *parent*
-        # directory. This is the algorithm's defined, deterministic behaviour
-        # for this topology, not a meaningful "primary checkout" in the
-        # linked-worktree sense.
-        assert result == bare.resolve().parent
+        assert result == bare_worktree
+
+    def test_separate_git_dir_nested_in_unrelated_checkout_uses_linked_worktree(self, tmp_path: Path) -> None:
+        unrelated = tmp_path / "unrelated"
+        unrelated.mkdir()
+        _init_repo_with_commit(unrelated)
+        primary = tmp_path / "primary"
+        primary.mkdir()
+        git_dir = unrelated / "project.git"
+        _run_git(["init", "--initial-branch=main", f"--separate-git-dir={git_dir}"], cwd=primary)
+        _run_git(["config", "user.email", "test@example.com"], cwd=primary)
+        _run_git(["config", "user.name", "Test"], cwd=primary)
+        (primary / "file.txt").write_text("content\n", encoding="utf-8")
+        _run_git(["add", "."], cwd=primary)
+        _run_git(["commit", "-m", "initial commit"], cwd=primary)
+        linked = tmp_path / "linked"
+        _run_git(["worktree", "add", str(linked)], cwd=primary)
+
+        assert _shared_checkout_root(linked) == linked.resolve()
+
+    def test_separate_git_dir_falls_back_without_recursively_scanning_ancestors(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        linked = tmp_path / "linked"
+        linked.mkdir()
+        git_dir = tmp_path / "git-dir"
+        git_dir.mkdir()
+        worktree_git_dir = git_dir / "worktrees" / "linked"
+        worktree_git_dir.mkdir(parents=True)
+        (linked / ".git").write_text(f"gitdir: {worktree_git_dir}\n", encoding="utf-8")
+        (worktree_git_dir / "commondir").write_text("../..\n", encoding="utf-8")
+
+        monkeypatch.setattr(
+            os,
+            "walk",
+            lambda *_args, **_kwargs: pytest.fail("cache-root resolution must not recursively scan ancestors"),
+        )
+
+        assert _shared_checkout_root(linked) == linked.resolve()
+
+    def test_separate_git_dir_falls_back_when_commonpath_is_unavailable(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        linked = tmp_path / "linked"
+        linked.mkdir()
+        git_dir = tmp_path / "git-dir"
+        git_dir.mkdir()
+        worktree_git_dir = git_dir / "worktrees" / "linked"
+        worktree_git_dir.mkdir(parents=True)
+        (linked / ".git").write_text(f"gitdir: {worktree_git_dir}\n", encoding="utf-8")
+        (worktree_git_dir / "commondir").write_text("../..\n", encoding="utf-8")
+
+        monkeypatch.setattr(
+            os.path,
+            "commonpath",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("paths are on different drives")),
+        )
+
+        assert _shared_checkout_root(linked) == linked.resolve()
 
     def test_malformed_gitdir_content_returns_start_unchanged(self, tmp_path: Path) -> None:
         """A .git file with unreadable/garbage gitdir content returns start unchanged.
@@ -961,6 +1045,88 @@ class TestSharedCheckoutRoot:
 
         # Assert
         assert result == weird_dir
+
+    @pytest.mark.parametrize("content", [b"gitdir: \xff\n", b"gitdir: bad\x00path\n"])
+    def test_invalid_gitdir_bytes_return_start_unchanged(self, tmp_path: Path, content: bytes) -> None:
+        weird_dir = tmp_path / "weird-bytes"
+        weird_dir.mkdir()
+        (weird_dir / ".git").write_bytes(content)
+
+        assert _shared_checkout_root(weird_dir) == weird_dir
+
+    def test_invalid_commondir_path_returns_start_unchanged(self, tmp_path: Path) -> None:
+        worktree = tmp_path / "worktree"
+        worktree.mkdir()
+        gitdir = tmp_path / "git-dir" / "worktrees" / "worktree"
+        gitdir.mkdir(parents=True)
+        (worktree / ".git").write_text(f"gitdir: {gitdir}\n", encoding="utf-8")
+        (gitdir / "commondir").write_bytes(b"bad\x00path\n")
+
+        assert _shared_checkout_root(worktree) == worktree
+
+    def test_cyclic_commondir_path_returns_start_unchanged(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        worktree = tmp_path / "worktree"
+        worktree.mkdir()
+        gitdir = tmp_path / "git-dir" / "worktrees" / "worktree"
+        gitdir.mkdir(parents=True)
+        cycle = tmp_path / "cycle"
+        cycle.symlink_to(cycle)
+        (worktree / ".git").write_text(f"gitdir: {gitdir}\n", encoding="utf-8")
+        (gitdir / "commondir").write_text(str(cycle), encoding="utf-8")
+        original_resolve = Path.resolve
+
+        def raise_for_cycle(path: Path, *, strict: bool = False) -> Path:
+            if path == cycle:
+                raise RuntimeError("Symlink loop from supported Python runtime")
+            return original_resolve(path, strict=strict)
+
+        monkeypatch.setattr(Path, "resolve", raise_for_cycle)
+
+        assert _shared_checkout_root(worktree) == worktree
+
+    def test_invalid_primary_checkout_git_pointer_returns_start_unchanged(self, tmp_path: Path) -> None:
+        worktree = tmp_path / "worktree"
+        worktree.mkdir()
+        worktree_gitdir = tmp_path / "metadata" / "worktrees" / "worktree"
+        worktree_gitdir.mkdir(parents=True)
+        primary = tmp_path / "primary"
+        primary.mkdir()
+        common_gitdir = primary / ".git-data"
+        common_gitdir.mkdir()
+        (worktree / ".git").write_text(f"gitdir: {worktree_gitdir}\n", encoding="utf-8")
+        (worktree_gitdir / "commondir").write_text(str(common_gitdir), encoding="utf-8")
+        (primary / ".git").write_bytes(b"gitdir: bad\x00path\n")
+
+        assert _shared_checkout_root(worktree) == worktree
+
+    def test_cyclic_primary_checkout_git_pointer_returns_start_unchanged(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        worktree = tmp_path / "worktree"
+        worktree.mkdir()
+        worktree_gitdir = tmp_path / "metadata" / "worktrees" / "worktree"
+        worktree_gitdir.mkdir(parents=True)
+        primary = tmp_path / "primary"
+        primary.mkdir()
+        common_gitdir = primary / ".git-data"
+        common_gitdir.mkdir()
+        cycle = primary / "cycle"
+        cycle.symlink_to(cycle)
+        (worktree / ".git").write_text(f"gitdir: {worktree_gitdir}\n", encoding="utf-8")
+        (worktree_gitdir / "commondir").write_text(str(common_gitdir), encoding="utf-8")
+        (primary / ".git").write_text("gitdir: cycle\n", encoding="utf-8")
+        original_resolve = Path.resolve
+
+        def raise_for_cycle(path: Path, *, strict: bool = False) -> Path:
+            if path == cycle:
+                raise RuntimeError("Symlink loop from supported Python runtime")
+            return original_resolve(path, strict=strict)
+
+        monkeypatch.setattr(Path, "resolve", raise_for_cycle)
+
+        assert _shared_checkout_root(worktree) == worktree
 
     def test_gitdir_pointing_nowhere_returns_start_unchanged(self, tmp_path: Path) -> None:
         """A .git file pointing at a nonexistent gitdir returns start unchanged.

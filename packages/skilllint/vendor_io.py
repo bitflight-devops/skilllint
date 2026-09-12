@@ -70,7 +70,7 @@ def _read_git_internal_file_or_none(path: Path) -> str | None:
     """
     try:
         return path.read_text(encoding="utf-8").strip()
-    except OSError:
+    except (OSError, UnicodeDecodeError, ValueError):
         return None
 
 
@@ -124,17 +124,45 @@ def _shared_checkout_root(start: Path) -> Path:
 
     try:
         resolved_git_dir = commondir_path.resolve(strict=True)
-    except OSError:
+    except (OSError, RuntimeError, ValueError):
         return start
 
-    return resolved_git_dir.parent
+    primary_checkout = resolved_git_dir.parent
+    if _checkout_points_to_git_dir(primary_checkout, resolved_git_dir):
+        return primary_checkout
+    return start
+
+
+def _checkout_points_to_git_dir(checkout: Path, git_dir: Path) -> bool:
+    git_entry = checkout / ".git"
+    if git_entry.is_dir():
+        try:
+            return git_entry.resolve(strict=True) == git_dir
+        except OSError:
+            return False
+
+    pointer = _read_git_internal_file_or_none(git_entry)
+    prefix = "gitdir: "
+    if pointer is None or not pointer.startswith(prefix):
+        return False
+
+    target = Path(pointer[len(prefix) :].strip())
+    if not target.is_absolute():
+        target = checkout / target
+    try:
+        return target.resolve(strict=True) == git_dir
+    except (OSError, RuntimeError, ValueError):
+        return False
 
 
 def _runtime_cache_root(cwd: Path | None = None) -> Path:
     if (PROJECT_ROOT / "pyproject.toml").is_file():
         return _shared_checkout_root(PROJECT_ROOT)
 
-    start = (cwd or Path.cwd()).resolve()
+    try:
+        start = (cwd or Path.cwd()).resolve()
+    except OSError:
+        return Path()
     for candidate in (start, *start.parents):
         if (candidate / ".git").exists():
             return _shared_checkout_root(candidate)
