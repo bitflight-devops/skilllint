@@ -66,14 +66,14 @@ def _iter_claims() -> list[tuple[str, dict[str, Any]]]:
     return [*registry["claims"].items(), *opinions["opinions"].items()]
 
 
-def _resolve_schema_json_location(claim_id: str, location: dict[str, str]) -> object:
+def _resolve_schema_json_location(claim_id: str, location: dict[str, str]) -> JsonValue:
     recorded_file = location["file"]
     schema_path = REPO_ROOT / recorded_file
     assert schema_path.is_file(), f"{claim_id}: assertion_location.file '{recorded_file}' does not exist"
 
     symbol = location["symbol"]
     assert symbol.startswith("$."), f"{claim_id}: schema locator '{symbol}' must start with '$.'"
-    target: object = JSON_OBJECT.validate_json(schema_path.read_text(encoding="utf-8"))
+    target: JsonValue = JSON_OBJECT.validate_json(schema_path.read_text(encoding="utf-8"))
     for part in symbol.removeprefix("$.").split("."):
         assert isinstance(target, dict), f"{claim_id}: '{symbol}' cannot traverse '{part}'"
         assert part in target, f"{claim_id}: '{symbol}' has no segment '{part}'"
