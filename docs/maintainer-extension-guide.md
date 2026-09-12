@@ -1,437 +1,111 @@
-# Maintainer Extension Guide
+# Maintainer extension guide
 
-This guide explains how to extend skilllint with new schemas, provider adapters, lint rules, and provenance metadata. Use this when adding support for a new AI coding platform or enhancing validation capabilities.
+This guide describes the current extension seams. Read the interface and its
+tests before adding an adapter, schema claim, or rule.
 
-## Where Does This Belong?
+## Choose the seam
 
-Before implementing, determine which extension path applies:
+| Need | Add | Owner |
+| --- | --- | --- |
+| provider metadata or fallback validation | `adapters/<provider>/` plus an entry point | `PlatformAdapter` |
+| schema-backed shape/type constraint | versioned provider schema | schema validators |
+| cross-platform quality rule | `rules/<series>_series.py` and decorator | rule registry + rule emitter |
+| traceability for a checkable claim | authority metadata or provenance registry entry | claim locator |
 
-| Your Goal | Extension Path | Key Files |
-|-----------|---------------|-----------|
-| **Schema-backed shape/type validation** | Schema JSON + `ValidatorOwnership.SCHEMA` | `packages/skilllint/schemas/<provider>/vN.json` |
-| **Provider-specific behavior** | Adapter in `adapters/<provider>/` + registry | `packages/skilllint/adapters/<provider>/` |
-| **Cross-platform quality/style rule** | Rule in `rules/` + `ValidatorOwnership.LINT` | `packages/skilllint/rules/` |
-| **Traceability metadata** | `authority` dict in schema or rule | Schema top-level key, rule decorator |
+Do not add an adapter for a rule that belongs to the core validator. Do not
+declare a rule complete because a decorator, catalog row, or entry point exists;
+the public fixture/CLI path must emit the finding.
 
----
+## Add an adapter
 
-## Section 1: Adding a Schema Update
-
-Schema updates add or modify constraints that are backed by an official specification. These produce `ValidatorOwnership.SCHEMA` violations (hard errors that fail the build).
-
-### Where Schema Files Live
-
-Versioned schema files are stored in:
-
-```
-packages/skilllint/schemas/<provider>/vN.json
-```
-
-For example, `packages/skilllint/schemas/claude_code/v1.json` defines the Claude Code platform schema.
-
-### Schema Structure
-
-Each schema file has a top-level structure:
-
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "skilllint/schemas/claude_code/v1.json",
-  "title": "Claude Code Platform Schema v1",
-  "version": "1.0.0",
-  "platform": "claude_code",
-  "provenance": {
-    "authority_url": "https://docs.anthropic.com/claude-code",
-    "last_verified": "2026-03-14",
-    "provider_id": "claude_code"
-  },
-  "file_types": {
-    "skill": { "fields": { ... } },
-    "agent": { "fields": { ... } },
-    "command": { "fields": { ... } },
-    "plugin": { "fields": { ... } }
-  }
-}
-```
-
-### Adding a New Field Constraint
-
-To add a new field or constraint:
-
-1. **Locate the target `file_types` section** (e.g., `skill`, `agent`, `command`, `plugin`).
-
-2. **Add or modify the field** with required metadata:
-
-```json
-"fields": {
-  "new_field": {
-    "required": false,
-    "constraint_scope": "shared",
-    "x-audited": {
-      "date": "2026-03-15",
-      "source": "docs/new-provider/spec.md"
-    }
-  }
-}
-```
-
-3. **Set `constraint_scope` appropriately**:
-   - `"shared"` — Applies to all platforms
-   - `"provider_specific"` — Only applies when this provider's adapter is active
-
-### Schema Validators Produce Hard Errors
-
-The ownership mapping is defined in `packages/skilllint/plugin_validator.py`:
+Implement the five-method structural interface in
+`packages/skilllint/adapters/protocol.py`:
 
 ```python
-VALIDATOR_OWNERSHIP: dict[str, ValidatorOwnership] = {
-    # Schema-backed validators (hard failures)
-    "FrontmatterValidator": ValidatorOwnership.SCHEMA,
-    "PluginStructureValidator": ValidatorOwnership.SCHEMA,
-    "PluginRegistrationValidator": ValidatorOwnership.SCHEMA,
-    "HookValidator": ValidatorOwnership.SCHEMA,
-    "SymlinkTargetValidator": ValidatorOwnership.SCHEMA,
-    # Lint validators (warnings/findings)
-    "NameFormatValidator": ValidatorOwnership.LINT,
-    "DescriptionValidator": ValidatorOwnership.LINT,
-    # ...
-}
-```
+from pathlib import Path
 
-### Testing Schema Changes
 
-Run the frontmatter-related tests:
-
-```bash
-uv run pytest packages/skilllint/tests/ -k frontmatter -v
-```
-
----
-
-## Section 2: Adding a Provider Overlay (New Adapter)
-
-Provider adapters encapsulate platform-specific behavior: file patterns, constraint scopes, and validation logic.
-
-### The PlatformAdapter Protocol
-
-All adapters must satisfy the `PlatformAdapter` protocol defined in `packages/skilllint/adapters/protocol.py`:
-
-```python
-@runtime_checkable
-class PlatformAdapter(Protocol):
+class ExampleAdapter:
     def id(self) -> str:
-        """Return the unique platform identifier (e.g. 'claude_code', 'cursor')."""
-        ...
+        return "example"
 
     def path_patterns(self) -> list[str]:
-        """Return glob patterns matching files this adapter handles."""
-        ...
+        return ["*.json"]
 
     def applicable_rules(self) -> set[str]:
-        """Return the set of rule-series codes this adapter applies (e.g. {'AS', 'CC'})."""
-        ...
+        return {"EX"}
 
     def constraint_scopes(self) -> set[str]:
-        """Return constraint_scope values from the provider schema."""
-        ...
-
-    def validate(self, path: pathlib.Path) -> list[dict]:
-        """Validate the given file path and return violation dicts."""
-        ...
-```
-
-### Creating a New Adapter
-
-1. **Create the adapter directory**:
-
-```bash
-mkdir -p packages/skilllint/adapters/<new_provider>/
-```
-
-2. **Implement the adapter class** (see `packages/skilllint/adapters/claude_code/adapter.py` as a template):
-
-```python
-# packages/skilllint/adapters/new_provider/adapter.py
-from pathlib import Path, PurePath
-
-
-class NewProviderAdapter:
-    def id(self) -> str:
-        return "new_provider"
-
-    def path_patterns(self) -> list[str]:
-        return ["**/.new_provider/**/*.md", "**/new-provider.yaml"]
-
-    def applicable_rules(self) -> set[str]:
-        return {"AS"}  # AS-series rules apply
-
-    def constraint_scopes(self) -> set[str]:
-        # Load from schema or return static set
-        return {"shared", "provider_specific"}
+        return {"shared"}
 
     def validate(self, path: Path) -> list[dict]:
-        # Platform-specific validation logic
-        return []
+        return (
+            [{"code": "EX001", "severity": "error", "message": "example failure"}] if path.name == "fail.json" else []
+        )
 ```
 
-3. **Register via entry points** in `pyproject.toml`:
+Register the class in the package that owns it:
 
 ```toml
 [project.entry-points."skilllint.adapters"]
-claude_code = "skilllint.adapters.claude_code:ClaudeCodeAdapter"
-new_provider = "skilllint.adapters.new_provider:NewProviderAdapter"
+example = "example_skilllint.adapter:ExampleAdapter"
 ```
 
-### How Adapter Discovery Works
+`load_adapters()` discovers and instantiates these entry points. A tiny sample
+distribution is retained in the architecture example test so installation,
+loading, and one passing/failing CLI result remain executable. Keep third-party
+validation output to dictionaries with `code`, `severity`, and `message`; the
+core converts them to `ValidationIssue` objects. The core still owns severity
+semantics, fixing, revalidation, and reporting.
 
-The `load_adapters()` function in `packages/skilllint/adapters/registry.py` discovers adapters:
+## Add a rule
 
-```python
-def load_adapters() -> list[PlatformAdapter]:
-    eps = importlib.metadata.entry_points(group="skilllint.adapters")
-    adapters: list[PlatformAdapter] = []
-    for ep in eps:
-        adapter_cls = ep.load()
-        adapters.append(adapter_cls())
-    return adapters
-```
+Use `@skilllint_rule` with an explicit code, category, platform, severity, and
+authority when an external source supports the claim. The decorator registers
+metadata for `skilllint rules` and `skilllint rule CODE`; the check function is
+the emitter. Keep registration, emission, severity, validator ownership, and
+provenance as separate facts.
 
-Third-party packages can register their own adapters by adding an entry point in their `pyproject.toml` — no modification to skilllint core required.
+Current registration rules include PR001, PR002, and PR005. PR001 is a warning
+for replacing unregistered agents/commands, not for additive skills. PR002 is
+skilllint's error for a registered component whose accepted file/directory/root
+target is absent. PR005 is a valid configuration with an optional informational
+recommendation when a command path is a skill directory. PR003, PR004, and
+SK009 are retired and must not be restored to help, catalog, or examples.
 
-### Structure-Based Discovery for Provider Directories
+## Schema and provenance
 
-When a provider directory lacks a `plugin.json` manifest, skilllint uses structure-based discovery. The `ScanDiscoveryMode` enum in `packages/skilllint/scan_runtime.py` defines three modes:
+Version schema changes under `packages/skilllint/schemas/<provider>/vN.json`.
+Preserve `constraint_scope`: `shared` means the core can apply it across
+providers; `provider_specific` requires the matching adapter. The old
+`docs/registry-schema-examples.md` remains a companion reference and is not
+deleted or treated as a second catalog.
 
-```python
-class ScanDiscoveryMode(StrEnum):
-    MANIFEST = "manifest"  # plugin.json explicitly enumerates components
-    AUTO = "auto"  # plugin.json exists but omits component arrays
-    STRUCTURE = "structure"  # provider directories without manifest
-```
+A provenance claim must identify its rule, authority file/URL and heading (when
+applicable), extraction shape, assertion locator, expected value, and audit
+date. The current locator test proves the supported Python-constant locators;
+schema JSON field/enum locators have separate schema validation coverage and
+must not be inferred from that test alone. The current refresher has two claims:
+the source changed, and the extracted claim matches the maintained value. #146
+is the schema-locator and refresh-outcome boundary. Future LLM or generalized
+provenance stages are proposed design, not shipped behavior.
 
-To add a new provider directory name for structure-based discovery, update `PROVIDER_DIR_NAMES` in `scan_runtime.py`:
+## Verification checklist
 
-```python
-PROVIDER_DIR_NAMES: frozenset[str] = frozenset({
-    ".claude",
-    ".agent",
-    ".agents",
-    ".gemini",
-    ".cursor",
-    ".new_provider",  # Add your provider here
-})
-```
+1. Add a source-coupled test for every documented symbol, heading, and code
+   block. Missing source or heading must fail.
+2. Install/load any retained adapter sample and run both its passing and
+   failing public CLI probes with `PYTHONPATH` cleared.
+3. Run `skilllint rules` and `skilllint rule CODE`; use Todo 15 emitter evidence
+   for the eight retained stub-backed claims and Todo 14 public-route evidence
+   for PR001, PR002, and PR005.
+4. Run `uv run prek run --all-files` and `uv run pytest`.
 
----
+## Typing boundary
 
-## Section 3: Adding a New Lint Rule
-
-Lint rules enforce cross-platform quality standards. They produce `ValidatorOwnership.LINT` violations (warnings that don't fail the build, unless configured otherwise).
-
-### Rule File Location
-
-All lint rules live in `packages/skilllint/rules/`. The file `packages/skilllint/rules/as_series.py` serves as the canonical template.
-
-### Using the @skilllint_rule Decorator
-
-The `@skilllint_rule` decorator registers a function in the global rule registry. From `packages/skilllint/rule_registry.py`:
-
-```python
-@skilllint_rule(
-    "FM010",
-    severity="error",
-    category="frontmatter",
-    platforms=["agentskills"],
-    # No `reference`: FM010 serves skills, agents and commands, whose frontmatter
-    # is defined by different vendor pages, so no single URL is correct for every
-    # finding. See the note below on rule-level versus claim-level authority.
-    authority={"origin": "anthropic.com"},
-)
-def check_fm010(frontmatter: dict, path: Path, file_type: str) -> list[ValidationIssue]:
-    """## FM010 — Name field does not match directory name or violates naming pattern"""
-    # Validation logic...
-```
-
-### Adding to the Ownership Registry
-
-After creating a new lint validator, register it in `packages/skilllint/plugin_validator.py`:
-
-```python
-VALIDATOR_OWNERSHIP: dict[str, ValidatorOwnership] = {
-    # ... existing entries ...
-    "MyNewValidator": ValidatorOwnership.LINT
-}
-```
-
-### Adding to the Constraint Scopes Registry
-
-Also register applicable constraint scopes:
-
-```python
-VALIDATOR_CONSTRAINT_SCOPES: dict[str, set[str]] = {
-    # ... existing entries ...
-    "MyNewValidator": {"shared", "provider_specific"}
-}
-```
-
-### Choosing Severity
-
-Reference the S04 severity classification:
-
-| Severity | When to Use | Exit Code Impact |
-|----------|-------------|-------------------|
-| `error` | Genuine schema violations, correctness issues | Exit 1 |
-| `warning` | Style preferences, best practices, runtime-accepted patterns | Exit 0 |
-| `info` | Recommendations, optional improvements | Exit 0 |
-
-### Testing Lint Rules
-
-Run tests filtered by rule code:
-
-```bash
-uv run pytest packages/skilllint/tests/ -k <rule_code> -v
-```
-
----
-
-## Section 4: Adding Provenance Metadata
-
-Provenance metadata (`authority` dicts) enables traceability from any violation back to its authoritative source. See "Why It Matters" below for what this satisfies.
-
-### Authority Dict Structure
-
-The `authority` dict has a standard shape:
-
-```python
-authority = {
-    "origin": "agentskills.io",  # Required: the authoritative source
-    "reference": "/specification#skill-naming",  # Optional: path/anchor within source
-}
-```
-
-### In Schema Files
-
-Add a top-level `provenance` key (see Section 1's schema structure) or a per-field `x-audited` block, as shown here for the `name` field:
-
-```json
-{
-  "file_types": {
-    "skill": {
-      "fields": {
-        "name": {
-          "required": true,
-          "constraint_scope": "shared",
-          "x-audited": {
-            "date": "2026-03-10",
-            "source": ".claude/vendor/claude_code/plugins/plugin-dev/skills/plugin-structure/SKILL.md"
-          }
-        }
-      }
-    }
-  }
-}
-```
-
-### In Rule Definitions
-
-Pass the `authority` kwarg to `@skilllint_rule`, as shown in the FM010 example in Section 3.
-
-The `authority` kwarg is **rule-level**, and the runtime lookup keys on the rule
-code, so every finding a rule emits inherits the same origin and reference. That
-is coarser than reality in two ways.
-
-First, a rule that serves several file types cannot name one correct page. FM010
-validates skills, agents and commands; `skills.md` and `sub-agents.md` define
-their frontmatter separately. Naming either one would attach it to findings on
-the other, so FM010 and FM001 declare `origin` alone and cite their per-context
-sources in the rule docstring that `skilllint rule <CODE>` renders.
-
-Second, a rule can carry a mix of sourced and unsourced claims.
-
-FM010 is exactly such a rule. Its 64-character limit is schema-backed and is
-registered as the claim `FM010.max_name_length` in
-`packages/skilllint/schemas/provenance-registry.json`. Its regex and
-consecutive-hyphen checks have no schema source and are recorded as the opinion
-`FM010.name_pattern` in `packages/skilllint/schemas/opinion-catalog.json`.
-
-Do not read a rule-level `authority` as a claim-level one. When you add a rule
-whose claims differ in provenance, split them across those two catalogs and cite
-the claim key, not the rule code, in anything that reports provenance.
-
-The decorator converts this to a `RuleAuthority` dataclass (defined in `packages/skilllint/rule_registry.py`):
-
-```python
-@dataclass
-class RuleAuthority:
-    origin: str  # e.g., "agent-skills.io", "anthropic.com"
-    reference: str | None = None  # URL or doc path
-```
-
-### Client Load Behavior
-
-`RuleEntry.client_load_behavior` is a separate, optional field recording what a
-real Claude Code / agent-skill client actually *does* at load time for a
-rule's finding — `"warn-and-load"` (the client logs a warning and loads the
-skill anyway) or `"skip-skill"` (the client refuses to load the skill). It is
-distinct from `authority`: `authority` says where a constraint comes from,
-`client_load_behavior` says what happens when a client encounters a
-violation of it.
-
-Set it only when the client-implementation guide
-(`https://agentskills.io/client-implementation/adding-skills-support#lenient-validation`)
-is explicit about client behavior for that exact check. Pass it as a keyword
-argument to `@skilllint_rule`, the same way as `authority`:
-
-```python
-@skilllint_rule(
-    "FM010",
-    severity="error",
-    category="frontmatter",
-    client_load_behavior="warn-and-load",
-)
-```
-
-It defaults to `None` — "the guide does not say" — matching how `authority`
-defaults to `None` for "no external reference." There is no third literal
-member for "unknown"; `None` already covers it. Most rules will leave this
-unset: only classify a rule when the guide states the client's behavior for
-the specific branch the rule checks, and note any branch-granularity gap
-(a rule checking more than the guide classifies) in the rule's docstring.
-
-### In Violation Dicts
-
-Rules can include authority directly in violation outputs:
-
-```python
-def _make_violation(code: str, severity: str, message: str, fix: str | None = None) -> dict:
-    return {
-        "code": code,
-        "severity": severity,
-        "message": message,
-        "authority": _get_rule_authority(code),  # Looked up from registry
-    }
-```
-
-### Why It Matters
-
-Provenance metadata enables:
-
-1. **Auditability:** Every violation can be traced to its source specification
-2. **Freshness detection:** `last_verified` dates indicate when schema constraints were last checked against the upstream spec
-3. **Debugging:** Users can click through to the authoritative documentation
-4. **Compliance:** Satisfies D002 (traceability to specs) and D005 (machine-readable provenance)
-
----
-
-## Quick Reference
-
-| What | Where | Key Pattern |
-|------|------|--------------|
-| Schema JSON | `packages/skilllint/schemas/<provider>/vN.json` | `file_types.<type>.fields.<field>` |
-| Adapter Protocol | `packages/skilllint/adapters/protocol.py` | `PlatformAdapter` Protocol |
-| Adapter Registry | `packages/skilllint/adapters/registry.py` | `load_adapters()` via entry_points |
-| Rule Registry | `packages/skilllint/rule_registry.py` | `@skilllint_rule` decorator |
-| Ownership Mapping | `packages/skilllint/plugin_validator.py` | `VALIDATOR_OWNERSHIP` dict |
-| Constraint Scopes | `packages/skilllint/plugin_validator.py` | `VALIDATOR_CONSTRAINT_SCOPES` dict |
-| Discovery Modes | `packages/skilllint/scan_runtime.py` | `ScanDiscoveryMode` enum |
-| Provider Directories | `packages/skilllint/scan_runtime.py` | `PROVIDER_DIR_NAMES` frozenset |
+Python 3.11 is the supported baseline. The repository's single enforced type
+checker is `ty`; its scope is `packages/` (`uv run ty check packages/`). The
+repository gates are broader: `uv run prek run --all-files` also runs formatting,
+lint, shell, Markdown, and workflow checks, while `uv run pytest` runs tests.
+Keep untrusted adapter/file payloads at explicit boundary modules and validate
+them before passing concrete values inward; see [TYPING_POLICY.md](TYPING_POLICY.md).
