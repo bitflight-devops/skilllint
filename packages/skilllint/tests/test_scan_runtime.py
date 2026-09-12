@@ -484,14 +484,33 @@ class TestResolveFilterAndExpandPaths:
             [direct_skill], None, None, platform_adapter=CursorAdapter()
         )
 
-        assert provider_paths == [provider_skill]
-        assert filtered_provider_paths == [provider_skill]
-        assert plugin_paths == [plugin, plugin_agent, plugin_command, plugin_skill]
-        assert filtered_plugin_paths == [plugin_skill]
+        assert provider_paths == [provider_skill / "SKILL.md"]
+        assert filtered_provider_paths == [provider_skill / "SKILL.md"]
+        assert plugin_paths == [
+            plugin / ".claude-plugin" / "plugin.json",
+            plugin_agent,
+            plugin_command,
+            plugin_skill / "SKILL.md",
+        ]
+        assert filtered_plugin_paths == [plugin_skill / "SKILL.md"]
         assert bare_claude_paths == [claude_file]
         assert cursor_plugin_paths == [cursor_rule]
-        assert marketplace_paths == [marketplace]
-        assert direct_skill_paths == [direct_skill]
+        assert marketplace_paths == [marketplace / ".claude-plugin" / "marketplace.json"]
+        assert direct_skill_paths == [direct_skill / "SKILL.md"]
+        assert all(
+            path.is_file()
+            for paths in (
+                provider_paths,
+                filtered_provider_paths,
+                plugin_paths,
+                filtered_plugin_paths,
+                bare_claude_paths,
+                cursor_plugin_paths,
+                marketplace_paths,
+                direct_skill_paths,
+            )
+            for path in paths
+        )
 
     def test_filter_type_resolves_to_glob(self, tmp_path: Path) -> None:
         """_resolve_filter_and_expand_paths resolves --filter-type to glob pattern.
@@ -622,16 +641,16 @@ class TestResolveFilterAndExpandPaths:
 
         discovered, _ = _resolve_filter_and_expand_paths([plugin_dir], None, None, platform_adapter=ClaudeCodeAdapter())
 
-        assert discovered == [plugin_dir, custom_skill]
+        assert discovered == [plugin_dir / ".claude-plugin" / "plugin.json", custom_skill]
 
-    def test_platform_discovery_preserves_direct_claude_skill_folder(self, tmp_path: Path) -> None:
+    def test_platform_discovery_returns_file_for_direct_claude_skill_folder(self, tmp_path: Path) -> None:
         skill_dir = tmp_path / "direct-skill"
         skill_dir.mkdir()
         (skill_dir / "SKILL.md").write_text("---\ndescription: direct\n---\n# Direct\n")
 
         discovered, _ = _resolve_filter_and_expand_paths([skill_dir], None, None, platform_adapter=ClaudeCodeAdapter())
 
-        assert discovered == [skill_dir]
+        assert discovered == [skill_dir / "SKILL.md"]
 
     def test_platform_validation_normalizes_skill_folder(self, tmp_path: Path) -> None:
         import typer

@@ -8,14 +8,11 @@ matches_file() checks whether a PurePath matches any of an adapter's path patter
 
 from __future__ import annotations
 
-import fnmatch
 import importlib.metadata
-import re
+import pathlib
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    import pathlib
-
     from skilllint.adapters.protocol import PlatformAdapter
 
 __all__ = ["load_adapters", "matches_file"]
@@ -54,18 +51,16 @@ def matches_file(adapter: PlatformAdapter, path: pathlib.PurePath) -> bool:
     """
 
     def pattern_matches(pattern: str) -> bool:
-        parts = pattern.split("/")
-        expression = ""
-        previous_was_recursive = False
-        for part in parts:
-            if part == "**":
-                expression += "(?:[^/]+/)*"
-                previous_was_recursive = True
+        if path.match(pattern) or "/**/" not in pattern:
+            return path.match(pattern)
+        prefix, suffix = pattern.split("/**/", maxsplit=1)
+        prefix_parts = tuple(prefix.split("/"))
+        parts = path.parts
+        for index in range(len(parts) - len(prefix_parts) + 1):
+            if parts[index : index + len(prefix_parts)] != prefix_parts:
                 continue
-            if expression and not previous_was_recursive:
-                expression += "/"
-            expression += fnmatch.translate(part)[4:-3]
-            previous_was_recursive = False
-        return re.search(rf"(?:^|.*/){expression}$", path.as_posix()) is not None
+            if pathlib.PurePath(*parts[index + len(prefix_parts) :]).match(suffix):
+                return True
+        return False
 
     return any(pattern_matches(pattern) for pattern in adapter.path_patterns())

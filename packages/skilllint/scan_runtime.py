@@ -363,24 +363,15 @@ def _discover_platform_paths(directory: Path, adapter: PlatformAdapter) -> list[
     for candidate in _glob_excluding(directory, "**/*"):
         if not candidate.is_file() or not matches_file(adapter, candidate):
             continue
-        target = next(
-            (
-                semantic_target
-                for semantic_target in semantic_targets
-                if candidate == semantic_target or candidate.is_relative_to(semantic_target)
-                if adapter.id() == "claude_code" or not (semantic_target / ".claude-plugin" / "plugin.json").is_file()
-            ),
-            candidate,
-        )
-        discovered.add(target if adapter.id() == "claude_code" or candidate.name == "SKILL.md" else candidate)
+        discovered.add(candidate)
     if adapter.id() == "claude_code":
         discovered.update(
-            target
+            target / ".claude-plugin" / "marketplace.json"
             for target in semantic_targets
             if (target / ".claude-plugin" / "marketplace.json").is_file()
-            or _is_skill_folder(target)
-            or target.name == "SKILL.md"
         )
+        discovered.update(target / "SKILL.md" for target in semantic_targets if _is_skill_folder(target))
+        discovered.update(target for target in semantic_targets if target.name == "SKILL.md")
     return sorted(discovered)
 
 
@@ -430,7 +421,7 @@ def _resolve_filter_and_expand_paths(
         if resolved_glob is not None and path.is_dir():
             matched = _glob_excluding(path, resolved_glob)
             matched = _platform_matching_paths(matched, path, platform_adapter)
-            if filter_type == "skills":
+            if filter_type == "skills" and platform_adapter is None:
                 matched = [match.parent for match in matched]
             expanded_paths.extend(matched)
             is_batch = True
