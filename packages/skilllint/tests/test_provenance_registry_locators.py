@@ -94,7 +94,7 @@ def _resolve_schema_json_location(claim_id: str, location: dict[str, str]) -> Js
         ("schema_json_enum", "$.required", ["description", "name"]),
     ],
 )
-def test_schema_json_locators_resolve_values(source_type: str, symbol: str, expected_value: object) -> None:
+def test_schema_json_locators_resolve_values(source_type: str, symbol: str, expected_value: JsonValue) -> None:
     location = {
         "file": "packages/skilllint/schemas/agentskills_io/v1.json",
         "symbol": symbol,
@@ -151,7 +151,7 @@ def test_fm010_claim_tracks_the_enforced_name_length_constant() -> None:
         ),
     ],
 )
-def test_schema_json_locators_reject_corrupted_values(location: dict[str, str], expected_value: object) -> None:
+def test_schema_json_locators_reject_corrupted_values(location: dict[str, str], expected_value: JsonValue) -> None:
     with pytest.raises(AssertionError):
         assert _resolve_schema_json_location("corrupted schema locator", location) == expected_value
 
