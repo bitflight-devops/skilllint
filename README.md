@@ -120,6 +120,10 @@ Use `bitflight-devops/skilllint` as a GitHub Action to validate skills, plugins,
 |---|---|
 | `result` | `passed` when exit code is 0; `failed` for any non-zero exit code |
 | `exit-code` | Raw exit code: `0` = pass · `1` = errors · `2` = usage error |
+| `inspected-count` | Number of files inspected by skilllint |
+| `findings` | Distinct finding codes emitted by skilllint |
+| `tool-python` | Python runtime used by the installed skilllint tool |
+| `tool-version` | Version reported by the installed skilllint tool |
 
 ### Example: fail the CI on validation errors
 

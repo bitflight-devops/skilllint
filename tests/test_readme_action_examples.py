@@ -28,3 +28,10 @@ def test_action_examples_pin_package_version_separately_from_action_ref() -> Non
             if input_line.startswith("version: ")
         ]
         assert any(len(version) == 3 and all(part.isdigit() for part in version) for version in versions), lines[index]
+
+
+def test_action_outputs_table_documents_every_public_output() -> None:
+    readme = README.read_text(encoding="utf-8")
+
+    for output in ("result", "exit-code", "inspected-count", "findings", "tool-python", "tool-version"):
+        assert f"| `{output}` |" in readme
