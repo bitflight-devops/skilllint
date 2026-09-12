@@ -546,6 +546,28 @@ class TestResolveFilterAndExpandPaths:
 
         assert paths == [skill]
 
+    @pytest.mark.parametrize("declared_path", ["../outside.md", "custom/agents"])
+    def test_claude_filtered_manifest_scan_rejects_targets_outside_plugin_root(
+        self, tmp_path: Path, declared_path: str
+    ) -> None:
+        plugin_dir = tmp_path / "plugin"
+        manifest = plugin_dir / ".claude-plugin" / "plugin.json"
+        manifest.parent.mkdir(parents=True)
+        manifest.write_text(f'{{"agents": ["{declared_path}"]}}')
+        outside = tmp_path / "outside.md"
+        outside.write_text("# Outside\n")
+        if declared_path == "custom/agents":
+            target = plugin_dir / declared_path
+            target.parent.mkdir(parents=True)
+            outside_dir = tmp_path / "outside-dir"
+            outside_dir.mkdir()
+            (outside_dir / "outside.md").write_text("# Outside\n")
+            target.symlink_to(outside_dir, target_is_directory=True)
+
+        paths, _ = _resolve_filter_and_expand_paths([plugin_dir], None, "agents", platform_adapter=ClaudeCodeAdapter())
+
+        assert paths == []
+
     def test_claude_filtered_manifest_scan_routes_missing_skill_to_plugin_manifest(self, tmp_path: Path) -> None:
         plugin_dir = tmp_path / "plugin"
         manifest = plugin_dir / ".claude-plugin" / "plugin.json"

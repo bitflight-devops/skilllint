@@ -235,6 +235,7 @@ def _replace_list_valued_tool_fields(frontmatter_text: str, data: dict[str, Yaml
         if (
             field_name in {"tools", "disallowedTools", "allowed-tools"}
             and isinstance(value, list)
+            and _is_losslessly_scalar_tool_list(value)
             and isinstance(value_node, SequenceNode)
         ):
             separator = frontmatter_text[key_node.end_mark.index : value_node.start_mark.index]
@@ -254,7 +255,7 @@ def _replace_list_valued_tool_fields(frontmatter_text: str, data: dict[str, Yaml
     requested_fields = {
         field_name
         for field_name in ("tools", "disallowedTools", "allowed-tools")
-        if isinstance(data.get(field_name), list)
+        if _is_losslessly_scalar_tool_list(data.get(field_name))
     }
     if not replacements or replaced_fields != requested_fields:
         return None

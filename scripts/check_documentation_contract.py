@@ -55,7 +55,7 @@ def _narrative(tracked: set[str]) -> set[str]:
 def _validate_links(path: str, text: str, root: Path) -> list[str]:
     errors: list[str] = []
     for raw in LINK.findall(FENCE.sub("", text)):
-        if not any(token in raw for token in ("/", ".", "#")):
+        if raw == "url" or any(token in raw for token in ("*", "[", "]", "{", "}")):
             continue
         if urlparse(raw).scheme in {"http", "https", "mailto"}:
             continue

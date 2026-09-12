@@ -472,12 +472,17 @@ def _manifest_filter_type_paths(
     if declared_paths is None:
         return []
     targets: list[Path] = []
+    directory_root = directory.resolve()
     for declared_path in declared_paths:
         target = directory / declared_path
+        if not target.resolve().is_relative_to(directory_root):
+            continue
         if _is_foreign_provider_target(target, directory):
             continue
         if target.is_dir() and filter_type in {"agents", "commands"}:
-            targets.extend(_glob_excluding(target, "*.md"))
+            targets.extend(
+                child for child in _glob_excluding(target, "*.md") if child.resolve().is_relative_to(directory_root)
+            )
             continue
         if filter_type == "skills" and not (
             _is_skill_folder(target) or (target.is_file() and target.name == "SKILL.md")

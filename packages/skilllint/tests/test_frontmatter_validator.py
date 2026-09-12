@@ -376,6 +376,22 @@ class TestFrontmatterAutoFix:
         assert "Bash(git log:*)" in fixed
         assert validator.validate(agent_md).errors == []
 
+    def test_fix_preserves_unrepresentable_disallowed_tools_with_safe_tool_fix(self, tmp_path: Path) -> None:
+        agent_md = tmp_path / "agents" / "tool-list.md"
+        agent_md.parent.mkdir()
+        original = (
+            "---\nname: tool-list\ndescription: Mixed tool-list verification.\n"
+            'tools: [Read]\ndisallowedTools: ["Bash(git log:*)"]\n---\nBody.\n'
+        )
+        agent_md.write_text(original, encoding="utf-8")
+
+        validator = FrontmatterValidator()
+        validator.fix(agent_md)
+
+        fixed = agent_md.read_text(encoding="utf-8")
+        assert 'disallowedTools: ["Bash(git log:*)"]' in fixed
+        assert "disallowedTools: Bash(git log:*)" not in fixed
+
     def test_fix_leaves_empty_tool_list_entries_unchanged(self, tmp_path: Path) -> None:
         agent_md = tmp_path / "agents" / "tool-list.md"
         agent_md.parent.mkdir()
