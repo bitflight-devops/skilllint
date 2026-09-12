@@ -286,7 +286,7 @@ def check_pr002(manifest: dict[str, YamlValue], plugin_dir: Path) -> list[Valida
             suggestion=f"Remove from plugin.json or create {ref}",
         )
         for ref in _component_paths(manifest, plugin_dir, "agents")
-        if not ((plugin_dir / ref).is_file() and ref.suffix == ".md")
+        if not ((plugin_dir / ref).is_dir() or ((plugin_dir / ref).is_file() and ref.suffix == ".md"))
     )
 
     issues.extend(
@@ -298,7 +298,7 @@ def check_pr002(manifest: dict[str, YamlValue], plugin_dir: Path) -> list[Valida
             suggestion=f"Remove from plugin.json or create {ref}",
         )
         for ref in _component_paths(manifest, plugin_dir, "commands")
-        if not ((plugin_dir / ref).is_file() and ref.suffix == ".md")
+        if not ((plugin_dir / ref).is_dir() or ((plugin_dir / ref).is_file() and ref.suffix == ".md"))
     )
 
     return issues
