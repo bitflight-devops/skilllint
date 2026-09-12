@@ -1101,6 +1101,33 @@ class TestSharedCheckoutRoot:
 
         assert _shared_checkout_root(worktree) == worktree
 
+    def test_cyclic_primary_checkout_git_pointer_returns_start_unchanged(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        worktree = tmp_path / "worktree"
+        worktree.mkdir()
+        worktree_gitdir = tmp_path / "metadata" / "worktrees" / "worktree"
+        worktree_gitdir.mkdir(parents=True)
+        primary = tmp_path / "primary"
+        primary.mkdir()
+        common_gitdir = primary / ".git-data"
+        common_gitdir.mkdir()
+        cycle = primary / "cycle"
+        cycle.symlink_to(cycle)
+        (worktree / ".git").write_text(f"gitdir: {worktree_gitdir}\n", encoding="utf-8")
+        (worktree_gitdir / "commondir").write_text(str(common_gitdir), encoding="utf-8")
+        (primary / ".git").write_text("gitdir: cycle\n", encoding="utf-8")
+        original_resolve = Path.resolve
+
+        def raise_for_cycle(path: Path, *, strict: bool = False) -> Path:
+            if path == cycle:
+                raise RuntimeError("Symlink loop from supported Python runtime")
+            return original_resolve(path, strict=strict)
+
+        monkeypatch.setattr(Path, "resolve", raise_for_cycle)
+
+        assert _shared_checkout_root(worktree) == worktree
+
     def test_gitdir_pointing_nowhere_returns_start_unchanged(self, tmp_path: Path) -> None:
         """A .git file pointing at a nonexistent gitdir returns start unchanged.
 
