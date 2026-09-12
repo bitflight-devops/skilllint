@@ -205,7 +205,7 @@ def _discover_plugin_paths(manifest: PluginManifest) -> list[Path]:
                     for child in _glob_excluding(resolved, "*.md")
                     if child.resolve().is_relative_to(root.resolve())
                 )
-            elif resolved.exists():
+            elif resolved.is_file() and resolved.suffix == ".md":
                 discovered.add(resolved)
 
     discovered.add(root)

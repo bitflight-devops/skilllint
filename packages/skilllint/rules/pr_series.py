@@ -61,7 +61,7 @@ def find_actual_capabilities(plugin_dir: Path) -> tuple[set[Path], set[Path], se
         actual_agents = {
             relative
             for f in agents_dir.glob("*.md")
-            if f.name not in FRONTMATTER_EXEMPT_FILENAMES
+            if f.is_file() and f.name not in FRONTMATTER_EXEMPT_FILENAMES
             if (relative := _contained_lexical_relative(f, plugin_dir)) is not None
         }
 
@@ -70,7 +70,7 @@ def find_actual_capabilities(plugin_dir: Path) -> tuple[set[Path], set[Path], se
         actual_commands = {
             relative
             for f in commands_dir.glob("*.md")
-            if f.name not in FRONTMATTER_EXEMPT_FILENAMES
+            if f.is_file() and f.name not in FRONTMATTER_EXEMPT_FILENAMES
             if (relative := _contained_lexical_relative(f, plugin_dir)) is not None
         }
 
@@ -111,10 +111,11 @@ def _registered_component_files(manifest: dict[str, YamlValue], plugin_dir: Path
             continue
         if resolved.is_dir():
             registered.update(
-                contained
-                for file in target.glob("*.md")
-                if file.name not in FRONTMATTER_EXEMPT_FILENAMES
-                if (contained := _contained_lexical_relative(file, plugin_dir)) is not None
+                relative / file.name
+                for file in resolved.glob("*.md")
+                if file.is_file()
+                and file.name not in FRONTMATTER_EXEMPT_FILENAMES
+                and file.resolve().is_relative_to(plugin_dir.resolve())
             )
         else:
             registered.add(relative)
@@ -285,7 +286,7 @@ def check_pr002(manifest: dict[str, YamlValue], plugin_dir: Path) -> list[Valida
             suggestion=f"Remove from plugin.json or create {ref}",
         )
         for ref in _component_paths(manifest, plugin_dir, "agents")
-        if not (plugin_dir / ref).exists()
+        if not ((plugin_dir / ref).is_file() and ref.suffix == ".md")
     )
 
     issues.extend(
@@ -297,7 +298,7 @@ def check_pr002(manifest: dict[str, YamlValue], plugin_dir: Path) -> list[Valida
             suggestion=f"Remove from plugin.json or create {ref}",
         )
         for ref in _component_paths(manifest, plugin_dir, "commands")
-        if not (plugin_dir / ref).exists()
+        if not ((plugin_dir / ref).is_file() and ref.suffix == ".md")
     )
 
     return issues

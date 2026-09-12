@@ -335,6 +335,17 @@ class TestUnregisteredAgent:
             "Agent 'agents/b.md' exists but is not registered"
         ]
 
+    def test_pr001_ignores_dangling_agent_symlink(self, tmp_path: Path) -> None:
+        plugin_dir = _make_plugin(
+            tmp_path, plugin_json_content=msgspec.json.encode({"name": "test-plugin", "agents": []}).decode()
+        )
+        (plugin_dir / "agents").mkdir()
+        (plugin_dir / "agents" / "ghost.md").symlink_to("missing.md")
+
+        result = PluginRegistrationValidator().validate(plugin_dir)
+
+        assert not [warning for warning in result.warnings if warning.code == "PR001"]
+
     def test_registered_directory_skips_external_symlink_child(self, tmp_path: Path) -> None:
         plugin_dir = _make_plugin(
             tmp_path,
