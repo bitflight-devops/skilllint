@@ -123,7 +123,7 @@ _rt_yaml.width = 10000  # prevent line wrapping
 
 # Platform adapter registry — loaded once at module level.
 # Keys are adapter IDs (e.g. "claude_code", "cursor", "codex").
-ADAPTERS: dict[str, object] = {a.id(): a for a in load_adapters()}
+ADAPTERS: dict[str, PlatformAdapter] = {a.id(): a for a in load_adapters()}
 
 
 def _safe_load_yaml(text: str) -> YamlValue:
@@ -4403,6 +4403,14 @@ def main(
     if not paths:
         _show_help_and_exit(ctx, code=0)
 
+    if check and fix:
+        typer.echo("Error: Cannot use both --check and --fix flags", err=True)
+        raise typer.Exit(2) from None
+
+    if fix and platform:
+        typer.echo("Error: Cannot use --fix with --platform", err=True)
+        raise typer.Exit(2) from None
+
     # Validate that all provided paths exist; report non-existent ones
     bad_paths = [str(p) for p in paths if not p.exists()]
     if bad_paths:
@@ -4415,16 +4423,17 @@ def main(
     record_console = _make_recording_console(no_color=no_color) if record is not None else None
 
     def _run_validation_command() -> None:
-        expanded_paths, is_batch = _resolve_filter_and_expand_paths(paths, filter_glob, filter_type)
+        expanded_paths, is_batch = _resolve_filter_and_expand_paths(
+            paths,
+            filter_glob,
+            filter_type,
+            platform_adapter=ADAPTERS[platform_override] if platform_override is not None else None,
+        )
         if platform_override is not None:
             expanded_paths = [_normalize_skill_folder(path) for path in expanded_paths]
 
         if tokens_only:
             _handle_tokens_only(expanded_paths, batch=is_batch)
-
-        if check and fix:
-            typer.echo("Error: Cannot use both --check and --fix flags", err=True)
-            raise typer.Exit(2) from None
 
         # One shared cache per scan run — prevents re-walking the directory
         # tree for every file when many files share the same config root.
