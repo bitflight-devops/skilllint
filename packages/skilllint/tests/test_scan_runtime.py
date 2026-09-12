@@ -533,6 +533,19 @@ class TestResolveFilterAndExpandPaths:
 
         assert paths == [agent]
 
+    def test_claude_filtered_manifest_scan_preserves_direct_skill_file(self, tmp_path: Path) -> None:
+        plugin_dir = tmp_path / "plugin"
+        manifest = plugin_dir / ".claude-plugin" / "plugin.json"
+        manifest.parent.mkdir(parents=True)
+        skill = plugin_dir / "custom" / "direct" / "SKILL.md"
+        skill.parent.mkdir(parents=True)
+        skill.write_text("---\ndescription: Direct skill\n---\n# Direct\n")
+        manifest.write_text('{"skills": ["custom/direct/SKILL.md"]}')
+
+        paths, _ = _resolve_filter_and_expand_paths([plugin_dir], None, "skills", platform_adapter=ClaudeCodeAdapter())
+
+        assert paths == [skill]
+
     def test_claude_filtered_manifest_scan_routes_missing_skill_to_plugin_manifest(self, tmp_path: Path) -> None:
         plugin_dir = tmp_path / "plugin"
         manifest = plugin_dir / ".claude-plugin" / "plugin.json"
