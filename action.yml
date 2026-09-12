@@ -201,7 +201,7 @@ runs:
 
         cat "${OUTPUT_FILE}"
 
-        INSPECTED_COUNT="$(sed -n 's/^Total files: \([0-9][0-9]*\)$/\1/p' "${OUTPUT_FILE}" | tail -n 1)"
+        INSPECTED_COUNT="$(tr -d '\r' < "${OUTPUT_FILE}" | sed -n 's/^Total files: \([0-9][0-9]*\)$/\1/p' | tail -n 1)"
         if [ "${INPUT_TOKENS_ONLY}" = "true" ] && [ "${EXIT_CODE}" -ne 2 ]; then
           INSPECTED_COUNT="$(grep -cE '^[0-9]+($|[[:blank:]])' "${OUTPUT_FILE}")"
         elif [ "${EXIT_CODE}" -ne 2 ] && [ -z "${INSPECTED_COUNT}" ] && { [ "${INPUT_SHOW_SUMMARY}" != "true" ] || [ "${INPUT_NO_COLOR}" != "true" ]; }; then
@@ -212,7 +212,7 @@ runs:
             fi
           done
           COUNT_OUTPUT="$(skilllint check --no-color "${COUNT_ARGS[@]}" --show-summary "${PATH_ARGS[@]}" 2>&1 || true)"
-          INSPECTED_COUNT="$(sed -n 's/^Total files: \([0-9][0-9]*\)$/\1/p' <<< "${COUNT_OUTPUT}" | tail -n 1)"
+          INSPECTED_COUNT="$(tr -d '\r' <<< "${COUNT_OUTPUT}" | sed -n 's/^Total files: \([0-9][0-9]*\)$/\1/p' | tail -n 1)"
         fi
 
         echo "exit-code=${EXIT_CODE}" >> "$GITHUB_OUTPUT"

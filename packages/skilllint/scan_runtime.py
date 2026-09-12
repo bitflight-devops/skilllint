@@ -354,10 +354,8 @@ def _discover_validatable_paths(directory: Path) -> list[Path]:
 def _platform_matching_paths(paths: list[Path], directory: Path, adapter: PlatformAdapter | None) -> list[Path]:
     if adapter is None:
         return paths
-    semantic_files = {
-        target for target in _discover_validatable_paths(directory) if target.is_file() or _is_skill_folder(target)
-    }
-    return [
+    semantic_targets = sorted(_discover_validatable_paths(directory), key=lambda path: len(path.parts), reverse=True)
+    matched = [
         path
         for path in paths
         if path.is_file()
@@ -365,10 +363,13 @@ def _platform_matching_paths(paths: list[Path], directory: Path, adapter: Platfo
             _matches_platform_path(adapter, path, directory)
             or (
                 adapter.id() == "claude_code"
-                and any(path == target or path.is_relative_to(target) for target in semantic_files)
+                and any(path == target or path.is_relative_to(target) for target in semantic_targets)
             )
         )
     ]
+    if adapter.id() == "claude_code":
+        return matched
+    return sorted({_semantic_platform_target(path, semantic_targets) for path in matched})
 
 
 def _matches_platform_path(adapter: PlatformAdapter, candidate: Path, directory: Path) -> bool:
@@ -391,6 +392,18 @@ def _matches_platform_relative_path(adapter: PlatformAdapter, candidate: Path) -
     )
 
 
+def _semantic_platform_target(candidate: Path, semantic_targets: list[Path]) -> Path:
+    return next(
+        (
+            semantic_target
+            for semantic_target in semantic_targets
+            if candidate == semantic_target or candidate.is_relative_to(semantic_target)
+            if not (semantic_target / ".claude-plugin" / "plugin.json").is_file()
+        ),
+        candidate,
+    )
+
+
 def _discover_platform_paths(directory: Path, adapter: PlatformAdapter) -> list[Path]:
     if adapter.id() == "claude_code":
         return _discover_validatable_paths(directory)
@@ -399,16 +412,7 @@ def _discover_platform_paths(directory: Path, adapter: PlatformAdapter) -> list[
     for candidate in _glob_excluding(directory, "**/*"):
         if not candidate.is_file() or not _matches_platform_path(adapter, candidate, directory):
             continue
-        target = next(
-            (
-                semantic_target
-                for semantic_target in semantic_targets
-                if candidate == semantic_target or candidate.is_relative_to(semantic_target)
-                if not (semantic_target / ".claude-plugin" / "plugin.json").is_file()
-            ),
-            candidate,
-        )
-        discovered.add(target)
+        discovered.add(_semantic_platform_target(candidate, semantic_targets))
     return sorted(discovered)
 
 

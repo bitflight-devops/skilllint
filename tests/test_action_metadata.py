@@ -16,3 +16,9 @@ def test_empty_platform_description_names_matching_adapters() -> None:
     action = ACTION_FILE.read_text(encoding="utf-8")
 
     assert "When omitted, validates each selected file with every matching platform adapter." in action
+
+
+def test_action_normalizes_crlf_before_reading_inspected_count() -> None:
+    action = ACTION_FILE.read_text(encoding="utf-8")
+
+    assert "tr -d '\\r'" in action
