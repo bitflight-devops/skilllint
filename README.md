@@ -27,22 +27,6 @@ plugins/my-plugin/agents/my-agent.md
 
 ---
 
-## Screenshots
-
-### Validation output with errors and warnings
-
-![skilllint check showing validation errors](docs/screenshots/check-violations.svg)
-
-### All available rules
-
-![skilllint rules table](docs/screenshots/rules.svg)
-
-### Rule detail
-
-![skilllint rule FM004 detail](docs/screenshots/rule-fm004.svg)
-
----
-
 ## Installation
 
 ```bash
@@ -512,8 +496,6 @@ Place `validator.json` inside `.claude-plugin/`:
 
 The same key format applies. Plugin-level config takes priority over a `.skilllint.json` in a parent directory.
 
-See [`docs/ignore-config.md`](docs/ignore-config.md) for the full reference.
-
 ---
 
 ## Third-party adapters
@@ -530,6 +512,12 @@ Your adapter must implement the `AdapterProtocol` interface from `skilllint.adap
 ---
 
 ## Links
+
+- [Usage and integrations](docs/usage.md)
+- [Architecture](docs/architecture.md)
+- [Vendor documentation cache](docs/vendor-cache.md)
+- [Maintainer extension guide](docs/maintainer-extension-guide.md)
+- [Plugin overview](plugins/agentskills-skilllint/README.md)
 
 - [GitHub repository](https://github.com/bitflight-devops/skilllint)
 - [Issue tracker](https://github.com/bitflight-devops/skilllint/issues)

@@ -68,7 +68,6 @@ missing, malformed, or incomplete metadata returns `MODIFIED` or
 `UNVERIFIABLE` (exit 1). An empty successful HTTP response is an unsuccessful
 fetch: with a cache it follows stale fallback, and without one it is a bounded
 failure rather than a false successful path.
-
 To fetch every normalized rule authority URL after performing the source-first
 check for each provider:
 
@@ -94,5 +93,6 @@ uv run --script scripts/fetch_doc_source.py verify "$LATEST_PATH"
 ```
 
 Do not infer source selection from a cache status: `FRESH` and `STALE` describe
-the cache response only, not whether a local clone was consulted. Keep older
-cache guides during this migration; they are retired in Todo 23.
+the cache response only, not whether a local clone was consulted. The older
+cache guides retired in Todo 23 are not part of the maintained documentation
+surface.
