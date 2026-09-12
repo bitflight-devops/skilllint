@@ -1,5 +1,9 @@
 # Design: Rule Provenance Registry
 
+> Status: proposed design, with the implemented registry/locator subset
+> explicitly identified below. The multi-stage LLM pipeline in this document
+> is not shipped runtime behavior.
+
 ## 1. Problem Statement
 
 skilllint's rule catalogue is not fixed to the FM, HK, AS, and PA families -- run `skilllint rules` for the current set. Many rules assert constraints derived from upstream vendor documentation -- event type enumerations, hook type sets, field constraints, and naming rules. These constraints are hardcoded as Python literals disconnected from their upstream sources.
