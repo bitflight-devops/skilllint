@@ -460,6 +460,55 @@ class TestPluginRegistrationRoutes:
         assert result.exit_code == 0, result.stdout
         assert result.stdout.count("[PR001]") == 1
 
+    def test_pr001_cli_orders_multiple_warnings_and_marks_them_warning(
+        self, cli_runner: CliRunner, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, no_color_env: None
+    ) -> None:
+        plugin = tmp_path / "plugin"
+        (plugin / ".claude-plugin").mkdir(parents=True)
+        (plugin / ".claude-plugin" / "plugin.json").write_text(
+            json.dumps({"name": "plugin", "agents": [], "commands": []})
+        )
+        for directory, names in (("agents", ("zeta", "alpha")), ("commands", ("zeta", "alpha"))):
+            (plugin / directory).mkdir()
+            for name in names:
+                (plugin / directory / f"{name}.md").write_text(
+                    f"---\nname: {name}\ndescription: Use when testing deterministic registration output\n---\n"
+                )
+        monkeypatch.setattr(
+            plugin_validator.PluginStructureValidator,
+            "validate",
+            lambda _self, _path: plugin_validator.ValidationResult(passed=True, errors=[], warnings=[], info=[]),
+        )
+
+        result = cli_runner.invoke(plugin_validator.app, ["check", "--no-color", str(plugin)])
+
+        assert result.exit_code == 0, result.stdout
+        assert result.stdout.count("WARN [PR001]") == 4
+        assert result.stdout.index("Agent 'agents/alpha.md'") < result.stdout.index("Agent 'agents/zeta.md'")
+        assert result.stdout.index("Command 'commands/alpha.md'") < result.stdout.index("Command 'commands/zeta.md'")
+
+    @pytest.mark.parametrize("field", ["agents", "commands"])
+    def test_pr001_cli_suppresses_default_component_when_field_is_absent(
+        self, cli_runner: CliRunner, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, no_color_env: None, field: str
+    ) -> None:
+        plugin = tmp_path / "plugin"
+        (plugin / ".claude-plugin").mkdir(parents=True)
+        (plugin / ".claude-plugin" / "plugin.json").write_text(json.dumps({"name": "plugin"}))
+        (plugin / field).mkdir()
+        (plugin / field / "auto.md").write_text(
+            "---\nname: auto\ndescription: Use when testing absent registration field behavior\n---\n"
+        )
+        monkeypatch.setattr(
+            plugin_validator.PluginStructureValidator,
+            "validate",
+            lambda _self, _path: plugin_validator.ValidationResult(passed=True, errors=[], warnings=[], info=[]),
+        )
+
+        result = cli_runner.invoke(plugin_validator.app, ["check", "--no-color", str(plugin)])
+
+        assert result.exit_code == 0, result.stdout
+        assert "[PR001]" not in result.stdout
+
     @pytest.mark.parametrize("route", ["root", "manifest", "parent"])
     @pytest.mark.parametrize(
         ("field", "reference"),
@@ -524,6 +573,27 @@ class TestPluginRegistrationRoutes:
         assert result.exit_code == 0, result.stdout
         assert result.stdout.count("[PR005]") == 1
         assert "INFO [PR005]" in result.stdout
+
+    def test_pr005_cli_ignores_plain_command_directory(
+        self, cli_runner: CliRunner, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, no_color_env: None
+    ) -> None:
+        plugin = tmp_path / "plugin"
+        (plugin / ".claude-plugin").mkdir(parents=True)
+        (plugin / ".claude-plugin" / "plugin.json").write_text(json.dumps({"name": "plugin", "commands": "./commands"}))
+        (plugin / "commands").mkdir()
+        (plugin / "commands" / "run.md").write_text(
+            "---\nname: run\ndescription: Use when testing plain command directory registration\n---\n"
+        )
+        monkeypatch.setattr(
+            plugin_validator.PluginStructureValidator,
+            "validate",
+            lambda _self, _path: plugin_validator.ValidationResult(passed=True, errors=[], warnings=[], info=[]),
+        )
+
+        result = cli_runner.invoke(plugin_validator.app, ["check", "--no-color", str(plugin)])
+
+        assert result.exit_code == 0, result.stdout
+        assert "[PR005]" not in result.stdout
 
 
 class TestCheckFlag:
