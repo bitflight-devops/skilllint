@@ -4,12 +4,33 @@ import json
 import os
 import subprocess
 import sys
+from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
 REPO_ROOT = Path(__file__).parent.parent
 ASSERTION_SCRIPT = REPO_ROOT / "scripts" / "assert_installed_artifact.py"
+
+
+def _assertion_module() -> ModuleType:
+    spec = spec_from_file_location("assert_installed_artifact", ASSERTION_SCRIPT)
+    assert spec is not None
+    assert spec.loader is not None
+    module = module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_offline_proxy_environment_uses_named_endpoint(tmp_path: Path) -> None:
+    module = _assertion_module()
+
+    environment = module._environment(tmp_path)
+
+    assert environment["ALL_PROXY"] == module.OFFLINE_PROXY_URL
+    assert environment["HTTP_PROXY"] == module.OFFLINE_PROXY_URL
+    assert environment["HTTPS_PROXY"] == module.OFFLINE_PROXY_URL
 
 
 @pytest.fixture(scope="module")

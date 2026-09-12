@@ -29,11 +29,13 @@ import httpx
 import pytest
 from hypothesis import given, strategies as st
 
+import skilllint.vendor_io as vendor_io
 from skilllint.boundary.vendor_sidecar_ingest import parse_sidecar_metadata
 from skilllint.vendor_io import (
     PROJECT_ROOT,
     SOURCES_DIR,
     VENDOR_DIR,
+    _runtime_cache_root,
     _shared_checkout_root,
     fetch_url_text,
     load_json_or_none,
@@ -901,6 +903,81 @@ class TestDirectoryConstants:
         """
         # Arrange / Act / Assert
         assert SOURCES_DIR == VENDOR_DIR / "sources"
+
+
+class TestRuntimeCacheRoot:
+    """Tests for cache ownership outside a source checkout."""
+
+    def test_source_checkout_uses_its_own_shared_root(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        source_root = tmp_path / "source"
+        source_root.mkdir()
+        (source_root / "pyproject.toml").touch()
+        monkeypatch.setattr(vendor_io, "PROJECT_ROOT", source_root)
+
+        assert _runtime_cache_root(tmp_path / "elsewhere") == source_root
+
+    def test_installed_wheel_in_git_subdirectory_uses_project_root(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        _init_repo_with_commit(repo)
+        cwd = repo / "nested"
+        cwd.mkdir()
+        monkeypatch.setattr(vendor_io, "PROJECT_ROOT", tmp_path / "site-packages")
+
+        assert _runtime_cache_root(cwd) == repo.resolve()
+
+    def test_installed_wheel_in_linked_worktree_uses_primary_checkout(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        _init_repo_with_commit(repo)
+        worktree = tmp_path / "linked"
+        _run_git(["worktree", "add", str(worktree)], cwd=repo)
+        monkeypatch.setattr(vendor_io, "PROJECT_ROOT", tmp_path / "site-packages")
+
+        assert _runtime_cache_root(worktree) == repo.resolve()
+
+    def test_installed_wheel_in_separate_git_dir_worktree_uses_linked_worktree(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        repo = tmp_path / "repo"
+        git_dir = tmp_path / "git-dir"
+        repo.mkdir()
+        _run_git(["init", "--initial-branch=main", f"--separate-git-dir={git_dir}"], cwd=repo)
+        _run_git(["config", "user.email", "test@example.com"], cwd=repo)
+        _run_git(["config", "user.name", "Test"], cwd=repo)
+        (repo / "file.txt").write_text("content\n", encoding="utf-8")
+        _run_git(["add", "."], cwd=repo)
+        _run_git(["commit", "-m", "initial commit"], cwd=repo)
+        worktree = tmp_path / "linked"
+        _run_git(["worktree", "add", str(worktree)], cwd=repo)
+        monkeypatch.setattr(vendor_io, "PROJECT_ROOT", tmp_path / "site-packages")
+
+        assert _runtime_cache_root(worktree) == worktree.resolve()
+
+    def test_installed_wheel_outside_git_uses_canonical_cwd(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        cwd = tmp_path / "non-git" / "nested"
+        cwd.mkdir(parents=True)
+        monkeypatch.setattr(vendor_io, "PROJECT_ROOT", tmp_path / "site-packages")
+
+        assert _runtime_cache_root(cwd) == cwd.resolve()
+
+    def test_installed_wheel_with_unavailable_cwd_keeps_cache_root_relative(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(vendor_io, "PROJECT_ROOT", tmp_path / "site-packages")
+
+        def unavailable_cwd() -> Path:
+            raise FileNotFoundError("working directory was removed")
+
+        monkeypatch.setattr(vendor_io.Path, "cwd", unavailable_cwd)
+
+        assert _runtime_cache_root() == Path()
 
 
 # ---------------------------------------------------------------------------
