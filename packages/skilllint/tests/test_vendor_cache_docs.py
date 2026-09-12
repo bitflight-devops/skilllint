@@ -18,6 +18,9 @@ def test_canonical_guide_and_commands_are_present() -> None:
     assert "scripts/fetch_doc_source.py" in text
     assert "--force" in text
     assert "--ttl 0" in text
+    assert "current implementation reports NEW" in text
+    assert "ValueError" in text
+    assert "cannot exclude a URL" in text
 
 
 def test_recipes_are_source_coupled_to_public_implementation() -> None:
@@ -32,6 +35,7 @@ def test_recipes_are_source_coupled_to_public_implementation() -> None:
         assert symbol in cli
         assert symbol in script
     assert re.search(r"uv run --script scripts/fetch_doc_source\.py fetch", text)
+    assert "from skilllint.vendor_cache import derive_page_name" in text
 
 
 def test_source_first_policy_has_network_sentinel_contract() -> None:

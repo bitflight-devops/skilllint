@@ -37,7 +37,8 @@ CACHE_PATH="$(uv run skilllint docs fetch "https://example.com/guide.md")"
 # Existing file within the TTL: FRESH (no request)
 uv run skilllint docs fetch "https://example.com/guide.md"
 
-# Force a request. Identical text is UNCHANGED; changed text is REFRESHED.
+# Force a request. The current implementation reports NEW and writes the
+# fetched result; UNCHANGED/REFRESHED are stale (non-force) outcomes.
 uv run skilllint docs fetch "https://example.com/guide.md" --force
 
 # TTL is in hours. TTL 0 means attempt refresh on every call; successful text
@@ -55,7 +56,7 @@ Available` and prints no path.
 ## Query and verify
 
 ```bash
-LATEST_PATH="$(uv run skilllint docs latest "$(python -c 'from skilllint.vendor_io import derive_page_name; print(derive_page_name("https://example.com/guide.md"))')")"
+LATEST_PATH="$(uv run skilllint docs latest "$(python -c 'from skilllint.vendor_cache import derive_page_name; print(derive_page_name("https://example.com/guide.md"))')")"
 uv run skilllint docs sections "$LATEST_PATH"
 uv run skilllint docs section "$LATEST_PATH" "Usage"
 uv run skilllint docs verify "$LATEST_PATH"
@@ -65,23 +66,31 @@ uv run skilllint docs verify "$LATEST_PATH"
 code. `section` accepts heading text or its lowercase Markdown slug. `verify`
 returns `INTACT` (exit 0) when the file matches its sidecar; modified,
 missing, malformed, or incomplete metadata returns `MODIFIED` or
-`UNVERIFIABLE` (exit 1). An empty successful HTTP response is an unsuccessful
-fetch: with a cache it follows stale fallback, and without one it is a bounded
-failure rather than a false successful path.
+`UNVERIFIABLE` (exit 1). An empty successful HTTP response currently raises the
+cache fetcher's `ValueError`; it is not a successful path or stale fallback.
+Normal transport/HTTP failures with an existing cache return `STALE`;
+empty-response normalization is a separate implementation follow-up.
 
-To fetch every normalized rule authority URL after performing the source-first
-check for each provider:
+To fetch every normalized rule authority URL after independently performing the
+source-first check for each provider:
 
 ```bash
 uv run skilllint docs fetch-authorities
 ```
 
+`fetch-authorities` itself is an on-demand URL loop and cannot exclude a URL
+because a clone contains an equivalent file. Use the per-URL `fetch` recipe
+when the local-source sentinel must prove zero URL calls; this limitation is a
+separate product follow-up.
+
 ## Roots and retained history
 
 Source checkouts and linked worktrees share the project vendor root; tracked
-schema outputs remain worktree-local. Installed wheel and `uvx` invocations
-resolve their runtime cache owner from the invocation project/root contract,
-while a non-Git working directory falls back to that working directory. The
+schema outputs remain worktree-local. Because the runtime derives
+`PROJECT_ROOT` from the imported module, an installed wheel or `uvx` invocation
+currently places its cache under the installation environment, not the
+invocation project. A non-Git working directory uses the imported runtime's
+derived root as well. This installed-root behavior is a product follow-up; the
 standalone script is source-coupled to this checkout and uses the same cache
 implementation:
 
