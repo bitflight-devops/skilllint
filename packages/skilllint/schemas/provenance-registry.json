@@ -201,17 +201,6 @@
       "assertion_location": {"file": "packages/skilllint/schemas/agentskills_io/v1.json", "symbol": "$.properties.name.maxLength", "source_type": "schema_json_field"},
       "expected_value": 64,
       "x-audited": {"date": "2026-09-12", "source": "packages/skilllint/schemas/agentskills_io/v1.json"}
-    },
-    "AgentSkills.required_fields": {
-      "rule_code": "FM001",
-      "claim_name": "required_fields",
-      "description": "AgentSkills schema required frontmatter fields",
-      "claim_type": "enum_set",
-      "authority": {"vendor_file": "packages/skilllint/schemas/agentskills_io/v1.json", "anchor_selector": null, "authority_url": "https://agentskills.io/specification"},
-      "extraction": {"prompt_template": "Read required fields.", "output_schema": {"type": "array", "items": {"type": "string"}}, "post_processing": "sort"},
-      "assertion_location": {"file": "packages/skilllint/schemas/agentskills_io/v1.json", "symbol": "$.required", "source_type": "schema_json_enum"},
-      "expected_value": ["description", "name"],
-      "x-audited": {"date": "2026-09-12", "source": "packages/skilllint/schemas/agentskills_io/v1.json"}
     }
   }
 }

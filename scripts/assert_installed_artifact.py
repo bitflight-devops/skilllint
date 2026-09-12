@@ -66,16 +66,19 @@ def _executable(venv_path: Path, name: str) -> Path:
 
 
 def _environment(cache_directory: Path) -> dict[str, str]:
+    # IANA assigns TCP port 1 to tcpmux; loopback keeps dependency checks offline.
+    # https://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.xhtml
+    offline_proxy = "http://127.0.0.1:1"
     return {
         **{
             key: value
             for key, value in os.environ.items()
             if key.upper() not in {"NO_PROXY", "PYTHONPATH", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"}
         },
-        "ALL_PROXY": "http://127.0.0.1:1",
+        "ALL_PROXY": offline_proxy,
         "DATA_GYM_CACHE_DIR": str(cache_directory),
-        "HTTP_PROXY": "http://127.0.0.1:1",
-        "HTTPS_PROXY": "http://127.0.0.1:1",
+        "HTTP_PROXY": offline_proxy,
+        "HTTPS_PROXY": offline_proxy,
         "TIKTOKEN_CACHE_DIR": str(cache_directory),
     }
 
