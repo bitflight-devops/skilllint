@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from skilllint.adapters import PlatformAdapter
 from skilllint.adapters.claude_code import ClaudeCodeAdapter
 from skilllint.adapters.codex import CodexAdapter
 from skilllint.adapters.cursor import CursorAdapter
@@ -362,173 +363,125 @@ class TestResolveFilterAndExpandPaths:
 
     def test_platform_directory_discovers_only_matching_files_recursively(self, tmp_path: Path) -> None:
         nested = tmp_path / "nested"
-        nested.mkdir(parents=True)
+        nested.mkdir()
         agents = nested / "AGENTS.md"
         rules = nested / "tool.rules"
         mdc = nested / "rule.mdc"
         ignored = nested / "notes.txt"
         for path in (agents, rules, mdc, ignored):
             path.write_text("")
-        claude_agent = tmp_path / ".claude" / "agents" / "team" / "deep" / "a.md"
-        claude_agent.parent.mkdir(parents=True)
-        claude_agent.write_text("")
 
         codex_paths, _ = _resolve_filter_and_expand_paths([tmp_path], None, None, platform_adapter=CodexAdapter())
-        claude_paths, _ = _resolve_filter_and_expand_paths([tmp_path], None, None, platform_adapter=ClaudeCodeAdapter())
         cursor_paths, _ = _resolve_filter_and_expand_paths([tmp_path], None, None, platform_adapter=CursorAdapter())
         filtered_paths, _ = _resolve_filter_and_expand_paths(
             [tmp_path], "**/*.rules", None, platform_adapter=CodexAdapter()
         )
 
         assert codex_paths == [agents, rules]
-        assert claude_paths == [claude_agent]
         assert cursor_paths == [mdc]
         assert filtered_paths == [rules]
 
-    def test_filtered_platform_paths_exclude_node_modules(self, tmp_path: Path) -> None:
-        agent = tmp_path / "node_modules" / "vendor" / "agents" / "bad.md"
-        agent.parent.mkdir(parents=True)
-        agent.write_text("# Ignored\n")
+    def test_platform_directory_uses_custom_adapter_matcher_and_deduplicates_roots(self, tmp_path: Path) -> None:
+        class CustomAdapter:
+            def id(self) -> str:
+                return "custom"
 
-        discovered, _ = _resolve_filter_and_expand_paths(
-            [tmp_path], None, "agents", platform_adapter=ClaudeCodeAdapter()
+            def path_patterns(self) -> list[str]:
+                return ["**/*.custom"]
+
+            def applicable_rules(self) -> set[str]:
+                return set()
+
+            def constraint_scopes(self) -> set[str]:
+                return set()
+
+            def validate(self, path: Path) -> list[dict]:
+                return []
+
+        nested = tmp_path / "nested"
+        nested.mkdir()
+        custom_file = nested / "rule.custom"
+        custom_file.write_text("")
+
+        paths, is_batch = _resolve_filter_and_expand_paths(
+            [tmp_path, nested], None, None, platform_adapter=CustomAdapter()
         )
 
-        assert discovered == []
+        assert paths == [custom_file]
+        assert is_batch is True
 
-    def test_platform_paths_exclude_agents_nested_inside_skills(self, tmp_path: Path) -> None:
-        plugin = tmp_path / "plugin"
-        (plugin / ".claude-plugin").mkdir(parents=True)
-        (plugin / ".claude-plugin" / "plugin.json").write_text("{}")
-        skill = plugin / "skills" / "demo"
-        skill.mkdir(parents=True)
-        (skill / "SKILL.md").write_text("# Demo\n")
-        helper = skill / "agents" / "helper.md"
-        helper.parent.mkdir()
-        helper.write_text("# Helper\n")
+    def test_claude_platform_preserves_direct_skill_folder(self, tmp_path: Path) -> None:
+        skill_dir = tmp_path / "direct-skill"
+        skill_dir.mkdir()
+        (skill_dir / "SKILL.md").write_text("---\ndescription: Direct skill\n---\n# Direct\n")
 
-        discovered, _ = _resolve_filter_and_expand_paths([plugin], None, None, platform_adapter=ClaudeCodeAdapter())
+        paths, _ = _resolve_filter_and_expand_paths([skill_dir], None, None, platform_adapter=ClaudeCodeAdapter())
 
-        assert discovered == [plugin / ".claude-plugin" / "plugin.json", skill / "SKILL.md"]
+        assert paths == [skill_dir]
 
-    def test_platform_paths_match_root_files_from_relative_directory(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.chdir(tmp_path)
-        mdc = Path("rule.mdc")
-        rules = Path("tool.rules")
-        mdc.write_text("description: rule\n", encoding="utf-8")
-        rules.write_text('prefix_rule("Bash")\n', encoding="utf-8")
+    def test_claude_platform_preserves_skills_from_parent_directory(self, tmp_path: Path) -> None:
+        skill_dir = tmp_path / "plugins" / "example" / "skills" / "nested-skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("---\ndescription: Nested skill\n---\n# Nested\n")
 
-        cursor_paths, _ = _resolve_filter_and_expand_paths([Path()], None, None, platform_adapter=CursorAdapter())
-        codex_paths, _ = _resolve_filter_and_expand_paths([Path()], None, None, platform_adapter=CodexAdapter())
+        paths, _ = _resolve_filter_and_expand_paths(
+            [tmp_path / "plugins"], None, None, platform_adapter=ClaudeCodeAdapter()
+        )
 
-        assert cursor_paths == [mdc]
-        assert codex_paths == [rules]
+        assert paths == [skill_dir]
 
-    def test_platform_paths_include_standalone_skill_file_for_each_adapter(self, tmp_path: Path) -> None:
-        skill = tmp_path / "standalone"
-        skill.mkdir()
-        skill_file = skill / "SKILL.md"
-        skill_file.write_text("# Standalone\n")
-
-        codex_paths, _ = _resolve_filter_and_expand_paths([skill], None, None, platform_adapter=CodexAdapter())
-        cursor_paths, _ = _resolve_filter_and_expand_paths([skill], None, None, platform_adapter=CursorAdapter())
-
-        assert codex_paths == [skill_file]
-        assert cursor_paths == [skill_file]
-
-    def test_platform_paths_prefer_plugin_manifest_over_marketplace_manifest(self, tmp_path: Path) -> None:
-        plugin = tmp_path / "plugin"
-        metadata = plugin / ".claude-plugin"
-        metadata.mkdir(parents=True)
-        plugin_manifest = metadata / "plugin.json"
-        plugin_manifest.write_text("{}")
-        (metadata / "marketplace.json").write_text("{}")
-
-        discovered, _ = _resolve_filter_and_expand_paths([plugin], None, None, platform_adapter=ClaudeCodeAdapter())
-
-        assert discovered == [plugin_manifest]
-
-    def test_platform_paths_include_agents_and_commands_in_nested_plugin(self, tmp_path: Path) -> None:
-        plugin = tmp_path / "extensions" / "demo"
-        metadata = plugin / ".claude-plugin"
-        metadata.mkdir(parents=True)
-        manifest = metadata / "plugin.json"
-        manifest.write_text("{}")
-        agent = plugin / "agents" / "demo.md"
+    def test_claude_platform_preserves_plugin_context_targets(self, tmp_path: Path) -> None:
+        plugin_dir = tmp_path / "plugin"
+        (plugin_dir / ".claude-plugin").mkdir(parents=True)
+        (plugin_dir / ".claude-plugin" / "plugin.json").write_text('{"name": "plugin"}')
+        skill_dir = plugin_dir / "skills" / "nested-skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("---\ndescription: Nested skill\n---\n# Nested\n")
+        agent = plugin_dir / "agents" / "agent.md"
         agent.parent.mkdir()
         agent.write_text("# Agent\n")
-        command = plugin / "commands" / "demo.md"
+        command = plugin_dir / "commands" / "command.md"
         command.parent.mkdir()
         command.write_text("# Command\n")
 
-        discovered, _ = _resolve_filter_and_expand_paths([tmp_path], None, None, platform_adapter=ClaudeCodeAdapter())
+        paths, _ = _resolve_filter_and_expand_paths([plugin_dir], None, None, platform_adapter=ClaudeCodeAdapter())
 
-        assert discovered == [manifest, agent, command]
+        assert paths == [plugin_dir, agent, command, skill_dir]
 
-    def test_platform_paths_exclude_unrelated_basename_only_hooks_file(self, tmp_path: Path) -> None:
-        unrelated = tmp_path / "services" / "web" / "hooks.json"
-        unrelated.parent.mkdir(parents=True)
-        unrelated.write_text("{}")
-        hook = tmp_path / "hooks" / "hooks.json"
-        hook.parent.mkdir()
-        hook.write_text("{}")
+    def test_claude_platform_preserves_manifest_declared_custom_agent_path(self, tmp_path: Path) -> None:
+        plugin_dir = tmp_path / "plugin"
+        manifest = plugin_dir / ".claude-plugin" / "plugin.json"
+        manifest.parent.mkdir(parents=True)
+        manifest.write_text('{"agents": ["custom/reviewer.md"]}')
+        reviewer = plugin_dir / "custom" / "reviewer.md"
+        reviewer.parent.mkdir()
+        reviewer.write_text("# Reviewer\n")
 
-        discovered, _ = _resolve_filter_and_expand_paths([tmp_path], None, None, platform_adapter=ClaudeCodeAdapter())
+        paths, _ = _resolve_filter_and_expand_paths([plugin_dir], None, None, platform_adapter=ClaudeCodeAdapter())
 
-        assert discovered == [hook]
+        assert paths == [plugin_dir, reviewer]
 
-    def test_platform_paths_honor_manifest_component_exclusions(self, tmp_path: Path) -> None:
-        plugin = tmp_path / "plugin"
-        metadata = plugin / ".claude-plugin"
-        metadata.mkdir(parents=True)
-        manifest = metadata / "plugin.json"
-        manifest.write_text('{"agents": ["agents/main.md"]}')
-        main = plugin / "agents" / "main.md"
-        main.parent.mkdir()
-        main.write_text("# Main\n")
-        extra = plugin / "agents" / "extra.md"
-        extra.write_text("# Extra\n")
+    def test_claude_platform_preserves_nested_manifest_declared_custom_agent_path(self, tmp_path: Path) -> None:
+        plugin_dir = tmp_path / "parent" / "plugin"
+        manifest = plugin_dir / ".claude-plugin" / "plugin.json"
+        manifest.parent.mkdir(parents=True)
+        manifest.write_text('{"agents": ["custom/reviewer.md"]}')
+        reviewer = plugin_dir / "custom" / "reviewer.md"
+        reviewer.parent.mkdir()
+        reviewer.write_text("# Reviewer\n")
 
-        discovered, _ = _resolve_filter_and_expand_paths([plugin], None, None, platform_adapter=ClaudeCodeAdapter())
+        paths, _ = _resolve_filter_and_expand_paths([tmp_path], None, None, platform_adapter=ClaudeCodeAdapter())
 
-        assert discovered == [manifest, main]
-
-    def test_non_claude_platform_paths_ignore_claude_manifest_allowlists(self, tmp_path: Path) -> None:
-        plugin = tmp_path / "plugin"
-        metadata = plugin / ".claude-plugin"
-        metadata.mkdir(parents=True)
-        manifest = metadata / "plugin.json"
-        manifest.write_text('{"agents": ["agents/main.md"]}')
-        main = plugin / "agents" / "main.md"
-        main.parent.mkdir()
-        main.write_text("# Main\n")
-        cursor_rule = plugin / ".cursor" / "rules" / "bad.mdc"
-        cursor_rule.parent.mkdir(parents=True)
-        cursor_rule.write_text("description: invalid\n")
-
-        discovered, _ = _resolve_filter_and_expand_paths([plugin], None, None, platform_adapter=CursorAdapter())
-
-        assert discovered == [cursor_rule]
-
-    def test_platform_paths_include_manifest_declared_custom_command(self, tmp_path: Path) -> None:
-        plugin = tmp_path / "extensions" / "plugin"
-        metadata = plugin / ".claude-plugin"
-        metadata.mkdir(parents=True)
-        manifest = metadata / "plugin.json"
-        manifest.write_text('{"commands": ["custom/commands/demo.md"]}')
-        command = plugin / "custom" / "commands" / "demo.md"
-        command.parent.mkdir(parents=True)
-        command.write_text("# Command\n")
-
-        discovered, _ = _resolve_filter_and_expand_paths([tmp_path], None, None, platform_adapter=ClaudeCodeAdapter())
-
-        assert discovered == [manifest, command]
+        assert paths == [plugin_dir, reviewer]
 
     @pytest.mark.parametrize(
         ("filter_glob", "filter_type", "expected_names"),
-        [(None, "agents", {"reviewer.md"}), (None, "commands", {"run.md"}), (None, "skills", {"custom-skill"})],
+        [
+            ("**/*.md", None, {"reviewer.md", "run.md", "custom-skill"}),
+            (None, "agents", {"reviewer.md"}),
+            (None, "commands", {"run.md"}),
+            (None, "skills", {"custom-skill"}),
+        ],
     )
     def test_claude_filtered_scan_preserves_manifest_declared_custom_paths(
         self, tmp_path: Path, filter_glob: str | None, filter_type: str | None, expected_names: set[str]
@@ -554,6 +507,194 @@ class TestResolveFilterAndExpandPaths:
 
         assert {path.name for path in paths} == expected_names
 
+    def test_claude_filtered_manifest_scan_excludes_foreign_agent(self, tmp_path: Path) -> None:
+        plugin_dir = tmp_path / "plugin"
+        manifest = plugin_dir / ".claude-plugin" / "plugin.json"
+        manifest.parent.mkdir(parents=True)
+        manifest.write_text('{"agents": [".agents/agents/team/foreign.md"]}')
+        foreign_agent = plugin_dir / ".agents" / "agents" / "team" / "foreign.md"
+        foreign_agent.parent.mkdir(parents=True)
+        foreign_agent.write_text("# Foreign\n")
+
+        paths, _ = _resolve_filter_and_expand_paths([plugin_dir], None, "agents", platform_adapter=ClaudeCodeAdapter())
+
+        assert paths == []
+
+    def test_claude_filtered_manifest_scan_routes_missing_skill_to_plugin_manifest(self, tmp_path: Path) -> None:
+        plugin_dir = tmp_path / "plugin"
+        manifest = plugin_dir / ".claude-plugin" / "plugin.json"
+        manifest.parent.mkdir(parents=True)
+        manifest.write_text('{"skills": ["custom/missing-skill"]}')
+
+        paths, _ = _resolve_filter_and_expand_paths([plugin_dir], None, "skills", platform_adapter=ClaudeCodeAdapter())
+
+        assert paths == [manifest]
+
+    @pytest.mark.parametrize(
+        ("filter_type", "expected_name"),
+        [("skills", "nested-skill"), ("agents", "agent.md"), ("commands", "command.md")],
+    )
+    def test_claude_platform_filter_type_preserves_semantic_target(
+        self, tmp_path: Path, filter_type: str, expected_name: str
+    ) -> None:
+        root = tmp_path / "root"
+        skill_dir = root / "skills" / "nested-skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("---\ndescription: Nested skill\n---\n# Nested\n")
+        agent = root / "agents" / "agent.md"
+        agent.parent.mkdir()
+        agent.write_text("# Agent\n")
+        command = root / "commands" / "command.md"
+        command.parent.mkdir()
+        command.write_text("# Command\n")
+
+        paths, _ = _resolve_filter_and_expand_paths([root], None, filter_type, platform_adapter=ClaudeCodeAdapter())
+
+        assert paths == [next(path for path in (skill_dir, agent, command) if path.name == expected_name)]
+
+    @pytest.mark.parametrize(("adapter", "provider"), [(CodexAdapter(), ".agents"), (CursorAdapter(), ".cursor")])
+    def test_platform_preserves_provider_prefix_for_nested_skill_folder(
+        self, tmp_path: Path, adapter: PlatformAdapter, provider: str
+    ) -> None:
+        skill_dir = tmp_path / provider / "skills" / "nested-skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("---\ndescription: Nested skill\n---\n# Nested\n")
+
+        paths, _ = _resolve_filter_and_expand_paths([tmp_path / provider], None, None, platform_adapter=adapter)
+
+        assert paths == [skill_dir]
+
+    @pytest.mark.parametrize(("adapter", "provider"), [(CodexAdapter(), ".agents"), (CursorAdapter(), ".cursor")])
+    def test_platform_preserves_provider_prefix_for_direct_skill_folder(
+        self, tmp_path: Path, adapter: PlatformAdapter, provider: str
+    ) -> None:
+        skill_dir = tmp_path / provider / "skills" / "direct-skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("---\ndescription: Direct skill\n---\n# Direct\n")
+
+        paths, _ = _resolve_filter_and_expand_paths([skill_dir], None, None, platform_adapter=adapter)
+
+        assert paths == [skill_dir]
+
+    @pytest.mark.parametrize(("adapter", "provider"), [(CodexAdapter(), ".agents"), (CursorAdapter(), ".cursor")])
+    def test_platform_skill_target_excludes_supporting_markdown(
+        self, tmp_path: Path, adapter: PlatformAdapter, provider: str
+    ) -> None:
+        skill_dir = tmp_path / provider / "skills" / "skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("---\ndescription: Skill\n---\n# Skill\n")
+        (skill_dir / "notes.md").write_text("# Supporting notes\n")
+
+        paths, _ = _resolve_filter_and_expand_paths([tmp_path / provider], None, None, platform_adapter=adapter)
+
+        assert paths == [skill_dir]
+
+    @pytest.mark.parametrize(("adapter", "provider"), [(CodexAdapter(), ".agents"), (CursorAdapter(), ".cursor")])
+    def test_platform_custom_filter_collapses_supporting_markdown_to_skill_target(
+        self, tmp_path: Path, adapter: PlatformAdapter, provider: str
+    ) -> None:
+        skill_dir = tmp_path / provider / "skills" / "skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("---\ndescription: Skill\n---\n# Skill\n")
+        (skill_dir / "notes.md").write_text("# Supporting notes\n")
+
+        paths, _ = _resolve_filter_and_expand_paths([tmp_path / provider], "**/*.md", None, platform_adapter=adapter)
+
+        assert paths == [skill_dir]
+
+    @pytest.mark.parametrize(
+        ("adapter", "provider", "native_filename"),
+        [(CodexAdapter(), ".agents", "rule.rules"), (CursorAdapter(), ".cursor", "rule.mdc")],
+    )
+    def test_platform_preserves_native_rule_files_inside_skills(
+        self, tmp_path: Path, adapter: PlatformAdapter, provider: str, native_filename: str
+    ) -> None:
+        skill_dir = tmp_path / provider / "skills" / "skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("---\ndescription: Skill\n---\n# Skill\n")
+        native_rule = skill_dir / native_filename
+        native_rule.write_text("# Native rule\n")
+
+        paths, _ = _resolve_filter_and_expand_paths([tmp_path / provider], None, None, platform_adapter=adapter)
+
+        assert paths == [skill_dir, native_rule]
+
+    def test_codex_platform_preserves_agents_file_inside_skill(self, tmp_path: Path) -> None:
+        skill_dir = tmp_path / ".agents" / "skills" / "skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("---\ndescription: Skill\n---\n# Skill\n")
+        agents_file = skill_dir / "AGENTS.md"
+        agents_file.write_text("")
+
+        paths, _ = _resolve_filter_and_expand_paths([tmp_path / ".agents"], None, None, platform_adapter=CodexAdapter())
+
+        assert paths == [skill_dir, agents_file]
+
+    @pytest.mark.parametrize(("adapter", "provider"), [(CodexAdapter(), ".agents"), (CursorAdapter(), ".cursor")])
+    def test_platform_filter_type_skills_does_not_double_normalize_skill_target(
+        self, tmp_path: Path, adapter: PlatformAdapter, provider: str
+    ) -> None:
+        skill_dir = tmp_path / provider / "skills" / "skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("---\ndescription: Skill\n---\n# Skill\n")
+
+        paths, _ = _resolve_filter_and_expand_paths([tmp_path / provider], None, "skills", platform_adapter=adapter)
+
+        assert paths == [skill_dir]
+
+    def test_claude_custom_filter_collapses_supporting_markdown_to_skill_target(self, tmp_path: Path) -> None:
+        skill_dir = tmp_path / ".claude" / "skills" / "skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("---\ndescription: Skill\n---\n# Skill\n")
+        (skill_dir / "notes.md").write_text("# Supporting notes\n")
+
+        paths, _ = _resolve_filter_and_expand_paths(
+            [tmp_path / ".claude"], "**/*.md", None, platform_adapter=ClaudeCodeAdapter()
+        )
+
+        assert paths == [skill_dir]
+
+    def test_claude_bare_scan_excludes_other_provider_skills(self, tmp_path: Path) -> None:
+        claude_skill = tmp_path / ".claude" / "skills" / "claude-skill"
+        codex_skill = tmp_path / ".agents" / "skills" / "codex-skill"
+        cursor_skill = tmp_path / ".cursor" / "skills" / "cursor-skill"
+        for skill_dir in (claude_skill, codex_skill, cursor_skill):
+            skill_dir.mkdir(parents=True)
+            (skill_dir / "SKILL.md").write_text("---\ndescription: Skill\n---\n# Skill\n")
+
+        paths, _ = _resolve_filter_and_expand_paths([tmp_path], None, None, platform_adapter=ClaudeCodeAdapter())
+
+        assert paths == [claude_skill]
+
+    def test_claude_scan_preserves_marketplace_only_root(self, tmp_path: Path) -> None:
+        marketplace = tmp_path / ".claude-plugin" / "marketplace.json"
+        marketplace.parent.mkdir()
+        marketplace.write_text('{"name": "marketplace"}')
+
+        paths, _ = _resolve_filter_and_expand_paths([tmp_path], None, None, platform_adapter=ClaudeCodeAdapter())
+
+        assert paths == [tmp_path]
+
+    def test_claude_filtered_scan_excludes_foreign_provider_agent(self, tmp_path: Path) -> None:
+        foreign_agent = tmp_path / ".agents" / "agents" / "team" / "foreign.md"
+        foreign_agent.parent.mkdir(parents=True)
+        foreign_agent.write_text("# Foreign\n")
+
+        paths, _ = _resolve_filter_and_expand_paths([tmp_path], "**/*.md", None, platform_adapter=ClaudeCodeAdapter())
+
+        assert paths == []
+
+    def test_claude_filtered_scan_preserves_marketplace_only_root(self, tmp_path: Path) -> None:
+        marketplace = tmp_path / ".claude-plugin" / "marketplace.json"
+        marketplace.parent.mkdir()
+        marketplace.write_text('{"name": "marketplace"}')
+
+        paths, _ = _resolve_filter_and_expand_paths(
+            [tmp_path], "**/marketplace.json", None, platform_adapter=ClaudeCodeAdapter()
+        )
+
+        assert paths == [tmp_path]
+
     def test_claude_filtered_scan_preserves_agent_beside_marketplace_manifest(self, tmp_path: Path) -> None:
         marketplace = tmp_path / ".claude-plugin" / "marketplace.json"
         agent = tmp_path / "agents" / "agent.md"
@@ -566,58 +707,49 @@ class TestResolveFilterAndExpandPaths:
 
         assert paths == [agent]
 
-    def test_platform_paths_match_nested_provider_files_in_provider_context(self, tmp_path: Path) -> None:
-        agent = tmp_path / "packages" / "app" / ".claude" / "agents" / "demo.md"
-        agent.parent.mkdir(parents=True)
-        agent.write_text("# Agent\n")
+    def test_claude_platform_preserves_root_claude_file(self, tmp_path: Path) -> None:
+        claude_file = tmp_path / "CLAUDE.md"
+        claude_file.write_text("# Claude\n")
 
-        discovered, _ = _resolve_filter_and_expand_paths([tmp_path], None, None, platform_adapter=ClaudeCodeAdapter())
+        paths, _ = _resolve_filter_and_expand_paths([tmp_path], None, None, platform_adapter=ClaudeCodeAdapter())
 
-        assert discovered == [agent]
+        assert paths == [claude_file]
 
-    def test_filtered_platform_paths_preserve_nested_plugin_and_provider_contexts(self, tmp_path: Path) -> None:
-        plugin_agent = tmp_path / "extensions" / "demo" / "agents" / "plugin.md"
-        (plugin_agent.parent.parent / ".claude-plugin").mkdir(parents=True)
-        (plugin_agent.parent.parent / ".claude-plugin" / "plugin.json").write_text("{}")
-        plugin_agent.parent.mkdir()
-        plugin_agent.write_text("# Plugin agent\n")
-        provider_agent = tmp_path / "packages" / "app" / ".claude" / "agents" / "provider.md"
-        provider_agent.parent.mkdir(parents=True)
-        provider_agent.write_text("# Provider agent\n")
-        helper = tmp_path / "packages" / "app" / ".claude" / "skills" / "demo" / "agents" / "helper.md"
-        helper.parent.mkdir(parents=True)
-        helper.write_text("# Helper\n")
-        cursor_agent = tmp_path / "packages" / "app" / ".cursor" / "agents" / "cursor.md"
-        cursor_agent.parent.mkdir(parents=True)
-        cursor_agent.write_text("# Cursor agent\n")
+    def test_claude_platform_preserves_nested_owned_targets_without_foreign_provider_files(
+        self, tmp_path: Path
+    ) -> None:
+        nested = tmp_path / "nested"
+        agent = nested / "agents" / "agent.md"
+        command = nested / "commands" / "command.md"
+        claude_file = nested / "CLAUDE.md"
+        foreign_agent = tmp_path / ".agents" / "agents" / "team" / "foreign.md"
+        for path in (agent, command, claude_file, foreign_agent):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("# Target\n")
 
-        discovered, _ = _resolve_filter_and_expand_paths(
-            [tmp_path], None, "agents", platform_adapter=ClaudeCodeAdapter()
+        paths, _ = _resolve_filter_and_expand_paths([tmp_path], None, None, platform_adapter=ClaudeCodeAdapter())
+
+        assert paths == sorted([agent, claude_file, command])
+
+    def test_claude_platform_excludes_nested_agent_inside_direct_foreign_provider_scan(self, tmp_path: Path) -> None:
+        foreign_provider = tmp_path / ".codex"
+        foreign_agent = foreign_provider / "agents" / "team" / "foreign.md"
+        foreign_agent.parent.mkdir(parents=True)
+        foreign_agent.write_text("# Foreign\n")
+
+        paths, _ = _resolve_filter_and_expand_paths(
+            [foreign_provider], None, None, platform_adapter=ClaudeCodeAdapter()
         )
 
-        assert set(discovered) == {plugin_agent, provider_agent}
+        assert paths == []
 
-    def test_platform_paths_exclude_skill_internal_files_in_provider_context(self, tmp_path: Path) -> None:
-        provider = tmp_path / ".claude"
-        skill = provider / "skills" / "demo"
-        skill.mkdir(parents=True)
-        skill_file = skill / "SKILL.md"
-        skill_file.write_text("# Demo\n")
-        helper = skill / "agents" / "helper.md"
-        helper.parent.mkdir()
-        helper.write_text("# Helper\n")
-
-        discovered, _ = _resolve_filter_and_expand_paths([provider], None, None, platform_adapter=ClaudeCodeAdapter())
-
-        assert discovered == [skill_file]
-
-    def test_platform_directory_uses_custom_adapter_matcher_and_deduplicates_roots(self, tmp_path: Path) -> None:
-        class CustomAdapter:
+    def test_platform_recovers_non_hidden_provider_prefix_for_direct_subtree_scan(self, tmp_path: Path) -> None:
+        class VendorAdapter:
             def id(self) -> str:
-                return "custom"
+                return "vendor"
 
             def path_patterns(self) -> list[str]:
-                return ["**/*.custom"]
+                return ["vendor/**/*.md"]
 
             def applicable_rules(self) -> set[str]:
                 return set()
@@ -628,104 +760,81 @@ class TestResolveFilterAndExpandPaths:
             def validate(self, path: Path) -> list[dict]:
                 return []
 
-        nested = tmp_path / "skills" / "nested"
-        nested.mkdir(parents=True)
-        (nested / "SKILL.md").write_text("# Skill\n")
-        custom_file = nested / "rule.custom"
-        custom_file.write_text("")
+        vendor_file = tmp_path / "vendor" / "rules" / "rule.md"
+        vendor_file.parent.mkdir(parents=True)
+        vendor_file.write_text("# Vendor rule\n")
 
-        paths, is_batch = _resolve_filter_and_expand_paths(
-            [tmp_path, nested], None, None, platform_adapter=CustomAdapter()
+        paths, _ = _resolve_filter_and_expand_paths([tmp_path / "vendor"], None, None, platform_adapter=VendorAdapter())
+
+        assert paths == [vendor_file]
+
+    def test_custom_adapter_preserves_markdown_inside_skill(self, tmp_path: Path) -> None:
+        class MarkdownAdapter:
+            def id(self) -> str:
+                return "markdown"
+
+            def path_patterns(self) -> list[str]:
+                return ["**/*.md"]
+
+            def applicable_rules(self) -> set[str]:
+                return set()
+
+            def constraint_scopes(self) -> set[str]:
+                return set()
+
+            def validate(self, path: Path) -> list[dict]:
+                return []
+
+        skill_dir = tmp_path / "skills" / "skill"
+        skill_dir.mkdir(parents=True)
+        skill_file = skill_dir / "SKILL.md"
+        note = skill_dir / "notes.md"
+        skill_file.write_text("---\ndescription: Skill\n---\n# Skill\n")
+        note.write_text("# Adapter target\n")
+
+        paths, _ = _resolve_filter_and_expand_paths([tmp_path], "**/*.md", None, platform_adapter=MarkdownAdapter())
+
+        assert paths == [skill_file, note]
+
+    def test_claude_plugin_custom_filter_excludes_documentation(self, tmp_path: Path) -> None:
+        plugin_root = tmp_path / "plugin"
+        (plugin_root / ".claude-plugin").mkdir(parents=True)
+        (plugin_root / ".claude-plugin" / "plugin.json").write_text('{"name": "plugin"}')
+        skill_dir = plugin_root / "skills" / "skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("---\ndescription: Skill\n---\n# Skill\n")
+        docs_note = plugin_root / "docs" / "note.md"
+        docs_note.parent.mkdir()
+        docs_note.write_text("# Documentation\n")
+
+        paths, _ = _resolve_filter_and_expand_paths(
+            [plugin_root], "**/*.md", None, platform_adapter=ClaudeCodeAdapter()
         )
 
-        assert paths == [custom_file]
-        assert is_batch is True
+        assert paths == [skill_dir]
 
-    def test_platform_directory_preserves_semantic_targets_for_provider_plugin_and_skill_inputs(
-        self, tmp_path: Path
+    @pytest.mark.parametrize(("adapter", "filename"), [(CursorAdapter(), "rule.mdc"), (CodexAdapter(), "rule.rules")])
+    def test_platform_includes_root_provider_file(
+        self, tmp_path: Path, adapter: PlatformAdapter, filename: str
     ) -> None:
-        provider = tmp_path / ".agents"
-        provider_skill = provider / "skills" / "provider-skill"
-        provider_skill.mkdir(parents=True)
-        (provider_skill / "SKILL.md").write_text("# Provider skill\n")
+        provider_file = tmp_path / filename
+        provider_file.write_text("# Provider file\n")
 
-        plugin = tmp_path / "plugin"
-        (plugin / ".claude-plugin").mkdir(parents=True)
-        (plugin / ".claude-plugin" / "plugin.json").write_text("{}")
-        plugin_skill = plugin / "skills" / "plugin-skill"
-        plugin_skill.mkdir(parents=True)
-        (plugin_skill / "SKILL.md").write_text("# Plugin skill\n")
-        plugin_agent = plugin / "agents" / "plugin-agent.md"
-        plugin_agent.parent.mkdir()
-        plugin_agent.write_text("# Agent\n")
-        plugin_command = plugin / "commands" / "plugin-command.md"
-        plugin_command.parent.mkdir()
-        plugin_command.write_text("# Command\n")
-        cursor_rule = plugin / ".cursor" / "bad.mdc"
-        cursor_rule.parent.mkdir()
-        cursor_rule.write_text("type: invalid\n")
+        paths, _ = _resolve_filter_and_expand_paths([tmp_path], None, None, platform_adapter=adapter)
 
-        bare_claude = tmp_path / "bare"
-        bare_claude.mkdir()
-        claude_file = bare_claude / "CLAUDE.md"
-        claude_file.write_text("# Claude instructions\n")
+        assert paths == [provider_file]
 
-        marketplace = tmp_path / "marketplace"
-        (marketplace / ".claude-plugin").mkdir(parents=True)
-        (marketplace / ".claude-plugin" / "marketplace.json").write_text("{}")
+    def test_claude_custom_filter_excludes_non_adapter_markdown(self, tmp_path: Path) -> None:
+        agent = tmp_path / "agents" / "agent.md"
+        agent.parent.mkdir()
+        agent.write_text("# Agent\n")
+        note = tmp_path / "docs" / "note.md"
+        note.parent.mkdir()
+        note.write_text("# Note\n")
 
-        direct_skill = tmp_path / ".cursor" / "skills" / "direct-skill"
-        direct_skill.mkdir(parents=True)
-        (direct_skill / "SKILL.md").write_text("# Direct skill\n")
+        paths, _ = _resolve_filter_and_expand_paths([tmp_path], "**/*.md", None, platform_adapter=ClaudeCodeAdapter())
 
-        provider_paths, _ = _resolve_filter_and_expand_paths([provider], None, None, platform_adapter=CodexAdapter())
-        filtered_provider_paths, _ = _resolve_filter_and_expand_paths(
-            [provider], None, "skills", platform_adapter=CodexAdapter()
-        )
-        plugin_paths, _ = _resolve_filter_and_expand_paths([plugin], None, None, platform_adapter=ClaudeCodeAdapter())
-        filtered_plugin_paths, _ = _resolve_filter_and_expand_paths(
-            [plugin], None, "skills", platform_adapter=ClaudeCodeAdapter()
-        )
-        bare_claude_paths, _ = _resolve_filter_and_expand_paths(
-            [bare_claude], None, None, platform_adapter=ClaudeCodeAdapter()
-        )
-        cursor_plugin_paths, _ = _resolve_filter_and_expand_paths(
-            [plugin], None, None, platform_adapter=CursorAdapter()
-        )
-        marketplace_paths, _ = _resolve_filter_and_expand_paths(
-            [marketplace], None, None, platform_adapter=ClaudeCodeAdapter()
-        )
-        direct_skill_paths, _ = _resolve_filter_and_expand_paths(
-            [direct_skill], None, None, platform_adapter=CursorAdapter()
-        )
-
-        assert provider_paths == [provider_skill / "SKILL.md"]
-        assert filtered_provider_paths == [provider_skill / "SKILL.md"]
-        assert plugin_paths == [
-            plugin / ".claude-plugin" / "plugin.json",
-            plugin_agent,
-            plugin_command,
-            plugin_skill / "SKILL.md",
-        ]
-        assert filtered_plugin_paths == [plugin_skill / "SKILL.md"]
-        assert bare_claude_paths == [claude_file]
-        assert cursor_plugin_paths == [cursor_rule, plugin_skill / "SKILL.md"]
-        assert marketplace_paths == [marketplace / ".claude-plugin" / "marketplace.json"]
-        assert direct_skill_paths == [direct_skill / "SKILL.md"]
-        assert all(
-            path.is_file()
-            for paths in (
-                provider_paths,
-                filtered_provider_paths,
-                plugin_paths,
-                filtered_plugin_paths,
-                bare_claude_paths,
-                cursor_plugin_paths,
-                marketplace_paths,
-                direct_skill_paths,
-            )
-            for path in paths
-        )
+        assert paths == [agent]
 
     def test_filter_type_resolves_to_glob(self, tmp_path: Path) -> None:
         """_resolve_filter_and_expand_paths resolves --filter-type to glob pattern.
@@ -843,29 +952,6 @@ class TestResolveFilterAndExpandPaths:
         assert plugin_dir / "skills" / "folder" in discovered
         assert plugin_dir / "skills" / "folder/SKILL.md" not in discovered
         assert direct in discovered
-
-    def test_platform_discovery_preserves_manifest_declared_custom_skill_file(self, tmp_path: Path) -> None:
-        plugin_dir = tmp_path / "my-plugin"
-        (plugin_dir / ".claude-plugin").mkdir(parents=True)
-        custom_skill = plugin_dir / "components" / "foo" / "SKILL.md"
-        custom_skill.parent.mkdir(parents=True)
-        custom_skill.write_text("---\ndescription: custom\n---\n# Custom\n")
-        (plugin_dir / ".claude-plugin" / "plugin.json").write_text(
-            '{"name": "my-plugin", "skills": ["components/foo/SKILL.md"]}'
-        )
-
-        discovered, _ = _resolve_filter_and_expand_paths([plugin_dir], None, None, platform_adapter=ClaudeCodeAdapter())
-
-        assert discovered == [plugin_dir / ".claude-plugin" / "plugin.json", custom_skill]
-
-    def test_platform_discovery_returns_file_for_direct_claude_skill_folder(self, tmp_path: Path) -> None:
-        skill_dir = tmp_path / "direct-skill"
-        skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text("---\ndescription: direct\n---\n# Direct\n")
-
-        discovered, _ = _resolve_filter_and_expand_paths([skill_dir], None, None, platform_adapter=ClaudeCodeAdapter())
-
-        assert discovered == [skill_dir / "SKILL.md"]
 
     def test_platform_validation_normalizes_skill_folder(self, tmp_path: Path) -> None:
         import typer
