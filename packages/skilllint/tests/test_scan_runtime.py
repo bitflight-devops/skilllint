@@ -494,6 +494,19 @@ class TestResolveFilterAndExpandPaths:
 
         assert paths == [skill_dir]
 
+    @pytest.mark.parametrize(("adapter", "provider"), [(CodexAdapter(), ".agents"), (CursorAdapter(), ".cursor")])
+    def test_platform_skill_target_excludes_supporting_markdown(
+        self, tmp_path: Path, adapter: PlatformAdapter, provider: str
+    ) -> None:
+        skill_dir = tmp_path / provider / "skills" / "skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("---\ndescription: Skill\n---\n# Skill\n")
+        (skill_dir / "notes.md").write_text("# Supporting notes\n")
+
+        paths, _ = _resolve_filter_and_expand_paths([tmp_path / provider], None, None, platform_adapter=adapter)
+
+        assert paths == [skill_dir]
+
     @pytest.mark.parametrize(("adapter", "filename"), [(CursorAdapter(), "rule.mdc"), (CodexAdapter(), "rule.rules")])
     def test_platform_includes_root_provider_file(
         self, tmp_path: Path, adapter: PlatformAdapter, filename: str

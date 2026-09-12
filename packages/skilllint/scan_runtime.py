@@ -408,7 +408,7 @@ def _discover_platform_paths(directory: Path, adapter: PlatformAdapter) -> list[
             ),
             candidate,
         )
-        discovered.add(target if candidate.name == "SKILL.md" else candidate)
+        discovered.add(target)
     return sorted(discovered)
 
 

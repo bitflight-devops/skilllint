@@ -1,0 +1,18 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+ACTION_FILE = Path(__file__).parents[1] / "action.yml"
+
+
+def test_action_reports_tool_python_from_uv_tool_environment() -> None:
+    action = ACTION_FILE.read_text(encoding="utf-8")
+
+    assert "uv tool list --show-python" in action
+    assert "command -v skilllint" not in action
+
+
+def test_empty_platform_description_names_matching_adapters() -> None:
+    action = ACTION_FILE.read_text(encoding="utf-8")
+
+    assert "When omitted, validates each selected file with every matching platform adapter." in action
