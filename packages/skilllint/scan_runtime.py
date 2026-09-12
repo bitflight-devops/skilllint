@@ -404,7 +404,8 @@ def _semantic_platform_target(candidate: Path, semantic_targets: list[Path], ada
             (
                 semantic_target
                 for semantic_target in semantic_targets
-                if _is_claude_marketplace_root(semantic_target) and candidate.is_relative_to(semantic_target)
+                if _is_claude_marketplace_root(semantic_target)
+                and candidate == semantic_target / ".claude-plugin" / "marketplace.json"
             ),
             None,
         )

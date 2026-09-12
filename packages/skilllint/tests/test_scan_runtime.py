@@ -672,6 +672,18 @@ class TestResolveFilterAndExpandPaths:
 
         assert paths == [tmp_path]
 
+    def test_claude_filtered_scan_preserves_agent_beside_marketplace_manifest(self, tmp_path: Path) -> None:
+        marketplace = tmp_path / ".claude-plugin" / "marketplace.json"
+        agent = tmp_path / "agents" / "agent.md"
+        marketplace.parent.mkdir()
+        marketplace.write_text('{"name": "marketplace"}')
+        agent.parent.mkdir()
+        agent.write_text("# Agent\n")
+
+        paths, _ = _resolve_filter_and_expand_paths([tmp_path], "**/*.md", None, platform_adapter=ClaudeCodeAdapter())
+
+        assert paths == [agent]
+
     def test_claude_platform_preserves_root_claude_file(self, tmp_path: Path) -> None:
         claude_file = tmp_path / "CLAUDE.md"
         claude_file.write_text("# Claude\n")
