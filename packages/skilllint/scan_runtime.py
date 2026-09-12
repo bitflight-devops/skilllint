@@ -144,6 +144,25 @@ def _parse_plugin_manifest(plugin_root: Path) -> PluginManifest:
     )
 
 
+def _discover_manifest_skill_paths(root: Path, paths: list[str]) -> set[Path]:
+    discovered: dict[Path, Path] = {}
+    for rel in paths:
+        resolved = root / rel
+        if not resolved.resolve().is_relative_to(root.resolve()):
+            continue
+        if resolved.is_dir():
+            direct_skill = resolved / "SKILL.md"
+            if direct_skill.is_file() and direct_skill.resolve().is_relative_to(root.resolve()):
+                discovered.setdefault(_ignore_path(resolved), resolved)
+            else:
+                for child_skill in _glob_excluding(resolved, "*/SKILL.md"):
+                    if child_skill.resolve().is_relative_to(root.resolve()):
+                        discovered.setdefault(_ignore_path(child_skill), child_skill)
+        elif resolved.is_file() and resolved.name == "SKILL.md":
+            discovered.setdefault(_ignore_path(resolved), resolved)
+    return set(discovered.values())
+
+
 def _discover_plugin_paths(manifest: PluginManifest) -> list[Path]:
     """Discover validatable files in a plugin directory.
 
@@ -153,9 +172,8 @@ def _discover_plugin_paths(manifest: PluginManifest) -> list[Path]:
 
     Never recurses into skills/*/agents/ or skills/*/commands/.
 
-    In manifest-driven mode, declared paths are added unconditionally regardless
-    of whether they exist on disk. This is intentional: a missing declared file
-    is a validation error that downstream validators (e.g. PL001) should flag.
+    In manifest-driven mode, existing declared paths are added. Missing entries
+    remain the responsibility of root-level registration validation.
     Convention-driven mode uses glob matching so only existing files appear.
 
     Args:
@@ -167,25 +185,26 @@ def _discover_plugin_paths(manifest: PluginManifest) -> list[Path]:
     discovered: set[Path] = set()
     root = manifest.plugin_root
 
-    if manifest.is_manifest_driven:
-        # Intentionally no existence check — missing declared paths are a lint error.
-        # Skills entries may be directories (e.g. "./skills/my-skill/") or
-        # direct SKILL.md paths. Preserve direct files; folder declarations are
-        # folder-backed targets so the validator bridge can resolve SKILL.md.
-        if manifest.skills is not None:
-            skill_paths: dict[Path, Path] = {}
-            for rel in manifest.skills:
-                resolved = root / rel
-                skill_paths.setdefault(_ignore_path(resolved), resolved)
-            discovered.update(skill_paths.values())
-        # Agents and commands entries should be direct file paths.
-        for path_list in (manifest.agents, manifest.commands):
-            if path_list is not None:
-                discovered.update(root / rel for rel in path_list)
-    else:
-        discovered.update(_glob_excluding(root, "agents/*.md"))
-        discovered.update(_glob_excluding(root, "commands/*.md"))
-        discovered.update(path.parent for path in _glob_excluding(root, "skills/*/SKILL.md"))
+    if manifest.skills is not None:
+        discovered.update(_discover_manifest_skill_paths(root, manifest.skills))
+    discovered.update(path.parent for path in _glob_excluding(root, "skills/*/SKILL.md"))
+
+    for field, path_list in (("agents", manifest.agents), ("commands", manifest.commands)):
+        if path_list is None:
+            discovered.update(_glob_excluding(root, f"{field}/*.md"))
+            continue
+        for rel in path_list:
+            resolved = root / rel
+            if not resolved.resolve().is_relative_to(root.resolve()):
+                continue
+            if resolved.is_dir():
+                discovered.update(
+                    child
+                    for child in _glob_excluding(resolved, "*.md")
+                    if child.resolve().is_relative_to(root.resolve())
+                )
+            elif resolved.is_file() and resolved.suffix == ".md":
+                discovered.add(resolved)
 
     discovered.add(root)
 
