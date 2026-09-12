@@ -359,9 +359,20 @@ def _platform_matching_paths(paths: list[Path], directory: Path, adapter: Platfo
 
 def _matches_platform_file(adapter: PlatformAdapter, path: Path, directory: Path) -> bool:
     relative_path = path.relative_to(directory)
-    if matches_file(adapter, relative_path):
+    if matches_file(adapter, relative_path, anchored=True):
         return True
-    return directory.name.startswith(".") and matches_file(adapter, Path(directory.name) / relative_path)
+    return directory.name.startswith(".") and matches_file(adapter, Path(directory.name) / relative_path, anchored=True)
+
+
+def _is_provider_skill_internal(candidate: Path, provider_root: Path) -> bool:
+    relative_path = candidate.relative_to(provider_root)
+    match relative_path.parts:
+        case ("skills", _, "SKILL.md"):
+            return False
+        case ("skills", *_):
+            return True
+        case _:
+            return False
 
 
 def _discover_platform_paths(directory: Path, adapter: PlatformAdapter) -> list[Path]:
@@ -369,19 +380,21 @@ def _discover_platform_paths(directory: Path, adapter: PlatformAdapter) -> list[
     plugin_roots = [target for target in semantic_targets if (target / ".claude-plugin" / "plugin.json").is_file()]
     plugin_manifests = {plugin_root: _parse_plugin_manifest(plugin_root) for plugin_root in plugin_roots}
     manifest_files: dict[Path, set[Path]] = {}
-    for plugin_root, manifest in plugin_manifests.items():
-        if not manifest.is_manifest_driven:
-            continue
-        files = {plugin_root / ".claude-plugin" / "plugin.json"}
-        for target in _discover_plugin_paths(manifest):
-            if target.is_file():
-                files.add(target)
-            elif _is_skill_folder(target):
-                files.add(target / "SKILL.md")
-        manifest_files[plugin_root] = files
-    provider_roots = [
+    if adapter.id() == "claude_code":
+        for plugin_root, manifest in plugin_manifests.items():
+            if not manifest.is_manifest_driven:
+                continue
+            files = {plugin_root / ".claude-plugin" / "plugin.json"}
+            for target in _discover_plugin_paths(manifest):
+                if target.is_file():
+                    files.add(target)
+                elif _is_skill_folder(target):
+                    files.add(target / "SKILL.md")
+            manifest_files[plugin_root] = files
+    provider_roots = [directory] if directory.name in KNOWN_PROVIDER_DIRS else []
+    provider_roots.extend(
         path for path in _glob_excluding(directory, "**/*") if path.is_dir() and path.name in KNOWN_PROVIDER_DIRS
-    ]
+    )
     discovered: set[Path] = set()
     for candidate in _glob_excluding(directory, "**/*"):
         candidate_plugin_roots = [plugin_root for plugin_root in plugin_roots if candidate.is_relative_to(plugin_root)]
@@ -400,12 +413,17 @@ def _discover_platform_paths(directory: Path, adapter: PlatformAdapter) -> list[
             candidate.is_relative_to(provider_root) and _matches_platform_file(adapter, candidate, provider_root)
             for provider_root in provider_roots
         )
+        is_provider_skill_internal = any(
+            candidate.is_relative_to(provider_root) and _is_provider_skill_internal(candidate, provider_root)
+            for provider_root in provider_roots
+        )
         is_unrelated_hook = (
             adapter.id() == "claude_code" and candidate.name == "hooks.json" and candidate.parent.name != "hooks"
         )
         if (
             not candidate.is_file()
             or is_unrelated_hook
+            or is_provider_skill_internal
             or not (matches_scan_root or matches_plugin_root or matches_provider_root)
         ):
             continue

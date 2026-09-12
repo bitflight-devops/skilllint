@@ -37,7 +37,7 @@ def load_adapters() -> list[PlatformAdapter]:
     return adapters
 
 
-def matches_file(adapter: PlatformAdapter, path: pathlib.PurePath) -> bool:
+def matches_file(adapter: PlatformAdapter, path: pathlib.PurePath, *, anchored: bool = False) -> bool:
     """Return True if the given path matches any of the adapter's path_patterns().
 
     Uses PurePath.match() for glob pattern matching.
@@ -45,6 +45,7 @@ def matches_file(adapter: PlatformAdapter, path: pathlib.PurePath) -> bool:
     Args:
         adapter: A PlatformAdapter instance.
         path: The file path to check.
+        anchored: Whether slash-containing patterns must match from the first path component.
 
     Returns:
         True if path matches at least one pattern, False otherwise.
@@ -66,6 +67,9 @@ def matches_file(adapter: PlatformAdapter, path: pathlib.PurePath) -> bool:
     def pattern_matches(pattern: str) -> bool:
         if "/" not in pattern:
             return path.match(pattern)
-        return pattern_parts_match(path.parts, tuple(pattern.split("/")))
+        pattern_parts = tuple(pattern.split("/"))
+        if anchored:
+            return pattern_parts_match(path.parts, pattern_parts)
+        return any(pattern_parts_match(path.parts[index:], pattern_parts) for index in range(len(path.parts)))
 
     return any(pattern_matches(pattern) for pattern in adapter.path_patterns())

@@ -111,7 +111,7 @@ def test_claude_code_path_patterns():
     assert ".claude/**/*.md" in patterns
 
 
-def test_claude_path_patterns_preserve_single_segment_boundaries() -> None:
+def test_claude_path_patterns_preserve_single_segment_boundaries_when_anchored() -> None:
     class SingleSegmentAdapter:
         def id(self) -> str:
             return "single-segment"
@@ -130,11 +130,15 @@ def test_claude_path_patterns_preserve_single_segment_boundaries() -> None:
 
     adapter = SingleSegmentAdapter()
 
-    assert matches_file(adapter, pathlib.PurePath("skills/example/SKILL.md"))
-    assert not matches_file(adapter, pathlib.PurePath("skills/example/nested/SKILL.md"))
-    assert matches_file(adapter, pathlib.PurePath("agents/example.md"))
-    assert not matches_file(adapter, pathlib.PurePath("agents/team/example.md"))
+    assert matches_file(adapter, pathlib.PurePath("skills/example/SKILL.md"), anchored=True)
+    assert not matches_file(adapter, pathlib.PurePath("skills/example/nested/SKILL.md"), anchored=True)
+    assert matches_file(adapter, pathlib.PurePath("agents/example.md"), anchored=True)
+    assert not matches_file(adapter, pathlib.PurePath("agents/team/example.md"), anchored=True)
     assert matches_file(ClaudeCodeAdapter(), pathlib.PurePath(".claude/agents/team/example.md"))
+
+
+def test_matches_file_preserves_suffix_matching_for_absolute_paths() -> None:
+    assert matches_file(ClaudeCodeAdapter(), pathlib.PurePath("/repo/.claude/agents/a.md"))
 
 
 def test_cursor_adapter_mdc_validation():

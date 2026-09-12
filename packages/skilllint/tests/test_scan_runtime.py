@@ -495,6 +495,23 @@ class TestResolveFilterAndExpandPaths:
 
         assert discovered == [manifest, main]
 
+    def test_non_claude_platform_paths_ignore_claude_manifest_allowlists(self, tmp_path: Path) -> None:
+        plugin = tmp_path / "plugin"
+        metadata = plugin / ".claude-plugin"
+        metadata.mkdir(parents=True)
+        manifest = metadata / "plugin.json"
+        manifest.write_text('{"agents": ["agents/main.md"]}')
+        main = plugin / "agents" / "main.md"
+        main.parent.mkdir()
+        main.write_text("# Main\n")
+        cursor_rule = plugin / ".cursor" / "rules" / "bad.mdc"
+        cursor_rule.parent.mkdir(parents=True)
+        cursor_rule.write_text("description: invalid\n")
+
+        discovered, _ = _resolve_filter_and_expand_paths([plugin], None, None, platform_adapter=CursorAdapter())
+
+        assert discovered == [cursor_rule]
+
     def test_platform_paths_include_manifest_declared_custom_command(self, tmp_path: Path) -> None:
         plugin = tmp_path / "extensions" / "plugin"
         metadata = plugin / ".claude-plugin"
@@ -517,6 +534,20 @@ class TestResolveFilterAndExpandPaths:
         discovered, _ = _resolve_filter_and_expand_paths([tmp_path], None, None, platform_adapter=ClaudeCodeAdapter())
 
         assert discovered == [agent]
+
+    def test_platform_paths_exclude_skill_internal_files_in_provider_context(self, tmp_path: Path) -> None:
+        provider = tmp_path / ".claude"
+        skill = provider / "skills" / "demo"
+        skill.mkdir(parents=True)
+        skill_file = skill / "SKILL.md"
+        skill_file.write_text("# Demo\n")
+        helper = skill / "agents" / "helper.md"
+        helper.parent.mkdir()
+        helper.write_text("# Helper\n")
+
+        discovered, _ = _resolve_filter_and_expand_paths([provider], None, None, platform_adapter=ClaudeCodeAdapter())
+
+        assert discovered == [skill_file]
 
     def test_platform_directory_uses_custom_adapter_matcher_and_deduplicates_roots(self, tmp_path: Path) -> None:
         class CustomAdapter:
