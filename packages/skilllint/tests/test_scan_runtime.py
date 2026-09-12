@@ -601,6 +601,75 @@ class TestResolveFilterAndExpandPaths:
 
         assert paths == [claude_file]
 
+    def test_claude_platform_preserves_nested_owned_targets_without_foreign_provider_files(
+        self, tmp_path: Path
+    ) -> None:
+        nested = tmp_path / "nested"
+        agent = nested / "agents" / "agent.md"
+        command = nested / "commands" / "command.md"
+        claude_file = nested / "CLAUDE.md"
+        foreign_agent = tmp_path / ".agents" / "agents" / "foreign.md"
+        for path in (agent, command, claude_file, foreign_agent):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("# Target\n")
+
+        paths, _ = _resolve_filter_and_expand_paths([tmp_path], None, None, platform_adapter=ClaudeCodeAdapter())
+
+        assert paths == sorted([agent, claude_file, command])
+
+    def test_platform_recovers_non_hidden_provider_prefix_for_direct_subtree_scan(self, tmp_path: Path) -> None:
+        class VendorAdapter:
+            def id(self) -> str:
+                return "vendor"
+
+            def path_patterns(self) -> list[str]:
+                return ["vendor/**/*.md"]
+
+            def applicable_rules(self) -> set[str]:
+                return set()
+
+            def constraint_scopes(self) -> set[str]:
+                return set()
+
+            def validate(self, path: Path) -> list[dict]:
+                return []
+
+        vendor_file = tmp_path / "vendor" / "rules" / "rule.md"
+        vendor_file.parent.mkdir(parents=True)
+        vendor_file.write_text("# Vendor rule\n")
+
+        paths, _ = _resolve_filter_and_expand_paths([tmp_path / "vendor"], None, None, platform_adapter=VendorAdapter())
+
+        assert paths == [vendor_file]
+
+    def test_custom_adapter_preserves_markdown_inside_skill(self, tmp_path: Path) -> None:
+        class MarkdownAdapter:
+            def id(self) -> str:
+                return "markdown"
+
+            def path_patterns(self) -> list[str]:
+                return ["**/*.md"]
+
+            def applicable_rules(self) -> set[str]:
+                return set()
+
+            def constraint_scopes(self) -> set[str]:
+                return set()
+
+            def validate(self, path: Path) -> list[dict]:
+                return []
+
+        skill_dir = tmp_path / "skills" / "skill"
+        skill_dir.mkdir(parents=True)
+        skill_file = skill_dir / "SKILL.md"
+        note = skill_dir / "notes.md"
+        skill_file.write_text("---\ndescription: Skill\n---\n# Skill\n")
+        note.write_text("# Adapter target\n")
+
+        paths, _ = _resolve_filter_and_expand_paths([tmp_path], "**/*.md", None, platform_adapter=MarkdownAdapter())
+
+        assert paths == [skill_file, note]
+
     def test_claude_plugin_custom_filter_excludes_documentation(self, tmp_path: Path) -> None:
         plugin_root = tmp_path / "plugin"
         (plugin_root / ".claude-plugin").mkdir(parents=True)
