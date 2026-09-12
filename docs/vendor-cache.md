@@ -68,7 +68,6 @@ missing, malformed, or incomplete metadata returns `MODIFIED` or
 `UNVERIFIABLE` (exit 1). An empty successful HTTP response is an unsuccessful
 fetch: with a cache it follows stale fallback, and without one it is a bounded
 failure rather than a false successful path.
-
 To fetch every normalized rule authority URL after performing the source-first
 check for each provider:
 
