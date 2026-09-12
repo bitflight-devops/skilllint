@@ -96,9 +96,13 @@ provenance stages are proposed design, not shipped behavior.
    block. Missing source or heading must fail.
 2. Install/load any retained adapter sample and run both its passing and
    failing public CLI probes with `PYTHONPATH` cleared.
-3. Run `skilllint rules` and `skilllint rule CODE`; use Todo 15 emitter evidence
-   for the eight retained stub-backed claims and Todo 14 public-route evidence
-   for PR001, PR002, and PR005.
+3. Run `uv run skilllint rules` and `uv run skilllint rule CODE`. The eight
+   retained stub-backed emitter claims are exercised by
+   `packages/skilllint/tests/test_public_rule_emitters.py` (run it with
+   `uv run pytest packages/skilllint/tests/test_public_rule_emitters.py`), and
+   the PR001/PR002/PR005 public-route cases are in
+   `packages/skilllint/tests/test_plugin_registration_validator.py` (run it
+   with `uv run pytest packages/skilllint/tests/test_plugin_registration_validator.py`).
 4. Run `uv run prek run --all-files` and `uv run pytest`.
 
 ## Typing boundary
