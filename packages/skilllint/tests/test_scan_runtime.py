@@ -532,6 +532,9 @@ class TestResolveFilterAndExpandPaths:
         paths, _ = _resolve_filter_and_expand_paths([plugin_dir], None, "agents", platform_adapter=ClaudeCodeAdapter())
 
         assert paths == [agent]
+        from skilllint.plugin_validator import FileType
+
+        assert FileType.detect_file_type(agent) == FileType.AGENT
 
     def test_claude_filtered_manifest_scan_preserves_direct_skill_file(self, tmp_path: Path) -> None:
         plugin_dir = tmp_path / "plugin"

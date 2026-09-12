@@ -97,7 +97,7 @@ from skilllint.rules.pr_series import check_pr001, check_pr002, check_pr005
 from skilllint.rules.sk_series import check_sk004, check_sk005
 from skilllint.rules.sl_series import check_sl001, iter_symlinks
 from skilllint.rules.tc_series import check_tc001
-from skilllint.scan_runtime import ScanContext
+from skilllint.scan_runtime import ScanContext, _load_plugin_json
 from skilllint.token_counter import TOKEN_ERROR_THRESHOLD, TOKEN_WARNING_THRESHOLD, count_tokens
 from skilllint.version import __version__
 
@@ -1197,6 +1197,26 @@ class FileType(StrEnum):
         return bool("commands" in path.parts and path.parent != plugin_root / "commands")
 
     @staticmethod
+    def _manifest_declared_type(path: Path) -> FileType | None:
+        for plugin_root in (path, *path.parents):
+            if not (plugin_root / ".claude-plugin" / "plugin.json").is_file():
+                continue
+            manifest = _load_plugin_json(plugin_root)
+            if manifest is None:
+                continue
+            for field_name, file_type in (("agents", FileType.AGENT), ("commands", FileType.COMMAND)):
+                declarations = manifest.get(field_name)
+                if not isinstance(declarations, list):
+                    continue
+                for declaration in declarations:
+                    if not isinstance(declaration, str):
+                        continue
+                    target = plugin_root / declaration
+                    if path == target or (target.is_dir() and path.parent == target):
+                        return file_type
+        return None
+
+    @staticmethod
     def detect_file_type(
         path: Path, scan_context: ScanContext | None = None, plugin_root: Path | None = None
     ) -> FileType:
@@ -1236,6 +1256,8 @@ class FileType(StrEnum):
             # (skilllint#118): a marketplace-only repository must be
             # classified as PLUGIN so PluginStructureValidator (PL006) runs.
             result = FileType.PLUGIN
+        elif (manifest_type := FileType._manifest_declared_type(path)) is not None:
+            result = manifest_type
         elif "agents" in path.parts:
             result = FileType.AGENT
         elif "commands" in path.parts:
@@ -3753,9 +3775,7 @@ def _frontmatter_requirement(path: Path) -> _FrontmatterRequirement:
     # Check parent directory name to distinguish direct child vs nested
     parent_name = path.parent.name
 
-    if parent_name == "agents":
-        return _FrontmatterRequirement.REQUIRED
-    if parent_name == "commands":
+    if FileType.detect_file_type(path) in {FileType.AGENT, FileType.COMMAND} or parent_name in {"agents", "commands"}:
         return _FrontmatterRequirement.REQUIRED
 
     # If "agents" or "commands" appears anywhere in the path parts but the

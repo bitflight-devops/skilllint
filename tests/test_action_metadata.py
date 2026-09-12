@@ -42,3 +42,10 @@ def test_action_findings_accept_rich_variation_selectors() -> None:
 
     assert "⚠️? (WARN|INFO)" in action
     assert "\u2139\ufe0f? (WARN|INFO)" in action
+
+
+def test_action_findings_accept_plain_rich_symbols() -> None:
+    action = ACTION_FILE.read_text(encoding="utf-8")
+
+    assert "⚠ (WARN|INFO)" in action
+    assert "\u2139 (WARN|INFO)" in action
