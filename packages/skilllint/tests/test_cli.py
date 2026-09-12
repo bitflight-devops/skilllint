@@ -706,6 +706,31 @@ class TestPluginRegistrationRoutes:
         assert result.exit_code == 0, result.stdout
         assert "[PR005]" not in result.stdout
 
+    @pytest.mark.parametrize("as_array", [False, True])
+    def test_pr005_cli_ignores_declared_flat_command_file(
+        self, cli_runner: CliRunner, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, no_color_env: None, as_array: bool
+    ) -> None:
+        plugin = tmp_path / "plugin"
+        (plugin / ".claude-plugin").mkdir(parents=True)
+        reference = "./commands/run.md"
+        (plugin / ".claude-plugin" / "plugin.json").write_text(
+            json.dumps({"name": "plugin", "commands": [reference] if as_array else reference})
+        )
+        (plugin / "commands").mkdir()
+        (plugin / "commands" / "run.md").write_text(
+            "---\nname: run\ndescription: Use when testing flat command registration\n---\n"
+        )
+        monkeypatch.setattr(
+            plugin_validator.PluginStructureValidator,
+            "validate",
+            lambda _self, _path: plugin_validator.ValidationResult(passed=True, errors=[], warnings=[], info=[]),
+        )
+
+        result = cli_runner.invoke(plugin_validator.app, ["check", "--no-color", str(plugin)])
+
+        assert result.exit_code == 0, result.stdout
+        assert "[PR005]" not in result.stdout
+
 
 class TestCheckFlag:
     """Test --check flag behavior (validate only, no fixes)."""
