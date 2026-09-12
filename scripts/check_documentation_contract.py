@@ -8,9 +8,13 @@ import re
 import shutil
 import subprocess
 import sys
+import tarfile
 import tomllib
+import zipfile
 from pathlib import Path
 from urllib.parse import urldefrag, urlparse
+
+from readme_renderer.markdown import render
 
 ROOT = Path(__file__).resolve().parents[1]
 GIT = shutil.which("git") or "git"
@@ -30,6 +34,7 @@ EXPECTED = {
     "plugins/agentskills-skilllint/skills/skilllint/SKILL.md",
 }
 LINK = re.compile(r"!?(?:\[[^]]*\])\(([^)\s]+)(?:\s+[^)]*)?\)")
+FENCE = re.compile(r"^```.*?^```\s*$", re.MULTILINE | re.DOTALL)
 
 
 def _tracked() -> set[str]:
@@ -47,6 +52,27 @@ def _narrative(tracked: set[str]) -> set[str]:
     }
 
 
+def _validate_links(path: str, text: str, root: Path) -> list[str]:
+    errors: list[str] = []
+    for raw in LINK.findall(FENCE.sub("", text)):
+        if not any(token in raw for token in ("/", ".", "#")):
+            continue
+        if urlparse(raw).scheme in {"http", "https", "mailto"}:
+            continue
+        link, anchor = urldefrag(raw)
+        destination = (root / path).parent.joinpath(link).resolve()
+        if not destination.is_file() or not destination.is_relative_to(root.resolve()):
+            errors.append(f"{path}: missing link {raw}")
+        elif anchor:
+            headings = {
+                re.sub(r"[^a-z0-9 -]", "", h.lower()).replace(" ", "-")
+                for h in re.findall(r"^#{1,6} +(.+)$", destination.read_text(encoding="utf-8"), re.MULTILINE)
+            }
+            if anchor not in headings:
+                errors.append(f"{path}: missing anchor {raw}")
+    return errors
+
+
 def validate_documentation_contract(root: Path = ROOT) -> list[str]:
     """Return violations in the maintained file inventory and local links."""
     errors: list[str] = []
@@ -54,9 +80,7 @@ def validate_documentation_contract(root: Path = ROOT) -> list[str]:
         _tracked()
         if root == ROOT
         else set(
-            subprocess.run(
-                [GIT, "ls-files"], cwd=root, check=True, capture_output=True, text=True
-            ).stdout.splitlines()
+            subprocess.run([GIT, "ls-files"], cwd=root, check=True, capture_output=True, text=True).stdout.splitlines()
         )
     )
     narrative = _narrative(tracked)
@@ -79,31 +103,50 @@ def validate_documentation_contract(root: Path = ROOT) -> list[str]:
         if not target.is_file():
             errors.append(f"missing maintained document: {path}")
             continue
-        text = target.read_text(encoding="utf-8")
-        for raw in LINK.findall(text):
-            if urlparse(raw).scheme in {"http", "https", "mailto"} or raw.startswith("#"):
-                if raw.startswith("#") and raw[1:] not in {
-                    re.sub(r"[^a-z0-9 -]", "", h.lower()).replace(" ", "-")
-                    for h in re.findall(r"^#{1,6} +(.+)$", text, re.MULTILINE)
-                }:
-                    errors.append(f"{path}: missing anchor {raw}")
-                continue
-            link, anchor = urldefrag(raw)
-            destination = (target.parent / link).resolve()
-            if not destination.is_file() or not destination.is_relative_to(root.resolve()):
-                errors.append(f"{path}: missing link {raw}")
-            elif anchor:
-                headings = {
-                    re.sub(r"[^a-z0-9 -]", "", h.lower()).replace(" ", "-")
-                    for h in re.findall(r"^#{1,6} +(.+)$", destination.read_text(encoding="utf-8"), re.MULTILINE)
-                }
-                if anchor not in headings:
-                    errors.append(f"{path}: missing anchor {raw}")
+        errors.extend(_validate_links(path, target.read_text(encoding="utf-8"), root))
     return errors
 
 
+def _artifact_readmes(directory: Path) -> dict[str, str]:
+    result: dict[str, str] = {}
+    for artifact in (*directory.glob("*.whl"), *directory.glob("*.tar.gz")):
+        if artifact.suffix == ".whl":
+            with zipfile.ZipFile(artifact) as archive:
+                names = [n for n in archive.namelist() if n.endswith(".dist-info/METADATA")]
+                metadata = archive.read(names[0]).decode() if names else ""
+        else:
+            with tarfile.open(artifact) as archive:
+                member = next((m for m in archive.getmembers() if m.name.endswith("/PKG-INFO")), None)
+                stream = archive.extractfile(member) if member else None
+                metadata = stream.read().decode() if stream else ""
+        description = metadata.split("\n\n", 1)[1] if "\n\n" in metadata else ""
+        result[artifact.name] = description.rstrip() + "\n"
+    return result
+
+
+def _artifact_results(directory: Path) -> tuple[dict[str, object], list[str]]:
+    expected = (ROOT / "README.md").read_text(encoding="utf-8")
+    results: dict[str, object] = {"artifacts": {}}
+    errors: list[str] = []
+    for name, description in _artifact_readmes(directory).items():
+        match = description == expected
+        rendered = render(description) is not None
+        results["artifacts"][name] = {"long_description_matches": match, "rendered": rendered}
+        if not match:
+            errors.append(f"{name}: long description differs from README.md")
+        if not rendered:
+            errors.append(f"{name}: long description does not render")
+    if not results["artifacts"]:
+        errors.append("no wheel or sdist artifacts found")
+    return results, errors
+
+
 def main() -> int:
-    """Run the contract checker and optional evidence modes."""
+    """Run the contract checker and optional evidence modes.
+
+    Returns:
+        The process exit code.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("--external-json", type=Path)
     parser.add_argument("--artifacts", type=Path)
@@ -111,14 +154,22 @@ def main() -> int:
     args = parser.parse_args()
     errors = validate_documentation_contract()
     if args.external_json:
-        args.external_json.write_text(json.dumps({"links": []}, indent=2) + "\n", encoding="utf-8")
+        links: list[dict[str, str]] = []
+        for path in EXPECTED:
+            text = (ROOT / path).read_text(encoding="utf-8")
+            links.extend(
+                {"url": raw, "source": path, "status": "unverified"}
+                for raw in LINK.findall(text)
+                if urlparse(raw).scheme in {"http", "https"}
+            )
+        args.external_json.write_text(json.dumps({"links": links}, indent=2) + "\n", encoding="utf-8")
     if args.artifacts or args.render_json:
         if not args.artifacts or not args.render_json:
             errors.append("--artifacts and --render-json must be provided together")
         else:
-            args.render_json.write_text(
-                json.dumps({"status": "not-built", "artifacts": str(args.artifacts)}, indent=2) + "\n", encoding="utf-8"
-            )
+            artifact_results, artifact_errors = _artifact_results(args.artifacts)
+            errors.extend(artifact_errors)
+            args.render_json.write_text(json.dumps(artifact_results, indent=2) + "\n", encoding="utf-8")
     for error in errors:
         print(error, file=sys.stderr)
     return int(bool(errors))

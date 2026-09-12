@@ -10,9 +10,9 @@ skilllint's rule catalogue is not fixed to the FM, HK, AS, and PA families -- ru
 
 This disconnection causes staleness. Concrete examples from the provenance audit:
 
-- **HK002 `VALID_EVENT_TYPES`**: The hardcoded frozenset contained 21 event names. Vendor documentation cached at the time only listed 9 of them; the remaining 12 appeared to exist only in the hardcoded constant with no traceable vendor source. **Resolved:** a fresher capture of `code.claude.com/docs/en/hooks.md` enumerates the complete set as level-3 headings — 31 names, a strict superset of the 22 then enforced. HK002 is now a shipped `provenance-registry.json` claim (`HK002.valid_event_types`); see [registry-schema-examples.md](./registry-schema-examples.md).
+- **HK002 `VALID_EVENT_TYPES`**: The hardcoded frozenset contained 21 event names. Vendor documentation cached at the time only listed 9 of them; the remaining 12 appeared to exist only in the hardcoded constant with no traceable vendor source. **Resolved:** a fresher capture of `code.claude.com/docs/en/hooks.md` enumerates the complete set as level-3 headings — 31 names, a strict superset of the 22 then enforced. HK002 is now a shipped `provenance-registry.json` claim (`HK002.valid_event_types`).
 
-- **HK003 `VALID_HOOK_TYPES`**: The hardcoded frozenset `{"command", "http", "prompt", "agent"}` appeared to have no vendor source defining the enumeration; the vendor hook files available at the time used `"command"` and `"http"` but no file enumerated the complete valid set. **Resolved:** the same fresher `hooks.md` capture's "Common fields" table enumerates all five values, including `mcp_tool`, which the code was missing. HK003 is now a shipped claim (`HK003.valid_hook_types`); see [registry-schema-examples.md](./registry-schema-examples.md).
+- **HK003 `VALID_HOOK_TYPES`**: The hardcoded frozenset `{"command", "http", "prompt", "agent"}` appeared to have no vendor source defining the enumeration; the vendor hook files available at the time used `"command"` and `"http"` but no file enumerated the complete valid set. **Resolved:** the same fresher `hooks.md` capture's "Common fields" table enumerates all five values, including `mcp_tool`, which the code was missing. HK003 is now a shipped claim (`HK003.valid_hook_types`).
 
 - **FM007 tool field names**: The set `{"tools", "disallowedTools", "allowed-tools"}` is hardcoded. `disallowedTools` does not appear in any schema file.
 
@@ -170,7 +170,7 @@ Each entry maps a **claim** (a specific assertion made by a rule) to its authori
 
 ### Concrete claim entry examples
 
-See [companion: registry-schema-examples.md](./registry-schema-examples.md) for full JSON examples of each claim type (enum_set, scalar, pattern, field_set) using real rule data from the provenance audit.
+The registry tests cover enum, scalar, pattern, and field-set claims using real rule data from the provenance audit.
 
 ## 4. Opinion Catalog Schema
 

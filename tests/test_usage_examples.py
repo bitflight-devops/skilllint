@@ -42,7 +42,6 @@ def test_usage_guide_keeps_source_blocks_and_contracts() -> None:
 
     assert "check --platform agentskills" not in text
     assert "--fix --platform" not in text
-    assert (ROOT / "docs/ignore-config.md").exists()
 
 
 def test_documented_cli_routes_execute_against_fixture(tmp_path: Path) -> None:

@@ -78,8 +78,7 @@ SK009 are retired and must not be restored to help, catalog, or examples.
 Version schema changes under `packages/skilllint/schemas/<provider>/vN.json`.
 Preserve `constraint_scope`: `shared` means the core can apply it across
 providers; `provider_specific` requires the matching adapter. The old
-`docs/registry-schema-examples.md` remains a companion reference and is not
-deleted or treated as a second catalog.
+Registry claims remain source-coupled to the design and validation tests.
 
 A provenance claim must identify its rule, authority file/URL and heading (when
 applicable), extraction shape, assertion locator, expected value, and audit
