@@ -510,6 +510,116 @@ class TestPluginRegistrationRoutes:
         assert result.exit_code == 0, result.stdout
         assert "[PR001]" not in result.stdout
 
+    @pytest.mark.parametrize("field", ["agents", "commands"])
+    @pytest.mark.parametrize("as_array", [False, True])
+    def test_pr001_cli_accepts_registered_component_directory(
+        self,
+        cli_runner: CliRunner,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        no_color_env: None,
+        field: str,
+        as_array: bool,
+    ) -> None:
+        plugin = tmp_path / "plugin"
+        (plugin / ".claude-plugin").mkdir(parents=True)
+        value = f"./{field}"
+        (plugin / ".claude-plugin" / "plugin.json").write_text(
+            json.dumps({"name": "plugin", field: [value] if as_array else value})
+        )
+        (plugin / field).mkdir()
+        (plugin / field / "registered.md").write_text(
+            "---\nname: registered\ndescription: Use when testing registered component directories\n---\n"
+        )
+        monkeypatch.setattr(
+            plugin_validator.PluginStructureValidator,
+            "validate",
+            lambda _self, _path: plugin_validator.ValidationResult(passed=True, errors=[], warnings=[], info=[]),
+        )
+
+        result = cli_runner.invoke(plugin_validator.app, ["check", "--no-color", str(plugin)])
+
+        assert result.exit_code == 0, result.stdout
+        assert "[PR001]" not in result.stdout
+
+    def test_pr001_cli_adds_custom_and_standard_skills_without_registration_errors(
+        self, cli_runner: CliRunner, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, no_color_env: None
+    ) -> None:
+        plugin = tmp_path / "plugin"
+        (plugin / ".claude-plugin").mkdir(parents=True)
+        (plugin / ".claude-plugin" / "plugin.json").write_text(
+            json.dumps({"name": "plugin", "skills": "./custom-skills"})
+        )
+        for parent, name in (("skills", "standard"), ("custom-skills", "custom")):
+            skill_dir = plugin / parent / name
+            skill_dir.mkdir(parents=True)
+            (skill_dir / "SKILL.md").write_text(
+                f"---\nname: {name}\ndescription: Use when testing additive skill discovery\n---\n"
+            )
+        monkeypatch.setattr(
+            plugin_validator.PluginStructureValidator,
+            "validate",
+            lambda _self, _path: plugin_validator.ValidationResult(passed=True, errors=[], warnings=[], info=[]),
+        )
+
+        result = cli_runner.invoke(plugin_validator.app, ["check", "--no-color", str(plugin)])
+
+        assert result.exit_code == 0, result.stdout
+        assert "[PR001]" not in result.stdout
+
+    @pytest.mark.parametrize(
+        ("field", "reference", "create_kind"),
+        [
+            ("skills", "./skills/direct/SKILL.md", "skill-file"),
+            ("skills", "./skills/container", "skill-directory"),
+            ("skills", ".", "root-skill"),
+            ("agents", "./agents/file.md", "markdown-file"),
+            ("agents", "./agents", "markdown-directory"),
+            ("commands", "./commands/file.md", "markdown-file"),
+            ("commands", "./commands", "markdown-directory"),
+        ],
+    )
+    @pytest.mark.parametrize("as_array", [False, True])
+    def test_pr002_cli_accepts_valid_registered_shapes(
+        self,
+        cli_runner: CliRunner,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        no_color_env: None,
+        field: str,
+        reference: str,
+        create_kind: str,
+        as_array: bool,
+    ) -> None:
+        plugin = tmp_path / "plugin"
+        (plugin / ".claude-plugin").mkdir(parents=True)
+        value = [reference] if as_array else reference
+        (plugin / ".claude-plugin" / "plugin.json").write_text(json.dumps({"name": "plugin", field: value}))
+        if create_kind == "skill-file":
+            target = plugin / "skills" / "direct" / "SKILL.md"
+        elif create_kind == "skill-directory":
+            target = plugin / "skills" / "container" / "SKILL.md"
+        elif create_kind == "root-skill":
+            target = plugin / "SKILL.md"
+        else:
+            target = plugin / reference.removeprefix("./")
+            if create_kind == "markdown-directory":
+                target = target / "entry.md"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(
+            f"---\nname: {target.parent.name}\ndescription: Use when testing valid registration shapes\n---\n"
+        )
+        monkeypatch.setattr(
+            plugin_validator.PluginStructureValidator,
+            "validate",
+            lambda _self, _path: plugin_validator.ValidationResult(passed=True, errors=[], warnings=[], info=[]),
+        )
+
+        result = cli_runner.invoke(plugin_validator.app, ["check", "--no-color", str(plugin)])
+
+        assert result.exit_code == 0, result.stdout
+        assert "[PR002]" not in result.stdout
+
     @pytest.mark.parametrize("route", ["root", "manifest", "parent"])
     @pytest.mark.parametrize(
         ("field", "reference"),
