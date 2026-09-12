@@ -3753,6 +3753,20 @@ def _get_fixers_for_path(validators: list[Validator], path: Path) -> list[Valida
     return [*validators, NameFormatValidator()]
 
 
+def _without_duplicate_plugin_errors(
+    result: ValidationResult, reported_plugin_structure_counts: dict[str, int]
+) -> ValidationResult:
+    remaining_duplicate_counts = reported_plugin_structure_counts.copy()
+    errors: list[ValidationIssue] = []
+    for issue in result.errors:
+        code = str(issue.code)
+        if code in {"PL002", "PL004"} and remaining_duplicate_counts.get(code, 0):
+            remaining_duplicate_counts[code] -= 1
+            continue
+        errors.append(issue)
+    return ValidationResult(passed=not errors, errors=errors, warnings=result.warnings, info=result.info)
+
+
 def _collect_validator_results(
     validators: list[Validator],
     path: Path,
@@ -3782,17 +3796,15 @@ def _collect_validator_results(
         List of (validator_class_name, result) tuples.
     """
     results: list[tuple[str, ValidationResult]] = []
-    reported_plugin_structure_codes: set[str] = set()
+    reported_plugin_structure_counts: dict[str, int] = {}
     for validator in validators:
         name = type(validator).__name__
         if policy is not None and isinstance(validator, (ComplexityValidator, AsSeriesValidator)):
             result = validator.validate(path, policy)
         else:
             result = validator.validate(path)
-        duplicate_plugin_codes = reported_plugin_structure_codes.intersection({"PL002", "PL004"})
-        if name == "PluginRegistrationValidator" and duplicate_plugin_codes:
-            errors = [issue for issue in result.errors if issue.code not in duplicate_plugin_codes]
-            result = ValidationResult(passed=not errors, errors=errors, warnings=result.warnings, info=result.info)
+        if name == "PluginRegistrationValidator":
+            result = _without_duplicate_plugin_errors(result, reported_plugin_structure_counts)
         if policy is not None and policy.severity:
 
             def remap(issue: ValidationIssue) -> ValidationIssue:
@@ -3824,7 +3836,9 @@ def _collect_validator_results(
         if config_root is not None:
             result = _filter_result_by_ignore(result, path, config_root, ignore_config)
         if name == "PluginStructureValidator":
-            reported_plugin_structure_codes.update(str(issue.code) for issue in result.errors)
+            for issue in result.errors:
+                code = str(issue.code)
+                reported_plugin_structure_counts[code] = reported_plugin_structure_counts.get(code, 0) + 1
         results.append((name, result))
     return results
 

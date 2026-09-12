@@ -318,6 +318,23 @@ class TestUnregisteredAgent:
 
         assert not [warning for warning in result.warnings if warning.code == "PR001"]
 
+    def test_pr001_keeps_distinct_in_root_symlink_aliases(self, tmp_path: Path) -> None:
+        plugin_dir = _make_plugin(
+            tmp_path,
+            plugin_json_content=msgspec.json.encode({"name": "test-plugin", "agents": ["./agents/a.md"]}).decode(),
+        )
+        (plugin_dir / "agents").mkdir()
+        (plugin_dir / "shared").mkdir()
+        (plugin_dir / "shared" / "agent.md").write_text("---\ndescription: alias target\n---\n")
+        (plugin_dir / "agents" / "a.md").symlink_to("../shared/agent.md")
+        (plugin_dir / "agents" / "b.md").symlink_to("../shared/agent.md")
+
+        result = PluginRegistrationValidator().validate(plugin_dir)
+
+        assert [warning.message for warning in result.warnings if warning.code == "PR001"] == [
+            "Agent 'agents/b.md' exists but is not registered"
+        ]
+
     def test_registered_directory_skips_external_symlink_child(self, tmp_path: Path) -> None:
         plugin_dir = _make_plugin(
             tmp_path,

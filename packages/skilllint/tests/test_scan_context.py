@@ -836,6 +836,17 @@ class TestDiscoverPluginPaths:
         assert tmp_path / "commands" / "run.md" in result
         assert tmp_path / "skills" / "guide" in result
 
+    def test_custom_skills_declaration_preserves_default_skill_discovery(self, tmp_path: Path) -> None:
+        (tmp_path / "skills" / "standard").mkdir(parents=True)
+        (tmp_path / "skills" / "standard" / "SKILL.md").write_text("# Standard")
+        (tmp_path / "custom-skills" / "custom").mkdir(parents=True)
+        (tmp_path / "custom-skills" / "custom" / "SKILL.md").write_text("# Custom")
+
+        result = _discover_plugin_paths(PluginManifest(plugin_root=tmp_path, skills=["./custom-skills"]))
+
+        assert tmp_path / "skills" / "standard" in result
+        assert tmp_path / "custom-skills" / "custom" / "SKILL.md" in result
+
     def test_manifest_driven_resolves_skill_paths(self, tmp_path: Path) -> None:
         """Manifest mode resolves a declared skill directory to its SKILL.md child.
 

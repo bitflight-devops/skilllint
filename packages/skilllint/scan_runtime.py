@@ -189,8 +189,7 @@ def _discover_plugin_paths(manifest: PluginManifest) -> list[Path]:
 
     if manifest.skills is not None:
         discovered.update(_discover_manifest_skill_paths(root, manifest.skills))
-    else:
-        discovered.update(path.parent for path in _glob_excluding(root, "skills/*/SKILL.md"))
+    discovered.update(path.parent for path in _glob_excluding(root, "skills/*/SKILL.md"))
 
     for field, path_list in (("agents", manifest.agents), ("commands", manifest.commands)):
         if path_list is None:

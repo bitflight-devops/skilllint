@@ -11,6 +11,7 @@ The validator is wired into plugin-root validation.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -22,6 +23,12 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 # Spec sources
 # ---------------------------------------------------------------------------
+
+
+def _contained_lexical_relative(path: Path, plugin_dir: Path) -> Path | None:
+    if not path.resolve().is_relative_to(plugin_dir.resolve()):
+        return None
+    return Path(os.path.normpath(str(path.relative_to(plugin_dir))))
 
 
 def find_actual_capabilities(plugin_dir: Path) -> tuple[set[Path], set[Path], set[Path]]:
@@ -39,30 +46,32 @@ def find_actual_capabilities(plugin_dir: Path) -> tuple[set[Path], set[Path], se
     actual_skills: set[Path] = set()
     actual_agents: set[Path] = set()
     actual_commands: set[Path] = set()
-    root = plugin_dir.resolve()
 
     skills_dir = plugin_dir / "skills"
     if skills_dir.is_dir():
         actual_skills = {
-            d.resolve().relative_to(root)
+            relative
             for d in skills_dir.glob("*/")
-            if d.is_dir() and (d / "SKILL.md").exists() and d.resolve().is_relative_to(root)
+            if d.is_dir() and (d / "SKILL.md").exists()
+            if (relative := _contained_lexical_relative(d, plugin_dir)) is not None
         }
 
     agents_dir = plugin_dir / "agents"
     if agents_dir.is_dir():
         actual_agents = {
-            f.resolve().relative_to(root)
+            relative
             for f in agents_dir.glob("*.md")
-            if f.name not in FRONTMATTER_EXEMPT_FILENAMES and f.resolve().is_relative_to(root)
+            if f.name not in FRONTMATTER_EXEMPT_FILENAMES
+            if (relative := _contained_lexical_relative(f, plugin_dir)) is not None
         }
 
     commands_dir = plugin_dir / "commands"
     if commands_dir.is_dir():
         actual_commands = {
-            f.resolve().relative_to(root)
+            relative
             for f in commands_dir.glob("*.md")
-            if f.name not in FRONTMATTER_EXEMPT_FILENAMES and f.resolve().is_relative_to(root)
+            if f.name not in FRONTMATTER_EXEMPT_FILENAMES
+            if (relative := _contained_lexical_relative(f, plugin_dir)) is not None
         }
 
     return actual_skills, actual_agents, actual_commands
@@ -94,20 +103,21 @@ def _registered_component_files(manifest: dict[str, YamlValue], plugin_dir: Path
     from skilllint.plugin_validator import FRONTMATTER_EXEMPT_FILENAMES  # noqa: PLC0415
 
     registered: set[Path] = set()
-    root = plugin_dir.resolve()
     for reference in _component_paths(manifest, plugin_dir, field):
         target = plugin_dir / reference
         resolved = target.resolve()
-        if not resolved.is_relative_to(root):
+        relative = _contained_lexical_relative(target, plugin_dir)
+        if relative is None:
             continue
         if resolved.is_dir():
             registered.update(
-                file.resolve().relative_to(root)
-                for file in resolved.glob("*.md")
-                if file.name not in FRONTMATTER_EXEMPT_FILENAMES and file.resolve().is_relative_to(root)
+                contained
+                for file in target.glob("*.md")
+                if file.name not in FRONTMATTER_EXEMPT_FILENAMES
+                if (contained := _contained_lexical_relative(file, plugin_dir)) is not None
             )
         else:
-            registered.add(resolved.relative_to(root))
+            registered.add(relative)
     return registered
 
 

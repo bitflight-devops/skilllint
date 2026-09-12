@@ -225,6 +225,30 @@ class TestPluginRegistrationRoutes:
         assert result.exit_code == 1, result.stdout
         assert result.stdout.count("[PL004]") == 1
 
+    def test_local_pl004_retains_second_invalid_path_when_claude_reports_one(
+        self, cli_runner: CliRunner, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, no_color_env: None
+    ) -> None:
+        plugin = tmp_path / "plugin"
+        (plugin / ".claude-plugin").mkdir(parents=True)
+        (plugin / ".claude-plugin" / "plugin.json").write_text(
+            json.dumps({"name": "plugin", "agents": "agents/a.md", "commands": "commands/b.md"})
+        )
+        claude_pl004 = plugin_validator.ValidationIssue(
+            field="plugin.json", severity="error", message="Path must start with ./", code="PL004"
+        )
+        monkeypatch.setattr(
+            plugin_validator.PluginStructureValidator,
+            "validate",
+            lambda _self, _path: plugin_validator.ValidationResult(
+                passed=False, errors=[claude_pl004], warnings=[], info=[]
+            ),
+        )
+
+        result = cli_runner.invoke(plugin_validator.app, ["check", "--no-color", str(plugin)])
+
+        assert result.exit_code == 1, result.stdout
+        assert result.stdout.count("[PL004]") == 2
+
     def test_malformed_plugin_manifest_reports_pl002_once(
         self, cli_runner: CliRunner, tmp_path: Path, no_color_env: None
     ) -> None:
