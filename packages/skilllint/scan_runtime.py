@@ -394,6 +394,8 @@ def _matches_platform_relative_path(adapter: PlatformAdapter, candidate: Path) -
 
 
 def _semantic_platform_target(candidate: Path, semantic_targets: list[Path], adapter: PlatformAdapter) -> Path:
+    if adapter.id() not in {"claude_code", "codex", "cursor"}:
+        return candidate
     if adapter.id() == "codex" and candidate.name == "AGENTS.md":
         return candidate
     if candidate.suffix != ".md":

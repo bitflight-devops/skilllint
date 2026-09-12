@@ -410,6 +410,36 @@ class TestResolveFilterAndExpandPaths:
         assert paths == [custom_file]
         assert is_batch is True
 
+    def test_custom_adapter_preserves_broad_markdown_matches(self, tmp_path: Path) -> None:
+        class CustomMarkdownAdapter:
+            def id(self) -> str:
+                return "custom"
+
+            def path_patterns(self) -> list[str]:
+                return ["**/*.md"]
+
+            def applicable_rules(self) -> set[str]:
+                return set()
+
+            def constraint_scopes(self) -> set[str]:
+                return set()
+
+            def validate(self, path: Path) -> list[dict]:
+                return []
+
+        skill_dir = tmp_path / "skills" / "skill"
+        skill_dir.mkdir(parents=True)
+        skill = skill_dir / "SKILL.md"
+        note = skill_dir / "notes.md"
+        skill.write_text("---\ndescription: Skill\n---\n# Skill\n")
+        note.write_text("# Notes\n")
+
+        paths, _ = _resolve_filter_and_expand_paths(
+            [tmp_path], "**/*.md", None, platform_adapter=CustomMarkdownAdapter()
+        )
+
+        assert paths == [skill, note]
+
     def test_claude_platform_preserves_direct_skill_folder(self, tmp_path: Path) -> None:
         skill_dir = tmp_path / "direct-skill"
         skill_dir.mkdir()
