@@ -375,8 +375,10 @@ def _matches_platform_path(adapter: PlatformAdapter, candidate: Path, directory:
     relative_candidate = candidate.relative_to(directory)
     if _matches_platform_relative_path(adapter, relative_candidate):
         return True
-    return directory.name.startswith(".") and _matches_platform_relative_path(
-        adapter, candidate.relative_to(directory.parent)
+    return any(
+        ancestor.name.startswith(".")
+        and _matches_platform_relative_path(adapter, candidate.relative_to(ancestor.parent))
+        for ancestor in (directory, *directory.parents)
     )
 
 
