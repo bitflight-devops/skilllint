@@ -47,12 +47,11 @@ from marko.block import Heading as MarkoHeading
 
 from skilllint.vendor_io import (
     SOURCES_DIR,
+    EmptyResponseError,
     fetch_url_text,
     load_sidecar,
     read_text_or_none,
     sha256_hex,
-    utc_now_iso,
-    write_json,
     write_sidecar,
 )
 
@@ -315,20 +314,21 @@ def fetch_or_cached(url: str, *, ttl_hours: float = 4.0, force: bool = False) ->
 
     1. Derive a filesystem-safe *page_name* from *url*.
     2. Look up the most recent cached file for *page_name*.
-    3. If a cached file exists **and** *force* is False:
+    3. If a cached file exists:
 
        a. Load its sidecar and check age against *ttl_hours*.
-       b. If fresh (age < TTL) → return :attr:`CacheStatus.FRESH`.
-       c. If stale → attempt a network fetch:
+       b. If *force* is False and fresh (age < TTL) → return
+          :attr:`CacheStatus.FRESH`.
+       c. Otherwise, attempt a network fetch:
 
           - Network OK, content changed → write a new timestamped file →
             :attr:`CacheStatus.REFRESHED`.
-          - Network OK, content identical → update ``fetched_at`` in the
-            existing sidecar only → :attr:`CacheStatus.UNCHANGED`.
+          - Network OK, content identical → rebuild the existing sidecar from
+            the fetched content → :attr:`CacheStatus.UNCHANGED`.
           - Network failure (connect error, timeout, HTTP error) → return the
             stale copy as :attr:`CacheStatus.STALE`.
 
-    4. If no cached file exists (or *force* is True):
+    4. If no cached file exists:
 
        a. Attempt a network fetch:
 
@@ -363,12 +363,10 @@ def fetch_or_cached(url: str, *, ttl_hours: float = 4.0, force: bool = False) ->
     def _new_path() -> Path:
         return SOURCES_DIR / f"{page_name}-{_timestamp()}.md"
 
-    if cached_path is not None and not force:
+    if cached_path is not None:
         sidecar = load_sidecar(cached_path)
-        fetched_at = sidecar.get("fetched_at", "") if sidecar else ""
-        age = _age_hours(fetched_at)
-
-        if age < ttl_hours:
+        fetched_at = sidecar.get("fetched_at", "") if not force and sidecar else ""
+        if not force and _age_hours(fetched_at) < ttl_hours:
             return CacheResult(path=cached_path, status=CacheStatus.FRESH, page_name=page_name, url=url)
 
         # Stale — attempt refresh.
@@ -376,33 +374,25 @@ def fetch_or_cached(url: str, *, ttl_hours: float = 4.0, force: bool = False) ->
         try:
             new_content = fetch_url_text(url)
         except Exception as exc:
-            if _is_network_error(exc):
+            if _is_network_error(exc) or isinstance(exc, EmptyResponseError):
                 return CacheResult(path=cached_path, status=CacheStatus.STALE, page_name=page_name, url=url)
             raise
 
-        old_content = read_text_or_none(cached_path) or ""
-        if sha256_hex(new_content) == sha256_hex(old_content):
-            # Content unchanged — touch sidecar only.
-            if sidecar is not None:
-                sidecar["fetched_at"] = utc_now_iso()
-                sidecar_path = cached_path.with_suffix(".meta.json")
-                write_json(sidecar_path, sidecar)
-            else:
-                write_sidecar(cached_path, url=url, content=new_content)
+        if cached_path.read_bytes() == new_content.encode():
+            write_sidecar(cached_path, url=url, content=new_content)
             return CacheResult(path=cached_path, status=CacheStatus.UNCHANGED, page_name=page_name, url=url)
 
         # Content changed — write new file.
         new_path = _new_path()
-        new_path.write_text(new_content, encoding="utf-8")
+        new_path.write_bytes(new_content.encode())
         write_sidecar(new_path, url=url, content=new_content)
         return CacheResult(path=new_path, status=CacheStatus.REFRESHED, page_name=page_name, url=url)
 
-    # No cached file, or force=True — must fetch.
     # Catch broadly; re-raise anything that isn't a network error.
     try:
         new_content = fetch_url_text(url)
     except Exception as exc:
-        if _is_network_error(exc):
+        if _is_network_error(exc) or isinstance(exc, EmptyResponseError):
             if cached_path is not None:
                 # force=True but network down; serve stale.
                 return CacheResult(path=cached_path, status=CacheStatus.STALE, page_name=page_name, url=url)
@@ -410,7 +400,7 @@ def fetch_or_cached(url: str, *, ttl_hours: float = 4.0, force: bool = False) ->
         raise
 
     new_path = _new_path()
-    new_path.write_text(new_content, encoding="utf-8")
+    new_path.write_bytes(new_content.encode())
     write_sidecar(new_path, url=url, content=new_content)
     return CacheResult(path=new_path, status=CacheStatus.NEW, page_name=page_name, url=url)
 

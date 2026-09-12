@@ -9,11 +9,10 @@ matches_file() checks whether a PurePath matches any of an adapter's path patter
 from __future__ import annotations
 
 import importlib.metadata
+import pathlib
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    import pathlib
-
     from skilllint.adapters.protocol import PlatformAdapter
 
 __all__ = ["load_adapters", "matches_file"]
@@ -38,7 +37,7 @@ def load_adapters() -> list[PlatformAdapter]:
     return adapters
 
 
-def matches_file(adapter: PlatformAdapter, path: pathlib.PurePath) -> bool:
+def matches_file(adapter: PlatformAdapter, path: pathlib.PurePath, *, anchored: bool = False) -> bool:
     """Return True if the given path matches any of the adapter's path_patterns().
 
     Uses PurePath.match() for glob pattern matching.
@@ -46,8 +45,31 @@ def matches_file(adapter: PlatformAdapter, path: pathlib.PurePath) -> bool:
     Args:
         adapter: A PlatformAdapter instance.
         path: The file path to check.
+        anchored: Whether slash-containing patterns must match from the first path component.
 
     Returns:
         True if path matches at least one pattern, False otherwise.
     """
-    return any(path.match(pattern) for pattern in adapter.path_patterns())
+
+    def pattern_parts_match(path_parts: tuple[str, ...], pattern_parts: tuple[str, ...]) -> bool:
+        if not pattern_parts:
+            return not path_parts
+        if pattern_parts[0] == "**":
+            return any(
+                pattern_parts_match(path_parts[index:], pattern_parts[1:]) for index in range(len(path_parts) + 1)
+            )
+        return (
+            bool(path_parts)
+            and pathlib.PurePath(path_parts[0]).match(pattern_parts[0])
+            and pattern_parts_match(path_parts[1:], pattern_parts[1:])
+        )
+
+    def pattern_matches(pattern: str) -> bool:
+        if "/" not in pattern:
+            return path.match(pattern)
+        pattern_parts = tuple(pattern.split("/"))
+        if anchored:
+            return pattern_parts_match(path.parts, pattern_parts)
+        return any(pattern_parts_match(path.parts[index:], pattern_parts) for index in range(len(path.parts)))
+
+    return any(pattern_matches(pattern) for pattern in adapter.path_patterns())

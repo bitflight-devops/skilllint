@@ -21,6 +21,7 @@ import typer
 from git import Repo
 from git.exc import InvalidGitRepositoryError, NoSuchPathError
 
+from .adapters import PlatformAdapter, matches_file
 from .reporting import CIReporter, ConsoleReporter, FileResults, Reporter
 
 if TYPE_CHECKING:
@@ -350,8 +351,136 @@ def _discover_validatable_paths(directory: Path) -> list[Path]:
     return _discover_bare_paths(directory)
 
 
+def _platform_matching_paths(paths: list[Path], directory: Path, adapter: PlatformAdapter | None) -> list[Path]:
+    if adapter is None:
+        return paths
+    provider_directory = {"claude_code": ".claude", "codex": ".codex", "cursor": ".cursor"}.get(adapter.id())
+    provider_roots = [directory] if directory.name == provider_directory else []
+    provider_roots.extend(
+        path for path in _glob_excluding(directory, "**/*") if path.is_dir() and path.name == provider_directory
+    )
+    context_roots = [directory]
+    context_roots.extend(
+        manifest.parent.parent for manifest in _glob_excluding(directory, "**/.claude-plugin/plugin.json")
+    )
+    context_roots.extend(provider_roots)
+    return [
+        path
+        for path in paths
+        if path.is_file()
+        and not any(
+            path.is_relative_to(provider_root) and _is_provider_skill_internal(path, provider_root)
+            for provider_root in provider_roots
+        )
+        and any(
+            path.is_relative_to(context_root) and _matches_platform_file(adapter, path, context_root)
+            for context_root in context_roots
+        )
+    ]
+
+
+def _matches_platform_file(adapter: PlatformAdapter, path: Path, directory: Path) -> bool:
+    relative_path = path.relative_to(directory)
+    if matches_file(adapter, relative_path, anchored=True):
+        return True
+    return directory.name.startswith(".") and matches_file(adapter, Path(directory.name) / relative_path, anchored=True)
+
+
+def _is_provider_skill_internal(candidate: Path, provider_root: Path) -> bool:
+    relative_path = candidate.relative_to(provider_root)
+    match relative_path.parts:
+        case ("skills", _, "SKILL.md"):
+            return False
+        case ("skills", *_):
+            return True
+        case _:
+            return False
+
+
+def _discover_platform_paths(directory: Path, adapter: PlatformAdapter) -> list[Path]:
+    semantic_targets = sorted(_discover_validatable_paths(directory), key=lambda path: len(path.parts), reverse=True)
+    plugin_roots = [target for target in semantic_targets if (target / ".claude-plugin" / "plugin.json").is_file()]
+    plugin_manifests = {plugin_root: _parse_plugin_manifest(plugin_root) for plugin_root in plugin_roots}
+    manifest_files: dict[Path, set[Path]] = {}
+    if adapter.id() == "claude_code":
+        for plugin_root, manifest in plugin_manifests.items():
+            if not manifest.is_manifest_driven:
+                continue
+            files = {plugin_root / ".claude-plugin" / "plugin.json"}
+            for target in _discover_plugin_paths(manifest):
+                if target.is_file():
+                    files.add(target)
+                elif _is_skill_folder(target):
+                    files.add(target / "SKILL.md")
+            manifest_files[plugin_root] = files
+    provider_roots = [directory] if directory.name in KNOWN_PROVIDER_DIRS else []
+    provider_roots.extend(
+        path for path in _glob_excluding(directory, "**/*") if path.is_dir() and path.name in KNOWN_PROVIDER_DIRS
+    )
+    discovered: set[Path] = set()
+    for candidate in _glob_excluding(directory, "**/*"):
+        candidate_plugin_roots = [plugin_root for plugin_root in plugin_roots if candidate.is_relative_to(plugin_root)]
+        if any(
+            candidate not in manifest_files.get(plugin_root, set())
+            for plugin_root in candidate_plugin_roots
+            if plugin_root in manifest_files
+        ):
+            continue
+        matches_scan_root = _matches_platform_file(adapter, candidate, directory)
+        matches_plugin_root = any(
+            candidate.is_relative_to(plugin_root) and _matches_platform_file(adapter, candidate, plugin_root)
+            for plugin_root in plugin_roots
+        )
+        matches_provider_root = any(
+            candidate.is_relative_to(provider_root) and _matches_platform_file(adapter, candidate, provider_root)
+            for provider_root in provider_roots
+        )
+        is_provider_skill_internal = any(
+            candidate.is_relative_to(provider_root) and _is_provider_skill_internal(candidate, provider_root)
+            for provider_root in provider_roots
+        )
+        is_unrelated_hook = (
+            adapter.id() == "claude_code" and candidate.name == "hooks.json" and candidate.parent.name != "hooks"
+        )
+        if (
+            not candidate.is_file()
+            or is_unrelated_hook
+            or is_provider_skill_internal
+            or not (matches_scan_root or matches_plugin_root or matches_provider_root)
+        ):
+            continue
+        discovered.add(candidate)
+    discovered.update(path for files in manifest_files.values() for path in files if path.is_file())
+    if adapter.id() in {"claude_code", "codex", "cursor"}:
+        discovered.update(target / "SKILL.md" for target in semantic_targets if _is_skill_folder(target))
+        discovered.update(target for target in semantic_targets if target.name == "SKILL.md")
+    if adapter.id() == "claude_code":
+        discovered.update(
+            target / ".claude-plugin" / "marketplace.json"
+            for target in semantic_targets
+            if (target / ".claude-plugin" / "marketplace.json").is_file()
+            and not (target / ".claude-plugin" / "plugin.json").is_file()
+        )
+    return sorted(discovered)
+
+
+def _validate_filter_options(filter_glob: str | None, filter_type: str | None) -> None:
+    if filter_glob is not None and filter_type is not None:
+        typer.echo("Error: --filter and --filter-type are mutually exclusive", err=True)
+        raise typer.Exit(2) from None
+
+    if filter_type is not None and filter_type not in FILTER_TYPE_MAP:
+        valid = ", ".join(FILTER_TYPE_MAP)
+        typer.echo(f"Error: --filter-type must be one of: {valid}", err=True)
+        raise typer.Exit(2) from None
+
+
 def _resolve_filter_and_expand_paths(
-    paths: list[Path], filter_glob: str | None, filter_type: str | None
+    paths: list[Path],
+    filter_glob: str | None,
+    filter_type: str | None,
+    *,
+    platform_adapter: PlatformAdapter | None = None,
 ) -> tuple[list[Path], bool]:
     """Resolve filter options and expand directory paths.
 
@@ -364,14 +493,7 @@ def _resolve_filter_and_expand_paths(
     Raises:
         typer.Exit: On invalid filter options.
     """
-    if filter_glob is not None and filter_type is not None:
-        typer.echo("Error: --filter and --filter-type are mutually exclusive", err=True)
-        raise typer.Exit(2) from None
-
-    if filter_type is not None and filter_type not in FILTER_TYPE_MAP:
-        valid = ", ".join(FILTER_TYPE_MAP)
-        typer.echo(f"Error: --filter-type must be one of: {valid}", err=True)
-        raise typer.Exit(2) from None
+    _validate_filter_options(filter_glob, filter_type)
 
     expanded_paths: list[Path] = []
     is_batch = False
@@ -386,17 +508,23 @@ def _resolve_filter_and_expand_paths(
         else:
             resolved_glob = filter_glob
         if resolved_glob is not None and path.is_dir():
-            matched = sorted(path.glob(resolved_glob))
-            if filter_type == "skills":
+            matched = _glob_excluding(path, resolved_glob)
+            matched = _platform_matching_paths(matched, path, platform_adapter)
+            if filter_type == "skills" and platform_adapter is None:
                 matched = [match.parent for match in matched]
             expanded_paths.extend(matched)
             is_batch = True
         elif resolved_glob is None and path.is_dir():
-            expanded_paths.extend(_discover_validatable_paths(path))
+            if platform_adapter is None:
+                expanded_paths.extend(_discover_validatable_paths(path))
+            else:
+                expanded_paths.extend(_discover_platform_paths(path, platform_adapter))
             is_batch = True
         else:
             expanded_paths.append(path)
-    return expanded_paths, is_batch
+    if platform_adapter is None:
+        return expanded_paths, is_batch
+    return list(dict.fromkeys(expanded_paths)), is_batch
 
 
 # ---------------------------------------------------------------------------
@@ -542,7 +670,7 @@ def _compute_scan_base(paths: list[Path]) -> Path | None:
 # This avoids circular imports: plugin_validator imports scan_runtime,
 # and passes its own functions as callbacks when calling run_validation_loop.
 ValidateSinglePathFn = Callable[..., "FileResults"]
-ValidateFileFn = Callable[[Path, dict[str, object], str | None], list[dict]]
+ValidateFileFn = Callable[[Path, dict[str, PlatformAdapter], str | None], list[dict]]
 ViolationsToResultFn = Callable[[list[dict]], Any]
 
 
@@ -583,7 +711,7 @@ def run_validation_loop(
     validate_single_path: ValidateSinglePathFn,
     validate_file: ValidateFileFn,
     violations_to_result: ViolationsToResultFn,
-    adapters: dict[str, object],
+    adapters: dict[str, PlatformAdapter],
     record_console: Console | None = None,
     include_gitignore: bool = False,
 ) -> NoReturn:
