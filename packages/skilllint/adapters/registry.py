@@ -50,17 +50,22 @@ def matches_file(adapter: PlatformAdapter, path: pathlib.PurePath) -> bool:
         True if path matches at least one pattern, False otherwise.
     """
 
+    def pattern_parts_match(path_parts: tuple[str, ...], pattern_parts: tuple[str, ...]) -> bool:
+        if not pattern_parts:
+            return not path_parts
+        if pattern_parts[0] == "**":
+            return any(
+                pattern_parts_match(path_parts[index:], pattern_parts[1:]) for index in range(len(path_parts) + 1)
+            )
+        return (
+            bool(path_parts)
+            and pathlib.PurePath(path_parts[0]).match(pattern_parts[0])
+            and pattern_parts_match(path_parts[1:], pattern_parts[1:])
+        )
+
     def pattern_matches(pattern: str) -> bool:
-        if path.match(pattern) or "/**/" not in pattern:
+        if "/" not in pattern:
             return path.match(pattern)
-        prefix, suffix = pattern.split("/**/", maxsplit=1)
-        prefix_parts = tuple(prefix.split("/"))
-        parts = path.parts
-        for index in range(len(parts) - len(prefix_parts) + 1):
-            if parts[index : index + len(prefix_parts)] != prefix_parts:
-                continue
-            if pathlib.PurePath(*parts[index + len(prefix_parts) :]).match(suffix):
-                return True
-        return False
+        return pattern_parts_match(path.parts, tuple(pattern.split("/")))
 
     return any(pattern_matches(pattern) for pattern in adapter.path_patterns())

@@ -396,6 +396,60 @@ class TestResolveFilterAndExpandPaths:
 
         assert discovered == []
 
+    def test_platform_paths_exclude_agents_nested_inside_skills(self, tmp_path: Path) -> None:
+        plugin = tmp_path / "plugin"
+        (plugin / ".claude-plugin").mkdir(parents=True)
+        (plugin / ".claude-plugin" / "plugin.json").write_text("{}")
+        skill = plugin / "skills" / "demo"
+        skill.mkdir(parents=True)
+        (skill / "SKILL.md").write_text("# Demo\n")
+        helper = skill / "agents" / "helper.md"
+        helper.parent.mkdir()
+        helper.write_text("# Helper\n")
+
+        discovered, _ = _resolve_filter_and_expand_paths([plugin], None, None, platform_adapter=ClaudeCodeAdapter())
+
+        assert discovered == [plugin / ".claude-plugin" / "plugin.json", skill / "SKILL.md"]
+
+    def test_platform_paths_match_root_files_from_relative_directory(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        mdc = Path("rule.mdc")
+        rules = Path("tool.rules")
+        mdc.write_text("description: rule\n", encoding="utf-8")
+        rules.write_text('prefix_rule("Bash")\n', encoding="utf-8")
+
+        cursor_paths, _ = _resolve_filter_and_expand_paths([Path()], None, None, platform_adapter=CursorAdapter())
+        codex_paths, _ = _resolve_filter_and_expand_paths([Path()], None, None, platform_adapter=CodexAdapter())
+
+        assert cursor_paths == [mdc]
+        assert codex_paths == [rules]
+
+    def test_platform_paths_include_standalone_skill_file_for_each_adapter(self, tmp_path: Path) -> None:
+        skill = tmp_path / "standalone"
+        skill.mkdir()
+        skill_file = skill / "SKILL.md"
+        skill_file.write_text("# Standalone\n")
+
+        codex_paths, _ = _resolve_filter_and_expand_paths([skill], None, None, platform_adapter=CodexAdapter())
+        cursor_paths, _ = _resolve_filter_and_expand_paths([skill], None, None, platform_adapter=CursorAdapter())
+
+        assert codex_paths == [skill_file]
+        assert cursor_paths == [skill_file]
+
+    def test_platform_paths_prefer_plugin_manifest_over_marketplace_manifest(self, tmp_path: Path) -> None:
+        plugin = tmp_path / "plugin"
+        metadata = plugin / ".claude-plugin"
+        metadata.mkdir(parents=True)
+        plugin_manifest = metadata / "plugin.json"
+        plugin_manifest.write_text("{}")
+        (metadata / "marketplace.json").write_text("{}")
+
+        discovered, _ = _resolve_filter_and_expand_paths([plugin], None, None, platform_adapter=ClaudeCodeAdapter())
+
+        assert discovered == [plugin_manifest]
+
     def test_platform_directory_uses_custom_adapter_matcher_and_deduplicates_roots(self, tmp_path: Path) -> None:
         class CustomAdapter:
             def id(self) -> str:
@@ -494,7 +548,7 @@ class TestResolveFilterAndExpandPaths:
         ]
         assert filtered_plugin_paths == [plugin_skill / "SKILL.md"]
         assert bare_claude_paths == [claude_file]
-        assert cursor_plugin_paths == [cursor_rule]
+        assert cursor_plugin_paths == [cursor_rule, plugin_skill / "SKILL.md"]
         assert marketplace_paths == [marketplace / ".claude-plugin" / "marketplace.json"]
         assert direct_skill_paths == [direct_skill / "SKILL.md"]
         assert all(

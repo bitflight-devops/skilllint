@@ -354,24 +354,33 @@ def _discover_validatable_paths(directory: Path) -> list[Path]:
 def _platform_matching_paths(paths: list[Path], directory: Path, adapter: PlatformAdapter | None) -> list[Path]:
     if adapter is None:
         return paths
-    return [path for path in paths if path.is_file() and matches_file(adapter, path)]
+    return [path for path in paths if path.is_file() and _matches_platform_file(adapter, path, directory)]
+
+
+def _matches_platform_file(adapter: PlatformAdapter, path: Path, directory: Path) -> bool:
+    relative_path = path.relative_to(directory)
+    if matches_file(adapter, relative_path):
+        return True
+    return directory.name.startswith(".") and matches_file(adapter, Path(directory.name) / relative_path)
 
 
 def _discover_platform_paths(directory: Path, adapter: PlatformAdapter) -> list[Path]:
     semantic_targets = sorted(_discover_validatable_paths(directory), key=lambda path: len(path.parts), reverse=True)
     discovered: set[Path] = set()
     for candidate in _glob_excluding(directory, "**/*"):
-        if not candidate.is_file() or not matches_file(adapter, candidate):
+        if not candidate.is_file() or not _matches_platform_file(adapter, candidate, directory):
             continue
         discovered.add(candidate)
+    if adapter.id() in {"claude_code", "codex", "cursor"}:
+        discovered.update(target / "SKILL.md" for target in semantic_targets if _is_skill_folder(target))
+        discovered.update(target for target in semantic_targets if target.name == "SKILL.md")
     if adapter.id() == "claude_code":
         discovered.update(
             target / ".claude-plugin" / "marketplace.json"
             for target in semantic_targets
             if (target / ".claude-plugin" / "marketplace.json").is_file()
+            and not (target / ".claude-plugin" / "plugin.json").is_file()
         )
-        discovered.update(target / "SKILL.md" for target in semantic_targets if _is_skill_folder(target))
-        discovered.update(target for target in semantic_targets if target.name == "SKILL.md")
     return sorted(discovered)
 
 
