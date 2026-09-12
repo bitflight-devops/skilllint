@@ -181,7 +181,7 @@ def check_pr001(manifest: dict[str, YamlValue], plugin_dir: Path) -> list[Valida
             code="PR001",
             suggestion=f"Add './{orphan}' to the agents array in plugin.json",
         )
-        for orphan in actual_agents - registered_agents
+        for orphan in sorted(actual_agents - registered_agents)
         if "agents" in manifest
     )
 
@@ -193,7 +193,7 @@ def check_pr001(manifest: dict[str, YamlValue], plugin_dir: Path) -> list[Valida
             code="PR001",
             suggestion=f"Add './{orphan}' to the commands array in plugin.json",
         )
-        for orphan in actual_commands - registered_commands
+        for orphan in sorted(actual_commands - registered_commands)
         if "commands" in manifest
     )
 

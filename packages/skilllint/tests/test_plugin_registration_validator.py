@@ -374,6 +374,25 @@ class TestUnregisteredAgent:
         assert len(pr001_warnings) >= 1
         assert any("orphan-agent" in w.message for w in pr001_warnings)
 
+    def test_pr001_orders_multiple_orphans_by_component_path(self, tmp_path: Path) -> None:
+        plugin_dir = _make_plugin(
+            tmp_path,
+            plugin_json_content=msgspec.json.encode({"name": "test-plugin", "agents": [], "commands": []}).decode(),
+        )
+        _add_agent(plugin_dir, "zeta")
+        _add_agent(plugin_dir, "alpha")
+        _add_command(plugin_dir, "zeta")
+        _add_command(plugin_dir, "alpha")
+
+        result = PluginRegistrationValidator().validate(plugin_dir)
+
+        assert [warning.message for warning in result.warnings if warning.code == "PR001"] == [
+            "Agent 'agents/alpha.md' exists but is not registered",
+            "Agent 'agents/zeta.md' exists but is not registered",
+            "Command 'commands/alpha.md' exists but is not registered",
+            "Command 'commands/zeta.md' exists but is not registered",
+        ]
+
 
 class TestUnregisteredCommand:
     """Test PR001 warning when command file exists but is not in plugin.json."""

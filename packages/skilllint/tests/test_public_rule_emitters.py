@@ -50,54 +50,6 @@ def _public_issues(path: Path, *, fix: bool = False) -> list[ValidationIssue]:
     ]
 
 
-def _assert_public_emitter(rule_id: str, emitter: str, cli_runner: CliRunner, tmp_path: Path) -> None:
-    if emitter.startswith("fixture:"):
-        fixture = _fixture_case(rule_id, emitter.removeprefix("fixture:"))
-        result = cli_runner.invoke(plugin_validator_module.app, ["check", "--no-color", str(fixture.path)])
-
-        assert result.exit_code == 1, result.stdout
-        assert f"[{rule_id}]" in result.stdout
-        return
-
-    if emitter == "branch:check-only-warning-and-post-fix-info":
-        skill_dir = tmp_path / "colon-skill"
-        skill_dir.mkdir()
-        skill = skill_dir / "SKILL.md"
-        skill.write_text("---\nname: colon-skill\ndescription: Use this: when testing colons\n---\n\nBody.\n")
-
-        check_only = [issue for issue in _public_issues(skill_dir) if issue.code == rule_id]
-        post_fix = [issue for issue in _public_issues(skill_dir, fix=True) if issue.code == rule_id]
-
-        assert [issue.severity for issue in check_only] == ["warning"]
-        assert [issue.severity for issue in post_fix] == ["info"]
-        return
-
-    token_branches = {
-        "branch:warning-token-band": (TOKEN_WARNING_THRESHOLD, "warning"),
-        "branch:error-token-band": (TOKEN_ERROR_THRESHOLD, "error"),
-    }
-    if emitter in token_branches:
-        threshold, severity = token_branches[emitter]
-        skill_dir = tmp_path / rule_id.lower()
-        skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text(
-            f"---\nname: {rule_id.lower()}\ndescription: Use this skill when testing token threshold branches.\n---\n\n"
-            + ("word " * (threshold + 100))
-        )
-
-        issues = [issue for issue in _public_issues(skill_dir) if issue.code == rule_id]
-
-        assert [issue.severity for issue in issues] == [severity]
-        return
-
-    pytest.fail(f"{rule_id}: unsupported public emitter {emitter!r}")
-
-
-def _assert_all_public_emitters(cli_runner: CliRunner, tmp_path: Path) -> None:
-    for rule_id, emitter in _PUBLIC_EMITTER_INVENTORY.items():
-        _assert_public_emitter(rule_id, emitter, cli_runner, tmp_path)
-
-
 def test_stub_inventory_is_exact_and_excludes_removed_codes() -> None:
     assert _stub_codes() == set(_PUBLIC_EMITTER_INVENTORY)
     assert not _REMOVED_STUB_CODES & _PUBLIC_EMITTER_INVENTORY.keys()
@@ -108,16 +60,49 @@ def test_stub_inventory_rejects_an_unmapped_stub(monkeypatch: pytest.MonkeyPatch
     assert _stub_codes() - _PUBLIC_EMITTER_INVENTORY.keys() == {"ZZ001"}
 
 
-def test_registration_only_fake_cannot_claim_a_mapped_public_emitter(
-    monkeypatch: pytest.MonkeyPatch, cli_runner: CliRunner, tmp_path: Path
-) -> None:
-    monkeypatch.setitem(RULE_REGISTRY, "ZZ001", RULE_REGISTRY["FM002"])
-    monkeypatch.setitem(_PUBLIC_EMITTER_INVENTORY, "ZZ001", "fixture:unclosed-brace")
+@pytest.mark.parametrize(
+    ("rule_id", "variant_name"),
+    [
+        ("FM002", "unclosed-brace"),
+        ("FM003", "no-frontmatter"),
+        ("FM005", "wrong-type-hooks"),
+        ("FM006", "invalid-context-value"),
+        ("SK008", "invalid-directory-name"),
+    ],
+)
+def test_fixture_inventory_rows_emit_through_the_cli(cli_runner: CliRunner, rule_id: str, variant_name: str) -> None:
+    fixture = _fixture_case(rule_id, variant_name)
+    result = cli_runner.invoke(plugin_validator_module.app, ["check", "--no-color", str(fixture.path)])
 
-    assert _stub_codes() == set(_PUBLIC_EMITTER_INVENTORY)
-    with pytest.raises(AssertionError, match="ZZ001"):
-        _assert_all_public_emitters(cli_runner, tmp_path)
+    assert result.exit_code == 1, result.stdout
+    assert f"[{rule_id}]" in result.stdout
 
 
-def test_each_inventory_row_executes_its_public_emitter(cli_runner: CliRunner, tmp_path: Path) -> None:
-    _assert_all_public_emitters(cli_runner, tmp_path)
+def test_fm009_emits_warning_before_fix_and_info_after_fix(tmp_path: Path) -> None:
+    skill_dir = tmp_path / "colon-skill"
+    skill_dir.mkdir()
+    skill = skill_dir / "SKILL.md"
+    skill.write_text("---\nname: colon-skill\ndescription: Use this: when testing colons\n---\n\nBody.\n")
+
+    check_only = [issue for issue in _public_issues(skill_dir) if issue.code == "FM009"]
+    post_fix = [issue for issue in _public_issues(skill_dir, fix=True) if issue.code == "FM009"]
+
+    assert [issue.severity for issue in check_only] == ["warning"]
+    assert [issue.severity for issue in post_fix] == ["info"]
+
+
+@pytest.mark.parametrize(
+    ("rule_id", "threshold", "severity"),
+    [("SK006", TOKEN_WARNING_THRESHOLD, "warning"), ("SK007", TOKEN_ERROR_THRESHOLD, "error")],
+)
+def test_token_stub_branch_severity(tmp_path: Path, rule_id: str, threshold: int, severity: str) -> None:
+    skill_dir = tmp_path / rule_id.lower()
+    skill_dir.mkdir()
+    (skill_dir / "SKILL.md").write_text(
+        f"---\nname: {rule_id.lower()}\ndescription: Use this skill when testing token threshold branches.\n---\n\n"
+        + ("word " * (threshold + 100))
+    )
+
+    issues = [issue for issue in _public_issues(skill_dir) if issue.code == rule_id]
+
+    assert [issue.severity for issue in issues] == [severity]

@@ -379,24 +379,31 @@ class TestPluginRegistrationRoutes:
         assert result.exit_code == 0, result.stdout
 
     @pytest.mark.parametrize("route", ["root", "manifest", "parent"])
-    @pytest.mark.parametrize("agents", ["./agents/registered.md", ["./agents/registered.md"]])
-    def test_pr001_warns_once_for_an_ignored_default_agent(
+    @pytest.mark.parametrize("field", ["agents", "commands"])
+    @pytest.mark.parametrize("registration", ["./{field}/registered.md", ["./{field}/registered.md"]])
+    def test_pr001_warns_once_for_an_ignored_default_component(
         self,
         cli_runner: CliRunner,
         monkeypatch: pytest.MonkeyPatch,
         tmp_path: Path,
         no_color_env: None,
         route: str,
-        agents: str | list[str],
+        field: str,
+        registration: str | list[str],
     ) -> None:
         plugin = tmp_path / "plugin"
         (plugin / ".claude-plugin").mkdir(parents=True)
-        (plugin / ".claude-plugin" / "plugin.json").write_text(json.dumps({"name": "plugin", "agents": agents}))
-        (plugin / "agents").mkdir()
-        (plugin / "agents" / "registered.md").write_text(
+        registered = (
+            registration.format(field=field)
+            if isinstance(registration, str)
+            else [entry.format(field=field) for entry in registration]
+        )
+        (plugin / ".claude-plugin" / "plugin.json").write_text(json.dumps({"name": "plugin", field: registered}))
+        (plugin / field).mkdir()
+        (plugin / field / "registered.md").write_text(
             "---\nname: registered\ndescription: A registered agent for route coverage\n---\n"
         )
-        (plugin / "agents" / "unlisted.md").write_text(
+        (plugin / field / "unlisted.md").write_text(
             "---\nname: unlisted\ndescription: An agent for route coverage\n---\n"
         )
         target = {"root": plugin, "manifest": plugin / ".claude-plugin" / "plugin.json", "parent": tmp_path}[route]
@@ -412,19 +419,26 @@ class TestPluginRegistrationRoutes:
         assert result.stdout.count("[PR001]") == 1
 
     @pytest.mark.parametrize("route", ["root", "manifest", "parent"])
-    @pytest.mark.parametrize("commands", ["./commands/missing.md", ["./commands/missing.md"]])
-    def test_pr002_is_reported_once_for_a_missing_declared_command(
+    @pytest.mark.parametrize(
+        ("field", "reference"),
+        [("skills", "./skills/missing"), ("agents", "./agents/missing.md"), ("commands", "./commands/missing.md")],
+    )
+    @pytest.mark.parametrize("as_array", [False, True])
+    def test_pr002_is_reported_once_for_a_missing_declared_component(
         self,
         cli_runner: CliRunner,
         monkeypatch: pytest.MonkeyPatch,
         tmp_path: Path,
         no_color_env: None,
         route: str,
-        commands: str | list[str],
+        field: str,
+        reference: str,
+        as_array: bool,
     ) -> None:
         plugin = tmp_path / "plugin"
         (plugin / ".claude-plugin").mkdir(parents=True)
-        (plugin / ".claude-plugin" / "plugin.json").write_text(json.dumps({"name": "plugin", "commands": commands}))
+        value = [reference] if as_array else reference
+        (plugin / ".claude-plugin" / "plugin.json").write_text(json.dumps({"name": "plugin", field: value}))
         target = {"root": plugin, "manifest": plugin / ".claude-plugin" / "plugin.json", "parent": tmp_path}[route]
         monkeypatch.setattr(
             plugin_validator.PluginStructureValidator,
