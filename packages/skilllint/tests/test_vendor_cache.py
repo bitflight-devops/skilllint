@@ -854,7 +854,7 @@ class TestFetchOrCachedForce:
     ) -> None:
         # Given
         mocker.patch("skilllint.vendor_cache.SOURCES_DIR", tmp_path)
-        mocker.patch("skilllint.vendor_io.utc_now_iso", return_value="2026-09-09T00:00:00+00:00")
+        mocker.patch("skilllint.vendor_cache.utc_now_iso", return_value="2026-09-09T00:00:00+00:00")
         url = "https://example.com/docs/identical.md"
         content = "# Identical\nCached content.\n"
         md_path = _write_md(tmp_path, "identical-2026-03-23-1000.md", content)
