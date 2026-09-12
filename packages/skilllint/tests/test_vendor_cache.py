@@ -366,6 +366,137 @@ class TestFetchOrCachedFresh:
         assert result.path == md_path
         assert result.url == url
 
+    @pytest.mark.parametrize(
+        "invalid_fetched_at", ["not-a-timestamp", 1, "2026-01-01T00:00:00"], ids=["malformed", "wrong-type", "naive"]
+    )
+    def test_fetch_or_cached_refreshes_invalid_sidecar_timestamp(
+        self, tmp_path: Path, mocker: MockerFixture, invalid_fetched_at: str | int
+    ) -> None:
+        # Given
+        mocker.patch("skilllint.vendor_cache.SOURCES_DIR", tmp_path)
+        url = "https://example.com/docs/invalid-timestamp.md"
+        content = "# Cached\nSome content."
+        md_path = _write_md(tmp_path, "invalid-timestamp-2026-03-23-1000.md", content)
+        sidecar_path = _write_sidecar(
+            md_path,
+            url=url,
+            sha256=hashlib.sha256(content.encode()).hexdigest(),
+            byte_count=len(content.encode()),
+            fetched_at=_fresh_fetched_at(),
+        )
+        sidecar = json.loads(sidecar_path.read_text(encoding="utf-8"))
+        sidecar["fetched_at"] = invalid_fetched_at
+        sidecar_path.write_text(json.dumps(sidecar), encoding="utf-8")
+        mock_fetch = mocker.patch("skilllint.vendor_cache.fetch_url_text", return_value=content)
+
+        # When
+        result = fetch_or_cached(url, ttl_hours=4.0)
+
+        # Then
+        mock_fetch.assert_called_once_with(url)
+        assert result.status == CacheStatus.UNCHANGED
+        assert result.path == md_path
+        assert (
+            datetime.fromisoformat(json.loads(sidecar_path.read_text(encoding="utf-8"))["fetched_at"]).tzinfo
+            is not None
+        )
+
+    def test_fetch_or_cached_refreshes_missing_sidecar_timestamp(self, tmp_path: Path, mocker: MockerFixture) -> None:
+        # Given
+        mocker.patch("skilllint.vendor_cache.SOURCES_DIR", tmp_path)
+        url = "https://example.com/docs/missing-timestamp.md"
+        content = "# Cached\nSome content."
+        md_path = _write_md(tmp_path, "missing-timestamp-2026-03-23-1000.md", content)
+        sidecar_path = _write_sidecar(
+            md_path,
+            url=url,
+            sha256=hashlib.sha256(content.encode()).hexdigest(),
+            byte_count=len(content.encode()),
+            fetched_at=_fresh_fetched_at(),
+        )
+        sidecar = json.loads(sidecar_path.read_text(encoding="utf-8"))
+        del sidecar["fetched_at"]
+        sidecar_path.write_text(json.dumps(sidecar), encoding="utf-8")
+        mock_fetch = mocker.patch("skilllint.vendor_cache.fetch_url_text", return_value=content)
+
+        # When
+        result = fetch_or_cached(url, ttl_hours=4.0)
+
+        # Then
+        mock_fetch.assert_called_once_with(url)
+        assert result.status == CacheStatus.UNCHANGED
+        assert result.path == md_path
+
+    def test_fetch_or_cached_repairs_list_sidecar_when_content_is_unchanged(
+        self, tmp_path: Path, mocker: MockerFixture
+    ) -> None:
+        # Given
+        mocker.patch("skilllint.vendor_cache.SOURCES_DIR", tmp_path)
+        url = "https://example.com/docs/list-sidecar.md"
+        content = "# Cached\nSome content."
+        md_path = _write_md(tmp_path, "list-sidecar-2026-03-23-1000.md", content)
+        sidecar_path = md_path.with_suffix(".meta.json")
+        sidecar_path.write_text("[]", encoding="utf-8")
+        mock_fetch = mocker.patch("skilllint.vendor_cache.fetch_url_text", return_value=content)
+
+        # When
+        result = fetch_or_cached(url, ttl_hours=4.0)
+
+        # Then
+        mock_fetch.assert_called_once_with(url)
+        assert result.status == CacheStatus.UNCHANGED
+        repaired = json.loads(sidecar_path.read_text(encoding="utf-8"))
+        assert repaired["url"] == url
+        assert datetime.fromisoformat(repaired["fetched_at"]).tzinfo is not None
+
+    def test_fetch_or_cached_repairs_incomplete_sidecar_to_an_intact_pair(
+        self, tmp_path: Path, mocker: MockerFixture
+    ) -> None:
+        # Given
+        mocker.patch("skilllint.vendor_cache.SOURCES_DIR", tmp_path)
+        url = "https://example.com/docs/incomplete-sidecar.md"
+        content = "# Cached\nSome content."
+        md_path = _write_md(tmp_path, "incomplete-sidecar-2026-03-23-1000.md", content)
+        md_path.with_suffix(".meta.json").write_text("{}", encoding="utf-8")
+        mock_fetch = mocker.patch("skilllint.vendor_cache.fetch_url_text", return_value=content)
+
+        # When
+        result = fetch_or_cached(url, ttl_hours=4.0)
+
+        # Then
+        mock_fetch.assert_called_once_with(url)
+        assert result.status == CacheStatus.UNCHANGED
+        assert verify_integrity(md_path).status == IntegrityStatus.INTACT
+
+    @pytest.mark.parametrize(
+        "stored_url", ["", "https://example.com/docs/different-source.md"], ids=["empty", "mismatched"]
+    )
+    def test_fetch_or_cached_repairs_wrong_sidecar_url_to_an_intact_pair(
+        self, tmp_path: Path, mocker: MockerFixture, stored_url: str
+    ) -> None:
+        # Given
+        mocker.patch("skilllint.vendor_cache.SOURCES_DIR", tmp_path)
+        url = "https://example.com/docs/provenance.md"
+        content = "# Cached\nSome content."
+        md_path = _write_md(tmp_path, "provenance-2026-03-23-1000.md", content)
+        sidecar_path = _write_sidecar(
+            md_path,
+            url=stored_url,
+            sha256=hashlib.sha256(content.encode()).hexdigest(),
+            byte_count=len(content.encode()),
+            fetched_at=_stale_fetched_at(),
+        )
+        mock_fetch = mocker.patch("skilllint.vendor_cache.fetch_url_text", return_value=content)
+
+        # When
+        result = fetch_or_cached(url, ttl_hours=4.0)
+
+        # Then
+        mock_fetch.assert_called_once_with(url)
+        assert result.status == CacheStatus.UNCHANGED
+        assert json.loads(sidecar_path.read_text(encoding="utf-8"))["url"] == url
+        assert verify_integrity(md_path).status == IntegrityStatus.INTACT
+
 
 class TestFetchOrCachedStale:
     """Tests for fetch_or_cached — stale cache scenarios."""
