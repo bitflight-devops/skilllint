@@ -450,6 +450,35 @@ class TestResolveFilterAndExpandPaths:
 
         assert discovered == [plugin_manifest]
 
+    def test_platform_paths_include_agents_and_commands_in_nested_plugin(self, tmp_path: Path) -> None:
+        plugin = tmp_path / "extensions" / "demo"
+        metadata = plugin / ".claude-plugin"
+        metadata.mkdir(parents=True)
+        manifest = metadata / "plugin.json"
+        manifest.write_text("{}")
+        agent = plugin / "agents" / "demo.md"
+        agent.parent.mkdir()
+        agent.write_text("# Agent\n")
+        command = plugin / "commands" / "demo.md"
+        command.parent.mkdir()
+        command.write_text("# Command\n")
+
+        discovered, _ = _resolve_filter_and_expand_paths([tmp_path], None, None, platform_adapter=ClaudeCodeAdapter())
+
+        assert discovered == [manifest, agent, command]
+
+    def test_platform_paths_exclude_unrelated_basename_only_hooks_file(self, tmp_path: Path) -> None:
+        unrelated = tmp_path / "services" / "web" / "hooks.json"
+        unrelated.parent.mkdir(parents=True)
+        unrelated.write_text("{}")
+        hook = tmp_path / "hooks" / "hooks.json"
+        hook.parent.mkdir()
+        hook.write_text("{}")
+
+        discovered, _ = _resolve_filter_and_expand_paths([tmp_path], None, None, platform_adapter=ClaudeCodeAdapter())
+
+        assert discovered == [hook]
+
     def test_platform_directory_uses_custom_adapter_matcher_and_deduplicates_roots(self, tmp_path: Path) -> None:
         class CustomAdapter:
             def id(self) -> str:

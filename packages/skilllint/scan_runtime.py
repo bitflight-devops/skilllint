@@ -366,9 +366,18 @@ def _matches_platform_file(adapter: PlatformAdapter, path: Path, directory: Path
 
 def _discover_platform_paths(directory: Path, adapter: PlatformAdapter) -> list[Path]:
     semantic_targets = sorted(_discover_validatable_paths(directory), key=lambda path: len(path.parts), reverse=True)
+    plugin_roots = [target for target in semantic_targets if (target / ".claude-plugin" / "plugin.json").is_file()]
     discovered: set[Path] = set()
     for candidate in _glob_excluding(directory, "**/*"):
-        if not candidate.is_file() or not _matches_platform_file(adapter, candidate, directory):
+        matches_scan_root = _matches_platform_file(adapter, candidate, directory)
+        matches_plugin_root = any(
+            candidate.is_relative_to(plugin_root) and _matches_platform_file(adapter, candidate, plugin_root)
+            for plugin_root in plugin_roots
+        )
+        is_unrelated_hook = (
+            adapter.id() == "claude_code" and candidate.name == "hooks.json" and candidate.parent.name != "hooks"
+        )
+        if not candidate.is_file() or is_unrelated_hook or not (matches_scan_root or matches_plugin_root):
             continue
         discovered.add(candidate)
     if adapter.id() in {"claude_code", "codex", "cursor"}:
