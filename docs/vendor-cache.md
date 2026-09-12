@@ -65,9 +65,11 @@ uv run skilllint docs verify "$LATEST_PATH"
 `sections` reports real Markdown headings and ignores headings inside fenced
 code. `section` accepts heading text or its lowercase Markdown slug. `verify`
 returns `INTACT` (exit 0) when the file matches its sidecar; modified,
-missing, malformed, or incomplete metadata returns `MODIFIED` or
-`UNVERIFIABLE` (exit 1). An empty successful HTTP response currently raises the
-cache fetcher's `ValueError`; it is not a successful path or stale fallback.
+missing metadata returns `MODIFIED` or `UNVERIFIABLE` (exit 1). Wrong-shaped
+JSON sidecars are not a bounded status contract and may raise during cache
+ingest; use a valid object sidecar or remove it before retrying. An empty
+successful HTTP response currently raises the cache fetcher's `ValueError`; it
+is not a successful path or stale fallback.
 Normal transport/HTTP failures with an existing cache return `STALE`;
 empty-response normalization is a separate implementation follow-up.
 
@@ -96,7 +98,7 @@ implementation:
 
 ```bash
 uv run --script scripts/fetch_doc_source.py fetch "https://example.com/guide.md"
-uv run --script scripts/fetch_doc_source.py latest "example--guide"
+uv run --script scripts/fetch_doc_source.py latest "guide"
 uv run --script scripts/fetch_doc_source.py sections "$LATEST_PATH"
 uv run --script scripts/fetch_doc_source.py section "$LATEST_PATH" "Usage"
 uv run --script scripts/fetch_doc_source.py verify "$LATEST_PATH"

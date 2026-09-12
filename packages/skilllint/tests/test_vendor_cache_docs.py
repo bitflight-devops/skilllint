@@ -50,10 +50,10 @@ def test_adversarial_cache_outcomes_are_documented() -> None:
     text = _guide()
     for phrase in (
         "missing or partial pairs",
-        "malformed, or incomplete metadata",
+        "Wrong-shaped\nJSON",
         "fenced",
         "No Cache\nAvailable",
-        "empty successful HTTP response",
+        "empty\nsuccessful HTTP response",
         "decoded response text encoded as\nUTF-8",
     ):
         assert phrase in text
