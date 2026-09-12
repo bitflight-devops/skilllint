@@ -34,7 +34,7 @@ uv run skilllint rules --platform agentskills
 ```
 
 Fixes are applied in place and the files are checked again. Fixing is not
-coverage proof: a zero exit means no remaining reported violations, not that
+coverage proof: a zero exit means no remaining error-severity findings, not that
 every adapter or file was selected.
 
 ```console
@@ -150,5 +150,5 @@ uv run pytest
 ```
 
 The examples above are source-coupled by
-`packages/skilllint/tests/test_usage_examples.py`; keep commands and their
+`tests/test_usage_examples.py`; keep commands and their
 documented context executable when changing this page.
