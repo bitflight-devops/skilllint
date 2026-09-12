@@ -219,7 +219,7 @@ runs:
         echo "exit-code=${EXIT_CODE}" >> "$GITHUB_OUTPUT"
         echo "inspected-count=${INSPECTED_COUNT}" >> "$GITHUB_OUTPUT"
         FINDINGS_OUTPUT="$(sed -E $'s/\033\[[0-?]*[ -\/]*[@-~]//g' "${OUTPUT_FILE}")"
-        echo "findings=$(grep -oE '(^[[:space:]]*(✗ (ERROR|WARN|INFO)|⚠ (WARN|INFO)|❌|⚠|🔧|ℹ|i INFO) |^FIXED )\[[A-Z]{2}[0-9]{3}(, [A-Z]{2}[0-9]{3})*\]' <<< "${FINDINGS_OUTPUT}" | sed -E 's/^.*\[//; s/\]$//' | tr -d ',' | tr ' ' '\n' | sort -u | xargs)" >> "$GITHUB_OUTPUT"
+        echo "findings=$(grep -oE '(^[[:space:]]*(✗ (ERROR|WARN|INFO)|⚠️? (WARN|INFO)|❌|⚠|🔧|ℹ️? (WARN|INFO)|ℹ|i INFO) |^FIXED )\[[A-Z]{2}[0-9]{3}(, [A-Z]{2}[0-9]{3})*\]' <<< "${FINDINGS_OUTPUT}" | sed -E 's/^.*\[//; s/\]$//' | tr -d ',' | tr ' ' '\n' | sort -u | xargs)" >> "$GITHUB_OUTPUT"
         TOOL_PYTHON="$(uv tool list --show-python | sed -n 's/^skilllint .*\[\([^]]*\)\]$/\1/p' | sed 's/^CPython /Python /')"
         echo "tool-python=${TOOL_PYTHON}" >> "$GITHUB_OUTPUT"
         echo "tool-version=$(skilllint --version)" >> "$GITHUB_OUTPUT"

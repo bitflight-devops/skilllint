@@ -497,6 +497,16 @@ class TestParsePluginManifest:
         assert manifest.commands is None
         assert manifest.skills is None
 
+    def test_non_object_json_returns_all_none_manifest(self, tmp_path: Path) -> None:
+        (tmp_path / ".claude-plugin").mkdir()
+        (tmp_path / ".claude-plugin" / "plugin.json").write_text("[]")
+
+        manifest = _parse_plugin_manifest(tmp_path)
+
+        assert manifest.agents is None
+        assert manifest.commands is None
+        assert manifest.skills is None
+
     def test_absent_keys_are_none_not_empty_list(self, tmp_path: Path) -> None:
         """Missing keys in plugin.json produce None, not an empty list.
 

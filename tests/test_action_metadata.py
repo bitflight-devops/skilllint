@@ -35,3 +35,10 @@ def test_action_normalizes_crlf_before_counting_tokens_only_output() -> None:
     action = ACTION_FILE.read_text(encoding="utf-8")
 
     assert "grep -cE '^[0-9]+($|[[:blank:]])' <<< \"${NORMALIZED_OUTPUT}\"" in action
+
+
+def test_action_findings_accept_rich_variation_selectors() -> None:
+    action = ACTION_FILE.read_text(encoding="utf-8")
+
+    assert "⚠️? (WARN|INFO)" in action
+    assert "\u2139\ufe0f? (WARN|INFO)" in action

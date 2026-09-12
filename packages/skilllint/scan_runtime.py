@@ -112,7 +112,8 @@ def _load_plugin_json(plugin_root: Path) -> dict | None:
     """
     manifest_path = plugin_root / ".claude-plugin" / "plugin.json"
     try:
-        return json.loads(manifest_path.read_text(encoding="utf-8"))
+        raw = json.loads(manifest_path.read_text(encoding="utf-8"))
+        return raw if isinstance(raw, dict) else None
     except (OSError, json.JSONDecodeError):
         return None
 
