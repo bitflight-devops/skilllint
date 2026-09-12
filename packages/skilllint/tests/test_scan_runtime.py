@@ -525,6 +525,7 @@ class TestResolveFilterAndExpandPaths:
         manifest = plugin_dir / ".claude-plugin" / "plugin.json"
         manifest.parent.mkdir(parents=True)
         manifest.write_text('{"skills": ["custom/missing-skill"]}')
+        (plugin_dir / "custom" / "missing-skill").mkdir(parents=True)
 
         paths, _ = _resolve_filter_and_expand_paths([plugin_dir], None, "skills", platform_adapter=ClaudeCodeAdapter())
 
