@@ -1,5 +1,8 @@
 # Design: Markdown Link Conventions — Closing the Link-Validation Gap
 
+> Status: proposed design. Existing link helpers and implemented checks are
+> current; deferred rules and discovery changes below are not active contracts.
+
 Status: revised (post-adversarial-review)
 Author: python-cli-design-spec (architecture pass)
 Depends on: `packages/skilllint/rules/lk_series.py`, `packages/skilllint/plugin_validator.py`,
