@@ -4,7 +4,7 @@ import json
 import subprocess
 from pathlib import Path
 
-ROOT = Path(__file__).parents[3]
+ROOT = Path(__file__).parents[1]
 GUIDE = ROOT / "docs/usage.md"
 
 
@@ -26,7 +26,12 @@ def test_usage_guide_keeps_source_blocks_and_contracts() -> None:
         ],
         "Output and selection": ["--include-gitignore", "--filter-type"],
         "Rules, thresholds, and severity": ['"thresholds"', '"severity"', '"ignore"', "do not merge"],
-        "GitHub Action": ["bitflight-devops/skilllint@v1.7.0", "steps.lint.outputs.result", "exit-code"],
+        "GitHub Action": [
+            "bitflight-devops/skilllint@v1.7.0",
+            "steps.lint.outputs.result",
+            'version: "1.7.0"',
+            "exit-code",
+        ],
         "Pre-commit": ["id: skilllint", "id: skilllint-fix", "by-file-type"],
     }
     for heading, snippets in required.items():

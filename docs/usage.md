@@ -45,8 +45,9 @@ uv run skilllint check --tokens-only skills/my-skill/SKILL.md
 Do not combine `--fix` with `--platform`; fixing always uses the default
 compatibility route. A second `--fix` run should make no further changes.
 
-Exit status is stable for scripts and CI: `0` means no schema errors (warnings
-and info findings may still be printed), `1` means schema validation errors,
+Exit status is stable for scripts and CI: `0` means no error-severity findings
+(warnings and info findings may still be printed), `1` means an
+error-severity validation finding,
 and `2` means invalid CLI usage. Invalid policy entries are diagnosed on
 stderr and the documented defaults are used; they do not turn a normal scan
 into exit `2`. File counts in the summary describe files selected, not adapter
@@ -86,8 +87,8 @@ priority. Configurations do not merge: the nearest applicable file wins.
 
 Ignore keys are path prefixes relative to their config root. An empty prefix
 matches every file below it; `skills/legacy` does not match a sibling such as
-`skills/legacy-old`. Invalid policy values are rejected with diagnostics and
-the documented defaults are used; fix the config rather than relying on a
+`skills/legacy-old`. Invalid `thresholds` and `severity` values are diagnosed
+and the documented defaults are used; fix the config rather than relying on a
 fallback. See [`ignore-config.md`](ignore-config.md) for the complete ignore
 reference.
 
@@ -116,6 +117,7 @@ To observe a failure without blocking a later step, use
   continue-on-error: true
   with:
     paths: "plugins/"
+    version: "1.7.0"
 - run: echo "skilllint result=${{ steps.lint.outputs.result }} exit=${{ steps.lint.outputs.exit-code }}"
 ```
 
