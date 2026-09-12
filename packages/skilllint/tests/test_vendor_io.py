@@ -1064,6 +1064,28 @@ class TestSharedCheckoutRoot:
 
         assert _shared_checkout_root(worktree) == worktree
 
+    def test_cyclic_commondir_path_returns_start_unchanged(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        worktree = tmp_path / "worktree"
+        worktree.mkdir()
+        gitdir = tmp_path / "git-dir" / "worktrees" / "worktree"
+        gitdir.mkdir(parents=True)
+        cycle = tmp_path / "cycle"
+        cycle.symlink_to(cycle)
+        (worktree / ".git").write_text(f"gitdir: {gitdir}\n", encoding="utf-8")
+        (gitdir / "commondir").write_text(str(cycle), encoding="utf-8")
+        original_resolve = Path.resolve
+
+        def raise_for_cycle(path: Path, *, strict: bool = False) -> Path:
+            if path == cycle:
+                raise RuntimeError("Symlink loop from supported Python runtime")
+            return original_resolve(path, strict=strict)
+
+        monkeypatch.setattr(Path, "resolve", raise_for_cycle)
+
+        assert _shared_checkout_root(worktree) == worktree
+
     def test_invalid_primary_checkout_git_pointer_returns_start_unchanged(self, tmp_path: Path) -> None:
         worktree = tmp_path / "worktree"
         worktree.mkdir()
