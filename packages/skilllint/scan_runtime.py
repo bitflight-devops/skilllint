@@ -354,9 +354,10 @@ def _discover_validatable_paths(directory: Path) -> list[Path]:
 def _platform_matching_paths(paths: list[Path], directory: Path, adapter: PlatformAdapter | None) -> list[Path]:
     if adapter is None:
         return paths
-    provider_roots = [directory] if directory.name in KNOWN_PROVIDER_DIRS else []
+    provider_directory = {"claude_code": ".claude", "codex": ".codex", "cursor": ".cursor"}.get(adapter.id())
+    provider_roots = [directory] if directory.name == provider_directory else []
     provider_roots.extend(
-        path for path in _glob_excluding(directory, "**/*") if path.is_dir() and path.name in KNOWN_PROVIDER_DIRS
+        path for path in _glob_excluding(directory, "**/*") if path.is_dir() and path.name == provider_directory
     )
     context_roots = [directory]
     context_roots.extend(
