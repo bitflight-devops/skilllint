@@ -3871,14 +3871,24 @@ def _get_fixers_for_path(validators: list[Validator], path: Path) -> list[Valida
     return [*validators, NameFormatValidator()]
 
 
+def _plugin_error_deduplication_key(issue: ValidationIssue) -> str | tuple[str, str]:
+    code = str(issue.code)
+    if code == "PL004":
+        return code
+    message = issue.message
+    for prefix in ("Invalid JSON syntax in plugin.json:", "Invalid JSON:"):
+        message = message.removeprefix(prefix).strip()
+    return code, message
+
+
 def _without_duplicate_plugin_errors(
-    result: ValidationResult, reported_plugin_structure_counts: dict[tuple[str, str], int]
+    result: ValidationResult, reported_plugin_structure_counts: dict[str | tuple[str, str], int]
 ) -> ValidationResult:
     remaining_duplicate_counts = reported_plugin_structure_counts.copy()
     errors: list[ValidationIssue] = []
     for issue in result.errors:
         code = str(issue.code)
-        duplicate_key = (code, issue.message)
+        duplicate_key = _plugin_error_deduplication_key(issue)
         if code in {"PL002", "PL004"} and remaining_duplicate_counts.get(duplicate_key, 0):
             remaining_duplicate_counts[duplicate_key] -= 1
             continue
@@ -3915,7 +3925,7 @@ def _collect_validator_results(
         List of (validator_class_name, result) tuples.
     """
     results: list[tuple[str, ValidationResult]] = []
-    reported_plugin_structure_counts: dict[tuple[str, str], int] = {}
+    reported_plugin_structure_counts: dict[str | tuple[str, str], int] = {}
     for validator in validators:
         name = type(validator).__name__
         if policy is not None and isinstance(validator, (ComplexityValidator, AsSeriesValidator)):
@@ -3956,8 +3966,8 @@ def _collect_validator_results(
             result = _filter_result_by_ignore(result, path, config_root, ignore_config)
         if name == "PluginStructureValidator":
             for issue in result.errors:
-                code = str(issue.code)
-                duplicate_key = (code, issue.message)
+                str(issue.code)
+                duplicate_key = _plugin_error_deduplication_key(issue)
                 reported_plugin_structure_counts[duplicate_key] = (
                     reported_plugin_structure_counts.get(duplicate_key, 0) + 1
                 )
