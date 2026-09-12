@@ -537,6 +537,17 @@ class TestResolveFilterAndExpandPaths:
 
         assert paths == [skill_dir, native_rule]
 
+    def test_codex_platform_preserves_agents_file_inside_skill(self, tmp_path: Path) -> None:
+        skill_dir = tmp_path / ".agents" / "skills" / "skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("---\ndescription: Skill\n---\n# Skill\n")
+        agents_file = skill_dir / "AGENTS.md"
+        agents_file.write_text("")
+
+        paths, _ = _resolve_filter_and_expand_paths([tmp_path / ".agents"], None, None, platform_adapter=CodexAdapter())
+
+        assert paths == [skill_dir, agents_file]
+
     @pytest.mark.parametrize(("adapter", "provider"), [(CodexAdapter(), ".agents"), (CursorAdapter(), ".cursor")])
     def test_platform_filter_type_skills_does_not_double_normalize_skill_target(
         self, tmp_path: Path, adapter: PlatformAdapter, provider: str
@@ -581,6 +592,14 @@ class TestResolveFilterAndExpandPaths:
         paths, _ = _resolve_filter_and_expand_paths([tmp_path], None, None, platform_adapter=ClaudeCodeAdapter())
 
         assert paths == [tmp_path]
+
+    def test_claude_platform_preserves_root_claude_file(self, tmp_path: Path) -> None:
+        claude_file = tmp_path / "CLAUDE.md"
+        claude_file.write_text("# Claude\n")
+
+        paths, _ = _resolve_filter_and_expand_paths([tmp_path], None, None, platform_adapter=ClaudeCodeAdapter())
+
+        assert paths == [claude_file]
 
     def test_claude_plugin_custom_filter_excludes_documentation(self, tmp_path: Path) -> None:
         plugin_root = tmp_path / "plugin"
