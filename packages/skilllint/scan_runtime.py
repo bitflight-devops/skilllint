@@ -452,7 +452,15 @@ def _manifest_filter_type_paths(
             return []
     if declared_paths is None:
         return []
-    return [directory / path for path in declared_paths]
+    targets: list[Path] = []
+    for declared_path in declared_paths:
+        target = directory / declared_path
+        if _is_foreign_provider_target(target, directory):
+            continue
+        if filter_type == "skills" and not target.exists():
+            target = directory / ".claude-plugin" / "plugin.json"
+        targets.append(target)
+    return targets
 
 
 def _is_claude_marketplace_root(target: Path) -> bool:

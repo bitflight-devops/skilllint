@@ -507,6 +507,29 @@ class TestResolveFilterAndExpandPaths:
 
         assert {path.name for path in paths} == expected_names
 
+    def test_claude_filtered_manifest_scan_excludes_foreign_agent(self, tmp_path: Path) -> None:
+        plugin_dir = tmp_path / "plugin"
+        manifest = plugin_dir / ".claude-plugin" / "plugin.json"
+        manifest.parent.mkdir(parents=True)
+        manifest.write_text('{"agents": [".agents/agents/team/foreign.md"]}')
+        foreign_agent = plugin_dir / ".agents" / "agents" / "team" / "foreign.md"
+        foreign_agent.parent.mkdir(parents=True)
+        foreign_agent.write_text("# Foreign\n")
+
+        paths, _ = _resolve_filter_and_expand_paths([plugin_dir], None, "agents", platform_adapter=ClaudeCodeAdapter())
+
+        assert paths == []
+
+    def test_claude_filtered_manifest_scan_routes_missing_skill_to_plugin_manifest(self, tmp_path: Path) -> None:
+        plugin_dir = tmp_path / "plugin"
+        manifest = plugin_dir / ".claude-plugin" / "plugin.json"
+        manifest.parent.mkdir(parents=True)
+        manifest.write_text('{"skills": ["custom/missing-skill"]}')
+
+        paths, _ = _resolve_filter_and_expand_paths([plugin_dir], None, "skills", platform_adapter=ClaudeCodeAdapter())
+
+        assert paths == [manifest]
+
     @pytest.mark.parametrize(
         ("filter_type", "expected_name"),
         [("skills", "nested-skill"), ("agents", "agent.md"), ("commands", "command.md")],
