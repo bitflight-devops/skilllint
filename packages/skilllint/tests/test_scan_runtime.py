@@ -475,6 +475,39 @@ class TestResolveFilterAndExpandPaths:
         assert paths == [plugin_dir, reviewer]
 
     @pytest.mark.parametrize(
+        ("filter_glob", "filter_type", "expected_names"),
+        [
+            ("**/*.md", None, {"reviewer.md", "run.md", "custom-skill"}),
+            (None, "agents", {"reviewer.md"}),
+            (None, "commands", {"run.md"}),
+            (None, "skills", {"custom-skill"}),
+        ],
+    )
+    def test_claude_filtered_scan_preserves_manifest_declared_custom_paths(
+        self, tmp_path: Path, filter_glob: str | None, filter_type: str | None, expected_names: set[str]
+    ) -> None:
+        plugin_dir = tmp_path / "plugin"
+        manifest = plugin_dir / ".claude-plugin" / "plugin.json"
+        manifest.parent.mkdir(parents=True)
+        manifest.write_text(
+            '{"agents": ["custom/reviewer.md"], "commands": ["custom/run.md"], "skills": ["custom/custom-skill"]}'
+        )
+        reviewer = plugin_dir / "custom" / "reviewer.md"
+        command = plugin_dir / "custom" / "run.md"
+        skill_dir = plugin_dir / "custom" / "custom-skill"
+        for path in (reviewer, command):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("# Target\n")
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("---\ndescription: Skill\n---\n# Skill\n")
+
+        paths, _ = _resolve_filter_and_expand_paths(
+            [plugin_dir], filter_glob, filter_type, platform_adapter=ClaudeCodeAdapter()
+        )
+
+        assert {path.name for path in paths} == expected_names
+
+    @pytest.mark.parametrize(
         ("filter_type", "expected_name"),
         [("skills", "nested-skill"), ("agents", "agent.md"), ("commands", "command.md")],
     )
