@@ -408,7 +408,7 @@ def _semantic_platform_target(candidate: Path, semantic_targets: list[Path]) -> 
 
 
 def _matches_semantic_target(adapter: PlatformAdapter, target: Path, directory: Path) -> bool:
-    if (target / ".claude-plugin" / "plugin.json").is_file():
+    if any((target / ".claude-plugin" / name).is_file() for name in ("plugin.json", "marketplace.json")):
         return True
     if target.is_dir():
         if not _is_skill_folder(target):

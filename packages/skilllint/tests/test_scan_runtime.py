@@ -573,6 +573,15 @@ class TestResolveFilterAndExpandPaths:
 
         assert paths == [claude_skill]
 
+    def test_claude_scan_preserves_marketplace_only_root(self, tmp_path: Path) -> None:
+        marketplace = tmp_path / ".claude-plugin" / "marketplace.json"
+        marketplace.parent.mkdir()
+        marketplace.write_text('{"name": "marketplace"}')
+
+        paths, _ = _resolve_filter_and_expand_paths([tmp_path], None, None, platform_adapter=ClaudeCodeAdapter())
+
+        assert paths == [tmp_path]
+
     def test_claude_plugin_custom_filter_excludes_documentation(self, tmp_path: Path) -> None:
         plugin_root = tmp_path / "plugin"
         (plugin_root / ".claude-plugin").mkdir(parents=True)
