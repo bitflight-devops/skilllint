@@ -10,7 +10,7 @@ It is imported by scripts that fetch, cache, and compare external documentation:
 Public API:
   Constants:
     PROJECT_ROOT -- absolute path to the repository root (worktree-local)
-    VENDOR_DIR   -- _shared_checkout_root(PROJECT_ROOT) / ".claude" / "vendor"
+    VENDOR_DIR   -- runtime cache root / ".claude" / "vendor"
     SOURCES_DIR  -- VENDOR_DIR / "sources"
 
   Functions:
@@ -37,6 +37,11 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+
+
+class EmptyResponseError(ValueError):
+    """Raised when a successful HTTP response has no body."""
+
 
 # ---------------------------------------------------------------------------
 # Directory constants
@@ -125,11 +130,19 @@ def _shared_checkout_root(start: Path) -> Path:
     return resolved_git_dir.parent
 
 
+def _runtime_cache_root(cwd: Path | None = None) -> Path:
+    if (PROJECT_ROOT / "pyproject.toml").is_file():
+        return _shared_checkout_root(PROJECT_ROOT)
+
+    start = (cwd or Path.cwd()).resolve()
+    for candidate in (start, *start.parents):
+        if (candidate / ".git").exists():
+            return _shared_checkout_root(candidate)
+    return start
+
+
 #: Vendor documentation directory inside .claude/.
-#: Redirected to the primary checkout when running inside a linked git
-#: worktree, so the gitignored cache is shared instead of duplicated
-#: (and silently invisible) per worktree. See _shared_checkout_root.
-VENDOR_DIR: Path = _shared_checkout_root(PROJECT_ROOT) / ".claude" / "vendor"
+VENDOR_DIR: Path = _runtime_cache_root() / ".claude" / "vendor"
 
 #: Per-source cached documents directory.
 SOURCES_DIR: Path = VENDOR_DIR / "sources"
@@ -208,9 +221,10 @@ def load_json_or_none(path: Path) -> dict[str, Any] | None:
         Parsed dict, or None if the file does not exist or contains invalid JSON.
     """
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8"))
     except (FileNotFoundError, json.JSONDecodeError, OSError):
         return None
+    return data if isinstance(data, dict) else None
 
 
 # ---------------------------------------------------------------------------
@@ -238,7 +252,7 @@ def fetch_url_text(url: str, *, timeout: float = 30.0, follow_redirects: bool = 
         response.raise_for_status()
         text = response.text
         if not text:
-            raise ValueError(f"Empty response body from {url!r}")
+            raise EmptyResponseError(f"Empty response body from {url!r}")
         return text
 
 
