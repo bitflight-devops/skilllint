@@ -29,7 +29,17 @@ class ClaudeCodeAdapter:
 
     def path_patterns(self) -> list[str]:
         """Return the glob patterns for files this adapter handles."""
-        return [".claude/**/*.md", "plugin.json", "hooks.json", "agents/**/*.md", "commands/**/*.md"]
+        return [
+            ".claude/**/*.md",
+            "plugin.json",
+            "hooks.json",
+            "skills/*/SKILL.md",
+            "agents/*.md",
+            "agents/**/*.md",
+            "commands/*.md",
+            "commands/**/*.md",
+            "CLAUDE.md",
+        ]
 
     def applicable_rules(self) -> set[str]:
         """Return the set of rule prefixes applicable to this adapter."""
