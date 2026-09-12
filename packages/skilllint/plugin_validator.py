@@ -2479,6 +2479,10 @@ class FrontmatterValidator:
             file_type=file_type,
             file_path=file_path,
         )
+        for field_name in ("tools", "disallowedTools", "allowed-tools"):
+            original_value = original_data.get(field_name)
+            if isinstance(original_value, list) and not _is_losslessly_scalar_tool_list(original_value):
+                normalized_dict[field_name] = original_value
         if not fixes:
             return None
         tool_list_fixes = {

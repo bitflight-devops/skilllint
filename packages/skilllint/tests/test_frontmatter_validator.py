@@ -364,14 +364,17 @@ class TestFrontmatterAutoFix:
         agent_md = tmp_path / "agents" / "tool-list.md"
         agent_md.parent.mkdir()
         agent_md.write_text(
-            "---\nname: tool-list\ndescription: 'Use: atomic tool list.'\ntools: [\"Bash(git log:*)\"]\n---\nBody.\n",
+            '---\nname: tool-list\ndescription: Use: atomic tool list.\ntools: ["Bash(git log:*)"]\n'
+            "disallowedTools: [Read, Grep]\n---\nBody.\n",
             encoding="utf-8",
         )
 
         validator = FrontmatterValidator()
         validator.fix(agent_md)
 
-        assert 'tools: ["Bash(git log:*)"]' in agent_md.read_text(encoding="utf-8")
+        fixed = agent_md.read_text(encoding="utf-8")
+        assert "Bash(git log:*)" in fixed
+        assert validator.validate(agent_md).errors == []
 
     def test_fix_leaves_empty_tool_list_entries_unchanged(self, tmp_path: Path) -> None:
         agent_md = tmp_path / "agents" / "tool-list.md"
