@@ -363,11 +363,14 @@ def _platform_matching_paths(paths: list[Path], directory: Path, adapter: Platfo
             _matches_platform_path(adapter, path, directory)
             or (
                 adapter.id() == "claude_code"
-                and any(path == target or path.is_relative_to(target) for target in semantic_targets)
+                and any(
+                    (target.is_file() or _is_skill_folder(target)) and (path == target or path.is_relative_to(target))
+                    for target in semantic_targets
+                )
             )
         )
     ]
-    return sorted({_semantic_platform_target(path, semantic_targets) for path in matched})
+    return sorted({_semantic_platform_target(path, semantic_targets, adapter, directory) for path in matched})
 
 
 def _matches_platform_path(adapter: PlatformAdapter, candidate: Path, directory: Path) -> bool:
@@ -390,7 +393,11 @@ def _matches_platform_relative_path(adapter: PlatformAdapter, candidate: Path) -
     )
 
 
-def _semantic_platform_target(candidate: Path, semantic_targets: list[Path]) -> Path:
+def _semantic_platform_target(
+    candidate: Path, semantic_targets: list[Path], adapter: PlatformAdapter, directory: Path
+) -> Path:
+    if candidate.suffix != ".md":
+        return candidate
     return next(
         (
             semantic_target
@@ -402,15 +409,37 @@ def _semantic_platform_target(candidate: Path, semantic_targets: list[Path]) -> 
     )
 
 
+def _matches_semantic_target(adapter: PlatformAdapter, target: Path, directory: Path) -> bool:
+    if (target / ".claude-plugin" / "plugin.json").is_file():
+        return True
+    if target.is_dir():
+        if not _is_skill_folder(target):
+            return False
+        foreign_provider_roots = (KNOWN_PROVIDER_DIRS | {".agents"}) - {".claude"}
+        return all(
+            ancestor.name not in foreign_provider_roots
+            for ancestor in (target, *target.parents)
+            if ancestor == directory or ancestor.is_relative_to(directory)
+        )
+    relative_target = target.relative_to(directory)
+    return _matches_platform_path(adapter, target, directory) or (
+        target.suffix == ".md" and relative_target.parts[0] in {"agents", "commands"}
+    )
+
+
 def _discover_platform_paths(directory: Path, adapter: PlatformAdapter) -> list[Path]:
     if adapter.id() == "claude_code":
-        return _discover_validatable_paths(directory)
+        return [
+            target
+            for target in _discover_validatable_paths(directory)
+            if _matches_semantic_target(adapter, target, directory)
+        ]
     semantic_targets = sorted(_discover_validatable_paths(directory), key=lambda path: len(path.parts), reverse=True)
     discovered: set[Path] = set()
     for candidate in _glob_excluding(directory, "**/*"):
         if not candidate.is_file() or not _matches_platform_path(adapter, candidate, directory):
             continue
-        discovered.add(_semantic_platform_target(candidate, semantic_targets))
+        discovered.add(_semantic_platform_target(candidate, semantic_targets, adapter, directory))
     return sorted(discovered)
 
 

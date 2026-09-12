@@ -12,6 +12,13 @@ def test_action_reports_tool_python_from_uv_tool_environment() -> None:
     assert "command -v skilllint" not in action
 
 
+def test_action_reports_non_cpython_tool_runtime() -> None:
+    action = ACTION_FILE.read_text(encoding="utf-8")
+
+    assert "s/^CPython /Python /" in action
+    assert "[CPython " not in action
+
+
 def test_empty_platform_description_names_matching_adapters() -> None:
     action = ACTION_FILE.read_text(encoding="utf-8")
 

@@ -520,6 +520,23 @@ class TestResolveFilterAndExpandPaths:
 
         assert paths == [skill_dir]
 
+    @pytest.mark.parametrize(
+        ("adapter", "provider", "native_filename"),
+        [(CodexAdapter(), ".agents", "rule.rules"), (CursorAdapter(), ".cursor", "rule.mdc")],
+    )
+    def test_platform_preserves_native_rule_files_inside_skills(
+        self, tmp_path: Path, adapter: PlatformAdapter, provider: str, native_filename: str
+    ) -> None:
+        skill_dir = tmp_path / provider / "skills" / "skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("---\ndescription: Skill\n---\n# Skill\n")
+        native_rule = skill_dir / native_filename
+        native_rule.write_text("# Native rule\n")
+
+        paths, _ = _resolve_filter_and_expand_paths([tmp_path / provider], None, None, platform_adapter=adapter)
+
+        assert paths == [skill_dir, native_rule]
+
     @pytest.mark.parametrize(("adapter", "provider"), [(CodexAdapter(), ".agents"), (CursorAdapter(), ".cursor")])
     def test_platform_filter_type_skills_does_not_double_normalize_skill_target(
         self, tmp_path: Path, adapter: PlatformAdapter, provider: str
@@ -540,6 +557,35 @@ class TestResolveFilterAndExpandPaths:
 
         paths, _ = _resolve_filter_and_expand_paths(
             [tmp_path / ".claude"], "**/*.md", None, platform_adapter=ClaudeCodeAdapter()
+        )
+
+        assert paths == [skill_dir]
+
+    def test_claude_bare_scan_excludes_other_provider_skills(self, tmp_path: Path) -> None:
+        claude_skill = tmp_path / ".claude" / "skills" / "claude-skill"
+        codex_skill = tmp_path / ".agents" / "skills" / "codex-skill"
+        cursor_skill = tmp_path / ".cursor" / "skills" / "cursor-skill"
+        for skill_dir in (claude_skill, codex_skill, cursor_skill):
+            skill_dir.mkdir(parents=True)
+            (skill_dir / "SKILL.md").write_text("---\ndescription: Skill\n---\n# Skill\n")
+
+        paths, _ = _resolve_filter_and_expand_paths([tmp_path], None, None, platform_adapter=ClaudeCodeAdapter())
+
+        assert paths == [claude_skill]
+
+    def test_claude_plugin_custom_filter_excludes_documentation(self, tmp_path: Path) -> None:
+        plugin_root = tmp_path / "plugin"
+        (plugin_root / ".claude-plugin").mkdir(parents=True)
+        (plugin_root / ".claude-plugin" / "plugin.json").write_text('{"name": "plugin"}')
+        skill_dir = plugin_root / "skills" / "skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("---\ndescription: Skill\n---\n# Skill\n")
+        docs_note = plugin_root / "docs" / "note.md"
+        docs_note.parent.mkdir()
+        docs_note.write_text("# Documentation\n")
+
+        paths, _ = _resolve_filter_and_expand_paths(
+            [plugin_root], "**/*.md", None, platform_adapter=ClaudeCodeAdapter()
         )
 
         assert paths == [skill_dir]
