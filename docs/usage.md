@@ -89,7 +89,7 @@ Ignore keys are path prefixes relative to their config root. An empty prefix
 matches every file below it; `skills/legacy` does not match a sibling such as
 `skills/legacy-old`. Invalid `thresholds` and `severity` values are diagnosed
 and the documented defaults are used; fix the config rather than relying on a
-fallback. The configuration examples above are the complete supported shape.
+fallback.
 
 ## GitHub Action
 
@@ -136,7 +136,7 @@ repos:
 
 `skilllint` checks without mutating files; `skilllint-fix` applies supported
 fixes and is idempotent. Use the hook's `exclude` for generated or vendored
-trees.
+trees. The broad by-file-type hook is intentionally omitted from this guide.
 
 ## Maintainer checks
 
