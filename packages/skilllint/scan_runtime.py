@@ -373,9 +373,20 @@ def _platform_matching_paths(paths: list[Path], directory: Path, adapter: Platfo
 
 def _matches_platform_path(adapter: PlatformAdapter, candidate: Path, directory: Path) -> bool:
     relative_candidate = candidate.relative_to(directory)
-    if matches_file(adapter, relative_candidate):
+    if _matches_platform_relative_path(adapter, relative_candidate):
         return True
-    return directory.name.startswith(".") and matches_file(adapter, candidate.relative_to(directory.parent))
+    return directory.name.startswith(".") and _matches_platform_relative_path(
+        adapter, candidate.relative_to(directory.parent)
+    )
+
+
+def _matches_platform_relative_path(adapter: PlatformAdapter, candidate: Path) -> bool:
+    if matches_file(adapter, candidate):
+        return True
+    return any(
+        pattern.startswith("**/") and candidate.match(pattern.removeprefix("**/"))
+        for pattern in adapter.path_patterns()
+    )
 
 
 def _discover_platform_paths(directory: Path, adapter: PlatformAdapter) -> list[Path]:

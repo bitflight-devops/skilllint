@@ -482,16 +482,16 @@ class TestResolveFilterAndExpandPaths:
 
         assert paths == [skill_dir]
 
-    def test_platform_cursor_keeps_unprefixed_mdc_outside_provider_subtree(self, tmp_path: Path) -> None:
-        valid_rule = tmp_path / ".cursor" / "valid.mdc"
-        valid_rule.parent.mkdir()
-        valid_rule.write_text("---\ndescription: Valid\n---\n")
-        unrelated_rule = tmp_path / "notes.mdc"
-        unrelated_rule.write_text("---\ntype: rule\n---\n")
+    @pytest.mark.parametrize(("adapter", "filename"), [(CursorAdapter(), "rule.mdc"), (CodexAdapter(), "rule.rules")])
+    def test_platform_includes_root_provider_file(
+        self, tmp_path: Path, adapter: PlatformAdapter, filename: str
+    ) -> None:
+        provider_file = tmp_path / filename
+        provider_file.write_text("# Provider file\n")
 
-        paths, _ = _resolve_filter_and_expand_paths([tmp_path], None, None, platform_adapter=CursorAdapter())
+        paths, _ = _resolve_filter_and_expand_paths([tmp_path], None, None, platform_adapter=adapter)
 
-        assert paths == [valid_rule]
+        assert paths == [provider_file]
 
     def test_claude_custom_filter_excludes_non_adapter_markdown(self, tmp_path: Path) -> None:
         agent = tmp_path / "agents" / "agent.md"
