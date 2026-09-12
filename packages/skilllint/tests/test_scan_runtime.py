@@ -482,6 +482,29 @@ class TestResolveFilterAndExpandPaths:
 
         assert paths == [skill_dir]
 
+    def test_platform_cursor_keeps_unprefixed_mdc_outside_provider_subtree(self, tmp_path: Path) -> None:
+        valid_rule = tmp_path / ".cursor" / "valid.mdc"
+        valid_rule.parent.mkdir()
+        valid_rule.write_text("---\ndescription: Valid\n---\n")
+        unrelated_rule = tmp_path / "notes.mdc"
+        unrelated_rule.write_text("---\ntype: rule\n---\n")
+
+        paths, _ = _resolve_filter_and_expand_paths([tmp_path], None, None, platform_adapter=CursorAdapter())
+
+        assert paths == [valid_rule]
+
+    def test_claude_custom_filter_excludes_non_adapter_markdown(self, tmp_path: Path) -> None:
+        agent = tmp_path / "agents" / "agent.md"
+        agent.parent.mkdir()
+        agent.write_text("# Agent\n")
+        note = tmp_path / "docs" / "note.md"
+        note.parent.mkdir()
+        note.write_text("# Note\n")
+
+        paths, _ = _resolve_filter_and_expand_paths([tmp_path], "**/*.md", None, platform_adapter=ClaudeCodeAdapter())
+
+        assert paths == [agent]
+
     def test_filter_type_resolves_to_glob(self, tmp_path: Path) -> None:
         """_resolve_filter_and_expand_paths resolves --filter-type to glob pattern.
 

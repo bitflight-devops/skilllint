@@ -352,9 +352,30 @@ def _discover_validatable_paths(directory: Path) -> list[Path]:
 
 
 def _platform_matching_paths(paths: list[Path], directory: Path, adapter: PlatformAdapter | None) -> list[Path]:
-    if adapter is None or adapter.id() == "claude_code":
+    if adapter is None:
         return paths
-    return [path for path in paths if path.is_file() and matches_file(adapter, path.relative_to(directory))]
+    semantic_files = {
+        target for target in _discover_validatable_paths(directory) if target.is_file() or _is_skill_folder(target)
+    }
+    return [
+        path
+        for path in paths
+        if path.is_file()
+        and (
+            _matches_platform_path(adapter, path, directory)
+            or (
+                adapter.id() == "claude_code"
+                and any(path == target or path.is_relative_to(target) for target in semantic_files)
+            )
+        )
+    ]
+
+
+def _matches_platform_path(adapter: PlatformAdapter, candidate: Path, directory: Path) -> bool:
+    relative_candidate = candidate.relative_to(directory)
+    if matches_file(adapter, relative_candidate):
+        return True
+    return directory.name.startswith(".") and matches_file(adapter, candidate.relative_to(directory.parent))
 
 
 def _discover_platform_paths(directory: Path, adapter: PlatformAdapter) -> list[Path]:
@@ -363,7 +384,7 @@ def _discover_platform_paths(directory: Path, adapter: PlatformAdapter) -> list[
     semantic_targets = sorted(_discover_validatable_paths(directory), key=lambda path: len(path.parts), reverse=True)
     discovered: set[Path] = set()
     for candidate in _glob_excluding(directory, "**/*"):
-        if not candidate.is_file() or not matches_file(adapter, candidate):
+        if not candidate.is_file() or not _matches_platform_path(adapter, candidate, directory):
             continue
         target = next(
             (
