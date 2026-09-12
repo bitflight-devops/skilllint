@@ -429,6 +429,46 @@ class TestResolveFilterAndExpandPaths:
 
         assert paths == [skill_dir]
 
+    def test_claude_platform_preserves_plugin_context_targets(self, tmp_path: Path) -> None:
+        plugin_dir = tmp_path / "plugin"
+        (plugin_dir / ".claude-plugin").mkdir(parents=True)
+        (plugin_dir / ".claude-plugin" / "plugin.json").write_text('{"name": "plugin"}')
+        skill_dir = plugin_dir / "skills" / "nested-skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("---\ndescription: Nested skill\n---\n# Nested\n")
+        agent = plugin_dir / "agents" / "agent.md"
+        agent.parent.mkdir()
+        agent.write_text("# Agent\n")
+        command = plugin_dir / "commands" / "command.md"
+        command.parent.mkdir()
+        command.write_text("# Command\n")
+
+        paths, _ = _resolve_filter_and_expand_paths([plugin_dir], None, None, platform_adapter=ClaudeCodeAdapter())
+
+        assert paths == [plugin_dir, agent, command, skill_dir]
+
+    @pytest.mark.parametrize(
+        ("filter_type", "expected_name"),
+        [("skills", "nested-skill"), ("agents", "agent.md"), ("commands", "command.md")],
+    )
+    def test_claude_platform_filter_type_preserves_semantic_target(
+        self, tmp_path: Path, filter_type: str, expected_name: str
+    ) -> None:
+        root = tmp_path / "root"
+        skill_dir = root / "skills" / "nested-skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("---\ndescription: Nested skill\n---\n# Nested\n")
+        agent = root / "agents" / "agent.md"
+        agent.parent.mkdir()
+        agent.write_text("# Agent\n")
+        command = root / "commands" / "command.md"
+        command.parent.mkdir()
+        command.write_text("# Command\n")
+
+        paths, _ = _resolve_filter_and_expand_paths([root], None, filter_type, platform_adapter=ClaudeCodeAdapter())
+
+        assert paths == [next(path for path in (skill_dir, agent, command) if path.name == expected_name)]
+
     def test_filter_type_resolves_to_glob(self, tmp_path: Path) -> None:
         """_resolve_filter_and_expand_paths resolves --filter-type to glob pattern.
 

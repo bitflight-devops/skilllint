@@ -21,12 +21,14 @@ jobs:
             filter: ""
             check_only: "false"
             fix: "false"
-            tokens_only: "true"
+            tokens_only: "false"
+            verbose: "true"
+            no_color: "false"
             show_summary: "false"
             expected_result: passed
             expected_exit_code: "0"
             expected_inspected_count: "2"
-            expected_finding: ""
+            expected_finding: TC001
             allow_failure: false
           - case: warning
             paths: tests/fixtures/action/skills/fixable-skill
@@ -100,6 +102,7 @@ jobs:
           filter: ${{ matrix.filter }}
           check-only: ${{ matrix.check_only }}
           fix: ${{ matrix.fix }}
+          verbose: ${{ matrix.verbose || 'false' }}
           no-color: ${{ matrix.no_color || 'true' }}
           tokens-only: ${{ matrix.tokens_only || 'false' }}
           show-summary: ${{ matrix.show_summary || 'true' }}

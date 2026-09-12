@@ -352,20 +352,19 @@ def _discover_validatable_paths(directory: Path) -> list[Path]:
 
 
 def _platform_matching_paths(paths: list[Path], directory: Path, adapter: PlatformAdapter | None) -> list[Path]:
-    if adapter is None:
+    if adapter is None or adapter.id() == "claude_code":
         return paths
     return [path for path in paths if path.is_file() and matches_file(adapter, path.relative_to(directory))]
 
 
 def _discover_platform_paths(directory: Path, adapter: PlatformAdapter) -> list[Path]:
-    discovered = {
+    if adapter.id() == "claude_code":
+        return _discover_validatable_paths(directory)
+    return sorted(
         candidate
         for candidate in _glob_excluding(directory, "**/*")
         if candidate.is_file() and matches_file(adapter, candidate.relative_to(directory))
-    }
-    if adapter.id() == "claude_code":
-        discovered.update(path for path in _discover_validatable_paths(directory) if _is_skill_folder(path))
-    return sorted(discovered)
+    )
 
 
 def _validate_filter_options(filter_glob: str | None, filter_type: str | None) -> None:
@@ -412,7 +411,7 @@ def _resolve_filter_and_expand_paths(
         else:
             resolved_glob = filter_glob
         if resolved_glob is not None and path.is_dir():
-            matched = sorted(path.glob(resolved_glob))
+            matched = _glob_excluding(path, resolved_glob)
             matched = _platform_matching_paths(matched, path, platform_adapter)
             if filter_type == "skills":
                 matched = [match.parent for match in matched]
