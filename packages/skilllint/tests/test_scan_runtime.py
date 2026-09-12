@@ -544,6 +544,9 @@ class TestResolveFilterAndExpandPaths:
         provider_agent = tmp_path / "packages" / "app" / ".claude" / "agents" / "provider.md"
         provider_agent.parent.mkdir(parents=True)
         provider_agent.write_text("# Provider agent\n")
+        helper = tmp_path / "packages" / "app" / ".claude" / "skills" / "demo" / "agents" / "helper.md"
+        helper.parent.mkdir(parents=True)
+        helper.write_text("# Helper\n")
 
         discovered, _ = _resolve_filter_and_expand_paths(
             [tmp_path], None, "agents", platform_adapter=ClaudeCodeAdapter()
