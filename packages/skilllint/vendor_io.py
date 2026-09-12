@@ -151,7 +151,7 @@ def _checkout_points_to_git_dir(checkout: Path, git_dir: Path) -> bool:
         target = checkout / target
     try:
         return target.resolve(strict=True) == git_dir
-    except (OSError, ValueError):
+    except (OSError, RuntimeError, ValueError):
         return False
 
 
