@@ -64,7 +64,7 @@ def test_retained_adapter_sample_installs_loads_and_emits(monkeypatch, cli_runne
     (tmp_path / "pyproject.toml").write_text(
         "[project]\nname = 'example-skilllint-adapter'\nversion = '0.0.1'\n"
         "requires-python = '>=3.11'\n[project.entry-points.'skilllint.adapters']\n"
-        "example = 'example_skilllint:ExampleAdapter'\n[build-system]\n"
+        "example = 'example_skilllint.adapter:ExampleAdapter'\n[build-system]\n"
         "requires = ['hatchling']\nbuild-backend = 'hatchling.build'\n"
         "[tool.hatch.build.targets.wheel]\npackages = ['example_skilllint']\n",
         encoding="utf-8",
@@ -95,12 +95,14 @@ def test_retained_adapter_sample_installs_loads_and_emits(monkeypatch, cli_runne
     import skilllint.plugin_validator as validator
 
     monkeypatch.syspath_prepend(str(target))
-    adapter_cls = next(
+    adapter_entry_point = next(
         ep
         for distribution in distributions(path=[str(target)])
         for ep in distribution.entry_points
         if ep.group == "skilllint.adapters" and ep.name == "example"
-    ).load()
+    )
+    assert adapter_entry_point.value == "example_skilllint.adapter:ExampleAdapter"
+    adapter_cls = adapter_entry_point.load()
     monkeypatch.setitem(validator.ADAPTERS, "example", adapter_cls())
 
     passing = tmp_path / "pass.json"

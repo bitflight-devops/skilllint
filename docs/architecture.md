@@ -16,9 +16,10 @@ CLI (plugin_validator.main)
   -> reporting.ConsoleReporter or CIReporter
 ```
 
-`scan_runtime.detect_scan_context` classifies a directory as manifest, auto,
-structure, or bare. `_discover_validatable_paths` dispatches that classification
-to `_discover_plugin_paths` and the other discovery implementations. Omitting
+`scan_runtime.detect_scan_context` classifies a directory as `PLUGIN`, `PROVIDER`,
+or `BARE`. `_discover_validatable_paths` dispatches that classification to
+`_discover_plugin_paths` and the other discovery implementations, whose
+downstream logic selects manifest, auto, or structure discovery modes. Omitting
 `--platform` preserves the default compatibility route.
 An explicit platform selects a registered `PlatformAdapter`; explicit-platform
 validation is validation-only and does not apply fixes. Discovery selects
@@ -64,12 +65,12 @@ A future LLM/general provenance pipeline is proposed only; it is not shipped.
 
 ## Fixing and reporting
 
-The validation loop in `scan_runtime.run_validation_loop` collects findings,
-applies only fixers authorized by declared trigger codes, revalidates the
-changed path, and sends resulting `FileResults` to the selected reporter. A
-fixer and a reporting rule may therefore be different modules. Exit status is
-derived from resulting errors and usage/validation contracts, not adapter
-registration.
+`scan_runtime.run_validation_loop` orchestrates file iteration and sends
+resulting `FileResults` to the selected reporter. The
+`plugin_validator.validate_single_path` function owns per-path validation,
+fixer authorization, revalidation, and
+the distinction between a fixer and its reporting rule. Exit status is derived
+from resulting errors and usage/validation contracts, not adapter registration.
 
 ## Maintainer map
 

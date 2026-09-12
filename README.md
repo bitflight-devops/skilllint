@@ -76,6 +76,7 @@ Use `bitflight-devops/skilllint` as a GitHub Action to validate skills, plugins,
   with:
     paths: "plugins/"
     platform: "claude-code"
+    version: "1.19.2"
     show-summary: "true"
 ```
 
@@ -84,7 +85,7 @@ Use `bitflight-devops/skilllint` as a GitHub Action to validate skills, plugins,
 | Input | Description | Default |
 |---|---|---|
 | `paths` | Space-separated paths to validate | `.` |
-| `platform` | Platform adapter: `claude-code`, `cursor`, `codex` | _(all)_ |
+| `platform` | Platform adapter: `claude-code`, `cursor`, `codex`; omit to validate each selected file with every matching adapter | _(matching adapters)_ |
 | `fix` | Auto-fix issues where possible | `false` |
 | `check-only` | Validate only, do not auto-fix | `false` |
 | `verbose` | Show detailed output including info messages | `false` |
@@ -103,6 +104,10 @@ Use `bitflight-devops/skilllint` as a GitHub Action to validate skills, plugins,
 |---|---|
 | `result` | `passed` when exit code is 0; `failed` for any non-zero exit code |
 | `exit-code` | Raw exit code: `0` = pass · `1` = errors · `2` = usage error |
+| `inspected-count` | Number of files inspected by skilllint |
+| `findings` | Distinct finding codes emitted by skilllint |
+| `tool-python` | Python runtime used by the installed skilllint tool |
+| `tool-version` | Version reported by the installed skilllint tool |
 
 ### Example: fail the CI on validation errors
 
@@ -122,6 +127,7 @@ jobs:
         with:
           paths: "plugins/ .claude/"
           platform: "claude-code"
+          version: "1.19.2"
           show-summary: "true"
           verbose: "false"
 ```
@@ -134,6 +140,7 @@ jobs:
   uses: bitflight-devops/skilllint@v1.7.0
   with:
     paths: "plugins/"
+    version: "1.19.2"
   continue-on-error: true
 
 - name: Print result
