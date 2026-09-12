@@ -20,6 +20,7 @@ Coverage:
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -28,7 +29,18 @@ import pytest
 import skilllint.plugin_validator as plugin_validator
 
 if TYPE_CHECKING:
+    from pytest_mock import MockerFixture
     from typer.testing import CliRunner
+
+
+@pytest.fixture(autouse=True)
+def _controlled_claude_plugin_validation(mocker: MockerFixture) -> None:
+    mocker.patch(
+        "skilllint.plugin_validator._run_claude_plugin_validate",
+        return_value=subprocess.CompletedProcess(
+            args=["claude", "plugin", "validate"], returncode=0, stdout="validation passed", stderr=""
+        ),
+    )
 
 
 class TestCLICommandParsing:

@@ -440,3 +440,63 @@ print(json.dumps({
         assert data.get("has_provenance"), "Schema missing provenance metadata"
         assert data.get("authority_url"), "Schema missing authority_url in provenance"
         assert data.get("provider_id") == "claude_code", f"Wrong provider_id: {data.get('provider_id')}"
+
+    def test_installed_docs_cache_uses_invocation_owner(
+        self, built_wheel: Path, temp_venv: Path, tmp_path: Path
+    ) -> None:
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        subprocess.run(["git", "init", "--initial-branch=main"], cwd=repo, check=True, capture_output=True, text=True)
+        subprocess.run(
+            ["git", "config", "user.email", "test@example.com"], cwd=repo, check=True, capture_output=True, text=True
+        )
+        subprocess.run(["git", "config", "user.name", "Test"], cwd=repo, check=True, capture_output=True, text=True)
+        (repo / "README.md").write_text("# test\n", encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=repo, check=True, capture_output=True, text=True)
+        subprocess.run(["git", "commit", "-m", "initial"], cwd=repo, check=True, capture_output=True, text=True)
+        linked = tmp_path / "linked"
+        subprocess.run(["git", "worktree", "add", str(linked)], cwd=repo, check=True, capture_output=True, text=True)
+        linked_cwd = linked / "nested"
+        linked_cwd.mkdir()
+        (repo / "nested").mkdir()
+        cache_file = repo / ".claude/vendor/sources/page-2026.md"
+        cache_file.parent.mkdir(parents=True)
+        cache_file.write_text("cached\n", encoding="utf-8")
+        env = {key: value for key, value in os.environ.items() if key != "PYTHONPATH"}
+
+        wheel_result = subprocess.run(
+            [str(self._get_skilllint_path(temp_venv)), "docs", "latest", "page"],
+            cwd=linked_cwd,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
+        )
+        uvx_result = subprocess.run(
+            ["uvx", "--from", str(built_wheel), "skilllint", "docs", "latest", "page"],
+            cwd=repo / "nested",
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
+        )
+        non_git = tmp_path / "non-git" / "nested"
+        non_git.mkdir(parents=True)
+        non_git_cache_file = non_git / ".claude/vendor/sources/page-2026.md"
+        non_git_cache_file.parent.mkdir(parents=True)
+        non_git_cache_file.write_text("cached\n", encoding="utf-8")
+        non_git_result = subprocess.run(
+            [str(self._get_skilllint_path(temp_venv)), "docs", "latest", "page"],
+            cwd=non_git,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
+        )
+
+        assert wheel_result.returncode == 0, wheel_result.stderr
+        assert uvx_result.returncode == 0, uvx_result.stderr
+        assert non_git_result.returncode == 0, non_git_result.stderr
+        assert wheel_result.stdout.replace("\n", "") == str(cache_file)
+        assert uvx_result.stdout.replace("\n", "") == str(cache_file)
+        assert non_git_result.stdout.replace("\n", "") == str(non_git_cache_file)

@@ -209,7 +209,7 @@ Result status returned by `fetch_or_cached()`.
 |-------|-------------|
 | `FRESH` | Within TTL; served from on-disk cache without a network request |
 | `REFRESHED` | Was stale; re-fetched successfully; content changed on remote |
-| `UNCHANGED` | Was stale; re-fetched successfully; content identical to cached copy; sidecar touched with new timestamp |
+| `UNCHANGED` | Was stale; re-fetched successfully; content identical to cached copy; sidecar rebuilt from fetched metadata |
 | `STALE` | Was stale and network unavailable; served from cache anyway |
 | `NEW` | First fetch; no prior cache existed |
 
@@ -442,10 +442,16 @@ def fetch_or_cached(url: str, *, ttl_hours: float = 4.0, force: bool = False) ->
    - **Fresh (age < TTL)**: Return status=`FRESH`, path=cached file
    - **Stale (age >= TTL)**: Attempt network fetch
      - Network OK, content changed: Write new timestamped file, return status=`REFRESHED`
-     - Network OK, content identical: Update `fetched_at` in sidecar only, return status=`UNCHANGED`
+     - Network OK, content identical: Rebuild the sidecar from fetched metadata, return status=`UNCHANGED`
      - Network failure (ConnectError, TimeoutException, HTTPError): Serve stale copy, return status=`STALE`
 
-4. **If no cached file or force=True**:
+4. **If cached file exists and force=True**:
+   - Attempt network fetch without checking freshness
+   - Network OK, content changed: Write new timestamped file, return status=`REFRESHED`
+   - Network OK, content identical: Update the existing sidecar, return status=`UNCHANGED`
+   - Network failure: Serve stale copy, return status=`STALE`
+
+5. **If no cached file exists**:
    - Attempt network fetch
    - Network OK: Write new timestamped file, return status=`NEW`
    - Network failure: Raise `NoCacheError`
@@ -1023,4 +1029,4 @@ When `force=True`, the freshness check is skipped and a network fetch is always 
 
 **No TTL on UNCHANGED status**
 
-When `fetch_or_cached()` detects that remote content is identical to the cached copy, it updates only the `fetched_at` timestamp in the sidecar (status=`UNCHANGED`). The existing `.md` file is not rewritten. This optimizes for network efficiency: the metadata is fresh (TTL resets) without rewriting unchanged content.
+When `fetch_or_cached()` detects that remote content is identical to the cached copy, it rebuilds the sidecar from the fetched content (including `url`, `fetched_at`, `sha256`, and `byte_count`) and returns status=`UNCHANGED`. The existing `.md` file is not rewritten. This refreshes both freshness and integrity metadata without rewriting unchanged content.

@@ -28,10 +28,12 @@ from typing import TYPE_CHECKING
 import httpx
 import pytest
 
+import skilllint.vendor_io as vendor_io
 from skilllint.vendor_io import (
     PROJECT_ROOT,
     SOURCES_DIR,
     VENDOR_DIR,
+    _runtime_cache_root,
     _shared_checkout_root,
     fetch_url_text,
     load_json_or_none,
@@ -726,6 +728,55 @@ class TestDirectoryConstants:
         """
         # Arrange / Act / Assert
         assert SOURCES_DIR == VENDOR_DIR / "sources"
+
+
+class TestRuntimeCacheRoot:
+    """Tests for cache ownership outside a source checkout."""
+
+    def test_source_checkout_uses_its_own_shared_root(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A source checkout keeps cache ownership at its shared checkout root."""
+        source_root = tmp_path / "source"
+        source_root.mkdir()
+        (source_root / "pyproject.toml").touch()
+        monkeypatch.setattr(vendor_io, "PROJECT_ROOT", source_root)
+
+        assert _runtime_cache_root(tmp_path / "elsewhere") == source_root
+
+    def test_installed_wheel_in_git_subdirectory_uses_project_root(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """An installed wheel invoked below a Git checkout owns the checkout cache."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        _init_repo_with_commit(repo)
+        cwd = repo / "nested"
+        cwd.mkdir()
+        monkeypatch.setattr(vendor_io, "PROJECT_ROOT", tmp_path / "site-packages")
+
+        assert _runtime_cache_root(cwd) == repo.resolve()
+
+    def test_installed_wheel_in_linked_worktree_uses_primary_checkout(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """An installed wheel invoked in a linked worktree reuses the primary cache."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        _init_repo_with_commit(repo)
+        worktree = tmp_path / "linked"
+        _run_git(["worktree", "add", str(worktree)], cwd=repo)
+        monkeypatch.setattr(vendor_io, "PROJECT_ROOT", tmp_path / "site-packages")
+
+        assert _runtime_cache_root(worktree) == repo.resolve()
+
+    def test_installed_wheel_outside_git_uses_canonical_cwd(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """An installed wheel outside Git writes below the invocation directory."""
+        cwd = tmp_path / "non-git" / "nested"
+        cwd.mkdir(parents=True)
+        monkeypatch.setattr(vendor_io, "PROJECT_ROOT", tmp_path / "site-packages")
+
+        assert _runtime_cache_root(cwd) == cwd.resolve()
 
 
 # ---------------------------------------------------------------------------
