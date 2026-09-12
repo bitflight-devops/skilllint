@@ -32,7 +32,7 @@ def test_usage_guide_keeps_source_blocks_and_contracts() -> None:
             'version: "1.7.0"',
             "exit-code",
         ],
-        "Pre-commit": ["id: skilllint", "id: skilllint-fix", "by-file-type"],
+        "Pre-commit": ["id: skilllint", "id: skilllint-fix"],
     }
     for heading, snippets in required.items():
         start = text.index(f"## {heading}")
@@ -41,6 +41,7 @@ def test_usage_guide_keeps_source_blocks_and_contracts() -> None:
         assert all(snippet in section for snippet in snippets), heading
 
     assert "check --platform agentskills" not in text
+    assert "broad by-file-type hook remains available" not in text
     assert "--fix --platform" not in text
 
 

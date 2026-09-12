@@ -38,6 +38,8 @@ from typing import Any
 
 import httpx
 
+from skilllint.boundary.vendor_sidecar_ingest import SidecarMetadata, parse_sidecar_metadata
+
 
 class EmptyResponseError(ValueError):
     """Raised when a successful HTTP response has no body."""
@@ -70,7 +72,7 @@ def _read_git_internal_file_or_none(path: Path) -> str | None:
     """
     try:
         return path.read_text(encoding="utf-8").strip()
-    except OSError:
+    except (OSError, UnicodeDecodeError, ValueError):
         return None
 
 
@@ -124,17 +126,45 @@ def _shared_checkout_root(start: Path) -> Path:
 
     try:
         resolved_git_dir = commondir_path.resolve(strict=True)
-    except OSError:
+    except (OSError, RuntimeError, ValueError):
         return start
 
-    return resolved_git_dir.parent
+    primary_checkout = resolved_git_dir.parent
+    if _checkout_points_to_git_dir(primary_checkout, resolved_git_dir):
+        return primary_checkout
+    return start
+
+
+def _checkout_points_to_git_dir(checkout: Path, git_dir: Path) -> bool:
+    git_entry = checkout / ".git"
+    if git_entry.is_dir():
+        try:
+            return git_entry.resolve(strict=True) == git_dir
+        except OSError:
+            return False
+
+    pointer = _read_git_internal_file_or_none(git_entry)
+    prefix = "gitdir: "
+    if pointer is None or not pointer.startswith(prefix):
+        return False
+
+    target = Path(pointer[len(prefix) :].strip())
+    if not target.is_absolute():
+        target = checkout / target
+    try:
+        return target.resolve(strict=True) == git_dir
+    except (OSError, RuntimeError, ValueError):
+        return False
 
 
 def _runtime_cache_root(cwd: Path | None = None) -> Path:
     if (PROJECT_ROOT / "pyproject.toml").is_file():
         return _shared_checkout_root(PROJECT_ROOT)
 
-    start = (cwd or Path.cwd()).resolve()
+    try:
+        start = (cwd or Path.cwd()).resolve()
+    except OSError:
+        return Path()
     for candidate in (start, *start.parents):
         if (candidate / ".git").exists():
             return _shared_checkout_root(candidate)
@@ -270,7 +300,7 @@ def utc_now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
-def write_sidecar(md_path: Path, *, url: str, content: str) -> Path:
+def write_sidecar(md_path: Path, *, url: str, content: str, fetched_at: datetime | None = None) -> Path:
     """Write a ``.meta.json`` sidecar alongside a saved file.
 
     Records provenance metadata: source URL, fetch timestamp, SHA-256 digest,
@@ -283,29 +313,34 @@ def write_sidecar(md_path: Path, *, url: str, content: str) -> Path:
         md_path: Path to the saved content file (e.g. a ``.md`` file).
         url: The URL the content was fetched from.
         content: The raw text content that was saved.
+        fetched_at: Timestamp to record, or the current UTC time when omitted.
 
     Returns:
         Path to the written sidecar file.
     """
     sidecar_path = md_path.with_suffix(".meta.json")
-    metadata: dict[str, Any] = {
-        "url": url,
-        "fetched_at": utc_now_iso(),
-        "sha256": sha256_hex(content),
-        "byte_count": len(content.encode()),
-    }
-    write_json(sidecar_path, metadata)
+    metadata = SidecarMetadata(
+        url=url,
+        fetched_at=fetched_at or datetime.fromisoformat(utc_now_iso()),
+        sha256=sha256_hex(content),
+        byte_count=len(content.encode()),
+    )
+    sidecar_path.parent.mkdir(parents=True, exist_ok=True)
+    sidecar_path.write_text(metadata.model_dump_json(indent=2) + "\n", encoding="utf-8")
     return sidecar_path
 
 
-def load_sidecar(md_path: Path) -> dict[str, Any] | None:
+def load_sidecar(md_path: Path) -> SidecarMetadata | None:
     """Load the ``.meta.json`` sidecar for a given file path.
 
     Args:
         md_path: Path to the content file whose sidecar to load.
 
     Returns:
-        Parsed sidecar dict, or None if the sidecar is missing or corrupt.
+        Validated sidecar metadata, or None if it is missing or malformed.
     """
     sidecar_path = md_path.with_suffix(".meta.json")
-    return load_json_or_none(sidecar_path)
+    try:
+        return parse_sidecar_metadata(sidecar_path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, OSError):
+        return None

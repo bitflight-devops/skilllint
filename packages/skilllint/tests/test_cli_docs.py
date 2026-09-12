@@ -97,6 +97,15 @@ class TestDocsFetch:
         assert result.exit_code == 0
         assert str(_TEST_PATH) in result.output
 
+    def test_fetch_stdout_is_a_single_capturable_path(self, cli_runner: CliRunner, mocker: MockerFixture) -> None:
+        mock_fetch = mocker.patch("skilllint.cli_docs.fetch_or_cached")
+        mock_fetch.return_value = _cache_result(CacheStatus.NEW, Path("/tmp/" + "directory-" * 20 + "settings.md"))
+
+        result = cli_runner.invoke(plugin_validator.app, ["docs", "fetch", _TEST_URL])
+
+        assert result.exit_code == 0
+        assert result.stdout == f"{mock_fetch.return_value.path}\n"
+
     def test_fresh_cache_hit_exits_zero(self, cli_runner: CliRunner, mocker: MockerFixture) -> None:
         """Cache hit within TTL (FRESH status) exits 0 and prints the path.
 
@@ -219,6 +228,52 @@ class TestDocsFetch:
         assert url in result.stderr
         assert "Empty response body" in result.stderr
         assert "Traceback" not in result.stderr
+
+    def test_real_subprocess_fetch_flow_separates_path_and_status_channels(self, tmp_path: Path) -> None:
+        class MarkdownHandler(BaseHTTPRequestHandler):
+            def do_GET(self) -> None:
+                body = b"# Real Heading\nBody.\n\n```bash\n# Fenced Fake\n```\n"
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), MarkdownHandler)
+        thread = threading.Thread(target=server.serve_forever)
+        thread.start()
+        url = f"http://127.0.0.1:{server.server_port}/contract.md"
+        command = [
+            sys.executable,
+            "-c",
+            (
+                "import sys, warnings; from pathlib import Path; "
+                "warnings.filterwarnings('ignore', message='.*is shallow and may cause errors'); "
+                "import skilllint.vendor_cache as cache; "
+                "cache.SOURCES_DIR = Path(sys.argv.pop(1)); "
+                "from skilllint.plugin_validator import app; app()"
+            ),
+            str(tmp_path),
+            "docs",
+            "fetch",
+            url,
+        ]
+        try:
+            first = subprocess.run(command, capture_output=True, check=False, text=True)
+            second = subprocess.run(command, capture_output=True, check=False, text=True)
+        finally:
+            server.shutdown()
+            thread.join()
+            server.server_close()
+
+        markdown_paths = list(tmp_path.glob("*.md"))
+        sidecar_paths = list(tmp_path.glob("*.meta.json"))
+        assert first.returncode == second.returncode == 0
+        assert first.stdout == second.stdout == f"{markdown_paths[0]}\n"
+        assert first.stderr == "✅ NEW contract\n"
+        assert second.stderr == "✅ FRESH contract\n"
+        assert str(markdown_paths[0]) not in first.stderr
+        assert str(markdown_paths[0]) not in second.stderr
+        assert len(markdown_paths) == len(sidecar_paths) == 1
 
     def test_force_flag_passes_force_true_to_fetch_or_cached(
         self, cli_runner: CliRunner, mocker: MockerFixture

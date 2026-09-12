@@ -19,12 +19,17 @@ from __future__ import annotations
 import importlib
 import json
 import re
+import sys
 from pathlib import Path
 from re import Pattern
 from typing import Any
 
+import pytest
+from pydantic import JsonValue, TypeAdapter
+
 REPO_ROOT = Path(__file__).parent.parent.parent.parent
 SCHEMAS_DIR = REPO_ROOT / "packages" / "skilllint" / "schemas"
+JSON_OBJECT = TypeAdapter(dict[str, JsonValue])
 REGISTRY_PATH = SCHEMAS_DIR / "provenance-registry.json"
 OPINION_CATALOG_PATH = SCHEMAS_DIR / "opinion-catalog.json"
 
@@ -61,31 +66,262 @@ def _iter_claims() -> list[tuple[str, dict[str, Any]]]:
     return [*registry["claims"].items(), *opinions["opinions"].items()]
 
 
+def _resolve_schema_json_location(claim_id: str, location: dict[str, str]) -> JsonValue:
+    recorded_file = location["file"]
+    schema_path = REPO_ROOT / recorded_file
+    assert schema_path.is_file(), f"{claim_id}: assertion_location.file '{recorded_file}' does not exist"
+
+    symbol = location["symbol"]
+    assert symbol.startswith("$."), f"{claim_id}: schema locator '{symbol}' must start with '$.'"
+    target: JsonValue = JSON_OBJECT.validate_json(schema_path.read_text(encoding="utf-8"))
+    for part in symbol.removeprefix("$.").split("."):
+        assert isinstance(target, dict), f"{claim_id}: '{symbol}' cannot traverse '{part}'"
+        assert part in target, f"{claim_id}: '{symbol}' has no segment '{part}'"
+        target = target[part]
+
+    if location["source_type"] == "schema_json_enum":
+        assert isinstance(target, list), f"{claim_id}: schema_json_enum '{symbol}' must resolve to a JSON array"
+        assert all(isinstance(member, str) for member in target), (
+            f"{claim_id}: schema_json_enum '{symbol}' must contain only strings"
+        )
+    return target
+
+
+@pytest.mark.parametrize(
+    ("source_type", "symbol", "expected_value"),
+    [
+        ("schema_json_field", "$.properties.name.maxLength", 64),
+        ("schema_json_enum", "$.required", ["description", "name"]),
+    ],
+)
+def test_schema_json_locators_resolve_values(source_type: str, symbol: str, expected_value: JsonValue) -> None:
+    location = {
+        "file": "packages/skilllint/schemas/agentskills_io/v1.json",
+        "symbol": symbol,
+        "source_type": source_type,
+    }
+
+    actual = _resolve_schema_json_location("schema locator", location)
+    assert _normalize(actual) == _normalize(expected_value)
+
+
+def test_registry_does_not_attribute_agentskills_required_fields_to_fm001() -> None:
+    registry = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
+
+    assert "FM001.required_fields" not in registry["claims"]
+
+
+def test_fm010_claim_tracks_the_enforced_name_length_constant() -> None:
+    registry = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
+    location = registry["claims"]["FM010.max_name_length"]["assertion_location"]
+
+    assert location == {
+        "file": "packages/skilllint/_spec_constants.py",
+        "symbol": "MAX_NAME_LENGTH",
+        "source_type": "python_constant",
+    }
+
+
+@pytest.mark.parametrize(
+    ("location", "expected_value"),
+    [
+        (
+            {
+                "file": "packages/skilllint/schemas/does-not-exist.json",
+                "symbol": "$.properties.name.maxLength",
+                "source_type": "schema_json_field",
+            },
+            64,
+        ),
+        (
+            {
+                "file": "packages/skilllint/schemas/agentskills_io/v1.json",
+                "symbol": "$.properties.name.doesNotExist",
+                "source_type": "schema_json_field",
+            },
+            64,
+        ),
+        (
+            {
+                "file": "packages/skilllint/schemas/agentskills_io/v1.json",
+                "symbol": "$.required",
+                "source_type": "schema_json_enum",
+            },
+            ["name"],
+        ),
+    ],
+)
+def test_schema_json_locators_reject_corrupted_values(location: dict[str, str], expected_value: JsonValue) -> None:
+    with pytest.raises(AssertionError):
+        assert _resolve_schema_json_location("corrupted schema locator", location) == expected_value
+
+
+def test_schema_json_enum_locators_reject_non_string_members(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    schema_path = tmp_path / "schema.json"
+    schema_path.write_text('{"required": [1]}', encoding="utf-8")
+    monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", tmp_path)
+    location = {"file": "schema.json", "symbol": "$.required", "source_type": "schema_json_enum"}
+
+    with pytest.raises(AssertionError, match="only strings"):
+        _resolve_schema_json_location("schema enum locator", location)
+
+
+def test_claim_locator_mismatch_reports_schema_file(monkeypatch: pytest.MonkeyPatch) -> None:
+    claims = [
+        (
+            "FM010.max_name_length",
+            {
+                "assertion_location": {
+                    "file": "packages/skilllint/schemas/agentskills_io/v1.json",
+                    "symbol": "$.properties.name.maxLength",
+                    "source_type": "schema_json_field",
+                },
+                "expected_value": 65,
+            },
+        )
+    ]
+    monkeypatch.setattr(sys.modules[__name__], "_iter_claims", lambda: claims)
+
+    with pytest.raises(AssertionError, match=r"agentskills_io/v1\.json"):
+        test_claim_locators_resolve_and_values_match()
+
+
+def test_claim_locators_reject_scalar_type_changes(monkeypatch: pytest.MonkeyPatch) -> None:
+    claims = [
+        (
+            "schema.boolean_drift",
+            {
+                "assertion_location": {
+                    "file": "packages/skilllint/schemas/agentskills_io/v1.json",
+                    "symbol": "$.properties.enabled.default",
+                    "source_type": "schema_json_field",
+                },
+                "expected_value": 1,
+            },
+        )
+    ]
+    monkeypatch.setattr(sys.modules[__name__], "_iter_claims", lambda: claims)
+    monkeypatch.setattr(sys.modules[__name__], "_resolve_schema_json_location", lambda _claim, _location: True)
+
+    with pytest.raises(AssertionError, match="type"):
+        test_claim_locators_resolve_and_values_match()
+
+
+def test_claim_locators_reject_non_string_expected_enum_members(monkeypatch: pytest.MonkeyPatch) -> None:
+    claims = [
+        (
+            "schema.numeric_enum_member",
+            {
+                "assertion_location": {
+                    "file": "packages/skilllint/schemas/agentskills_io/v1.json",
+                    "symbol": "$.required",
+                    "source_type": "schema_json_enum",
+                },
+                "expected_value": [1],
+            },
+        )
+    ]
+    monkeypatch.setattr(sys.modules[__name__], "_iter_claims", lambda: claims)
+    monkeypatch.setattr(sys.modules[__name__], "_resolve_schema_json_location", lambda _claim, _location: ["1"])
+
+    with pytest.raises(AssertionError, match="types"):
+        test_claim_locators_resolve_and_values_match()
+
+
+def test_claim_locators_reject_array_member_type_changes(monkeypatch: pytest.MonkeyPatch) -> None:
+    claims = [
+        (
+            "schema.array_drift",
+            {
+                "assertion_location": {
+                    "file": "packages/skilllint/schemas/agentskills_io/v1.json",
+                    "symbol": "$.properties.name.examples",
+                    "source_type": "schema_json_field",
+                },
+                "expected_value": ["1"],
+            },
+        )
+    ]
+    monkeypatch.setattr(sys.modules[__name__], "_iter_claims", lambda: claims)
+    monkeypatch.setattr(sys.modules[__name__], "_resolve_schema_json_location", lambda _claim, _location: [1])
+    with pytest.raises(AssertionError, match="type"):
+        test_claim_locators_resolve_and_values_match()
+
+
+def test_claim_locators_reject_non_string_field_set_members(monkeypatch: pytest.MonkeyPatch) -> None:
+    claims = [
+        (
+            "schema.field_set",
+            {
+                "claim_type": "field_set",
+                "assertion_location": {
+                    "file": "packages/skilllint/schemas/agentskills_io/v1.json",
+                    "symbol": "$.properties.name.examples",
+                    "source_type": "schema_json_field",
+                },
+                "expected_value": [1],
+            },
+        )
+    ]
+    monkeypatch.setattr(sys.modules[__name__], "_iter_claims", lambda: claims)
+    monkeypatch.setattr(sys.modules[__name__], "_resolve_schema_json_location", lambda _claim, _location: [1])
+    with pytest.raises(AssertionError, match="only strings"):
+        test_claim_locators_resolve_and_values_match()
+
+
 def test_claim_locators_resolve_and_values_match() -> None:
-    """Every python_constant assertion_location must import, resolve, and match."""
     for claim_id, claim in _iter_claims():
         location = claim["assertion_location"]
         source_type = location["source_type"]
-        assert source_type in _KNOWN_SOURCE_TYPES, f"{claim_id}: unrecognized source_type '{source_type}'"
-        if source_type != "python_constant":
-            continue
-
         recorded_file = location["file"]
-        assert (REPO_ROOT / recorded_file).is_file(), (
-            f"{claim_id}: assertion_location.file '{recorded_file}' does not exist"
-        )
+        assert source_type in _KNOWN_SOURCE_TYPES, f"{claim_id}: unrecognized source_type '{source_type}'"
 
-        module_name = recorded_file.removeprefix("packages/").removesuffix(".py").replace("/", ".")
-        target: object = importlib.import_module(module_name)
-        for part in location["symbol"].split("."):
-            assert hasattr(target, part), (
-                f"{claim_id}: {recorded_file} has no symbol '{location['symbol']}' (missing '{part}')"
-            )
-            target = getattr(target, part)
+        match source_type:
+            case "python_constant":
+                assert (REPO_ROOT / recorded_file).is_file(), (
+                    f"{claim_id}: assertion_location.file '{recorded_file}' does not exist"
+                )
+
+                module_name = recorded_file.removeprefix("packages/").removesuffix(".py").replace("/", ".")
+                target: object = importlib.import_module(module_name)
+                for part in location["symbol"].split("."):
+                    assert hasattr(target, part), (
+                        f"{claim_id}: {recorded_file} has no symbol '{location['symbol']}' (missing '{part}')"
+                    )
+                    target = getattr(target, part)
+            case "schema_json_field" | "schema_json_enum":
+                target = _resolve_schema_json_location(claim_id, location)
+            case _:
+                raise AssertionError(f"{claim_id}: unrecognized source_type '{source_type}'")
 
         assert "expected_value" in claim, f"{claim_id}: missing expected_value"
+        if claim.get("claim_type") in {"enum_set", "field_set"}:
+            assert isinstance(target, (list, tuple, set, frozenset)), (
+                f"{claim_id}: set claim resolved value must be a collection"
+            )
+            assert all(isinstance(member, str) for member in target), (
+                f"{claim_id}: set claim resolved value must contain only strings"
+            )
+            assert isinstance(claim["expected_value"], list), f"{claim_id}: set claim expected_value must be an array"
+            assert all(isinstance(member, str) for member in claim["expected_value"]), (
+                f"{claim_id}: set claim expected_value must contain only strings"
+            )
+        if isinstance(target, list) and isinstance(claim["expected_value"], list):
+            assert [type(member) for member in target] == [type(member) for member in claim["expected_value"]], (
+                f"{claim_id}: {recorded_file}.{location['symbol']} array members have different types"
+            )
+        if source_type == "schema_json_enum":
+            expected_members = claim["expected_value"]
+            assert isinstance(expected_members, list), f"{claim_id}: schema_json_enum expected_value must be an array"
+            assert all(isinstance(member, str) for member in expected_members), (
+                f"{claim_id}: schema_json_enum expected_value must contain only strings"
+            )
         actual = _normalize(target)
         expected = _normalize(claim["expected_value"])
+        assert type(actual) is type(expected), (
+            f"{claim_id}: {recorded_file}.{location['symbol']} has type {type(actual).__name__}, "
+            f"but expected_value has type {type(expected).__name__}"
+        )
         assert actual == expected, (
             f"{claim_id}: {recorded_file}.{location['symbol']} is {actual!r}, but expected_value says {expected!r}"
         )

@@ -144,6 +144,25 @@ def _parse_plugin_manifest(plugin_root: Path) -> PluginManifest:
     )
 
 
+def _discover_manifest_skill_paths(root: Path, paths: list[str]) -> set[Path]:
+    discovered: dict[Path, Path] = {}
+    for rel in paths:
+        resolved = root / rel
+        if not resolved.resolve().is_relative_to(root.resolve()):
+            continue
+        if resolved.is_dir():
+            direct_skill = resolved / "SKILL.md"
+            if direct_skill.is_file() and direct_skill.resolve().is_relative_to(root.resolve()):
+                discovered.setdefault(_ignore_path(resolved), resolved)
+            else:
+                for child_skill in _glob_excluding(resolved, "*/SKILL.md"):
+                    if child_skill.resolve().is_relative_to(root.resolve()):
+                        discovered.setdefault(_ignore_path(child_skill), child_skill)
+        elif resolved.is_file() and resolved.name == "SKILL.md":
+            discovered.setdefault(_ignore_path(resolved), resolved)
+    return set(discovered.values())
+
+
 def _discover_plugin_paths(manifest: PluginManifest) -> list[Path]:
     """Discover validatable files in a plugin directory.
 
@@ -153,9 +172,8 @@ def _discover_plugin_paths(manifest: PluginManifest) -> list[Path]:
 
     Never recurses into skills/*/agents/ or skills/*/commands/.
 
-    In manifest-driven mode, declared paths are added unconditionally regardless
-    of whether they exist on disk. This is intentional: a missing declared file
-    is a validation error that downstream validators (e.g. PL001) should flag.
+    In manifest-driven mode, existing declared paths are added. Missing entries
+    remain the responsibility of root-level registration validation.
     Convention-driven mode uses glob matching so only existing files appear.
 
     Args:
@@ -167,25 +185,26 @@ def _discover_plugin_paths(manifest: PluginManifest) -> list[Path]:
     discovered: set[Path] = set()
     root = manifest.plugin_root
 
-    if manifest.is_manifest_driven:
-        # Intentionally no existence check — missing declared paths are a lint error.
-        # Skills entries may be directories (e.g. "./skills/my-skill/") or
-        # direct SKILL.md paths. Preserve direct files; folder declarations are
-        # folder-backed targets so the validator bridge can resolve SKILL.md.
-        if manifest.skills is not None:
-            skill_paths: dict[Path, Path] = {}
-            for rel in manifest.skills:
-                resolved = root / rel
-                skill_paths.setdefault(_ignore_path(resolved), resolved)
-            discovered.update(skill_paths.values())
-        # Agents and commands entries should be direct file paths.
-        for path_list in (manifest.agents, manifest.commands):
-            if path_list is not None:
-                discovered.update(root / rel for rel in path_list)
-    else:
-        discovered.update(_glob_excluding(root, "agents/*.md"))
-        discovered.update(_glob_excluding(root, "commands/*.md"))
-        discovered.update(path.parent for path in _glob_excluding(root, "skills/*/SKILL.md"))
+    if manifest.skills is not None:
+        discovered.update(_discover_manifest_skill_paths(root, manifest.skills))
+    discovered.update(path.parent for path in _glob_excluding(root, "skills/*/SKILL.md"))
+
+    for field, path_list in (("agents", manifest.agents), ("commands", manifest.commands)):
+        if path_list is None:
+            discovered.update(_glob_excluding(root, f"{field}/*.md"))
+            continue
+        for rel in path_list:
+            resolved = root / rel
+            if not resolved.resolve().is_relative_to(root.resolve()):
+                continue
+            if resolved.is_dir():
+                discovered.update(
+                    child
+                    for child in _glob_excluding(resolved, "*.md")
+                    if child.resolve().is_relative_to(root.resolve())
+                )
+            elif resolved.is_file() and resolved.suffix == ".md":
+                discovered.add(resolved)
 
     discovered.add(root)
 
@@ -359,12 +378,14 @@ def _platform_matching_paths(paths: list[Path], directory: Path, adapter: Platfo
         path
         for path in paths
         if path.is_file()
+        and not (adapter.id() == "claude_code" and _is_foreign_provider_target(path, directory))
         and (
             _matches_platform_path(adapter, path, directory)
             or (
                 adapter.id() == "claude_code"
                 and any(
-                    (target.is_file() or _is_skill_folder(target)) and (path == target or path.is_relative_to(target))
+                    (target.is_file() or _is_skill_folder(target) or _is_claude_marketplace_root(target))
+                    and (path == target or path.is_relative_to(target))
                     for target in semantic_targets
                 )
             )
@@ -378,8 +399,7 @@ def _matches_platform_path(adapter: PlatformAdapter, candidate: Path, directory:
     if _matches_platform_relative_path(adapter, relative_candidate):
         return True
     return any(
-        ancestor.name.startswith(".")
-        and _matches_platform_relative_path(adapter, candidate.relative_to(ancestor.parent))
+        _matches_platform_relative_path(adapter, candidate.relative_to(ancestor.parent))
         for ancestor in (directory, *directory.parents)
     )
 
@@ -398,6 +418,18 @@ def _semantic_platform_target(candidate: Path, semantic_targets: list[Path], ada
         return candidate
     if adapter.id() == "codex" and candidate.name == "AGENTS.md":
         return candidate
+    if adapter.id() == "claude_code":
+        marketplace_root = next(
+            (
+                semantic_target
+                for semantic_target in semantic_targets
+                if _is_claude_marketplace_root(semantic_target)
+                and candidate == semantic_target / ".claude-plugin" / "marketplace.json"
+            ),
+            None,
+        )
+        if marketplace_root is not None:
+            return marketplace_root
     if candidate.suffix != ".md":
         return candidate
     return next(
@@ -411,39 +443,91 @@ def _semantic_platform_target(candidate: Path, semantic_targets: list[Path], ada
     )
 
 
+def _is_manifest_declared_target(target: Path, directory: Path) -> bool:
+    for plugin_root in target.parents:
+        if plugin_root != directory and not plugin_root.is_relative_to(directory):
+            break
+        if not (plugin_root / ".claude-plugin" / "plugin.json").is_file():
+            continue
+        manifest = _parse_plugin_manifest(plugin_root)
+        return manifest.is_manifest_driven and target in _discover_plugin_paths(manifest)
+    return False
+
+
+def _manifest_filter_type_paths(
+    directory: Path, filter_type: str | None, adapter: PlatformAdapter | None
+) -> list[Path]:
+    if adapter is None or adapter.id() != "claude_code" or detect_scan_context(directory) != ScanContext.PLUGIN:
+        return []
+    manifest = _parse_plugin_manifest(directory)
+    match filter_type:
+        case "agents":
+            declared_paths = manifest.agents
+        case "commands":
+            declared_paths = manifest.commands
+        case "skills":
+            declared_paths = manifest.skills
+        case _:
+            return []
+    if declared_paths is None:
+        return []
+    targets: list[Path] = []
+    directory_root = directory.resolve()
+    for declared_path in declared_paths:
+        target = directory / declared_path
+        if not target.resolve().is_relative_to(directory_root):
+            continue
+        if _is_foreign_provider_target(target, directory):
+            continue
+        if target.is_dir() and filter_type in {"agents", "commands"}:
+            targets.extend(
+                child for child in _glob_excluding(target, "*.md") if child.resolve().is_relative_to(directory_root)
+            )
+            continue
+        if filter_type == "skills" and not (
+            _is_skill_folder(target) or (target.is_file() and target.name == "SKILL.md")
+        ):
+            target = directory / ".claude-plugin" / "plugin.json"
+        targets.append(target)
+    return targets
+
+
+def _is_claude_marketplace_root(target: Path) -> bool:
+    return (target / ".claude-plugin" / "marketplace.json").is_file()
+
+
+def _is_foreign_provider_target(target: Path, directory: Path) -> bool:
+    foreign_provider_roots = (KNOWN_PROVIDER_DIRS | {".agents"}) - {".claude"}
+    return any(
+        ancestor.name in foreign_provider_roots
+        for ancestor in (target, *target.parents)
+        if ancestor == directory or ancestor.is_relative_to(directory)
+    )
+
+
 def _matches_semantic_target(adapter: PlatformAdapter, target: Path, directory: Path) -> bool:
-    if any((target / ".claude-plugin" / name).is_file() for name in ("plugin.json", "marketplace.json")):
+    if _is_foreign_provider_target(target, directory):
+        return False
+    if (target / ".claude-plugin" / "plugin.json").is_file() or _is_claude_marketplace_root(target):
+        return True
+    if _is_manifest_declared_target(target, directory):
         return True
     if target.is_dir():
-        if not _is_skill_folder(target):
-            return False
-        foreign_provider_roots = (KNOWN_PROVIDER_DIRS | {".agents"}) - {".claude"}
-        return all(
-            ancestor.name not in foreign_provider_roots
-            for ancestor in (target, *target.parents)
-            if ancestor == directory or ancestor.is_relative_to(directory)
-        )
-    target.relative_to(directory)
-    plugin_component = any(
-        target.is_relative_to(plugin_root) and target.relative_to(plugin_root).parts[0] in {"agents", "commands"}
-        for plugin_root in (target, *target.parents)
-        if (plugin_root / ".claude-plugin" / "plugin.json").is_file()
-    )
+        return _is_skill_folder(target)
+    relative_target = target.relative_to(directory)
     return _matches_platform_path(adapter, target, directory) or (
-        target.suffix == ".md" and ((target.name == "CLAUDE.md" and target.parent == directory) or plugin_component)
+        target.suffix == ".md"
+        and (target.name == "CLAUDE.md" or any(part in {"agents", "commands"} for part in relative_target.parts))
     )
 
 
 def _discover_platform_paths(directory: Path, adapter: PlatformAdapter) -> list[Path]:
     if adapter.id() == "claude_code":
-        targets = _discover_validatable_paths(directory)
-        nested = [
-            child
-            for target in targets
-            if (target / ".claude-plugin" / "plugin.json").is_file()
-            for child in _discover_plugin_paths(_parse_plugin_manifest(target))
+        return [
+            target
+            for target in _discover_validatable_paths(directory)
+            if _matches_semantic_target(adapter, target, directory)
         ]
-        return [target for target in [*targets, *nested] if _matches_semantic_target(adapter, target, directory)]
     semantic_targets = sorted(_discover_validatable_paths(directory), key=lambda path: len(path.parts), reverse=True)
     discovered: set[Path] = set()
     for candidate in _glob_excluding(directory, "**/*"):
@@ -499,6 +583,7 @@ def _resolve_filter_and_expand_paths(
         if resolved_glob is not None and path.is_dir():
             matched = _glob_excluding(path, resolved_glob)
             matched = _platform_matching_paths(matched, path, platform_adapter)
+            matched.extend(_manifest_filter_type_paths(path, filter_type, platform_adapter))
             if filter_type == "skills" and platform_adapter is None:
                 matched = [match.parent for match in matched]
             expanded_paths.extend(matched)

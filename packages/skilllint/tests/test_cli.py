@@ -592,6 +592,30 @@ class TestPathArguments:
         assert result.exit_code == 1, result.stdout
         assert "Total files: 1" in result.stdout
 
+    def test_platform_filtered_missing_manifest_skill_reports_plugin_validation(
+        self, cli_runner: CliRunner, tmp_path: Path, no_color_env: None, mocker: MockerFixture
+    ) -> None:
+        plugin_dir = tmp_path / "plugin"
+        manifest = plugin_dir / ".claude-plugin" / "plugin.json"
+        manifest.parent.mkdir(parents=True)
+        manifest.write_text('{"skills": ["custom/missing-skill"]}')
+        mocker.patch("shutil.which", return_value="/usr/local/bin/claude")
+        mocker.patch("skilllint.plugin_validator._should_skip_claude_validate", return_value=False)
+        mocker.patch(
+            "skilllint.plugin_validator._run_claude_plugin_validate",
+            return_value=subprocess.CompletedProcess(
+                args=["claude", "plugin", "validate"], returncode=1, stdout="referenced file does not exist", stderr=""
+            ),
+        )
+
+        result = cli_runner.invoke(
+            plugin_validator.app,
+            ["check", "--no-color", "--platform", "claude-code", "--filter-type", "skills", str(plugin_dir)],
+        )
+
+        assert result.exit_code == 1, result.stdout
+        assert "PL005" in result.stdout
+
 
 class TestErrorMessages:
     """Test error message clarity and actionability."""
