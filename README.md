@@ -88,7 +88,7 @@ Exit codes: `0` = all checks passed · `1` = validation errors · `2` = usage er
 Use `bitflight-devops/skilllint` as a GitHub Action to validate skills, plugins, and agents in any repository:
 
 ```yaml
-- uses: bitflight-devops/skilllint@v1.7.0
+- uses: bitflight-devops/skilllint@v1.19.0
   with:
     paths: "plugins/"
     platform: "claude-code"
@@ -139,7 +139,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Lint skills and plugins
-        uses: bitflight-devops/skilllint@v1.7.0
+        uses: bitflight-devops/skilllint@v1.19.0
         with:
           paths: "plugins/ .claude/"
           platform: "claude-code"
@@ -153,7 +153,7 @@ jobs:
 ```yaml
 - name: Lint skills and plugins
   id: lint
-  uses: bitflight-devops/skilllint@v1.7.0
+  uses: bitflight-devops/skilllint@v1.19.0
   with:
     paths: "plugins/"
     version: "1.19.2"
@@ -172,7 +172,7 @@ Add to `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/bitflight-devops/skilllint
-    rev: v1.7.0
+    rev: v1.19.0
     hooks:
       - id: skilllint
 ```
