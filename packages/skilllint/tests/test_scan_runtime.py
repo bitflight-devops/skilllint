@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from skilllint.adapters import PlatformAdapter
 from skilllint.adapters.claude_code import ClaudeCodeAdapter
 from skilllint.adapters.codex import CodexAdapter
 from skilllint.adapters.cursor import CursorAdapter
@@ -468,6 +469,18 @@ class TestResolveFilterAndExpandPaths:
         paths, _ = _resolve_filter_and_expand_paths([root], None, filter_type, platform_adapter=ClaudeCodeAdapter())
 
         assert paths == [next(path for path in (skill_dir, agent, command) if path.name == expected_name)]
+
+    @pytest.mark.parametrize(("adapter", "provider"), [(CodexAdapter(), ".agents"), (CursorAdapter(), ".cursor")])
+    def test_platform_preserves_provider_prefix_for_nested_skill_folder(
+        self, tmp_path: Path, adapter: PlatformAdapter, provider: str
+    ) -> None:
+        skill_dir = tmp_path / provider / "skills" / "nested-skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("---\ndescription: Nested skill\n---\n# Nested\n")
+
+        paths, _ = _resolve_filter_and_expand_paths([tmp_path / provider], None, None, platform_adapter=adapter)
+
+        assert paths == [skill_dir]
 
     def test_filter_type_resolves_to_glob(self, tmp_path: Path) -> None:
         """_resolve_filter_and_expand_paths resolves --filter-type to glob pattern.

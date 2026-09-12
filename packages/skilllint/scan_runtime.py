@@ -360,11 +360,22 @@ def _platform_matching_paths(paths: list[Path], directory: Path, adapter: Platfo
 def _discover_platform_paths(directory: Path, adapter: PlatformAdapter) -> list[Path]:
     if adapter.id() == "claude_code":
         return _discover_validatable_paths(directory)
-    return sorted(
-        candidate
-        for candidate in _glob_excluding(directory, "**/*")
-        if candidate.is_file() and matches_file(adapter, candidate.relative_to(directory))
-    )
+    semantic_targets = sorted(_discover_validatable_paths(directory), key=lambda path: len(path.parts), reverse=True)
+    discovered: set[Path] = set()
+    for candidate in _glob_excluding(directory, "**/*"):
+        if not candidate.is_file() or not matches_file(adapter, candidate):
+            continue
+        target = next(
+            (
+                semantic_target
+                for semantic_target in semantic_targets
+                if candidate == semantic_target or candidate.is_relative_to(semantic_target)
+                if not (semantic_target / ".claude-plugin" / "plugin.json").is_file()
+            ),
+            candidate,
+        )
+        discovered.add(target if candidate.name == "SKILL.md" else candidate)
+    return sorted(discovered)
 
 
 def _validate_filter_options(filter_glob: str | None, filter_type: str | None) -> None:
