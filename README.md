@@ -92,6 +92,7 @@ Use `bitflight-devops/skilllint` as a GitHub Action to validate skills, plugins,
   with:
     paths: "plugins/"
     platform: "claude-code"
+    version: "1.19.2"
     show-summary: "true"
 ```
 
@@ -138,6 +139,7 @@ jobs:
         with:
           paths: "plugins/ .claude/"
           platform: "claude-code"
+          version: "1.19.2"
           show-summary: "true"
           verbose: "false"
 ```
@@ -150,6 +152,7 @@ jobs:
   uses: bitflight-devops/skilllint@v1.7.0
   with:
     paths: "plugins/"
+    version: "1.19.2"
   continue-on-error: true
 
 - name: Print result
