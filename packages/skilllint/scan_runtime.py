@@ -354,7 +354,22 @@ def _discover_validatable_paths(directory: Path) -> list[Path]:
 def _platform_matching_paths(paths: list[Path], directory: Path, adapter: PlatformAdapter | None) -> list[Path]:
     if adapter is None:
         return paths
-    return [path for path in paths if path.is_file() and _matches_platform_file(adapter, path, directory)]
+    context_roots = [directory]
+    context_roots.extend(
+        manifest.parent.parent for manifest in _glob_excluding(directory, "**/.claude-plugin/plugin.json")
+    )
+    context_roots.extend(
+        path for path in _glob_excluding(directory, "**/*") if path.is_dir() and path.name in KNOWN_PROVIDER_DIRS
+    )
+    return [
+        path
+        for path in paths
+        if path.is_file()
+        and any(
+            path.is_relative_to(context_root) and _matches_platform_file(adapter, path, context_root)
+            for context_root in context_roots
+        )
+    ]
 
 
 def _matches_platform_file(adapter: PlatformAdapter, path: Path, directory: Path) -> bool:

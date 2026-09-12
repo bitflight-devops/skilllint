@@ -535,6 +535,22 @@ class TestResolveFilterAndExpandPaths:
 
         assert discovered == [agent]
 
+    def test_filtered_platform_paths_preserve_nested_plugin_and_provider_contexts(self, tmp_path: Path) -> None:
+        plugin_agent = tmp_path / "extensions" / "demo" / "agents" / "plugin.md"
+        (plugin_agent.parent.parent / ".claude-plugin").mkdir(parents=True)
+        (plugin_agent.parent.parent / ".claude-plugin" / "plugin.json").write_text("{}")
+        plugin_agent.parent.mkdir()
+        plugin_agent.write_text("# Plugin agent\n")
+        provider_agent = tmp_path / "packages" / "app" / ".claude" / "agents" / "provider.md"
+        provider_agent.parent.mkdir(parents=True)
+        provider_agent.write_text("# Provider agent\n")
+
+        discovered, _ = _resolve_filter_and_expand_paths(
+            [tmp_path], None, "agents", platform_adapter=ClaudeCodeAdapter()
+        )
+
+        assert set(discovered) == {plugin_agent, provider_agent}
+
     def test_platform_paths_exclude_skill_internal_files_in_provider_context(self, tmp_path: Path) -> None:
         provider = tmp_path / ".claude"
         skill = provider / "skills" / "demo"
