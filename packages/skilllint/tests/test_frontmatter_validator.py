@@ -14,11 +14,14 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+import skilllint.plugin_validator as plugin_validator
 from skilllint.frontmatter_core import SkillFrontmatter
 from skilllint.plugin_validator import FrontmatterValidator
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    from typer.testing import CliRunner
 
 
 class TestFrontmatterValidatorBasic:
@@ -233,6 +236,219 @@ echo "test"
 class TestFrontmatterAutoFix:
     """Test auto-fix functionality."""
 
+    @pytest.mark.parametrize(
+        ("tool_yaml", "expected_yaml"),
+        [
+            ("tools: []", "tools: ''"),
+            ("defaults: &shared [Read, Grep]\ntools: *shared", "defaults: &shared [Read, Grep]\ntools: Read, Grep"),
+            ("tools: &shared [Read, Grep]\nskills: *shared", "tools: Read, Grep\nskills: &shared [Read, Grep]"),
+        ],
+    )
+    def test_fix_preserves_tool_list_yaml_alias_contract(
+        self, tmp_path: Path, tool_yaml: str, expected_yaml: str
+    ) -> None:
+        agent_md = tmp_path / "agents" / "tool-list.md"
+        agent_md.parent.mkdir()
+        agent_md.write_text(
+            "---\n"
+            "name: tool-list\n"
+            "description: Use this agent when testing tool-list YAML.\n"
+            f"{tool_yaml}\n"
+            "---\n"
+            "Body.\n",
+            encoding="utf-8",
+        )
+
+        validator = FrontmatterValidator()
+        validator.fix(agent_md)
+
+        fixed = agent_md.read_text(encoding="utf-8")
+        assert expected_yaml in fixed
+        assert validator.validate(agent_md).errors == []
+
+    @pytest.mark.parametrize(
+        "tool_yaml",
+        ["defaults: &defaults {tools: [Read, Grep]}\n<<: *defaults", "? tools\n: [Read, Grep]", 'tools: ["*"]'],
+    )
+    def test_fix_preserves_yaml_syntax_for_nonstandard_tool_lists(self, tmp_path: Path, tool_yaml: str) -> None:
+        agent_md = tmp_path / "agents" / "tool-list.md"
+        agent_md.parent.mkdir()
+        agent_md.write_text(
+            "---\n"
+            "name: tool-list\n"
+            "description: Use this agent when testing tool-list YAML.\n"
+            f"{tool_yaml}\n"
+            "---\n"
+            "Body.\n",
+            encoding="utf-8",
+        )
+
+        validator = FrontmatterValidator()
+        validator.fix(agent_md)
+
+        fixed = agent_md.read_text(encoding="utf-8")
+        assert validator.validate(agent_md).errors == []
+        assert all(issue.code != "FM007" for issue in validator.validate(agent_md).warnings)
+        assert validator.fix(agent_md) == []
+        assert agent_md.read_text(encoding="utf-8") == fixed
+
+    def test_fix_preserves_comments_inside_tool_list(self, tmp_path: Path) -> None:
+        agent_md = tmp_path / "agents" / "tool-list.md"
+        agent_md.parent.mkdir()
+        agent_md.write_text(
+            "---\n"
+            "name: tool-list\n"
+            "description: Use this agent when testing tool-list YAML.\n"
+            "tools:\n"
+            "  # required for search\n"
+            "  - Grep # #TODO\n"
+            "  - Read\n"
+            "---\n"
+            "Body.\n",
+            encoding="utf-8",
+        )
+
+        validator = FrontmatterValidator()
+        validator.fix(agent_md)
+
+        fixed = agent_md.read_text(encoding="utf-8")
+        assert "# required for search" in fixed
+        assert "# #TODO" in fixed
+        assert all(issue.code != "FM007" for issue in validator.validate(agent_md).warnings)
+
+    def test_fix_drops_null_tool_list_entries(self, tmp_path: Path) -> None:
+        agent_md = tmp_path / "agents" / "tool-list.md"
+        agent_md.parent.mkdir()
+        agent_md.write_text(
+            "---\nname: tool-list\ndescription: Null tool-list entry verification.\ntools: [Read, null]\n---\nBody.\n",
+            encoding="utf-8",
+        )
+
+        validator = FrontmatterValidator()
+        validator.fix(agent_md)
+
+        fixed = agent_md.read_text(encoding="utf-8")
+        assert "tools: Read" in fixed
+        assert "None" not in fixed
+        assert all(issue.code != "FM007" for issue in validator.validate(agent_md).warnings)
+
+    def test_fix_falls_back_when_merged_tool_field_has_no_source_node(self, tmp_path: Path) -> None:
+        agent_md = tmp_path / "agents" / "tool-list.md"
+        agent_md.parent.mkdir()
+        agent_md.write_text(
+            "---\nname: tool-list\ndescription: Merged tool-list verification.\n"
+            "defaults: &d {tools: [Read, Grep]}\n<<: *d\ndisallowedTools: [Write]\n---\nBody.\n",
+            encoding="utf-8",
+        )
+
+        validator = FrontmatterValidator()
+        validator.fix(agent_md)
+
+        assert all(issue.code != "FM007" for issue in validator.validate(agent_md).warnings)
+
+    def test_fix_leaves_unrepresentable_tool_list_entries_unchanged(self, tmp_path: Path) -> None:
+        agent_md = tmp_path / "agents" / "tool-list.md"
+        agent_md.parent.mkdir()
+        original = (
+            "---\nname: tool-list\ndescription: Atomic tool-list verification.\n"
+            'tools: ["Bash(git log:*)"]\n---\nBody.\n'
+        )
+        agent_md.write_text(original, encoding="utf-8")
+
+        validator = FrontmatterValidator()
+
+        assert validator.fix(agent_md) == []
+        assert agent_md.read_text(encoding="utf-8") == original
+
+    def test_fix_preserves_unrepresentable_tool_list_with_unrelated_fix(self, tmp_path: Path) -> None:
+        agent_md = tmp_path / "agents" / "tool-list.md"
+        agent_md.parent.mkdir()
+        agent_md.write_text(
+            '---\nname: tool-list\ndescription: Use: atomic tool list.\ntools: ["Bash(git log:*)"]\n'
+            "disallowedTools: [Read, Grep]\n---\nBody.\n",
+            encoding="utf-8",
+        )
+
+        validator = FrontmatterValidator()
+        validator.fix(agent_md)
+
+        fixed = agent_md.read_text(encoding="utf-8")
+        assert "Bash(git log:*)" in fixed
+        assert validator.validate(agent_md).errors == []
+
+    def test_fix_leaves_empty_tool_list_entries_unchanged(self, tmp_path: Path) -> None:
+        agent_md = tmp_path / "agents" / "tool-list.md"
+        agent_md.parent.mkdir()
+        original = (
+            '---\nname: tool-list\ndescription: Empty tool-list verification.\ntools: ["", Workflow]\n---\nBody.\n'
+        )
+        agent_md.write_text(original, encoding="utf-8")
+
+        validator = FrontmatterValidator()
+
+        assert validator.fix(agent_md) == []
+        assert agent_md.read_text(encoding="utf-8") == original
+
+    def test_fix_preserves_flow_mapping_tool_list_semantics(self, tmp_path: Path) -> None:
+        agent_md = tmp_path / "agents" / "tool-list.md"
+        agent_md.parent.mkdir()
+        agent_md.write_text(
+            "---\n{name: flow-agent, description: Flow tool-list verification., tools: [Read, Grep]}\n---\nBody.\n",
+            encoding="utf-8",
+        )
+
+        validator = FrontmatterValidator()
+        validator.fix(agent_md)
+
+        assert validator.validate(agent_md).errors == []
+        assert all(issue.code != "FM007" for issue in validator.validate(agent_md).warnings)
+
+    @pytest.mark.parametrize(
+        ("relative_path", "field_name"),
+        [
+            ("skills/tool-list/SKILL.md", "allowed-tools"),
+            ("commands/tool-list.md", "allowed-tools"),
+            ("agents/tool-list.md", "tools"),
+            ("agents/tool-list.md", "disallowedTools"),
+        ],
+    )
+    def test_fix_normalizes_declared_tool_list_without_changing_unrelated_bytes(
+        self, cli_runner: CliRunner, tmp_path: Path, relative_path: str, field_name: str
+    ) -> None:
+        capability_file = tmp_path / relative_path
+        capability_file.parent.mkdir(parents=True)
+        capability_file.write_text(
+            "---\n"
+            "name: tool-list\n"
+            "description: Use this component when testing declared tool-list fixes.\n"
+            "marker: maintain-this-byte # preserve this YAML comment\n"
+            f"{field_name}:\n"
+            "  - Read\n"
+            "  - Grep\n"
+            "---\n"
+            "\nBody bytes remain unchanged.\n",
+            encoding="utf-8",
+        )
+        before = capability_file.read_bytes()
+        check_result = cli_runner.invoke(plugin_validator.app, ["check", str(capability_file)])
+        after_check_content = capability_file.read_bytes()
+        first_fix_result = cli_runner.invoke(plugin_validator.app, ["check", "--fix", str(capability_file)])
+        first_content = capability_file.read_bytes()
+        after_first_check_result = cli_runner.invoke(plugin_validator.app, ["check", str(capability_file)])
+        second_fix_result = cli_runner.invoke(plugin_validator.app, ["check", "--fix", str(capability_file)])
+
+        assert check_result.exit_code == 0
+        assert "[FM007]" in check_result.stdout
+        assert after_check_content == before
+        assert first_fix_result.exit_code == 0
+        assert first_content == before.replace(
+            f"{field_name}:\n  - Read\n  - Grep\n".encode(), f"{field_name}: Read, Grep\n".encode()
+        )
+        assert after_first_check_result.exit_code == 0
+        assert "[FM007]" not in after_first_check_result.stdout
+        assert second_fix_result.exit_code == 0
+        assert capability_file.read_bytes() == first_content
+
     def test_autofix_yaml_array_to_csv(self, tmp_path: Path) -> None:
         """Test auto-fix converts YAML arrays to CSV strings (FM007).
 
@@ -289,6 +505,28 @@ description: >-
         # Verify file was fixed
         content = skill_md.read_text()
         assert ">-" not in content
+
+    def test_autofix_multiline_description_and_tool_list(self, tmp_path: Path) -> None:
+        skill_md = tmp_path / "SKILL.md"
+        skill_md.write_text("""---
+description: >-
+  A multiline description
+  for a skill.
+tools:
+  - Read
+  - Grep
+---
+
+# Content
+""")
+
+        fixes = FrontmatterValidator().fix(skill_md)
+
+        content = skill_md.read_text()
+        assert any("multiline" in fix.lower() for fix in fixes)
+        assert any("YAML array" in fix for fix in fixes)
+        assert ">-" not in content
+        assert "tools: Read, Grep" in content
 
     def test_autofix_unquoted_colon(self, tmp_path: Path) -> None:
         """Test auto-fix quotes descriptions with colons (FM009).

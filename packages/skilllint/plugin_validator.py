@@ -51,7 +51,10 @@ from git.exc import InvalidGitRepositoryError, NoSuchPathError
 from git.index.fun import entry_key
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from ruamel.yaml import YAML, YAMLError
+from ruamel.yaml.comments import CommentedMap, CommentedSeq
+from ruamel.yaml.nodes import MappingNode, SequenceNode
 from ruamel.yaml.scalarstring import DoubleQuotedScalarString
+from ruamel.yaml.tokens import CommentToken
 
 import skilllint.rules  # ruff: ignore[unused-import] — ensures all 15 series modules register into RULE_REGISTRY
 from skilllint.adapters import PlatformAdapter, load_adapters, matches_file
@@ -216,6 +219,88 @@ def _dump_yaml(data: dict[str, YamlValue]) -> str:
     buf = StringIO()
     _rt_yaml.dump(prepared, buf)
     return buf.getvalue()
+
+
+def _replace_list_valued_tool_fields(frontmatter_text: str, data: dict[str, YamlValue]) -> str | None:
+    document = _rt_yaml.compose(frontmatter_text)
+    if not isinstance(document, MappingNode) or document.flow_style:
+        return None
+
+    replacements: list[tuple[int, int, str]] = []
+    replaced_fields: set[str] = set()
+    for key_node, value_node in document.value:
+        field_name = key_node.value
+        value = data.get(field_name)
+        if (
+            field_name in {"tools", "disallowedTools", "allowed-tools"}
+            and isinstance(value, list)
+            and isinstance(value_node, SequenceNode)
+        ):
+            separator = frontmatter_text[key_node.end_mark.index : value_node.start_mark.index]
+            if (
+                value_node.start_mark.index < key_node.end_mark.index
+                or "&" in frontmatter_text[key_node.end_mark.index : value_node.end_mark.index]
+                or "#" in frontmatter_text[key_node.end_mark.index : value_node.end_mark.index]
+                or not separator.startswith(":")
+            ):
+                return None
+            scalar_buffer = StringIO()
+            _rt_yaml.dump({"value": ", ".join(str(item) for item in value if item is not None)}, scalar_buffer)
+            replacement_value = scalar_buffer.getvalue().removeprefix("value: ").rstrip()
+            replacements.append((key_node.end_mark.index, value_node.end_mark.index, f": {replacement_value}"))
+            replaced_fields.add(field_name)
+
+    requested_fields = {
+        field_name
+        for field_name in ("tools", "disallowedTools", "allowed-tools")
+        if isinstance(data.get(field_name), list)
+    }
+    if not replacements or replaced_fields != requested_fields:
+        return None
+    for start, end, replacement in reversed(replacements):
+        frontmatter_text = f"{frontmatter_text[:start]}{replacement}{frontmatter_text[end:]}"
+    return frontmatter_text
+
+
+def _is_losslessly_scalar_tool_list(values: YamlValue) -> bool:
+    if not isinstance(values, list):
+        return False
+    return all(
+        str(value) and "," not in str(value) and not re.search(r"\s", str(value))
+        for value in values
+        if value is not None
+    )
+
+
+def _comment_lines(comment_data: object) -> list[str]:
+    if isinstance(comment_data, CommentToken):
+        return [line.removeprefix("#").removeprefix(" ") for line in comment_data.value.splitlines()]
+    if isinstance(comment_data, list):
+        return [line for item in comment_data for line in _comment_lines(item)]
+    if isinstance(comment_data, tuple):
+        return [line for item in comment_data for line in _comment_lines(item)]
+    if isinstance(comment_data, dict):
+        return [line for item in comment_data.values() for line in _comment_lines(item)]
+    return []
+
+
+def _dump_tool_list_fixes(frontmatter_text: str, tool_values: dict[str, str]) -> str | None:
+    data = _rt_yaml.load(frontmatter_text)
+    if not isinstance(data, CommentedMap):
+        return None
+    for field_name, value in tool_values.items():
+        original_value = data.get(field_name)
+        comment_lines = _comment_lines(data.ca.items.get(field_name))
+        if isinstance(original_value, CommentedSeq) and original_value.anchor.value is not None:
+            original_value.yaml_set_anchor(original_value.anchor.value, always_dump=True)
+        if isinstance(original_value, CommentedSeq):
+            comment_lines.extend(_comment_lines(original_value.ca.items))
+        if comment_lines:
+            data.yaml_set_comment_before_after_key(field_name, before="\n".join(comment_lines))
+        data[field_name] = value
+    buffer = StringIO()
+    _rt_yaml.dump(data, buffer)
+    return buffer.getvalue()
 
 
 def _fix_unquoted_colons(frontmatter_text: str) -> tuple[str, list[str], list[str]]:
@@ -2344,9 +2429,9 @@ class FrontmatterValidator:
             normalized_dict["skills"] = original_data["skills"]
         tool_fields = {"tools", "disallowedTools", "allowed-tools"}
         for field_name in tool_fields:
-            val = normalized_dict.get(field_name)
-            if isinstance(val, list):
-                normalized_dict[field_name] = ", ".join(str(x) for x in val)
+            original_value = original_data.get(field_name)
+            if isinstance(original_value, list) and _is_losslessly_scalar_tool_list(original_value):
+                normalized_dict[field_name] = ", ".join(str(x) for x in original_value if x is not None)
                 fixes.append(f"Converted {field_name} from YAML array to comma-separated string")
         for key, value in normalized_dict.items():
             if key in tool_fields:
@@ -2363,6 +2448,7 @@ class FrontmatterValidator:
 
     def _compute_normalized_fixes(
         self,
+        content: str,
         original_data: dict[str, YamlValue],
         frontmatter_text: str,
         body: str,
@@ -2393,8 +2479,34 @@ class FrontmatterValidator:
             file_type=file_type,
             file_path=file_path,
         )
+        for field_name in ("tools", "disallowedTools", "allowed-tools"):
+            original_value = original_data.get(field_name)
+            if isinstance(original_value, list) and not _is_losslessly_scalar_tool_list(original_value):
+                normalized_dict[field_name] = original_value
         if not fixes:
             return None
+        tool_list_fixes = {
+            f"Converted {field_name} from YAML array to comma-separated string"
+            for field_name in ("tools", "disallowedTools", "allowed-tools")
+            if isinstance(original_data.get(field_name), list)
+            and _is_losslessly_scalar_tool_list(original_data[field_name])
+        }
+        tool_values = {
+            field_name: value
+            for field_name, value in normalized_dict.items()
+            if field_name in {"tools", "disallowedTools", "allowed-tools"}
+            and isinstance(original_data.get(field_name), list)
+            and _is_losslessly_scalar_tool_list(original_data[field_name])
+            and isinstance(value, str)
+        }
+        if set(fixes) == tool_list_fixes:
+            rewritten_frontmatter = _replace_list_valued_tool_fields(frontmatter_text, original_data)
+            if rewritten_frontmatter is not None:
+                return content.replace(frontmatter_text, rewritten_frontmatter, 1), fixes
+        if len(tool_values) == len(fixes):
+            yaml = _dump_tool_list_fixes(frontmatter_text, tool_values)
+            if yaml is not None:
+                return f"---\n{yaml}---\n{body}", fixes
         return f"---\n{_dump_yaml(normalized_dict)}---\n{body}", fixes
 
     def _apply_fixes(self, content: str, file_type: FileType, file_path: Path | None = None) -> tuple[str, list[str]]:
@@ -2422,7 +2534,13 @@ class FrontmatterValidator:
 
         if isinstance(original_data, dict):
             computed = self._compute_normalized_fixes(
-                original_data, frontmatter_text, body, file_type=file_type, file_path=file_path, colon_fixes=colon_fixes
+                content,
+                original_data,
+                frontmatter_text,
+                body,
+                file_type=file_type,
+                file_path=file_path,
+                colon_fixes=colon_fixes,
             )
             if computed is not None:
                 result_content, result_fixes = computed
