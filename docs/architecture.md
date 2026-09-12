@@ -16,9 +16,10 @@ CLI (plugin_validator.main)
   -> reporting.ConsoleReporter or CIReporter
 ```
 
-`scan_runtime.detect_scan_context` classifies a directory as manifest, auto,
-structure, or bare. `_discover_validatable_paths` dispatches that classification
-to `_discover_plugin_paths` and the other discovery implementations. Omitting
+`scan_runtime.detect_scan_context` classifies a directory as `PLUGIN`, `PROVIDER`,
+or `BARE`. `_discover_validatable_paths` dispatches that classification to
+`_discover_plugin_paths` and the other discovery implementations, whose
+downstream logic selects manifest, auto, or structure discovery modes. Omitting
 `--platform` preserves the default compatibility route.
 An explicit platform selects a registered `PlatformAdapter`; explicit-platform
 validation is validation-only and does not apply fixes. Discovery selects
