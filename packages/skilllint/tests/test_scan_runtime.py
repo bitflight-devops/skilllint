@@ -648,6 +648,21 @@ class TestResolveFilterAndExpandPaths:
 
         assert paths == [skill_dir]
 
+    def test_claude_parent_scan_preserves_nested_plugin_agents_and_commands(self, tmp_path: Path) -> None:
+        plugin_root = tmp_path / "example"
+        (plugin_root / ".claude-plugin").mkdir(parents=True)
+        (plugin_root / ".claude-plugin" / "plugin.json").write_text('{"name": "example"}')
+        agents = plugin_root / "agents" / "reviewer.md"
+        commands = plugin_root / "commands" / "check.md"
+        agents.parent.mkdir()
+        commands.parent.mkdir()
+        agents.write_text("# Reviewer\n")
+        commands.write_text("# Check\n")
+
+        paths, _ = _resolve_filter_and_expand_paths([tmp_path], None, None, platform_adapter=ClaudeCodeAdapter())
+
+        assert paths == [plugin_root, agents, commands]
+
     @pytest.mark.parametrize(("adapter", "filename"), [(CursorAdapter(), "rule.mdc"), (CodexAdapter(), "rule.rules")])
     def test_platform_includes_root_provider_file(
         self, tmp_path: Path, adapter: PlatformAdapter, filename: str

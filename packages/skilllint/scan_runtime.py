@@ -423,23 +423,27 @@ def _matches_semantic_target(adapter: PlatformAdapter, target: Path, directory: 
             for ancestor in (target, *target.parents)
             if ancestor == directory or ancestor.is_relative_to(directory)
         )
-    relative_target = target.relative_to(directory)
+    target.relative_to(directory)
+    plugin_component = any(
+        target.is_relative_to(plugin_root) and target.relative_to(plugin_root).parts[0] in {"agents", "commands"}
+        for plugin_root in (target, *target.parents)
+        if (plugin_root / ".claude-plugin" / "plugin.json").is_file()
+    )
     return _matches_platform_path(adapter, target, directory) or (
-        target.suffix == ".md"
-        and (
-            relative_target.parts[0] in {"agents", "commands"}
-            or (target.name == "CLAUDE.md" and target.parent == directory)
-        )
+        target.suffix == ".md" and ((target.name == "CLAUDE.md" and target.parent == directory) or plugin_component)
     )
 
 
 def _discover_platform_paths(directory: Path, adapter: PlatformAdapter) -> list[Path]:
     if adapter.id() == "claude_code":
-        return [
-            target
-            for target in _discover_validatable_paths(directory)
-            if _matches_semantic_target(adapter, target, directory)
+        targets = _discover_validatable_paths(directory)
+        nested = [
+            child
+            for target in targets
+            if (target / ".claude-plugin" / "plugin.json").is_file()
+            for child in _discover_plugin_paths(_parse_plugin_manifest(target))
         ]
+        return [target for target in [*targets, *nested] if _matches_semantic_target(adapter, target, directory)]
     semantic_targets = sorted(_discover_validatable_paths(directory), key=lambda path: len(path.parts), reverse=True)
     discovered: set[Path] = set()
     for candidate in _glob_excluding(directory, "**/*"):
