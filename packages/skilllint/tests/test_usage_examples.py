@@ -74,5 +74,6 @@ def test_documented_policy_shape_reports_invalid_input(tmp_path: Path) -> None:
     )
     result = _run("check", "--no-color", str(skill), cwd=tmp_path)
     output = result.stdout + result.stderr
+    assert result.returncode == 0
     assert "SK006" in output
     assert "invalid" in output.lower() or "must" in output.lower()

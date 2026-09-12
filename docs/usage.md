@@ -45,10 +45,12 @@ uv run skilllint check --tokens-only skills/my-skill/SKILL.md
 Do not combine `--fix` with `--platform`; fixing always uses the default
 compatibility route. A second `--fix` run should make no further changes.
 
-Exit status is stable for scripts and CI: `0` means no reported violations,
-`1` means validation findings, and `2` means invalid usage or configuration.
-Warnings and info findings are reported separately from errors; file counts in
-the summary describe files selected, not adapter coverage.
+Exit status is stable for scripts and CI: `0` means no schema errors (warnings
+and info findings may still be printed), `1` means schema validation errors,
+and `2` means invalid CLI usage. Invalid policy entries are diagnosed on
+stderr and the documented defaults are used; they do not turn a normal scan
+into exit `2`. File counts in the summary describe files selected, not adapter
+coverage.
 
 ## Output and selection
 
