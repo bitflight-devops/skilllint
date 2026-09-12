@@ -461,6 +461,19 @@ class TestResolveFilterAndExpandPaths:
 
         assert paths == [plugin_dir, reviewer]
 
+    def test_claude_platform_preserves_nested_manifest_declared_custom_agent_path(self, tmp_path: Path) -> None:
+        plugin_dir = tmp_path / "parent" / "plugin"
+        manifest = plugin_dir / ".claude-plugin" / "plugin.json"
+        manifest.parent.mkdir(parents=True)
+        manifest.write_text('{"agents": ["custom/reviewer.md"]}')
+        reviewer = plugin_dir / "custom" / "reviewer.md"
+        reviewer.parent.mkdir()
+        reviewer.write_text("# Reviewer\n")
+
+        paths, _ = _resolve_filter_and_expand_paths([tmp_path], None, None, platform_adapter=ClaudeCodeAdapter())
+
+        assert paths == [plugin_dir, reviewer]
+
     @pytest.mark.parametrize(
         ("filter_type", "expected_name"),
         [("skills", "nested-skill"), ("agents", "agent.md"), ("commands", "command.md")],
@@ -621,7 +634,7 @@ class TestResolveFilterAndExpandPaths:
         agent = nested / "agents" / "agent.md"
         command = nested / "commands" / "command.md"
         claude_file = nested / "CLAUDE.md"
-        foreign_agent = tmp_path / ".agents" / "agents" / "foreign.md"
+        foreign_agent = tmp_path / ".agents" / "agents" / "team" / "foreign.md"
         for path in (agent, command, claude_file, foreign_agent):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("# Target\n")
@@ -629,6 +642,18 @@ class TestResolveFilterAndExpandPaths:
         paths, _ = _resolve_filter_and_expand_paths([tmp_path], None, None, platform_adapter=ClaudeCodeAdapter())
 
         assert paths == sorted([agent, claude_file, command])
+
+    def test_claude_platform_excludes_nested_agent_inside_direct_foreign_provider_scan(self, tmp_path: Path) -> None:
+        foreign_provider = tmp_path / ".codex"
+        foreign_agent = foreign_provider / "agents" / "team" / "foreign.md"
+        foreign_agent.parent.mkdir(parents=True)
+        foreign_agent.write_text("# Foreign\n")
+
+        paths, _ = _resolve_filter_and_expand_paths(
+            [foreign_provider], None, None, platform_adapter=ClaudeCodeAdapter()
+        )
+
+        assert paths == []
 
     def test_platform_recovers_non_hidden_provider_prefix_for_direct_subtree_scan(self, tmp_path: Path) -> None:
         class VendorAdapter:

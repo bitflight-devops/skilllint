@@ -422,24 +422,23 @@ def _is_manifest_declared_target(target: Path, directory: Path) -> bool:
 
 
 def _matches_semantic_target(adapter: PlatformAdapter, target: Path, directory: Path) -> bool:
+    foreign_provider_roots = (KNOWN_PROVIDER_DIRS | {".agents"}) - {".claude"}
+    if any(
+        ancestor.name in foreign_provider_roots
+        for ancestor in (target, *target.parents)
+        if ancestor == directory or ancestor.is_relative_to(directory)
+    ):
+        return False
     if any((target / ".claude-plugin" / name).is_file() for name in ("plugin.json", "marketplace.json")):
         return True
     if _is_manifest_declared_target(target, directory):
         return True
-    foreign_provider_roots = (KNOWN_PROVIDER_DIRS | {".agents"}) - {".claude"}
     if target.is_dir():
-        if not _is_skill_folder(target):
-            return False
-        return all(
-            ancestor.name not in foreign_provider_roots
-            for ancestor in (target, *target.parents)
-            if ancestor == directory or ancestor.is_relative_to(directory)
-        )
+        return _is_skill_folder(target)
     relative_target = target.relative_to(directory)
     return _matches_platform_path(adapter, target, directory) or (
         target.suffix == ".md"
         and (target.name == "CLAUDE.md" or any(part in {"agents", "commands"} for part in relative_target.parts))
-        and not any(part in foreign_provider_roots for part in relative_target.parts)
     )
 
 
