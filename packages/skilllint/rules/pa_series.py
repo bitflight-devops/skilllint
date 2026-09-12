@@ -325,7 +325,7 @@ def check_pa001(path: Path) -> ValidationResult:
     plugin_mcp_servers = ingest_plugin_level_mcp_server_names(plugin_dir)
 
     for agent_md in sorted(agents_dir.glob("*.md")):
-        if agent_md.name in FRONTMATTER_EXEMPT_FILENAMES:
+        if not agent_md.is_file() or agent_md.name in FRONTMATTER_EXEMPT_FILENAMES:
             continue
         content = agent_md.read_text(encoding="utf-8")
         fm_text, _start, _end = extract_frontmatter(content)

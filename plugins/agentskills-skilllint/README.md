@@ -80,7 +80,7 @@ Run `skilllint rules` for the full rule listing, or `skilllint rule <ID>` for a 
 | NR001–NR002 | Namespace references |
 | SL001 | Symlink hygiene |
 | TC001 | Token count reporting |
-| PR001–PR005 | Plugin registration (`plugin.json` capability paths) |
+| PR001, PR002, PR005 | Plugin registration (`plugin.json` capability paths) |
 | PA001       | Plugin-packaged agent frontmatter                  |
 | CU001–CU002 | Cursor `.mdc` frontmatter validity |
 | CX001–CX002 | Codex `AGENTS.md` and `.rules` file validity |
