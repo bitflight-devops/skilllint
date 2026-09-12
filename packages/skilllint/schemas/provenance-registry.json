@@ -190,17 +190,6 @@
         "date": "2026-09-04",
         "source": ".claude/vendor/sources/hooks-2026-08-28-0408.md"
       }
-    },
-    "AgentSkills.name_max_length": {
-      "rule_code": "FM010",
-      "claim_name": "name_max_length",
-      "description": "AgentSkills schema maximum name length",
-      "claim_type": "scalar",
-      "authority": {"vendor_file": "packages/skilllint/schemas/agentskills_io/v1.json", "anchor_selector": null, "authority_url": "https://agentskills.io/specification"},
-      "extraction": {"prompt_template": "Read maxLength for name.", "output_schema": {"type": "integer"}, "post_processing": "none"},
-      "assertion_location": {"file": "packages/skilllint/schemas/agentskills_io/v1.json", "symbol": "$.properties.name.maxLength", "source_type": "schema_json_field"},
-      "expected_value": 64,
-      "x-audited": {"date": "2026-09-12", "source": "packages/skilllint/schemas/agentskills_io/v1.json"}
     }
   }
 }
