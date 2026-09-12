@@ -1064,6 +1064,21 @@ class TestSharedCheckoutRoot:
 
         assert _shared_checkout_root(worktree) == worktree
 
+    def test_invalid_primary_checkout_git_pointer_returns_start_unchanged(self, tmp_path: Path) -> None:
+        worktree = tmp_path / "worktree"
+        worktree.mkdir()
+        worktree_gitdir = tmp_path / "metadata" / "worktrees" / "worktree"
+        worktree_gitdir.mkdir(parents=True)
+        primary = tmp_path / "primary"
+        primary.mkdir()
+        common_gitdir = primary / ".git-data"
+        common_gitdir.mkdir()
+        (worktree / ".git").write_text(f"gitdir: {worktree_gitdir}\n", encoding="utf-8")
+        (worktree_gitdir / "commondir").write_text(str(common_gitdir), encoding="utf-8")
+        (primary / ".git").write_bytes(b"gitdir: bad\x00path\n")
+
+        assert _shared_checkout_root(worktree) == worktree
+
     def test_gitdir_pointing_nowhere_returns_start_unchanged(self, tmp_path: Path) -> None:
         """A .git file pointing at a nonexistent gitdir returns start unchanged.
 
