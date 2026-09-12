@@ -367,8 +367,6 @@ def _platform_matching_paths(paths: list[Path], directory: Path, adapter: Platfo
             )
         )
     ]
-    if adapter.id() == "claude_code":
-        return matched
     return sorted({_semantic_platform_target(path, semantic_targets) for path in matched})
 
 
@@ -462,7 +460,7 @@ def _resolve_filter_and_expand_paths(
         if resolved_glob is not None and path.is_dir():
             matched = _glob_excluding(path, resolved_glob)
             matched = _platform_matching_paths(matched, path, platform_adapter)
-            if filter_type == "skills":
+            if filter_type == "skills" and platform_adapter is None:
                 matched = [match.parent for match in matched]
             expanded_paths.extend(matched)
             is_batch = True
