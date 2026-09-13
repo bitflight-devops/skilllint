@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789014648058,
+  "lastUpdate": 1789301198455,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -2682,6 +2682,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 100.885,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "stack@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "ca1dfdca1f1f4249a213e855ce7a91db6f8cf2d8",
+          "message": "Merge pull request #274 from bitflight-devops/remediation/product-candidate\n\nIntegrate cumulative remediation before docs",
+          "timestamp": "2026-09-13T12:03:34Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/ca1dfdca1f1f4249a213e855ce7a91db6f8cf2d8"
+        },
+        "date": 1789301197159,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 8636.073,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 8998.62,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 9561.706,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 111.239,
             "unit": "files/s"
           }
         ]
