@@ -60,7 +60,7 @@ def _validate_links(path: str, text: str, root: Path) -> list[str]:
         if urlparse(raw).scheme in {"http", "https", "mailto"}:
             continue
         link, anchor = urldefrag(raw)
-        destination = (root / path).parent.joinpath(link).resolve()
+        destination = (root / path).resolve() if not link else (root / path).parent.joinpath(link).resolve()
         if not destination.is_file() or not destination.is_relative_to(root.resolve()):
             errors.append(f"{path}: missing link {raw}")
         elif anchor:

@@ -26,3 +26,11 @@ def test_extensionless_local_links_are_validated(tmp_path: Path) -> None:
 
     assert _validate_links("README.md", "[License](LICENSE)", tmp_path) == []
     assert _validate_links("README.md", "[Missing](CONTRIBUTING)", tmp_path)
+
+
+def test_fragment_only_links_resolve_against_current_document(tmp_path: Path) -> None:
+    document = tmp_path / "README.md"
+    document.write_text("# Usage\n\n[Usage](#usage)\n", encoding="utf-8")
+
+    assert _validate_links("README.md", "[Usage](#usage)", tmp_path) == []
+    assert _validate_links("README.md", "[Missing](#missing)", tmp_path)
