@@ -182,7 +182,7 @@ description: 'Validate files: plugins, skills, and agents'
 
 Move large reference content to a `references/` subdirectory and link to it:
 ```markdown
-For background, see [background.md](./references/background.md)
+For background, see the [architecture guide](../../../../docs/architecture.md).
 ```
 Token thresholds are defined by `TOKEN_WARNING_THRESHOLD` (warning) and `TOKEN_ERROR_THRESHOLD` (error) in the skilllint source. Run `skilllint rules` to see current threshold values. Body text only — frontmatter is excluded from the count.
 
@@ -233,7 +233,7 @@ skilllint --version
 
 ```bash
 # Validate only for a specific platform
-skilllint check --platform agentskills ./plugins/my-plugin
+skilllint check --platform claude-code ./plugins/my-plugin
 
 # List rules for a specific platform
 skilllint rules --platform agentskills

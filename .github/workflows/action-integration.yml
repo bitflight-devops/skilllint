@@ -1,0 +1,127 @@
+name: Action integration
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  action-contract:
+    name: action-contract (${{ matrix.case }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - case: clean
+            paths: packages/skilllint/tests/fixtures/claude_code/valid_skill.md packages/skilllint/tests/fixtures/claude_code/invalid_skill.md
+            platform: claude-code
+            filter: ""
+            check_only: "false"
+            fix: "false"
+            tokens_only: "false"
+            verbose: "true"
+            no_color: "false"
+            show_summary: "false"
+            expected_result: passed
+            expected_exit_code: "0"
+            expected_inspected_count: "2"
+            expected_finding: TC001
+            allow_failure: false
+          - case: warning
+            paths: tests/fixtures/action/skills/fixable-skill
+            platform: ""
+            filter: ""
+            check_only: "false"
+            fix: "true"
+            no_color: "false"
+            expected_result: passed
+            expected_exit_code: "0"
+            expected_inspected_count: "1"
+            expected_finding: FM004 FM007 SK005
+            allow_failure: false
+          - case: zero-files
+            paths: packages/skilllint/tests/fixtures/claude_code
+            platform: ""
+            filter: "*.does-not-exist"
+            check_only: "false"
+            fix: "false"
+            expected_result: passed
+            expected_exit_code: "0"
+            expected_inspected_count: "0"
+            expected_finding: ""
+            allow_failure: false
+          - case: validation-error
+            paths: packages/skilllint/tests/fixtures/claude_code/invalid-skill/SKILL.md
+            platform: claude-code
+            filter: ""
+            check_only: "false"
+            fix: "false"
+            no_color: "false"
+            expected_result: failed
+            expected_exit_code: "1"
+            expected_inspected_count: "1"
+            expected_finding: FM010 SK005
+            allow_failure: true
+          - case: usage-error
+            paths: packages/skilllint/tests/fixtures/claude_code/valid_skill.md
+            platform: ""
+            filter: ""
+            check_only: "true"
+            fix: "true"
+            show_summary: "false"
+            expected_result: failed
+            expected_exit_code: "2"
+            expected_inspected_count: ""
+            expected_finding: ""
+            allow_failure: true
+          - case: continue-on-error
+            paths: packages/skilllint/tests/fixtures/claude_code/invalid-skill/SKILL.md
+            platform: claude-code
+            filter: ""
+            check_only: "false"
+            fix: "false"
+            expected_result: failed
+            expected_exit_code: "1"
+            expected_inspected_count: "1"
+            expected_finding: FM010 SK005
+            allow_failure: true
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Run composite Action
+        id: action
+        continue-on-error: ${{ matrix.allow_failure }}
+        uses: ./
+        with:
+          paths: ${{ matrix.paths }}
+          platform: ${{ matrix.platform }}
+          filter: ${{ matrix.filter }}
+          check-only: ${{ matrix.check_only }}
+          fix: ${{ matrix.fix }}
+          verbose: ${{ matrix.verbose || 'false' }}
+          no-color: ${{ matrix.no_color || 'true' }}
+          tokens-only: ${{ matrix.tokens_only || 'false' }}
+          show-summary: ${{ matrix.show_summary || 'true' }}
+          python-version: "3.11"
+          version: "1.19.2"
+
+      - name: Assert composite Action outcome
+        env:
+          CASE: ${{ matrix.case }}
+          ACTION_RESULT: ${{ steps.action.outputs.result }}
+          ACTION_EXIT_CODE: ${{ steps.action.outputs.exit-code }}
+          ACTION_INSPECTED_COUNT: ${{ steps.action.outputs.inspected-count }}
+          ACTION_FINDINGS: ${{ steps.action.outputs.findings }}
+          ACTION_TOOL_PYTHON: ${{ steps.action.outputs.tool-python }}
+          ACTION_TOOL_VERSION: ${{ steps.action.outputs.tool-version }}
+          EXPECTED_RESULT: ${{ matrix.expected_result }}
+          EXPECTED_EXIT_CODE: ${{ matrix.expected_exit_code }}
+          EXPECTED_INSPECTED_COUNT: ${{ matrix.expected_inspected_count }}
+          EXPECTED_FINDING: ${{ matrix.expected_finding }}
+          EXPECTED_PYTHON_VERSION: "3.11"
+          EXPECTED_PACKAGE_VERSION: "1.19.2"
+        run: python scripts/assert_action_contract.py

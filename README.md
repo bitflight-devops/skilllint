@@ -27,22 +27,6 @@ plugins/my-plugin/agents/my-agent.md
 
 ---
 
-## Screenshots
-
-### Validation output with errors and warnings
-
-![skilllint check showing validation errors](docs/screenshots/check-violations.svg)
-
-### All available rules
-
-![skilllint rules table](docs/screenshots/rules.svg)
-
-### Rule detail
-
-![skilllint rule FM004 detail](docs/screenshots/rule-fm004.svg)
-
----
-
 ## Installation
 
 ```bash
@@ -88,10 +72,11 @@ Exit codes: `0` = all checks passed · `1` = validation errors · `2` = usage er
 Use `bitflight-devops/skilllint` as a GitHub Action to validate skills, plugins, and agents in any repository:
 
 ```yaml
-- uses: bitflight-devops/skilllint@v1.7.0
+- uses: bitflight-devops/skilllint@v1.19.0
   with:
     paths: "plugins/"
     platform: "claude-code"
+    version: "1.19.2"
     show-summary: "true"
 ```
 
@@ -100,7 +85,7 @@ Use `bitflight-devops/skilllint` as a GitHub Action to validate skills, plugins,
 | Input | Description | Default |
 |---|---|---|
 | `paths` | Space-separated paths to validate | `.` |
-| `platform` | Platform adapter: `claude-code`, `cursor`, `codex` | _(all)_ |
+| `platform` | Platform adapter: `claude-code`, `cursor`, `codex`; omit to validate each selected file with every matching adapter | _(matching adapters)_ |
 | `fix` | Auto-fix issues where possible | `false` |
 | `check-only` | Validate only, do not auto-fix | `false` |
 | `verbose` | Show detailed output including info messages | `false` |
@@ -119,6 +104,10 @@ Use `bitflight-devops/skilllint` as a GitHub Action to validate skills, plugins,
 |---|---|
 | `result` | `passed` when exit code is 0; `failed` for any non-zero exit code |
 | `exit-code` | Raw exit code: `0` = pass · `1` = errors · `2` = usage error |
+| `inspected-count` | Number of files inspected by skilllint |
+| `findings` | Distinct finding codes emitted by skilllint |
+| `tool-python` | Python runtime used by the installed skilllint tool |
+| `tool-version` | Version reported by the installed skilllint tool |
 
 ### Example: fail the CI on validation errors
 
@@ -134,10 +123,11 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Lint skills and plugins
-        uses: bitflight-devops/skilllint@v1.7.0
+        uses: bitflight-devops/skilllint@v1.19.0
         with:
           paths: "plugins/ .claude/"
           platform: "claude-code"
+          version: "1.19.2"
           show-summary: "true"
           verbose: "false"
 ```
@@ -147,9 +137,10 @@ jobs:
 ```yaml
 - name: Lint skills and plugins
   id: lint
-  uses: bitflight-devops/skilllint@v1.7.0
+  uses: bitflight-devops/skilllint@v1.19.0
   with:
     paths: "plugins/"
+    version: "1.19.2"
   continue-on-error: true
 
 - name: Print result
@@ -165,7 +156,7 @@ Add to `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/bitflight-devops/skilllint
-    rev: v1.7.0
+    rev: v1.19.0
     hooks:
       - id: skilllint
 ```
@@ -216,7 +207,7 @@ skilllint check --platform claude-code plugins/my-plugin
 | NR001–NR002 | Namespace refs | Cross-plugin skill/agent/command references |
 | SL001 | Symlinks | Symlink hygiene within plugin directory |
 | TC001 | Token count | Token count reporting and threshold enforcement |
-| PR001–PR005 | Plugin registration | Capability registration completeness and correctness in plugin.json |
+| PR001, PR002, PR005 | Plugin registration | Capability registration completeness and correctness in plugin.json |
 | PA001 | Plugin agent | Plugin-packaged agents: `hooks` / `mcpServers` / `permissionMode` unsupported per Anthropic (ignored at load; cite sub-agents doc) |
 | AG001–AG003 | Agent frontmatter | Claude Code `agents/*.md` (any scope): unresolvable tool wildcards, MCP server casing/references, and non-string `skills` values or members discarded by the file loader; scalar strings and string-only lists are accepted |
 | CU001–CU002 | Cursor | Cursor `.mdc` frontmatter required fields and enum values |
@@ -505,8 +496,6 @@ Place `validator.json` inside `.claude-plugin/`:
 
 The same key format applies. Plugin-level config takes priority over a `.skilllint.json` in a parent directory.
 
-See [`docs/ignore-config.md`](docs/ignore-config.md) for the full reference.
-
 ---
 
 ## Third-party adapters
@@ -523,6 +512,12 @@ Your adapter must implement the `AdapterProtocol` interface from `skilllint.adap
 ---
 
 ## Links
+
+- [Usage and integrations](docs/usage.md)
+- [Architecture](docs/architecture.md)
+- [Vendor documentation cache](docs/vendor-cache.md)
+- [Maintainer extension guide](docs/maintainer-extension-guide.md)
+- [Plugin overview](plugins/agentskills-skilllint/README.md)
 
 - [GitHub repository](https://github.com/bitflight-devops/skilllint)
 - [Issue tracker](https://github.com/bitflight-devops/skilllint/issues)

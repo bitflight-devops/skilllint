@@ -1,0 +1,43 @@
+"""Assert the composite Action's outputs and installed tool runtime."""
+
+from __future__ import annotations
+
+import os
+import sys
+
+
+def main() -> int:
+    """Return zero only when the Action environment matches its expected contract."""
+    checks = (
+        ("result", "ACTION_RESULT", "EXPECTED_RESULT"),
+        ("exit code", "ACTION_EXIT_CODE", "EXPECTED_EXIT_CODE"),
+        ("inspected count", "ACTION_INSPECTED_COUNT", "EXPECTED_INSPECTED_COUNT"),
+    )
+    failures = [
+        f"{name}: expected {os.environ[expected]!r}, got {os.environ[actual]!r}"
+        for name, actual, expected in checks
+        if os.environ[actual] != os.environ[expected]
+    ]
+    expected_findings = os.environ["EXPECTED_FINDING"].split()
+    action_findings = set(os.environ["ACTION_FINDINGS"].split())
+    missing_findings = [finding for finding in expected_findings if finding not in action_findings]
+    if missing_findings:
+        failures.append(f"findings: missing {missing_findings!r}, got {os.environ['ACTION_FINDINGS']!r}")
+    unexpected_findings = sorted(action_findings - set(expected_findings))
+    if unexpected_findings:
+        failures.append(f"findings: unexpected {unexpected_findings!r}, got {os.environ['ACTION_FINDINGS']!r}")
+    expected_python = f"Python {os.environ['EXPECTED_PYTHON_VERSION']}"
+    if not os.environ["ACTION_TOOL_PYTHON"].startswith(expected_python):
+        failures.append(f"tool Python: expected {expected_python!r}, got {os.environ['ACTION_TOOL_PYTHON']!r}")
+    expected_version = f"skilllint {os.environ['EXPECTED_PACKAGE_VERSION']}"
+    if os.environ["ACTION_TOOL_VERSION"] != expected_version:
+        failures.append(f"tool version: expected {expected_version!r}, got {os.environ['ACTION_TOOL_VERSION']!r}")
+    if failures:
+        print("\n".join(failures), file=sys.stderr)
+        return 1
+    print(f"case={os.environ['CASE']} result={os.environ['ACTION_RESULT']} exit-code={os.environ['ACTION_EXIT_CODE']}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

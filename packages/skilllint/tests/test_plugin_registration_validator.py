@@ -3,21 +3,17 @@
 Tests:
 - Graceful pass when .claude-plugin/plugin.json is absent (TestNoPluginJson)
 - PL002 error for malformed plugin.json (TestInvalidJson)
-- PR001 warning for unregistered skill (TestUnregisteredSkill)
 - PR001 warning for unregistered agent (TestUnregisteredAgent)
 - PR001 warning for unregistered command (TestUnregisteredCommand)
 - PR002 error when registered path does not exist (TestMissingRegisteredFile)
 - PR005 info when a registered command path is a skill directory (TestCommandPathIsSkillDirectory)
 - No errors when all capabilities registered and files exist (TestFullyRegistered)
 - Empty plugin with no capabilities passes (TestEmptyPlugin)
-- PR003 info when metadata fields absent from plugin.json (TestMissingMetadata)
-- PR004 warning when repository URL mismatches git remote (TestRepositoryMismatch)
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-from unittest.mock import patch
 
 import msgspec.json
 import pytest
@@ -250,109 +246,6 @@ class TestInvalidJson:
             validator.fix(plugin_dir)
 
 
-@pytest.mark.skip(reason="Superseded by additive skills contract")
-class TestUnregisteredSkill:
-    """Test PR001 warning when skill directory exists but is not in plugin.json."""
-
-    def test_unregistered_skill_produces_pr001(self, tmp_path: Path) -> None:
-        """Test PR001 warning for skill existing without registration.
-
-        Tests: Unregistered skill detection (PR001)
-        How: Create skill directory, leave plugin.json skills array empty
-        Why: Unregistered capabilities rely on default discovery which may be fragile
-        """
-        plugin_dir = _make_plugin(tmp_path)
-        _add_skill(plugin_dir, "my-skill")
-        # skills array in plugin.json is empty (default from _make_plugin)
-
-        validator = PluginRegistrationValidator()
-        result = validator.validate(plugin_dir)
-
-        # PR001 is a warning, not an error -- result should still pass
-        pr001_warnings = [w for w in result.warnings if w.code == "PR001"]
-        assert len(pr001_warnings) >= 1
-
-    def test_unregistered_skill_warning_mentions_skill_name(self, tmp_path: Path) -> None:
-        """Test PR001 warning message references the unregistered skill name.
-
-        Tests: PR001 warning message content
-        How: Create named skill, check PR001 warning message
-        Why: Warning should identify which skill needs registration
-        """
-        plugin_dir = _make_plugin(tmp_path)
-        _add_skill(plugin_dir, "unregistered-skill")
-
-        validator = PluginRegistrationValidator()
-        result = validator.validate(plugin_dir)
-
-        pr001_warnings = [w for w in result.warnings if w.code == "PR001"]
-        assert len(pr001_warnings) >= 1
-        assert any("unregistered-skill" in w.message for w in pr001_warnings)
-
-    def test_registered_skill_no_pr001(self, tmp_path: Path) -> None:
-        """Test no PR001 warning when skill is registered in plugin.json.
-
-        Tests: Registered skill accepted without warning
-        How: Create skill, register it in plugin.json skills array, validate
-        Why: Registered capabilities should not generate PR001 warnings
-        """
-        plugin_dir = _make_plugin(
-            tmp_path,
-            plugin_json_content=msgspec.json.encode({"name": "test-plugin", "skills": ["./skills/my-skill/"]}).decode(),
-        )
-        _add_skill(plugin_dir, "my-skill")
-
-        validator = PluginRegistrationValidator()
-        result = validator.validate(plugin_dir)
-
-        pr001_warnings = [w for w in result.warnings if w.code == "PR001"]
-        assert len(pr001_warnings) == 0
-
-    def test_multiple_unregistered_skills_all_reported(self, tmp_path: Path) -> None:
-        """Test all unregistered skills produce individual PR001 warnings.
-
-        Tests: Multiple unregistered skills
-        How: Create two skills, leave both unregistered, validate
-        Why: All unregistered capabilities must be reported
-        """
-        plugin_dir = _make_plugin(tmp_path)
-        _add_skill(plugin_dir, "skill-one")
-        _add_skill(plugin_dir, "skill-two")
-
-        validator = PluginRegistrationValidator()
-        result = validator.validate(plugin_dir)
-
-        pr001_warnings = [w for w in result.warnings if w.code == "PR001"]
-        assert len(pr001_warnings) >= 2
-
-    def test_pr001_still_fires_when_skills_array_explicitly_empty(self, tmp_path: Path) -> None:
-        """Test PR001 still fires for an orphan skill when 'skills' is an explicit empty array.
-
-        Tests: PR001 must not be suppressed merely because 'skills' is declared (issue #200)
-        How: plugin.json declares 'skills': [] explicitly; an unregistered skill exists
-            under the standard ./skills/ path; validate
-        Why: The vendor path-behavior rules make 'skills' additive -- the default
-            ./skills/ directory is scanned regardless of declaration. Declaring the
-            array (even empty) must never, by itself, suppress PR001 for skills that
-            still are not listed in it. A prior condition (`"skills" in manifest or
-            not str(orphan).startswith("skills/")`) risked being "corrected" into a
-            form that always evaluates to False for standard-path skills, silently
-            disabling this warning entirely -- this regression test guards against
-            exactly that.
-        """
-        plugin_dir = _make_plugin(
-            tmp_path, plugin_json_content=msgspec.json.encode({"name": "test-plugin", "skills": []}).decode()
-        )
-        _add_skill(plugin_dir, "orphan-skill")
-
-        validator = PluginRegistrationValidator()
-        result = validator.validate(plugin_dir)
-
-        pr001_warnings = [w for w in result.warnings if w.code == "PR001"]
-        assert len(pr001_warnings) >= 1
-        assert any("orphan-skill" in w.message for w in pr001_warnings)
-
-
 class TestUnregisteredAgent:
     """Test PR001 warning when agent file exists but is not in plugin.json."""
 
@@ -411,6 +304,63 @@ class TestUnregisteredAgent:
         pr001_warnings = [w for w in result.warnings if w.code == "PR001"]
         assert len(pr001_warnings) == 0
 
+    def test_normalized_registered_agent_directory_has_no_pr001(self, tmp_path: Path) -> None:
+        plugin_dir = _make_plugin(
+            tmp_path,
+            plugin_json_content=msgspec.json.encode({
+                "name": "test-plugin",
+                "agents": ["./aliases/../agents"],
+            }).decode(),
+        )
+        _add_agent(plugin_dir, "my-agent")
+
+        result = PluginRegistrationValidator().validate(plugin_dir)
+
+        assert not [warning for warning in result.warnings if warning.code == "PR001"]
+
+    def test_pr001_keeps_distinct_in_root_symlink_aliases(self, tmp_path: Path) -> None:
+        plugin_dir = _make_plugin(
+            tmp_path,
+            plugin_json_content=msgspec.json.encode({"name": "test-plugin", "agents": ["./agents/a.md"]}).decode(),
+        )
+        (plugin_dir / "agents").mkdir()
+        (plugin_dir / "shared").mkdir()
+        (plugin_dir / "shared" / "agent.md").write_text("---\ndescription: alias target\n---\n")
+        (plugin_dir / "agents" / "a.md").symlink_to("../shared/agent.md")
+        (plugin_dir / "agents" / "b.md").symlink_to("../shared/agent.md")
+
+        result = PluginRegistrationValidator().validate(plugin_dir)
+
+        assert [warning.message for warning in result.warnings if warning.code == "PR001"] == [
+            "Agent 'agents/b.md' exists but is not registered"
+        ]
+
+    def test_pr001_ignores_dangling_agent_symlink(self, tmp_path: Path) -> None:
+        plugin_dir = _make_plugin(
+            tmp_path, plugin_json_content=msgspec.json.encode({"name": "test-plugin", "agents": []}).decode()
+        )
+        (plugin_dir / "agents").mkdir()
+        (plugin_dir / "agents" / "ghost.md").symlink_to("missing.md")
+
+        result = PluginRegistrationValidator().validate(plugin_dir)
+
+        assert not [warning for warning in result.warnings if warning.code == "PR001"]
+
+    def test_registered_directory_skips_external_symlink_child(self, tmp_path: Path) -> None:
+        plugin_dir = _make_plugin(
+            tmp_path,
+            plugin_json_content=msgspec.json.encode({"name": "test-plugin", "commands": ["./custom"]}).decode(),
+        )
+        external_file = tmp_path / "external.md"
+        external_file.write_text("# External\n")
+        custom_dir = plugin_dir / "custom"
+        custom_dir.mkdir()
+        (custom_dir / "external.md").symlink_to(external_file)
+
+        result = PluginRegistrationValidator().validate(plugin_dir)
+
+        assert result.passed is True
+
     def test_no_pr001_for_unregistered_agent_when_agents_field_absent(self, tmp_path: Path) -> None:
         """Test no PR001 warning for an agent when 'agents' is absent from plugin.json.
 
@@ -451,6 +401,25 @@ class TestUnregisteredAgent:
         pr001_warnings = [w for w in result.warnings if w.code == "PR001"]
         assert len(pr001_warnings) >= 1
         assert any("orphan-agent" in w.message for w in pr001_warnings)
+
+    def test_pr001_orders_multiple_orphans_by_component_path(self, tmp_path: Path) -> None:
+        plugin_dir = _make_plugin(
+            tmp_path,
+            plugin_json_content=msgspec.json.encode({"name": "test-plugin", "agents": [], "commands": []}).decode(),
+        )
+        _add_agent(plugin_dir, "zeta")
+        _add_agent(plugin_dir, "alpha")
+        _add_command(plugin_dir, "zeta")
+        _add_command(plugin_dir, "alpha")
+
+        result = PluginRegistrationValidator().validate(plugin_dir)
+
+        assert [warning.message for warning in result.warnings if warning.code == "PR001"] == [
+            "Agent 'agents/alpha.md' exists but is not registered",
+            "Agent 'agents/zeta.md' exists but is not registered",
+            "Command 'commands/alpha.md' exists but is not registered",
+            "Command 'commands/zeta.md' exists but is not registered",
+        ]
 
 
 class TestUnregisteredCommand:
@@ -558,6 +527,20 @@ class TestUnregisteredCommand:
 
 class TestMissingRegisteredFile:
     """Test PR002 error when plugin.json lists paths that do not exist."""
+
+    def test_registered_direct_skill_file_does_not_produce_pr002(self, tmp_path: Path) -> None:
+        plugin_dir = _make_plugin(
+            tmp_path,
+            plugin_json_content=msgspec.json.encode({
+                "name": "test-plugin",
+                "skills": ["./skills/example/SKILL.md"],
+            }).decode(),
+        )
+        _add_skill(plugin_dir, "example")
+
+        result = PluginRegistrationValidator().validate(plugin_dir)
+
+        assert [issue for issue in result.errors if issue.code == "PR002"] == []
 
     def test_registered_skill_not_on_disk_produces_pr002(self, tmp_path: Path) -> None:
         """Test PR002 error when registered skill SKILL.md does not exist on disk.
@@ -885,287 +868,3 @@ class TestEmptyPlugin:
 
         pr001_warnings = [w for w in result.warnings if w.code == "PR001"]
         assert len(pr001_warnings) == 0
-
-
-# ---------------------------------------------------------------------------
-# _GENERATE_PLUGIN_METADATA mock return value used across PR003/PR004 tests.
-# Matches the shape returned by the real function: keys are repository,
-# homepage, author.  Tests that need only a subset of keys trim the dict.
-# ---------------------------------------------------------------------------
-
-_FULL_GIT_METADATA = {
-    "repository": "https://github.com/example/my-plugin",
-    "homepage": "https://github.com/example/my-plugin/tree/main/plugins/test-plugin",
-    "author": {"name": "Test Author", "email": "author@example.com"},
-}
-
-_GIT_METADATA_MODULE = "skilllint.plugin_validator._generate_plugin_metadata"
-
-
-@pytest.mark.skip(reason="Superseded by removed metadata rules")
-class TestMissingMetadata:
-    """Test PR003 info when metadata fields are absent from plugin.json.
-
-    PR003 is emitted as info (not warning/error) when _generate_plugin_metadata
-    returns non-empty metadata and one or more of the keys (repository, homepage,
-    author) are present in git_metadata but absent from plugin_config.
-    Source: plugin_validator.py lines 2798-2819.
-    """
-
-    def test_pr003_emitted_when_repository_field_absent(self, tmp_path: Path) -> None:
-        """Test PR003 info when plugin.json is missing the repository field.
-
-        Tests: PR003 info for absent repository field
-        How: plugin.json omits repository; git_metadata has repository; validate
-        Why: Validator should inform user that repository can be populated from git
-        """
-        plugin_dir = _make_plugin(tmp_path, plugin_json_content=msgspec.json.encode({"name": "test-plugin"}).decode())
-        # git_metadata has repository; plugin_config does not
-        metadata = {"repository": _FULL_GIT_METADATA["repository"]}
-
-        with patch(_GIT_METADATA_MODULE, return_value=metadata):
-            validator = PluginRegistrationValidator()
-            result = validator.validate(plugin_dir)
-
-        pr003_info = [i for i in result.info if i.code == "PR003"]
-        assert len(pr003_info) >= 1
-        assert any("repository" in i.message for i in pr003_info)
-
-    def test_pr003_emitted_when_homepage_field_absent(self, tmp_path: Path) -> None:
-        """Test PR003 info when plugin.json is missing the homepage field.
-
-        Tests: PR003 info for absent homepage field
-        How: plugin.json omits homepage; git_metadata has homepage; validate
-        Why: Validator should surface all populatable metadata fields
-        """
-        plugin_dir = _make_plugin(tmp_path, plugin_json_content=msgspec.json.encode({"name": "test-plugin"}).decode())
-        metadata = {"homepage": _FULL_GIT_METADATA["homepage"]}
-
-        with patch(_GIT_METADATA_MODULE, return_value=metadata):
-            validator = PluginRegistrationValidator()
-            result = validator.validate(plugin_dir)
-
-        pr003_info = [i for i in result.info if i.code == "PR003"]
-        assert len(pr003_info) >= 1
-        assert any("homepage" in i.message for i in pr003_info)
-
-    def test_pr003_emitted_when_author_field_absent(self, tmp_path: Path) -> None:
-        """Test PR003 info when plugin.json is missing the author field.
-
-        Tests: PR003 info for absent author field
-        How: plugin.json omits author; git_metadata has author; validate
-        Why: Validator should surface author as a populatable metadata field
-        """
-        plugin_dir = _make_plugin(tmp_path, plugin_json_content=msgspec.json.encode({"name": "test-plugin"}).decode())
-        metadata = {"author": _FULL_GIT_METADATA["author"]}
-
-        with patch(_GIT_METADATA_MODULE, return_value=metadata):
-            validator = PluginRegistrationValidator()
-            result = validator.validate(plugin_dir)
-
-        pr003_info = [i for i in result.info if i.code == "PR003"]
-        assert len(pr003_info) >= 1
-        assert any("author" in i.message for i in pr003_info)
-
-    def test_no_pr003_when_all_metadata_present(self, tmp_path: Path) -> None:
-        """Test no PR003 info when plugin.json already has all three metadata fields.
-
-        Tests: PR003 suppressed when metadata fields are present
-        How: plugin.json includes repository, homepage, author; validate
-        Why: No informational nudge needed when metadata is complete
-        """
-        plugin_dir = _make_plugin(
-            tmp_path,
-            plugin_json_content=msgspec.json.encode({
-                "name": "test-plugin",
-                "repository": "https://github.com/example/my-plugin",
-                "homepage": "https://github.com/example/my-plugin/tree/main",
-                "author": {"name": "Test Author"},
-            }).decode(),
-        )
-
-        with patch(_GIT_METADATA_MODULE, return_value=_FULL_GIT_METADATA):
-            validator = PluginRegistrationValidator()
-            result = validator.validate(plugin_dir)
-
-        pr003_info = [i for i in result.info if i.code == "PR003"]
-        assert len(pr003_info) == 0
-
-    def test_no_pr003_when_git_metadata_empty(self, tmp_path: Path) -> None:
-        """Test no PR003 info when git metadata is unavailable.
-
-        Tests: PR003 gated on non-empty git_metadata return
-        How: _generate_plugin_metadata returns {}; validate
-        Why: No git context means no metadata suggestion can be made
-        """
-        plugin_dir = _make_plugin(tmp_path, plugin_json_content=msgspec.json.encode({"name": "test-plugin"}).decode())
-
-        with patch(_GIT_METADATA_MODULE, return_value={}):
-            validator = PluginRegistrationValidator()
-            result = validator.validate(plugin_dir)
-
-        pr003_info = [i for i in result.info if i.code == "PR003"]
-        assert len(pr003_info) == 0
-
-    def test_pr003_suggestion_contains_json_snippet(self, tmp_path: Path) -> None:
-        """Test PR003 info suggestion includes a JSON snippet for missing fields.
-
-        Tests: PR003 suggestion text quality
-        How: Trigger PR003 for repository field, check suggestion contains JSON
-        Why: Suggestion must be actionable -- user should be able to copy-paste
-        """
-        plugin_dir = _make_plugin(tmp_path, plugin_json_content=msgspec.json.encode({"name": "test-plugin"}).decode())
-        metadata = {"repository": "https://github.com/example/my-plugin"}
-
-        with patch(_GIT_METADATA_MODULE, return_value=metadata):
-            validator = PluginRegistrationValidator()
-            result = validator.validate(plugin_dir)
-
-        pr003_info = [i for i in result.info if i.code == "PR003"]
-        assert len(pr003_info) >= 1
-        # Suggestion should be a JSON snippet the user can paste into plugin.json
-        assert all(i.suggestion is not None and "repository" in i.suggestion for i in pr003_info)
-
-
-@pytest.mark.skip(reason="Superseded by removed repository consistency rule")
-class TestRepositoryMismatch:
-    """Test PR004 warning when repository URL in plugin.json differs from git remote.
-
-    PR004 is emitted as warning (not error/info) when both plugin_config and
-    git_metadata contain a repository key and their values differ.
-    Source: plugin_validator.py lines 2821-2838.
-    """
-
-    def test_pr004_emitted_when_repository_url_mismatches_git_remote(self, tmp_path: Path) -> None:
-        """Test PR004 warning when plugin.json repository differs from git remote.
-
-        Tests: PR004 warning for repository URL mismatch
-        How: plugin.json has wrong URL; git_metadata has correct URL; validate
-        Why: Stale/incorrect repository URLs should be flagged before publishing
-        """
-        plugin_dir = _make_plugin(
-            tmp_path,
-            plugin_json_content=msgspec.json.encode({
-                "name": "test-plugin",
-                "repository": "https://github.com/old-org/my-plugin",
-            }).decode(),
-        )
-        metadata = {"repository": "https://github.com/example/my-plugin"}
-
-        with patch(_GIT_METADATA_MODULE, return_value=metadata):
-            validator = PluginRegistrationValidator()
-            result = validator.validate(plugin_dir)
-
-        pr004_warnings = [w for w in result.warnings if w.code == "PR004"]
-        assert len(pr004_warnings) >= 1
-
-    def test_pr004_warning_message_includes_both_urls(self, tmp_path: Path) -> None:
-        """Test PR004 warning message includes both the plugin.json and git URLs.
-
-        Tests: PR004 warning message content
-        How: Trigger PR004, verify both URLs appear in warning message
-        Why: User must know what to change and what the expected value is
-        """
-        plugin_url = "https://github.com/old-org/my-plugin"
-        git_url = "https://github.com/example/my-plugin"
-        plugin_dir = _make_plugin(
-            tmp_path,
-            plugin_json_content=msgspec.json.encode({"name": "test-plugin", "repository": plugin_url}).decode(),
-        )
-        metadata = {"repository": git_url}
-
-        with patch(_GIT_METADATA_MODULE, return_value=metadata):
-            validator = PluginRegistrationValidator()
-            result = validator.validate(plugin_dir)
-
-        pr004_warnings = [w for w in result.warnings if w.code == "PR004"]
-        assert len(pr004_warnings) >= 1
-        assert all(plugin_url in w.message for w in pr004_warnings)
-        assert all(git_url in w.message for w in pr004_warnings)
-
-    def test_pr004_suggestion_contains_correct_url(self, tmp_path: Path) -> None:
-        """Test PR004 warning suggestion points to the correct git remote URL.
-
-        Tests: PR004 suggestion text quality
-        How: Trigger PR004, verify suggestion contains the git remote URL
-        Why: Suggestion must be actionable -- user should update to the git URL
-        """
-        git_url = "https://github.com/example/my-plugin"
-        plugin_dir = _make_plugin(
-            tmp_path,
-            plugin_json_content=msgspec.json.encode({
-                "name": "test-plugin",
-                "repository": "https://github.com/old-org/my-plugin",
-            }).decode(),
-        )
-        metadata = {"repository": git_url}
-
-        with patch(_GIT_METADATA_MODULE, return_value=metadata):
-            validator = PluginRegistrationValidator()
-            result = validator.validate(plugin_dir)
-
-        pr004_warnings = [w for w in result.warnings if w.code == "PR004"]
-        assert len(pr004_warnings) >= 1
-        assert all(w.suggestion is not None and git_url in w.suggestion for w in pr004_warnings)
-
-    def test_no_pr004_when_repository_matches_git_remote(self, tmp_path: Path) -> None:
-        """Test no PR004 warning when plugin.json repository matches git remote.
-
-        Tests: PR004 suppressed on URL match
-        How: plugin.json repository equals git_metadata repository; validate
-        Why: Consistent URLs should not generate any warning
-        """
-        matching_url = "https://github.com/example/my-plugin"
-        plugin_dir = _make_plugin(
-            tmp_path,
-            plugin_json_content=msgspec.json.encode({"name": "test-plugin", "repository": matching_url}).decode(),
-        )
-        metadata = {"repository": matching_url}
-
-        with patch(_GIT_METADATA_MODULE, return_value=metadata):
-            validator = PluginRegistrationValidator()
-            result = validator.validate(plugin_dir)
-
-        pr004_warnings = [w for w in result.warnings if w.code == "PR004"]
-        assert len(pr004_warnings) == 0
-
-    def test_no_pr004_when_plugin_json_has_no_repository(self, tmp_path: Path) -> None:
-        """Test no PR004 warning when plugin.json does not have a repository field.
-
-        Tests: PR004 requires repository in both plugin_config and git_metadata
-        How: plugin.json omits repository; git_metadata has repository; validate
-        Why: Mismatch check requires both sides to be present; absence triggers PR003
-        """
-        plugin_dir = _make_plugin(tmp_path, plugin_json_content=msgspec.json.encode({"name": "test-plugin"}).decode())
-        metadata = {"repository": "https://github.com/example/my-plugin"}
-
-        with patch(_GIT_METADATA_MODULE, return_value=metadata):
-            validator = PluginRegistrationValidator()
-            result = validator.validate(plugin_dir)
-
-        pr004_warnings = [w for w in result.warnings if w.code == "PR004"]
-        assert len(pr004_warnings) == 0
-
-    def test_no_pr004_when_git_metadata_has_no_repository(self, tmp_path: Path) -> None:
-        """Test no PR004 warning when git metadata contains no repository field.
-
-        Tests: PR004 suppressed when git_metadata lacks repository
-        How: plugin.json has repository; git_metadata lacks it; validate
-        Why: Cannot compare URLs when git remote is unavailable
-        """
-        plugin_dir = _make_plugin(
-            tmp_path,
-            plugin_json_content=msgspec.json.encode({
-                "name": "test-plugin",
-                "repository": "https://github.com/example/my-plugin",
-            }).decode(),
-        )
-        # git_metadata has author but no repository
-        metadata = {"author": {"name": "Test Author"}}
-
-        with patch(_GIT_METADATA_MODULE, return_value=metadata):
-            validator = PluginRegistrationValidator()
-            result = validator.validate(plugin_dir)
-
-        pr004_warnings = [w for w in result.warnings if w.code == "PR004"]
-        assert len(pr004_warnings) == 0

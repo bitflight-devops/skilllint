@@ -168,6 +168,35 @@ description: Test skill with invalid name format
         assert result.exit_code == 2
         assert "Cannot use both" in result.stdout or "Cannot use both" in result.stderr
 
+    def test_exit_2_on_fix_with_platform_without_modifying_file(
+        self, cli_runner: CliRunner, tmp_path: Path, no_color_env: None
+    ) -> None:
+        """--fix with --platform is rejected before it can modify its target."""
+        skill_dir = tmp_path / "platform-fix-skill"
+        skill_dir.mkdir()
+        skill_file = skill_dir / "SKILL.md"
+        original_content = (
+            "---\n"
+            "name: platform-fix-skill\n"
+            "description: Use when testing the platform fix conflict.\n"
+            "tools:\n"
+            "  - Read\n"
+            "  - Write\n"
+            "---\n\n"
+            "# Skill\n"
+        )
+        skill_file.write_text(original_content, encoding="utf-8")
+
+        result = cli_runner.invoke(
+            plugin_validator.app, ["check", "--fix", "--platform", "claude-code", str(skill_file)]
+        )
+
+        assert result.exit_code == 2
+        assert (
+            "Cannot use --fix with --platform" in result.stdout or "Cannot use --fix with --platform" in result.stderr
+        )
+        assert skill_file.read_text(encoding="utf-8") == original_content
+
 
 class TestPluginRegistrationRoutes:
     @pytest.mark.parametrize("route", ["root", "manifest", "parent"])
@@ -562,6 +591,30 @@ class TestPathArguments:
 
         assert result.exit_code == 1, result.stdout
         assert "Total files: 1" in result.stdout
+
+    def test_platform_filtered_missing_manifest_skill_reports_plugin_validation(
+        self, cli_runner: CliRunner, tmp_path: Path, no_color_env: None, mocker: MockerFixture
+    ) -> None:
+        plugin_dir = tmp_path / "plugin"
+        manifest = plugin_dir / ".claude-plugin" / "plugin.json"
+        manifest.parent.mkdir(parents=True)
+        manifest.write_text('{"skills": ["custom/missing-skill"]}')
+        mocker.patch("shutil.which", return_value="/usr/local/bin/claude")
+        mocker.patch("skilllint.plugin_validator._should_skip_claude_validate", return_value=False)
+        mocker.patch(
+            "skilllint.plugin_validator._run_claude_plugin_validate",
+            return_value=subprocess.CompletedProcess(
+                args=["claude", "plugin", "validate"], returncode=1, stdout="referenced file does not exist", stderr=""
+            ),
+        )
+
+        result = cli_runner.invoke(
+            plugin_validator.app,
+            ["check", "--no-color", "--platform", "claude-code", "--filter-type", "skills", str(plugin_dir)],
+        )
+
+        assert result.exit_code == 1, result.stdout
+        assert "PL005" in result.stdout
 
 
 class TestErrorMessages:

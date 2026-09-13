@@ -21,6 +21,11 @@ from pydantic import BaseModel, ConfigDict
 
 ALIASES: Final = ("agentlint", "pluginlint", "skillint", "skilllint")
 WHEEL_PYTHONS: Final = ("3.11", "3.12", "3.13", "3.14")
+# IANA Service Name and Transport Protocol Port Number Registry assigns TCP port
+# 1 to tcpmux: https://www.iana.org/assignments/service-names-port-numbers.
+# Artifact verification starts no proxy, so this named loopback endpoint makes
+# an accidental token-download path fail locally instead of using ambient proxies.
+OFFLINE_PROXY_URL: Final = "http://127.0.0.1:1"
 
 
 class _ArtifactEvidence(BaseModel):
@@ -72,10 +77,10 @@ def _environment(cache_directory: Path) -> dict[str, str]:
             for key, value in os.environ.items()
             if key.upper() not in {"NO_PROXY", "PYTHONPATH", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"}
         },
-        "ALL_PROXY": "http://127.0.0.1:1",
+        "ALL_PROXY": OFFLINE_PROXY_URL,
         "DATA_GYM_CACHE_DIR": str(cache_directory),
-        "HTTP_PROXY": "http://127.0.0.1:1",
-        "HTTPS_PROXY": "http://127.0.0.1:1",
+        "HTTP_PROXY": OFFLINE_PROXY_URL,
+        "HTTPS_PROXY": OFFLINE_PROXY_URL,
         "TIKTOKEN_CACHE_DIR": str(cache_directory),
     }
 

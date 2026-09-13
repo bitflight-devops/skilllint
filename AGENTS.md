@@ -159,7 +159,18 @@ Stale cache is served when the network is unavailable (`STALE` status, warning t
 
 ### Agent instructions
 
-Run `docs fetch` (above), then Read the file path it prints — never WebFetch or an MCP URL-reading tool. For large files, narrow with `docs sections` and `docs section` first.
+Before capturing a URL, inspect `.claude/vendor/{provider}/` for an equivalent
+authoritative Markdown or RST source from the maintained vendor clone. Read the
+matching path and section directly when it exists; this source-first check must
+not invoke URL capture. Record the path and section used. If no equivalent
+local source exists, run `uv run skilllint docs fetch URL` (or the standalone
+script above), then read the cache path printed on stdout. A rendered page may
+remain authoritative when Markdown/RST cannot represent the authority; capture
+that URL in that case. `fetch-authorities` is an on-demand URL operation and is
+used only after the same local-source check. Never use WebFetch or an MCP
+URL-reading tool to pull vendor documentation into context.
+
+For large cached files, narrow with `docs sections` and `docs section` first.
 
 ### Relationship to `fetch_platform_docs.py`
 

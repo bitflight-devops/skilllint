@@ -51,7 +51,10 @@ from git.exc import InvalidGitRepositoryError, NoSuchPathError
 from git.index.fun import entry_key
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from ruamel.yaml import YAML, YAMLError
+from ruamel.yaml.comments import CommentedMap, CommentedSeq
+from ruamel.yaml.nodes import MappingNode, SequenceNode
 from ruamel.yaml.scalarstring import DoubleQuotedScalarString
+from ruamel.yaml.tokens import CommentToken
 
 import skilllint.rules  # ruff: ignore[unused-import] — ensures all 15 series modules register into RULE_REGISTRY
 from skilllint.adapters import PlatformAdapter, load_adapters, matches_file
@@ -81,6 +84,7 @@ from skilllint.rules.lk_series import check_lk001
 from skilllint.rules.nr_series import check_nr001, check_nr002
 from skilllint.rules.pd_series import check_pd001, check_pd002, check_pd003
 from skilllint.rules.pl_series import (
+    _check_pl004_manifest_paths,
     check_pl001,
     check_pl002,
     check_pl003,
@@ -93,7 +97,7 @@ from skilllint.rules.pr_series import check_pr001, check_pr002, check_pr005
 from skilllint.rules.sk_series import check_sk004, check_sk005
 from skilllint.rules.sl_series import check_sl001, iter_symlinks
 from skilllint.rules.tc_series import check_tc001
-from skilllint.scan_runtime import ScanContext
+from skilllint.scan_runtime import ScanContext, _load_plugin_json
 from skilllint.token_counter import TOKEN_ERROR_THRESHOLD, TOKEN_WARNING_THRESHOLD, count_tokens
 from skilllint.version import __version__
 
@@ -123,7 +127,7 @@ _rt_yaml.width = 10000  # prevent line wrapping
 
 # Platform adapter registry — loaded once at module level.
 # Keys are adapter IDs (e.g. "claude_code", "cursor", "codex").
-ADAPTERS: dict[str, object] = {a.id(): a for a in load_adapters()}
+ADAPTERS: dict[str, PlatformAdapter] = {a.id(): a for a in load_adapters()}
 
 
 def _safe_load_yaml(text: str) -> YamlValue:
@@ -216,6 +220,89 @@ def _dump_yaml(data: dict[str, YamlValue]) -> str:
     buf = StringIO()
     _rt_yaml.dump(prepared, buf)
     return buf.getvalue()
+
+
+def _replace_list_valued_tool_fields(frontmatter_text: str, data: dict[str, YamlValue]) -> str | None:
+    document = _rt_yaml.compose(frontmatter_text)
+    if not isinstance(document, MappingNode) or document.flow_style:
+        return None
+
+    replacements: list[tuple[int, int, str]] = []
+    replaced_fields: set[str] = set()
+    for key_node, value_node in document.value:
+        field_name = key_node.value
+        value = data.get(field_name)
+        if (
+            field_name in {"tools", "disallowedTools", "allowed-tools"}
+            and isinstance(value, list)
+            and _is_losslessly_scalar_tool_list(value)
+            and isinstance(value_node, SequenceNode)
+        ):
+            separator = frontmatter_text[key_node.end_mark.index : value_node.start_mark.index]
+            if (
+                value_node.start_mark.index < key_node.end_mark.index
+                or "&" in frontmatter_text[key_node.end_mark.index : value_node.end_mark.index]
+                or "#" in frontmatter_text[key_node.end_mark.index : value_node.end_mark.index]
+                or not separator.startswith(":")
+            ):
+                return None
+            scalar_buffer = StringIO()
+            _rt_yaml.dump({"value": ", ".join(str(item) for item in value if item is not None)}, scalar_buffer)
+            replacement_value = scalar_buffer.getvalue().removeprefix("value: ").rstrip()
+            replacements.append((key_node.end_mark.index, value_node.end_mark.index, f": {replacement_value}"))
+            replaced_fields.add(field_name)
+
+    requested_fields = {
+        field_name
+        for field_name in ("tools", "disallowedTools", "allowed-tools")
+        if _is_losslessly_scalar_tool_list(data.get(field_name))
+    }
+    if not replacements or replaced_fields != requested_fields:
+        return None
+    for start, end, replacement in reversed(replacements):
+        frontmatter_text = f"{frontmatter_text[:start]}{replacement}{frontmatter_text[end:]}"
+    return frontmatter_text
+
+
+def _is_losslessly_scalar_tool_list(values: YamlValue) -> bool:
+    if not isinstance(values, list):
+        return False
+    return all(
+        str(value) and "," not in str(value) and not re.search(r"\s", str(value))
+        for value in values
+        if value is not None
+    )
+
+
+def _comment_lines(comment_data: object) -> list[str]:
+    if isinstance(comment_data, CommentToken):
+        return [line.removeprefix("#").removeprefix(" ") for line in comment_data.value.splitlines()]
+    if isinstance(comment_data, list):
+        return [line for item in comment_data for line in _comment_lines(item)]
+    if isinstance(comment_data, tuple):
+        return [line for item in comment_data for line in _comment_lines(item)]
+    if isinstance(comment_data, dict):
+        return [line for item in comment_data.values() for line in _comment_lines(item)]
+    return []
+
+
+def _dump_tool_list_fixes(frontmatter_text: str, tool_values: dict[str, str]) -> str | None:
+    data = _rt_yaml.load(frontmatter_text)
+    if not isinstance(data, CommentedMap):
+        return None
+    for field_name, value in tool_values.items():
+        original_value = data.get(field_name)
+        comment_lines = _comment_lines(data.ca.items.get(field_name))
+        if isinstance(original_value, CommentedSeq) and original_value.anchor.value is not None:
+            original_value.yaml_set_anchor(original_value.anchor.value, always_dump=True)
+        if isinstance(original_value, CommentedSeq):
+            comment_lines.extend(_comment_lines(original_value.ca.items))
+        if comment_lines:
+            data.yaml_set_comment_before_after_key(field_name, before="\n".join(comment_lines))
+        data[field_name] = value
+    buffer = StringIO()
+    _rt_yaml.dump(data, buffer)
+    return buffer.getvalue()
 
 
 def _fix_unquoted_colons(frontmatter_text: str) -> tuple[str, list[str], list[str]]:
@@ -1024,7 +1111,7 @@ def _is_suppressed(ignore_config: IgnoreConfig, file_path: Path, config_root: Pa
     if not ignore_config:
         return False
     try:
-        rel = file_path.relative_to(config_root)
+        rel = file_path.resolve().relative_to(config_root.resolve())
     except ValueError:
         return False
     rel_str = rel.as_posix()
@@ -1110,6 +1197,26 @@ class FileType(StrEnum):
         return bool("commands" in path.parts and path.parent != plugin_root / "commands")
 
     @staticmethod
+    def _manifest_declared_type(path: Path) -> FileType | None:
+        for plugin_root in (path, *path.parents):
+            if not (plugin_root / ".claude-plugin" / "plugin.json").is_file():
+                continue
+            manifest = _load_plugin_json(plugin_root)
+            if manifest is None:
+                continue
+            for field_name, file_type in (("agents", FileType.AGENT), ("commands", FileType.COMMAND)):
+                declarations = manifest.get(field_name)
+                if not isinstance(declarations, list):
+                    continue
+                for declaration in declarations:
+                    if not isinstance(declaration, str):
+                        continue
+                    target = plugin_root / declaration
+                    if path == target or (target.is_dir() and path.parent == target):
+                        return file_type
+        return None
+
+    @staticmethod
     def detect_file_type(
         path: Path, scan_context: ScanContext | None = None, plugin_root: Path | None = None
     ) -> FileType:
@@ -1149,6 +1256,8 @@ class FileType(StrEnum):
             # (skilllint#118): a marketplace-only repository must be
             # classified as PLUGIN so PluginStructureValidator (PL006) runs.
             result = FileType.PLUGIN
+        elif (manifest_type := FileType._manifest_declared_type(path)) is not None:
+            result = manifest_type
         elif "agents" in path.parts:
             result = FileType.AGENT
         elif "commands" in path.parts:
@@ -2344,9 +2453,9 @@ class FrontmatterValidator:
             normalized_dict["skills"] = original_data["skills"]
         tool_fields = {"tools", "disallowedTools", "allowed-tools"}
         for field_name in tool_fields:
-            val = normalized_dict.get(field_name)
-            if isinstance(val, list):
-                normalized_dict[field_name] = ", ".join(str(x) for x in val)
+            original_value = original_data.get(field_name)
+            if isinstance(original_value, list) and _is_losslessly_scalar_tool_list(original_value):
+                normalized_dict[field_name] = ", ".join(str(x) for x in original_value if x is not None)
                 fixes.append(f"Converted {field_name} from YAML array to comma-separated string")
         for key, value in normalized_dict.items():
             if key in tool_fields:
@@ -2363,6 +2472,7 @@ class FrontmatterValidator:
 
     def _compute_normalized_fixes(
         self,
+        content: str,
         original_data: dict[str, YamlValue],
         frontmatter_text: str,
         body: str,
@@ -2393,8 +2503,34 @@ class FrontmatterValidator:
             file_type=file_type,
             file_path=file_path,
         )
+        for field_name in ("tools", "disallowedTools", "allowed-tools"):
+            original_value = original_data.get(field_name)
+            if isinstance(original_value, list) and not _is_losslessly_scalar_tool_list(original_value):
+                normalized_dict[field_name] = original_value
         if not fixes:
             return None
+        tool_list_fixes = {
+            f"Converted {field_name} from YAML array to comma-separated string"
+            for field_name in ("tools", "disallowedTools", "allowed-tools")
+            if isinstance(original_data.get(field_name), list)
+            and _is_losslessly_scalar_tool_list(original_data[field_name])
+        }
+        tool_values = {
+            field_name: value
+            for field_name, value in normalized_dict.items()
+            if field_name in {"tools", "disallowedTools", "allowed-tools"}
+            and isinstance(original_data.get(field_name), list)
+            and _is_losslessly_scalar_tool_list(original_data[field_name])
+            and isinstance(value, str)
+        }
+        if set(fixes) == tool_list_fixes:
+            rewritten_frontmatter = _replace_list_valued_tool_fields(frontmatter_text, original_data)
+            if rewritten_frontmatter is not None:
+                return content.replace(frontmatter_text, rewritten_frontmatter, 1), fixes
+        if len(tool_values) == len(fixes):
+            yaml = _dump_tool_list_fixes(frontmatter_text, tool_values)
+            if yaml is not None:
+                return f"---\n{yaml}---\n{body}", fixes
         return f"---\n{_dump_yaml(normalized_dict)}---\n{body}", fixes
 
     def _apply_fixes(self, content: str, file_type: FileType, file_path: Path | None = None) -> tuple[str, list[str]]:
@@ -2422,7 +2558,13 @@ class FrontmatterValidator:
 
         if isinstance(original_data, dict):
             computed = self._compute_normalized_fixes(
-                original_data, frontmatter_text, body, file_type=file_type, file_path=file_path, colon_fixes=colon_fixes
+                content,
+                original_data,
+                frontmatter_text,
+                body,
+                file_type=file_type,
+                file_path=file_path,
+                colon_fixes=colon_fixes,
             )
             if computed is not None:
                 result_content, result_fixes = computed
@@ -3018,12 +3160,12 @@ class PluginRegistrationValidator:
 
         try:
             plugin_config = msgspec.json.decode(plugin_json_path.read_bytes())
-        except msgspec.DecodeError as e:
+        except msgspec.DecodeError as error:
             errors.append(
                 ValidationIssue(
                     field="plugin.json",
                     severity="error",
-                    message=f"Invalid JSON: {e}",
+                    message=f"Invalid JSON: {error}",
                     code=PL002,
                     docs_url=generate_docs_url(PL002),
                     suggestion="Fix JSON syntax errors",
@@ -3031,7 +3173,21 @@ class PluginRegistrationValidator:
             )
             return ValidationResult(passed=False, errors=errors, warnings=warnings, info=info)
 
+        if not isinstance(plugin_config, dict):
+            errors.append(
+                ValidationIssue(
+                    field="plugin.json",
+                    severity="error",
+                    message="Invalid JSON: plugin.json top level must be an object",
+                    code=PL002,
+                    docs_url=generate_docs_url(PL002),
+                    suggestion="Use a JSON object for plugin.json",
+                )
+            )
+            return ValidationResult(passed=False, errors=errors, warnings=warnings, info=info)
+
         # Registration checks — detection lives in skilllint.rules.pr_series.
+        errors.extend(_check_pl004_manifest_paths(plugin_config, plugin_dir))
         warnings.extend(check_pr001(plugin_config, plugin_dir))
         errors.extend(check_pr002(plugin_config, plugin_dir))
         info.extend(check_pr005(plugin_config, plugin_dir))
@@ -3619,9 +3775,7 @@ def _frontmatter_requirement(path: Path) -> _FrontmatterRequirement:
     # Check parent directory name to distinguish direct child vs nested
     parent_name = path.parent.name
 
-    if parent_name == "agents":
-        return _FrontmatterRequirement.REQUIRED
-    if parent_name == "commands":
+    if FileType.detect_file_type(path) in {FileType.AGENT, FileType.COMMAND} or parent_name in {"agents", "commands"}:
         return _FrontmatterRequirement.REQUIRED
 
     # If "agents" or "commands" appears anywhere in the path parts but the
@@ -3738,6 +3892,31 @@ def _get_fixers_for_path(validators: list[Validator], path: Path) -> list[Valida
     return [*validators, NameFormatValidator()]
 
 
+def _plugin_error_deduplication_key(issue: ValidationIssue) -> str | tuple[str, str]:
+    code = str(issue.code)
+    if code == "PL004":
+        return code
+    message = issue.message
+    for prefix in ("Invalid JSON syntax in plugin.json:", "Invalid JSON:"):
+        message = message.removeprefix(prefix).strip()
+    return code, message
+
+
+def _without_duplicate_plugin_errors(
+    result: ValidationResult, reported_plugin_structure_counts: dict[str | tuple[str, str], int]
+) -> ValidationResult:
+    remaining_duplicate_counts = reported_plugin_structure_counts.copy()
+    errors: list[ValidationIssue] = []
+    for issue in result.errors:
+        code = str(issue.code)
+        duplicate_key = _plugin_error_deduplication_key(issue)
+        if code in {"PL002", "PL004"} and remaining_duplicate_counts.get(duplicate_key, 0):
+            remaining_duplicate_counts[duplicate_key] -= 1
+            continue
+        errors.append(issue)
+    return ValidationResult(passed=not errors, errors=errors, warnings=result.warnings, info=result.info)
+
+
 def _collect_validator_results(
     validators: list[Validator],
     path: Path,
@@ -3767,12 +3946,15 @@ def _collect_validator_results(
         List of (validator_class_name, result) tuples.
     """
     results: list[tuple[str, ValidationResult]] = []
+    reported_plugin_structure_counts: dict[str | tuple[str, str], int] = {}
     for validator in validators:
         name = type(validator).__name__
         if policy is not None and isinstance(validator, (ComplexityValidator, AsSeriesValidator)):
             result = validator.validate(path, policy)
         else:
             result = validator.validate(path)
+        if name == "PluginRegistrationValidator":
+            result = _without_duplicate_plugin_errors(result, reported_plugin_structure_counts)
         if policy is not None and policy.severity:
 
             def remap(issue: ValidationIssue) -> ValidationIssue:
@@ -3803,6 +3985,13 @@ def _collect_validator_results(
             raw_codes_out.update(str(i.code) for i in (*result.errors, *result.warnings, *result.info))
         if config_root is not None:
             result = _filter_result_by_ignore(result, path, config_root, ignore_config)
+        if name == "PluginStructureValidator":
+            for issue in (*result.errors, *result.warnings, *result.info):
+                str(issue.code)
+                duplicate_key = _plugin_error_deduplication_key(issue)
+                reported_plugin_structure_counts[duplicate_key] = (
+                    reported_plugin_structure_counts.get(duplicate_key, 0) + 1
+                )
         results.append((name, result))
     return results
 
@@ -4403,6 +4592,14 @@ def main(
     if not paths:
         _show_help_and_exit(ctx, code=0)
 
+    if check and fix:
+        typer.echo("Error: Cannot use both --check and --fix flags", err=True)
+        raise typer.Exit(2) from None
+
+    if fix and platform:
+        typer.echo("Error: Cannot use --fix with --platform", err=True)
+        raise typer.Exit(2) from None
+
     # Validate that all provided paths exist; report non-existent ones
     bad_paths = [str(p) for p in paths if not p.exists()]
     if bad_paths:
@@ -4415,16 +4612,17 @@ def main(
     record_console = _make_recording_console(no_color=no_color) if record is not None else None
 
     def _run_validation_command() -> None:
-        expanded_paths, is_batch = _resolve_filter_and_expand_paths(paths, filter_glob, filter_type)
+        expanded_paths, is_batch = _resolve_filter_and_expand_paths(
+            paths,
+            filter_glob,
+            filter_type,
+            platform_adapter=ADAPTERS[platform_override] if platform_override is not None else None,
+        )
         if platform_override is not None:
             expanded_paths = [_normalize_skill_folder(path) for path in expanded_paths]
 
         if tokens_only:
             _handle_tokens_only(expanded_paths, batch=is_batch)
-
-        if check and fix:
-            typer.echo("Error: Cannot use both --check and --fix flags", err=True)
-            raise typer.Exit(2) from None
 
         # One shared cache per scan run — prevents re-walking the directory
         # tree for every file when many files share the same config root.

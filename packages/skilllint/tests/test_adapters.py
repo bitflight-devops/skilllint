@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pathlib
 
-from skilllint.adapters import load_adapters
+from skilllint.adapters import load_adapters, matches_file
 from skilllint.adapters.claude_code import ClaudeCodeAdapter
 from skilllint.adapters.codex import CodexAdapter
 from skilllint.adapters.cursor import CursorAdapter
@@ -109,6 +109,36 @@ def test_claude_code_path_patterns():
     adapter = ClaudeCodeAdapter()
     patterns = adapter.path_patterns()
     assert ".claude/**/*.md" in patterns
+
+
+def test_claude_path_patterns_preserve_single_segment_boundaries_when_anchored() -> None:
+    class SingleSegmentAdapter:
+        def id(self) -> str:
+            return "single-segment"
+
+        def path_patterns(self) -> list[str]:
+            return ["skills/*/SKILL.md", "agents/*.md"]
+
+        def applicable_rules(self) -> set[str]:
+            return set()
+
+        def constraint_scopes(self) -> set[str]:
+            return set()
+
+        def validate(self, path: pathlib.Path) -> list[dict]:
+            return []
+
+    adapter = SingleSegmentAdapter()
+
+    assert matches_file(adapter, pathlib.PurePath("skills/example/SKILL.md"), anchored=True)
+    assert not matches_file(adapter, pathlib.PurePath("skills/example/nested/SKILL.md"), anchored=True)
+    assert matches_file(adapter, pathlib.PurePath("agents/example.md"), anchored=True)
+    assert not matches_file(adapter, pathlib.PurePath("agents/team/example.md"), anchored=True)
+    assert matches_file(ClaudeCodeAdapter(), pathlib.PurePath(".claude/agents/team/example.md"))
+
+
+def test_matches_file_preserves_suffix_matching_for_absolute_paths() -> None:
+    assert matches_file(ClaudeCodeAdapter(), pathlib.PurePath("/repo/.claude/agents/a.md"))
 
 
 def test_cursor_adapter_mdc_validation():

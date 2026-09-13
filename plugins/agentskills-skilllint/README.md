@@ -15,17 +15,15 @@ The skill teaches Claude how to:
 
 ## Installation
 
-Install this plugin from the repository:
-
-```bash
-claude plugin install agentskills-skilllint@skilllint
-```
-
-Or load it for a single session:
+Load this repository plugin for a session:
 
 ```bash
 claude --plugin-dir ./plugins/agentskills-skilllint
 ```
+
+This repository does not publish a persistent marketplace entry. Copy or
+package the plugin through your organization's supported Claude distribution
+process when a persistent installation is required.
 
 ## Usage
 
@@ -80,7 +78,7 @@ Run `skilllint rules` for the full rule listing, or `skilllint rule <ID>` for a 
 | NR001–NR002 | Namespace references |
 | SL001 | Symlink hygiene |
 | TC001 | Token count reporting |
-| PR001–PR005 | Plugin registration (`plugin.json` capability paths) |
+| PR001, PR002, PR005 | Plugin registration (`plugin.json` capability paths) |
 | PA001       | Plugin-packaged agent frontmatter                  |
 | CU001–CU002 | Cursor `.mdc` frontmatter validity |
 | CX001–CX002 | Codex `AGENTS.md` and `.rules` file validity |
