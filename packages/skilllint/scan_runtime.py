@@ -136,7 +136,7 @@ def _parse_plugin_manifest(plugin_root: Path) -> PluginManifest:
 
     def _extract(key: str) -> list[str] | None:
         value = raw.get(key)
-        if isinstance(value, list):
+        if isinstance(value, list) and all(isinstance(entry, str) for entry in value):
             return value
         return None
 
@@ -455,12 +455,23 @@ def _is_manifest_declared_target(target: Path, directory: Path) -> bool:
     return False
 
 
+def _manifest_filter_type_is_malformed(raw_manifest: dict | None, filter_type: str) -> bool:
+    if raw_manifest is None:
+        return True
+    if filter_type not in raw_manifest:
+        return False
+    declared_paths = raw_manifest[filter_type]
+    return not isinstance(declared_paths, list) or any(not isinstance(path, str) for path in declared_paths)
+
+
 def _manifest_filter_type_paths(
     directory: Path, filter_type: str | None, adapter: PlatformAdapter | None
 ) -> list[Path]:
     if adapter is None or adapter.id() != "claude_code" or detect_scan_context(directory) != ScanContext.PLUGIN:
         return []
     manifest = _parse_plugin_manifest(directory)
+    manifest_path = directory / ".claude-plugin" / "plugin.json"
+    raw_manifest = _load_plugin_json(directory)
     match filter_type:
         case "agents":
             declared_paths = manifest.agents
@@ -470,8 +481,9 @@ def _manifest_filter_type_paths(
             declared_paths = manifest.skills
         case _:
             return []
-    if declared_paths is None:
-        return []
+    if _manifest_filter_type_is_malformed(raw_manifest, filter_type):
+        return [manifest_path]
+    declared_paths = declared_paths or []
     targets: list[Path] = []
     directory_root = directory.resolve()
     for declared_path in declared_paths:
