@@ -11,6 +11,7 @@ The validator is wired into plugin-root validation.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -22,6 +23,12 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 # Spec sources
 # ---------------------------------------------------------------------------
+
+
+def _contained_lexical_relative(path: Path, plugin_dir: Path) -> Path | None:
+    if not path.resolve().is_relative_to(plugin_dir.resolve()):
+        return None
+    return Path(os.path.normpath(str(path.relative_to(plugin_dir))))
 
 
 def find_actual_capabilities(plugin_dir: Path) -> tuple[set[Path], set[Path], set[Path]]:
@@ -43,19 +50,28 @@ def find_actual_capabilities(plugin_dir: Path) -> tuple[set[Path], set[Path], se
     skills_dir = plugin_dir / "skills"
     if skills_dir.is_dir():
         actual_skills = {
-            d.relative_to(plugin_dir) for d in skills_dir.glob("*/") if d.is_dir() and (d / "SKILL.md").exists()
+            relative
+            for d in skills_dir.glob("*/")
+            if d.is_dir() and (d / "SKILL.md").exists()
+            if (relative := _contained_lexical_relative(d, plugin_dir)) is not None
         }
 
     agents_dir = plugin_dir / "agents"
     if agents_dir.is_dir():
         actual_agents = {
-            f.relative_to(plugin_dir) for f in agents_dir.glob("*.md") if f.name not in FRONTMATTER_EXEMPT_FILENAMES
+            relative
+            for f in agents_dir.glob("*.md")
+            if f.is_file() and f.name not in FRONTMATTER_EXEMPT_FILENAMES
+            if (relative := _contained_lexical_relative(f, plugin_dir)) is not None
         }
 
     commands_dir = plugin_dir / "commands"
     if commands_dir.is_dir():
         actual_commands = {
-            f.relative_to(plugin_dir) for f in commands_dir.glob("*.md") if f.name not in FRONTMATTER_EXEMPT_FILENAMES
+            relative
+            for f in commands_dir.glob("*.md")
+            if f.is_file() and f.name not in FRONTMATTER_EXEMPT_FILENAMES
+            if (relative := _contained_lexical_relative(f, plugin_dir)) is not None
         }
 
     return actual_skills, actual_agents, actual_commands
@@ -80,7 +96,7 @@ def _component_paths(manifest: dict[str, YamlValue], plugin_dir: Path, field: st
         if isinstance(value, list)
         else []
     )
-    return [Path(entry.removeprefix("./")) for entry in entries]
+    return [Path(entry.removeprefix("./")) for entry in entries if "\x00" not in entry]
 
 
 def _registered_component_files(manifest: dict[str, YamlValue], plugin_dir: Path, field: str) -> set[Path]:
@@ -89,14 +105,20 @@ def _registered_component_files(manifest: dict[str, YamlValue], plugin_dir: Path
     registered: set[Path] = set()
     for reference in _component_paths(manifest, plugin_dir, field):
         target = plugin_dir / reference
-        if target.is_dir():
+        resolved = target.resolve()
+        relative = _contained_lexical_relative(target, plugin_dir)
+        if relative is None:
+            continue
+        if resolved.is_dir():
             registered.update(
-                file.relative_to(plugin_dir)
-                for file in target.glob("*.md")
-                if file.name not in FRONTMATTER_EXEMPT_FILENAMES
+                relative / file.name
+                for file in resolved.glob("*.md")
+                if file.is_file()
+                and file.name not in FRONTMATTER_EXEMPT_FILENAMES
+                and file.resolve().is_relative_to(plugin_dir.resolve())
             )
         else:
-            registered.add(reference)
+            registered.add(relative)
     return registered
 
 
@@ -118,8 +140,8 @@ def _registered_component_files(manifest: dict[str, YamlValue], plugin_dir: Path
 def check_pr001(manifest: dict[str, YamlValue], plugin_dir: Path) -> list[ValidationIssue]:
     """## PR001 — Capability exists but not explicitly registered
 
-    A skill, agent, or command directory was found on the filesystem but is
-    not listed in the corresponding array in ``plugin.json``.
+    An agent or command file was found in its default directory but is not
+    listed in the corresponding array in ``plugin.json``.
 
     Per the vendor path-behavior rules, an explicit ``agents`` or
     ``commands`` array *replaces* default directory discovery: once either
@@ -128,25 +150,16 @@ def check_pr001(manifest: dict[str, YamlValue], plugin_dir: Path) -> list[Valida
     there is a genuine gap.  When the field is absent, the default directory
     is auto-discovered wholesale and PR001 is suppressed.
 
-    ``skills`` behaves differently: the default ``./skills/`` directory is
-    *always* scanned, whether or not ``skills`` is declared (additive, not
-    replacing).  An unregistered standard-path skill therefore always loads.
-    PR001 still flags it once the plugin has opted into explicit
-    registration by declaring the ``skills`` array (even empty), as a
-    consistency nudge, but is suppressed while no ``skills`` array is
-    declared at all.
-
     **Source:** ``PluginRegistrationValidator.validate`` in
     ``plugin_validator.py`` — scans the filesystem for actual capability
-    directories and compares against the registered paths from
-    ``plugin.json``.
+    files and compares them with the registered paths from ``plugin.json``.
 
     **Fix:** Add the unregistered capability path to the appropriate array in
     ``plugin.json``:
 
     ```json
     {
-      "skills": ["./skills/my-skill"]
+      "agents": ["./agents/my-agent.md"]
     }
     ```
 
@@ -155,8 +168,8 @@ def check_pr001(manifest: dict[str, YamlValue], plugin_dir: Path) -> list[Valida
         plugin_dir: Plugin directory containing ``.claude-plugin/plugin.json``.
 
     Returns:
-        One warning per capability found on disk but absent from the matching
-        registration array, ordered skills, agents, then commands.
+        One warning per agent or command file absent from its matching
+        registration array.
 
     <!-- examples: PR001 -->
     """
@@ -179,7 +192,7 @@ def check_pr001(manifest: dict[str, YamlValue], plugin_dir: Path) -> list[Valida
             code="PR001",
             suggestion=f"Add './{orphan}' to the agents array in plugin.json",
         )
-        for orphan in actual_agents - registered_agents
+        for orphan in sorted(actual_agents - registered_agents)
         if "agents" in manifest
     )
 
@@ -191,7 +204,7 @@ def check_pr001(manifest: dict[str, YamlValue], plugin_dir: Path) -> list[Valida
             code="PR001",
             suggestion=f"Add './{orphan}' to the commands array in plugin.json",
         )
-        for orphan in actual_commands - registered_commands
+        for orphan in sorted(actual_commands - registered_commands)
         if "commands" in manifest
     )
 
@@ -257,7 +270,11 @@ def check_pr002(manifest: dict[str, YamlValue], plugin_dir: Path) -> list[Valida
             suggestion=f"Remove from plugin.json or create {ref}/SKILL.md",
         )
         for ref in _component_paths(manifest, plugin_dir, "skills")
-        if not ((plugin_dir / ref / "SKILL.md").is_file() or any((plugin_dir / ref).glob("*/SKILL.md")))
+        if not (
+            ((plugin_dir / ref).is_file() and ref.name == "SKILL.md")
+            or (plugin_dir / ref / "SKILL.md").is_file()
+            or any((plugin_dir / ref).glob("*/SKILL.md"))
+        )
     )
 
     issues.extend(
@@ -269,7 +286,7 @@ def check_pr002(manifest: dict[str, YamlValue], plugin_dir: Path) -> list[Valida
             suggestion=f"Remove from plugin.json or create {ref}",
         )
         for ref in _component_paths(manifest, plugin_dir, "agents")
-        if not (plugin_dir / ref).exists()
+        if not ((plugin_dir / ref).is_dir() or ((plugin_dir / ref).is_file() and ref.suffix == ".md"))
     )
 
     issues.extend(
@@ -281,7 +298,7 @@ def check_pr002(manifest: dict[str, YamlValue], plugin_dir: Path) -> list[Valida
             suggestion=f"Remove from plugin.json or create {ref}",
         )
         for ref in _component_paths(manifest, plugin_dir, "commands")
-        if not (plugin_dir / ref).exists()
+        if not ((plugin_dir / ref).is_dir() or ((plugin_dir / ref).is_file() and ref.suffix == ".md"))
     )
 
     return issues

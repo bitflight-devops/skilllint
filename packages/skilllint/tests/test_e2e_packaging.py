@@ -472,9 +472,19 @@ print(json.dumps({
             check=False,
             env=env,
         )
+        uvx_repo = tmp_path / "uvx-repo"
+        uvx_repo.mkdir()
+        subprocess.run(
+            ["git", "init", "--initial-branch=main"], cwd=uvx_repo, check=True, capture_output=True, text=True
+        )
+        uvx_cwd = uvx_repo / "nested"
+        uvx_cwd.mkdir()
+        uvx_cache_file = uvx_repo / ".claude/vendor/sources/page-2026.md"
+        uvx_cache_file.parent.mkdir(parents=True)
+        uvx_cache_file.write_text("cached by uvx\n", encoding="utf-8")
         uvx_result = subprocess.run(
             ["uvx", "--from", str(built_wheel), "skilllint", "docs", "latest", "page"],
-            cwd=repo / "nested",
+            cwd=uvx_cwd,
             capture_output=True,
             text=True,
             check=False,
@@ -498,5 +508,98 @@ print(json.dumps({
         assert uvx_result.returncode == 0, uvx_result.stderr
         assert non_git_result.returncode == 0, non_git_result.stderr
         assert wheel_result.stdout.replace("\n", "") == str(cache_file)
-        assert uvx_result.stdout.replace("\n", "") == str(cache_file)
+        assert uvx_result.stdout.replace("\n", "") == str(uvx_cache_file)
         assert non_git_result.stdout.replace("\n", "") == str(non_git_cache_file)
+
+    def test_installed_docs_cache_uses_linked_worktree_for_separate_git_dir(
+        self, temp_venv: Path, tmp_path: Path
+    ) -> None:
+        primary = tmp_path / "primary-area" / "primary"
+        git_dir = tmp_path / "git-area" / "git-dir"
+        linked = tmp_path / "worktree-area" / "linked"
+        primary.mkdir(parents=True)
+        git_dir.parent.mkdir()
+        subprocess.run(
+            ["git", "init", "--initial-branch=main", f"--separate-git-dir={git_dir}"],
+            cwd=primary,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.email", "test@example.com"], cwd=primary, check=True, capture_output=True, text=True
+        )
+        subprocess.run(["git", "config", "user.name", "Test"], cwd=primary, check=True, capture_output=True, text=True)
+        (primary / "README.md").write_text("# test\n", encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=primary, check=True, capture_output=True, text=True)
+        subprocess.run(["git", "commit", "-m", "initial"], cwd=primary, check=True, capture_output=True, text=True)
+        linked.parent.mkdir()
+        subprocess.run(["git", "worktree", "add", str(linked)], cwd=primary, check=True, capture_output=True, text=True)
+        cache_file = linked / ".claude/vendor/sources/page-2026.md"
+        cache_file.parent.mkdir(parents=True)
+        cache_file.write_text("cached\n", encoding="utf-8")
+
+        result = subprocess.run(
+            [str(self._get_skilllint_path(temp_venv)), "docs", "latest", "page"],
+            cwd=linked,
+            capture_output=True,
+            text=True,
+            check=False,
+            env={key: value for key, value in os.environ.items() if key != "PYTHONPATH"},
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.replace("\n", "") == str(cache_file)
+
+    def test_installed_docs_cache_uses_linked_worktree_when_cross_root_primary_is_undiscoverable(
+        self, temp_venv: Path
+    ) -> None:
+        if sys.platform == "win32":
+            pytest.skip("Cross-root topology requires POSIX /tmp and /var/tmp roots")
+
+        with (
+            tempfile.TemporaryDirectory(dir=Path.home()) as primary_dir,
+            tempfile.TemporaryDirectory(dir="/tmp") as git_dir_parent,
+            tempfile.TemporaryDirectory(dir="/var/tmp") as linked_parent,
+        ):
+            primary = Path(primary_dir)
+            git_dir = Path(git_dir_parent) / "git-dir"
+            linked = Path(linked_parent) / "linked"
+            subprocess.run(
+                ["git", "init", "--initial-branch=main", f"--separate-git-dir={git_dir}"],
+                cwd=primary,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            subprocess.run(
+                ["git", "config", "user.email", "test@example.com"],
+                cwd=primary,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            subprocess.run(
+                ["git", "config", "user.name", "Test"], cwd=primary, check=True, capture_output=True, text=True
+            )
+            (primary / "README.md").write_text("# test\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=primary, check=True, capture_output=True, text=True)
+            subprocess.run(["git", "commit", "-m", "initial"], cwd=primary, check=True, capture_output=True, text=True)
+            subprocess.run(
+                ["git", "worktree", "add", str(linked)], cwd=primary, check=True, capture_output=True, text=True
+            )
+            cache_file = linked / ".claude/vendor/sources/page-2026.md"
+            cache_file.parent.mkdir(parents=True)
+            cache_file.write_text("cached\n", encoding="utf-8")
+
+            result = subprocess.run(
+                [str(self._get_skilllint_path(temp_venv)), "docs", "latest", "page"],
+                cwd=linked,
+                capture_output=True,
+                text=True,
+                check=False,
+                env={key: value for key, value in os.environ.items() if key != "PYTHONPATH"},
+            )
+
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.replace("\n", "") == str(cache_file.resolve())

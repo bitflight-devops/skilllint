@@ -1,7 +1,7 @@
 # AI Engineering Policy: Strict Typing and Typed Boundaries in Python
 
 Version: 1.0
-Applies to: Python 3.11+
+Applies to: Python 3.11+ (3.11 is the repository baseline)
 Required libraries: [Pydantic](https://docs.pydantic.dev/), [Hypothesis](https://hypothesis.readthedocs.io/)
 
 ## 1. Purpose
@@ -111,7 +111,7 @@ Everywhere else:
 
 ### skilllint repository
 
-CI (`.github/workflows/test.yml`) and `.pre-commit-config.yaml` run Astral **`ty check`** on `packages/` (configuration: `pyproject.toml` → `[tool.ty.environment]` / `[tool.ty.src]`). Use `uv run ty check packages/` locally. **`[tool.mypy]`** (effectively excluded) and **`[tool.basedpyright]`** (`typeCheckingMode = "off"`) stay that way on purpose: **ty** is the single type gate; mypy and Pyright/basedpyright overlap it and would create conflicting diagnostics and repeated configuration work if left active.
+CI and the pre-commit configuration run Astral **`ty check`** on `packages/` (configured in `pyproject.toml`). Use `uv run ty check packages/` locally. This is the package-only type scope; repository gates are broader and include formatting, lint, shell, Markdown, workflow, and pytest checks. **`[tool.mypy]`** (effectively excluded) and **`[tool.basedpyright]`** (`typeCheckingMode = "off"`) stay that way on purpose: **ty** is the single type gate.
 
 ## 8. Pydantic Addendum
 

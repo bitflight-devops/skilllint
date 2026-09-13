@@ -4,7 +4,7 @@
 #
 #   repos:
 #     - repo: https://github.com/bitflight-devops/skilllint
-#       rev: v1.6.0
+#       rev: v1.19.0
 #       hooks:
 #         - id: skilllint
 #
@@ -55,20 +55,6 @@
   entry: skilllint check --fix --no-color
   language: python
   files: (?i)(^|/)(\.claude/|\.cursor/|\.agents/|\.codex/|\.claude-plugin/).+\.(md|mdc|json|ya?ml)$|(^|/)SKILL\.md$|(^|/)(plugin|hooks|marketplace)\.json$|(^|/)skills/.+\.(md|mdc)$|(^|/)agents/.+\.md$|(^|/)commands/.+\.md$
-  exclude: (^|/).*failing-examples(/|$)
-  pass_filenames: true
-  minimum_pre_commit_version: "3.5.0"
-
-- id: skilllint-by-file-type
-  name: skilllint (by file type — broad)
-  description: >-
-    Runs on all staged markdown, JSON, and YAML (pre-commit file tags). Use when your
-    layout is non-standard; you must `exclude` paths skilllint does not understand
-    (e.g. package.json, docker-compose.yml) or commits will fail with “Cannot determine
-    file type”.
-  entry: skilllint check --no-color
-  language: python
-  types_or: [markdown, json, yaml]
   exclude: (^|/).*failing-examples(/|$)
   pass_filenames: true
   minimum_pre_commit_version: "3.5.0"

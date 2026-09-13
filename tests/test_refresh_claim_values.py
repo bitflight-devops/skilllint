@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
+from pydantic import JsonValue
 from scripts import refresh_claim_values as refresh
 
 from skilllint.vendor_cache import CacheResult, CacheStatus, NoCacheError
@@ -19,7 +20,7 @@ REPO_ROOT = Path(__file__).parent.parent
 AUTHORITY_URL = "https://example.test/hooks.md"
 
 
-def _registry() -> dict[str, object]:
+def _registry() -> dict[str, JsonValue]:
     return {
         "description": "Registry — exact bytes",
         "claims": {

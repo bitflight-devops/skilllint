@@ -18,12 +18,12 @@ inputs:
     description: >
       Platform adapter to use for validation.
       Supported values: claude-code, cursor, codex.
-      Leave empty to validate against all platforms.
+      When omitted, validates each selected file with every matching platform adapter.
     required: false
     default: ""
 
   fix:
-    description: "Auto-fix issues where possible. Mutually exclusive with check-only."
+    description: "Auto-fix issues where possible. Mutually exclusive with check-only and platform."
     required: false
     default: "false"
 
@@ -96,6 +96,22 @@ outputs:
       0 = all checks passed, 1 = validation errors found, 2 = usage/configuration error.
     value: ${{ steps.run-skilllint.outputs.exit-code }}
 
+  inspected-count:
+    description: "Number of files inspected by skilllint."
+    value: ${{ steps.run-skilllint.outputs.inspected-count }}
+
+  findings:
+    description: "Distinct finding codes emitted by skilllint."
+    value: ${{ steps.run-skilllint.outputs.findings }}
+
+  tool-python:
+    description: "Python runtime used by the installed skilllint tool."
+    value: ${{ steps.run-skilllint.outputs.tool-python }}
+
+  tool-version:
+    description: "Version reported by the installed skilllint tool."
+    value: ${{ steps.run-skilllint.outputs.tool-version }}
+
 runs:
   using: "composite"
   steps:
@@ -114,11 +130,12 @@ runs:
       shell: bash
       env:
         INPUT_VERSION: ${{ inputs.version }}
+        INPUT_PYTHON_VERSION: ${{ inputs.python-version }}
       run: |
         if [ "${INPUT_VERSION}" = "latest" ]; then
-          uv tool install skilllint
+          uv tool install --python "${INPUT_PYTHON_VERSION}" skilllint
         else
-          uv tool install "skilllint==${INPUT_VERSION}"
+          uv tool install --python "${INPUT_PYTHON_VERSION}" "skilllint==${INPUT_VERSION}"
         fi
 
     - name: Run skilllint check
@@ -178,10 +195,34 @@ runs:
         # Paths (space-separated, split into individual arguments)
         read -ra PATH_ARGS <<< "${INPUT_PATHS}"
 
-        skilllint check "${ARGS[@]}" "${PATH_ARGS[@]}"
+        OUTPUT_FILE="$(mktemp)"
+        skilllint check "${ARGS[@]}" "${PATH_ARGS[@]}" >"${OUTPUT_FILE}" 2>&1
         EXIT_CODE=$?
 
+        cat "${OUTPUT_FILE}"
+
+        NORMALIZED_OUTPUT="$(tr -d '\r' < "${OUTPUT_FILE}")"
+        INSPECTED_COUNT="$(sed -n 's/^Total files: \([0-9][0-9]*\)$/\1/p' <<< "${NORMALIZED_OUTPUT}" | tail -n 1)"
+        if [ "${INPUT_TOKENS_ONLY}" = "true" ] && [ "${EXIT_CODE}" -ne 2 ]; then
+          INSPECTED_COUNT="$(grep -cE '^[0-9]+($|[[:blank:]])' <<< "${NORMALIZED_OUTPUT}")"
+        elif [ "${EXIT_CODE}" -ne 2 ] && [ -z "${INSPECTED_COUNT}" ] && { [ "${INPUT_SHOW_SUMMARY}" != "true" ] || [ "${INPUT_NO_COLOR}" != "true" ]; }; then
+          COUNT_ARGS=()
+          for ARG in "${ARGS[@]}"; do
+            if [ "${ARG}" != "--check" ] && [ "${ARG}" != "--fix" ] && [ "${ARG}" != "--tokens-only" ]; then
+              COUNT_ARGS+=("${ARG}")
+            fi
+          done
+          COUNT_OUTPUT="$(skilllint check --no-color "${COUNT_ARGS[@]}" --show-summary "${PATH_ARGS[@]}" 2>&1 || true)"
+          INSPECTED_COUNT="$(tr -d '\r' <<< "${COUNT_OUTPUT}" | sed -n 's/^Total files: \([0-9][0-9]*\)$/\1/p' | tail -n 1)"
+        fi
+
         echo "exit-code=${EXIT_CODE}" >> "$GITHUB_OUTPUT"
+        echo "inspected-count=${INSPECTED_COUNT}" >> "$GITHUB_OUTPUT"
+        FINDINGS_OUTPUT="$(sed -E $'s/\033\[[0-?]*[ -\/]*[@-~]//g' "${OUTPUT_FILE}")"
+        echo "findings=$(grep -oE '(^[[:space:]]*(✗ (ERROR|WARN|INFO)|⚠️? (WARN|INFO)|⚠ (WARN|INFO)|❌|⚠|🔧|ℹ️? (WARN|INFO)|ℹ (WARN|INFO)|ℹ|i INFO) |^FIXED )\[[A-Z]{2}[0-9]{3}(, [A-Z]{2}[0-9]{3})*\]' <<< "${FINDINGS_OUTPUT}" | sed -E 's/^.*\[//; s/\]$//' | tr -d ',' | tr ' ' '\n' | sort -u | xargs)" >> "$GITHUB_OUTPUT"
+        TOOL_PYTHON="$(uv tool list --show-python | sed -n 's/^skilllint .*\[\([^]]*\)\]$/\1/p' | sed 's/^CPython /Python /')"
+        echo "tool-python=${TOOL_PYTHON}" >> "$GITHUB_OUTPUT"
+        echo "tool-version=$(skilllint --version)" >> "$GITHUB_OUTPUT"
         if [ "${EXIT_CODE}" -eq 0 ]; then
           echo "result=passed" >> "$GITHUB_OUTPUT"
         else

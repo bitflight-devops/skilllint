@@ -14,10 +14,12 @@ import json
 from pathlib import Path
 
 from skilllint.plugin_validator import (
+    ADAPTERS,
     IgnoreConfig,
     _is_suppressed,
     _load_skilllint_config,
     _resolve_ignore_config,
+    validate_file,
     validate_single_path,
 )
 
@@ -141,6 +143,26 @@ def test_is_suppressed_prefix_no_partial_segment_match(tmp_path: Path) -> None:
     config: IgnoreConfig = {"skills/foo": ["AS008"]}
     file_path = tmp_path / "skills" / "foobar" / "SKILL.md"
     assert _is_suppressed(config, file_path, tmp_path, "AS008") is False
+
+
+def test_is_suppressed_matches_a_symlink_alias_of_the_configured_tree(tmp_path: Path) -> None:
+    configured_root = tmp_path / "configured"
+    file_path = _make_skill(configured_root / "skills" / "demo")
+    alias = tmp_path / "alias"
+    alias.symlink_to(configured_root, target_is_directory=True)
+    aliased_file = alias / file_path.relative_to(configured_root)
+
+    assert _is_suppressed({"": ["FM007"]}, aliased_file, configured_root, "FM007")
+    assert _is_suppressed({"skills/demo": ["FM007"]}, aliased_file, configured_root, "FM007")
+
+
+def test_is_suppressed_rejects_symlink_alias_that_resolves_outside_configured_tree(tmp_path: Path) -> None:
+    configured_root = tmp_path / "configured"
+    configured_root.mkdir()
+    outside = _make_skill(tmp_path / "outside")
+    (configured_root / "linked").symlink_to(outside.parent, target_is_directory=True)
+
+    assert _is_suppressed({"": ["FM007"]}, configured_root / "linked" / outside.name, configured_root, "FM007") is False
 
 
 # ---------------------------------------------------------------------------
@@ -320,6 +342,29 @@ def test_validate_single_path_path_prefix_suppression(tmp_path: Path) -> None:
     assert _fm007_codes(inner_file) == set()
     # Assert outer: not suppressed
     assert "FM007" in _fm007_codes(outer_file)
+
+
+def test_suppression_through_symlink_alias_matches_canonical_path_in_default_and_claude_routes(tmp_path: Path) -> None:
+    configured_root = tmp_path / "configured"
+    skill_file = _make_skill(configured_root / "skills" / "demo")
+    (configured_root / ".skilllint.json").write_text(
+        json.dumps({"ignore": {"": ["FM007"], "skills/demo": ["FM007"]}}), encoding="utf-8"
+    )
+    alias = tmp_path / "alias"
+    alias.symlink_to(configured_root, target_is_directory=True)
+    aliased_skill = alias / skill_file.relative_to(configured_root)
+
+    for path in (skill_file, aliased_skill):
+        default_codes = {
+            str(issue.code)
+            for validator_results in validate_single_path(path, check=True, fix=False, verbose=False).values()
+            for _, result in validator_results
+            for issue in (*result.errors, *result.warnings, *result.info)
+        }
+        claude_codes = {str(violation["code"]) for violation in validate_file(path, ADAPTERS, "claude_code")}
+
+        assert "FM007" not in default_codes
+        assert "FM007" not in claude_codes
 
 
 def test_validate_single_path_per_run_cache_shared_across_calls(tmp_path: Path) -> None:

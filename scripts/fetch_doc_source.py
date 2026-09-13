@@ -100,7 +100,7 @@ def fetch(
         status_label = result.status.value.upper()
         err_console.print(f":white_check_mark: [green]{status_label}[/green] {result.page_name}")
 
-    console.print(result.path)
+    typer.echo(str(result.path))
 
 
 # ---------------------------------------------------------------------------
@@ -126,7 +126,7 @@ def latest(
         err_console.print(f":cross_mark: [red]No cached file found for page name:[/red] {page_name}")
         raise typer.Exit(code=1)
 
-    console.print(path)
+    typer.echo(str(path))
 
 
 # ---------------------------------------------------------------------------

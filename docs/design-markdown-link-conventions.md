@@ -1,5 +1,8 @@
 # Design: Markdown Link Conventions — Closing the Link-Validation Gap
 
+> Status: proposed design. Existing link helpers and implemented checks are
+> current; deferred rules and discovery changes below are not active contracts.
+
 Status: revised (post-adversarial-review)
 Author: python-cli-design-spec (architecture pass)
 Depends on: `packages/skilllint/rules/lk_series.py`, `packages/skilllint/plugin_validator.py`,
@@ -572,8 +575,8 @@ substitution — any link containing a `${...}` token is skipped, not flagged.
   relative import paths "resolve relative to the file containing the import, not the working
   directory." That sentence is written for the `@import` mechanism, not plain markdown links,
   so it is not a literal citation for this rule — but this repo's own two working examples
-  (`README.md:508` → `docs/ignore-config.md`, resolved against the repo-root README's own
-  directory; `docs/registry-schema-examples.md:3` → `./design-rule-provenance-registry.md`,
+  (the maintained README and design references resolve against each document's own
+  directory; registry claims are tested source-coupled,
   resolved against *that* file's own directory, not the repo root) both
   independently confirm file's-own-directory resolution for plain links too. Confidence: high,
   by directional evidence plus internal repo consistency, not by a single documented sentence
