@@ -197,7 +197,7 @@ def latest(
         err_console.print(f":cross_mark: [red]No cached file found for page name:[/red] {page_name}")
         raise typer.Exit(code=1)
 
-    console.print(path)
+    typer.echo(str(path))
 
 
 # ---------------------------------------------------------------------------

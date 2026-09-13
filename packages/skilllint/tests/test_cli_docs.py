@@ -480,6 +480,15 @@ class TestDocsLatest:
         assert result.exit_code == 0
         assert str(cached) in result.output
 
+    def test_found_long_path_is_not_wrapped(self, cli_runner: CliRunner, mocker: MockerFixture) -> None:
+        cached = Path("/tmp/" + "nested/" * 30 + "settings.md")
+        mocker.patch("skilllint.cli_docs.find_latest", return_value=cached)
+
+        result = cli_runner.invoke(plugin_validator.app, ["docs", "latest", "settings"])
+
+        assert result.exit_code == 0
+        assert result.stdout == f"{cached}\n"
+
     def test_not_found_exits_one(self, cli_runner: CliRunner, mocker: MockerFixture) -> None:
         """When find_latest returns None, exits 1.
 
