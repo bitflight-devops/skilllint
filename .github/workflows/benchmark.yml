@@ -41,7 +41,7 @@ jobs:
           fetch-depth: 0
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v10.0.1
+        uses: astral-sh/setup-uv@v10.1.0
         with:
           enable-cache: true
 
@@ -88,7 +88,7 @@ jobs:
 
       - name: Store I/O benchmark result
         if: github.ref == 'refs/heads/main'
-        uses: benchmark-action/github-action-benchmark@v1.22.1
+        uses: benchmark-action/github-action-benchmark@v1.22.2
         with:
           tool: customSmallerIsBetter
           output-file-path: scripts/results/bench_io_clean_gh.json
@@ -220,7 +220,7 @@ jobs:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.compare_ref || github.sha }}
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v10.0.1
+        uses: astral-sh/setup-uv@v10.1.0
         with:
           enable-cache: true
 
@@ -249,7 +249,7 @@ jobs:
 
       - name: Store CPU benchmark result
         if: github.ref == 'refs/heads/main'
-        uses: benchmark-action/github-action-benchmark@v1.22.1
+        uses: benchmark-action/github-action-benchmark@v1.22.2
         with:
           tool: customSmallerIsBetter
           output-file-path: scripts/results/bench_cpu_gh.json
@@ -333,7 +333,7 @@ jobs:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.compare_ref || github.sha }}
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v10.0.1
+        uses: astral-sh/setup-uv@v10.1.0
         with:
           enable-cache: true
 
@@ -354,7 +354,7 @@ jobs:
 
       - name: Store import-time benchmark result
         if: github.ref == 'refs/heads/main'
-        uses: benchmark-action/github-action-benchmark@v1.22.1
+        uses: benchmark-action/github-action-benchmark@v1.22.2
         with:
           tool: customSmallerIsBetter
           output-file-path: scripts/results/bench_import_gh.json
@@ -469,7 +469,7 @@ jobs:
           path: scripts/results/base/
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v10.0.1
+        uses: astral-sh/setup-uv@v10.1.0
         with:
           enable-cache: true
 
@@ -508,7 +508,7 @@ jobs:
           fetch-depth: 0
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v10.0.1
+        uses: astral-sh/setup-uv@v10.1.0
         with:
           enable-cache: true
 
@@ -587,7 +587,7 @@ jobs:
             --base scripts/results/benchmark_results_base.json
 
       - name: Store I/O benchmark result
-        uses: benchmark-action/github-action-benchmark@v1.22.1
+        uses: benchmark-action/github-action-benchmark@v1.22.2
         with:
           tool: customSmallerIsBetter
           output-file-path: scripts/results/bench_io_gh.json
