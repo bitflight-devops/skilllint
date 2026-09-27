@@ -13,6 +13,9 @@ from typing import Annotated, Literal, Protocol, TypeAlias
 from pydantic import BaseModel, ConfigDict, Field
 
 
+YamlValue: TypeAlias = dict[str, "YamlValue"] | list["YamlValue"] | str | int | float | bool | None
+
+
 class ValidationIssue(BaseModel):
     """A single validation issue."""
 
@@ -79,4 +82,4 @@ class Validator(Protocol):
         ...
 
 
-__all__ = ["AppliedFix", "FileResults", "ValidationIssue", "ValidationResult", "Validator"]
+__all__ = ["AppliedFix", "FileResults", "ValidationIssue", "ValidationResult", "Validator", "YamlValue"]
