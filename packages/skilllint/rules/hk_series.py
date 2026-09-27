@@ -20,9 +20,8 @@ Rule IDs and default severities:
     | HK005 | Hook script exists but is not executable                  | warning   |
     +-------+-----------------------------------------------------------+-----------+
 
-Import note: ValidationIssue is deferred inside each function to break the
-circular import: plugin_validator imports rules/, so rules/ cannot import
-plugin_validator at module level.
+Import note: ValidationIssue comes from the dependency-light ``models`` module,
+so this rule module does not depend on the legacy validation/CLI module.
 """
 
 from __future__ import annotations
