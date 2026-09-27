@@ -89,16 +89,32 @@ REFERENCE_DEFINITION_PATTERN = (
 BACKSLASH_ESCAPE_PATTERN = r"\\([!-/:-@\[-`{-~])"
 CHARACTER_REFERENCE_PATTERN = r"&(?:#[0-9]{1,7}|#[xX][0-9a-fA-F]{1,6}|[A-Za-z][A-Za-z0-9]{1,31});"
 
+# Both decode forms in one alternation, scanned left to right over the
+# original string in a single pass: a character produced by decoding one form
+# must never be re-scanned as input to the other (e.g. ``\&amp;evil.md`` is a
+# backslash-escaped literal ``&`` followed by inert text, not the entity
+# ``&amp;`` -- decoding the two forms as separate sequential passes would
+# read pass 1's bare ``&`` output back into pass 2 as an entity).
+_DESTINATION_DECODE_PATTERN = re.compile(f"{BACKSLASH_ESCAPE_PATTERN}|{CHARACTER_REFERENCE_PATTERN}")
+
+
+def _decode_destination_replacement(match: re.Match[str]) -> str:
+    # Group 1 is only set by the backslash-escape branch; the
+    # character-reference branch has no group, so group 1 is None there and
+    # the whole match is decoded as an entity/numeric reference instead.
+    escaped_char = match.group(1)
+    return escaped_char if escaped_char is not None else html.unescape(match.group(0))
+
 
 def _decode_destination(url: str) -> str:
     """Return the destination a Markdown renderer produces from *url*.
 
     Backslash escapes and character references are decoded as CommonMark
-    specifies. Percent-encoding is left in place; the caller decodes the path
-    part once the ``#fragment`` is split off, so ``%23`` stays part of the path.
+    specifies, in a single left-to-right scan. Percent-encoding is left in
+    place; the caller decodes the path part once the ``#fragment`` is split
+    off, so ``%23`` stays part of the path.
     """
-    unescaped = re.sub(BACKSLASH_ESCAPE_PATTERN, r"\1", url)
-    return re.sub(CHARACTER_REFERENCE_PATTERN, lambda m: html.unescape(m.group(0)), unescaped)
+    return _DESTINATION_DECODE_PATTERN.sub(_decode_destination_replacement, url)
 
 
 # Regex pattern for fenced code blocks (``` or ~~~, with optional language specifier).

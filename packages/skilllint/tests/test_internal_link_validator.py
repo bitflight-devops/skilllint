@@ -733,6 +733,27 @@ class TestEncodedDestinations:
 
         assert InternalLinkValidator().validate(skill_md).errors == []
 
+    def test_backslash_escaped_ampersand_not_reinterpreted_as_entity(self, tmp_path: Path) -> None:
+        """``\\&amp;evil.md`` is a backslash-escaped literal ``&`` followed by
+        inert text ``amp;evil.md`` -- it must decode to ``&amp;evil.md``, not
+        to ``&evil.md``.
+
+        Regression test: decoding backslash escapes and character references
+        as two independent sequential passes lets pass 1's bare ``&`` output
+        be re-read by pass 2 as the entity ``&amp;``, producing the wrong
+        path and silently pointing this link at a different (here,
+        nonexistent) file.
+        """
+        skill_dir = tmp_path / "amp-skill"
+        skill_dir.mkdir()
+        (skill_dir / "&evil.md").write_text("# should not be the resolved target\n")
+        skill_md = skill_dir / "SKILL.md"
+        skill_md.write_text("---\ndescription: Test skill\n---\n\n[x](\\&amp;evil.md)\n")
+
+        result = InternalLinkValidator().validate(skill_md)
+
+        assert [issue.message for issue in result.errors] == ["Broken link: [x](\\&amp;evil.md) (file not found)"]
+
 
 class TestTitlesAndHtmlLinks:
     """LK001 reads a titled link's destination and checks raw HTML href/src."""
