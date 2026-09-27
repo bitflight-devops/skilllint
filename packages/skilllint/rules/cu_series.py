@@ -26,10 +26,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from skilllint.models import ValidationIssue
 from skilllint.rule_registry import rule_reference, skilllint_rule
 
 if TYPE_CHECKING:
-    from skilllint.models import ValidationIssue
 
 # ---------------------------------------------------------------------------
 # Spec sources
@@ -76,7 +76,6 @@ def check_cu001(frontmatter: dict[str, object], mdc_schema: dict[str, object]) -
 
     <!-- examples: CU001 -->
     """
-    from skilllint.models import ValidationIssue
 
     required_val: object = mdc_schema.get("required", [])
     required_fields: list[str] = (
@@ -138,7 +137,6 @@ def check_cu002(frontmatter: dict[str, object], mdc_schema: dict[str, object]) -
 
     <!-- examples: CU002 -->
     """
-    from skilllint.models import ValidationIssue
 
     additional_properties: object = mdc_schema.get("additionalProperties", True)
     if additional_properties is not False:
