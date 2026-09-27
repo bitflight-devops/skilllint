@@ -1,5 +1,6 @@
 .worktrees
 .hermes/
+.omo/
 .tmp/
 .venv/
 __pycache__/
