@@ -199,3 +199,29 @@ def test_cli_check_on_plugin_directory_reports_lk004_with_file_and_line(tmp_path
 
     assert result.exit_code == 1, result.output
     assert "[LK004] README.md:3:" in result.output
+
+
+def test_reference_definitions_are_checked_with_titles_and_real_lines(tmp_path: Path) -> None:
+    plugin = _make_plugin(tmp_path / "demo")
+    (plugin / "README.md").write_text(
+        "# Demo\n"  # 1
+        "\n"  # 2
+        "See [rules][r] and [site][s].\n"  # 3
+        "\n"  # 4
+        "```markdown\n"  # 5
+        "[fenced]: ../../rules/x.md\n"  # 6
+        "```\n"  # 7
+        "\n"  # 8
+        '[r]: ../rules/x.md "Shared rules"\n'  # 9
+        "[s]: https://example.com/\n"  # 10
+        "[in]: ./docs/a.md 'inside'\n"  # 11
+        "  [abs]: </abs path.md> (title)\n"  # 12
+        "[^note]: ../not-a-link.md\n",  # 13
+        encoding="utf-8",
+    )
+
+    findings = _lk004(plugin)
+
+    assert [line for _, line, _ in findings] == [9, 12]
+    assert "[r](../rules/x.md)" in findings[0][2]
+    assert "[abs](/abs path.md)" in findings[1][2]

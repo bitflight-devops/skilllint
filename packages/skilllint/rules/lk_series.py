@@ -55,6 +55,16 @@ if TYPE_CHECKING:
 # Regex pattern for extracting markdown links (Architecture line 1219)
 LINK_PATTERN = r"\[([^\]]+)\]\(([^)]+)\)"
 
+# Regex pattern for link reference definitions (``[label]: dest "title"``),
+# per CommonMark 0.31.2 section 4.7 (spec.commonmark.org/0.31.2/#link-reference-definitions):
+# up to three spaces of indentation, a destination optionally wrapped in
+# ``<>``, and an optional title in double quotes, single quotes or parentheses.
+# A ``[^label]:`` footnote definition is not a link and is excluded.
+REFERENCE_DEFINITION_PATTERN = (
+    r"^ {0,3}\[(?!\^)([^\]]+)\]:[ \t]*(?:<([^>\n]+)>|([^\s<]\S*))"
+    r"(?:[ \t]+(?:\"[^\"\n]*\"|'[^'\n]*'|\([^)\n]*\)))?[ \t]*$"
+)
+
 # Regex pattern for fenced code blocks (``` or ~~~, with optional language specifier).
 # Uses backreference to match opening/closing fence of equal or greater length.
 CODE_FENCE_PATTERN = r"^(`{3,}|~{3,})[^\n]*\n.*?\n\1\s*$"
@@ -109,10 +119,12 @@ def _should_ignore_link(url: str) -> bool:
 
 
 def _iter_links(content: str, *, keep_root_absolute: bool = False) -> Iterator[tuple[str, str, str, int]]:
-    """Yield every relative markdown link in *content*.
+    """Yield every relative markdown link in *content*, in document order.
 
-    Code blocks and inline code spans are stripped first, then external,
-    anchor and absolute links are skipped.
+    Both inline links (``[text](dest)``) and link reference definitions
+    (``[label]: dest "title"``) are links; for a definition, ``link_text`` is
+    its label. Code blocks and inline code spans are stripped first, then
+    external, anchor and absolute links are skipped.
 
     Args:
         content: Raw markdown content
@@ -127,17 +139,19 @@ def _iter_links(content: str, *, keep_root_absolute: bool = False) -> Iterator[t
         link's opening ``[`` in *content*.
     """
     stripped = _strip_code_blocks(content)
-    for match in re.finditer(LINK_PATTERN, stripped):
-        link_text = match.group(1)
-        link_url = match.group(2)
-
+    inline = ((m.start(), m.group(1), m.group(2)) for m in re.finditer(LINK_PATTERN, stripped))
+    definitions = (
+        (m.start(), m.group(1), m.group(2) or m.group(3))
+        for m in re.finditer(REFERENCE_DEFINITION_PATTERN, stripped, flags=re.MULTILINE)
+    )
+    for start, link_text, link_url in sorted([*inline, *definitions]):
         # Filter to relative file links only
         root_absolute = link_url.startswith("/") and not link_url.startswith("//")
         if _should_ignore_link(link_url) and not (keep_root_absolute and root_absolute):
             continue
 
         # Strip anchor fragment before resolving path
-        line = stripped.count("\n", 0, match.start()) + 1
+        line = stripped.count("\n", 0, start) + 1
         yield link_text, link_url, link_url.split("#")[0], line
 
 
@@ -222,7 +236,8 @@ def check_lk001(content: str, path: Path) -> list[ValidationIssue]:
     """## LK001 — Broken internal link
 
     A relative markdown link in `SKILL.md` points to a file that does not
-    exist on the filesystem.  Broken links prevent readers and tools from
+    exist on the filesystem. Inline links and link reference definitions
+    (``[label]: path "title"``) are both checked.  Broken links prevent readers and tools from
     following references and indicate stale documentation.
 
     **Source:** `InternalLinkValidator` in `plugin_validator.py` — resolves
@@ -341,7 +356,8 @@ def check_lk004(content: str, path: Path, plugin_root: Path) -> list[ValidationI
 
     Paths are compared lexically, after ``..`` segments are collapsed and
     without following symlinks, so a symlink inside the plugin does not
-    count as an escape. Links are found the same way as LK001: code blocks
+    count as an escape. Links are found the same way as LK001, inline links
+    and link reference definitions (``[label]: path "title"``) alike: code blocks
     and inline code are ignored, and so are URLs, ``#anchor`` links and
     ``//host`` links. ``${CLAUDE_PLUGIN_ROOT}`` and ``${CLAUDE_SKILL_DIR}``
     are substituted as in LK001; ``${CLAUDE_SKILL_DIR}`` becomes the linking

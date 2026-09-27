@@ -675,3 +675,26 @@ See [foo](${CLAUDE_SKILL_DIR}/${SOME_UNKNOWN_VAR}/foo.md) for details.
 
         assert result.passed is True
         assert not any(issue.code == "LK001" for issue in result.errors)
+
+
+class TestReferenceDefinitions:
+    """LK001 also checks link reference definitions (``[label]: dest``)."""
+
+    def test_broken_reference_definition_reported_with_title_and_code_block_ignored(self, tmp_path: Path) -> None:
+        skill_dir = tmp_path / "ref-skill"
+        (skill_dir / "references").mkdir(parents=True)
+        (skill_dir / "references" / "ok.md").write_text("# ok\n")
+        skill_md = skill_dir / "SKILL.md"
+        skill_md.write_text(
+            "---\ndescription: Test skill\n---\n\n"
+            "See [guide][g] and [ok][o].\n\n"
+            "```markdown\n[fenced]: ./references/in-code.md\n```\n\n"
+            '[g]: ./references/missing.md "Guide"\n'
+            "[o]: <./references/ok.md> 'OK'\n"
+        )
+
+        result = InternalLinkValidator().validate(skill_md)
+
+        assert [issue.message for issue in result.errors] == [
+            "Broken link: [g](./references/missing.md) (file not found)"
+        ]
