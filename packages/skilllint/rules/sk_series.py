@@ -20,12 +20,12 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
+from skilllint.models import ValidationIssue
 from skilllint.rule_registry import rule_reference, skilllint_rule
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from skilllint.models import ValidationIssue
 
 # ---------------------------------------------------------------------------
 # Spec sources
@@ -85,7 +85,6 @@ def check_sk004(frontmatter: dict[str, object], path: Path, file_type: str) -> l
     <!-- examples: SK004 -->
     """
     from skilllint.frontmatter_core import RECOMMENDED_DESCRIPTION_LENGTH  # noqa: PLC0415
-    from skilllint.models import ValidationIssue
 
     if file_type not in {"skill", "agent"}:
         return []
@@ -193,7 +192,6 @@ def check_sk005(frontmatter: dict[str, object], path: Path, file_type: str) -> l
 
     <!-- examples: SK005 -->
     """
-    from skilllint.models import ValidationIssue
 
     if file_type != "skill":
         return []
