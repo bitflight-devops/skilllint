@@ -155,6 +155,15 @@ def _strip_code_blocks(content: str) -> str:
     return re.sub(HTML_COMMENT_PATTERN, lambda m: "\n" * m.group(0).count("\n"), stripped, flags=re.DOTALL)
 
 
+# CommonMark 0.31.2 section 6.9 (autolinks: spec.commonmark.org/0.31.2/#absolute-uri):
+# a scheme is an ASCII letter followed by 1 to 31 further ASCII letters,
+# digits, "+", "-" or "." (total length 2-32), followed by ":". Any such
+# scheme prefix names an absolute URI, not a relative filesystem path --
+# mailto:, tel: and custom schemes are external links, the same as http(s):
+# and ftp:, not just the three hardcoded ones.
+_URI_SCHEME_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9+.\-]{1,31}:")
+
+
 def _should_ignore_link(url: str) -> bool:
     """Check if link should be ignored during validation.
 
@@ -164,8 +173,8 @@ def _should_ignore_link(url: str) -> bool:
     Returns:
         True if link should be ignored (external, anchor, absolute)
     """
-    # Ignore external links
-    if url.startswith(("http://", "https://", "ftp://")):
+    # Ignore any absolute-URI-scheme link (http:, https:, ftp:, mailto:, tel:, ...)
+    if _URI_SCHEME_PATTERN.match(url):
         return True
 
     # Ignore anchor links

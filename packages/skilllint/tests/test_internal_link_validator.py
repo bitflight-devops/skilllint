@@ -200,14 +200,25 @@ class TestExternalLinkFiltering:
 
     @pytest.mark.parametrize(
         "external_link",
-        ["https://example.com", "http://example.com", "ftp://example.com", "https://docs.python.org/3/"],
+        [
+            "https://example.com",
+            "http://example.com",
+            "ftp://example.com",
+            "https://docs.python.org/3/",
+            "mailto:someone@example.com",
+            "tel:+15551234567",
+            "urn:isbn:0451450523",
+        ],
     )
     def test_external_links_ignored(self, tmp_path: Path, external_link: str) -> None:
         """Test external links are not validated.
 
         Tests: External link filtering
         How: Create SKILL.md with external links, validate
-        Why: Ensure validator ignores http://, https://, ftp:// links
+        Why: Ensure validator ignores any absolute-URI-scheme link
+            (CommonMark 0.31.2 section 6.9), not just the three
+            hardcoded http(s)/ftp schemes -- mailto:, tel: and other
+            schemes must not be treated as relative filesystem paths.
         """
         skill_md = tmp_path / "SKILL.md"
         skill_md.write_text(f"""---
