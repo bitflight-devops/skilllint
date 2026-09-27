@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 
     from pydantic import JsonValue
 
-    from skilllint.plugin_validator import ValidationIssue
+    from skilllint.models import ValidationIssue
 
 # ---------------------------------------------------------------------------
 # Spec sources
