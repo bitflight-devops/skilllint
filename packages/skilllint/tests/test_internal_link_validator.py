@@ -774,3 +774,24 @@ class TestTitlesAndHtmlLinks:
             "Broken link: [<img src>](assets/missing.png) (file not found)",
             "Broken link: [<a href>](references/gone.md) (file not found)",
         ]
+
+
+class TestHtmlComments:
+    """LK001 skips links inside HTML comments."""
+
+    def test_commented_links_ignored(self, tmp_path: Path) -> None:
+        skill_dir = tmp_path / "comment-skill"
+        skill_dir.mkdir()
+        skill_md = skill_dir / "SKILL.md"
+        skill_md.write_text(
+            "---\ndescription: Test skill\n---\n\n"
+            '<!-- <img src="assets/old.png"> [old](references/old.md) -->\n'
+            "<!--\n[older](references/older.md)\n-->\n"
+            "[gone](references/gone.md)\n"
+        )
+
+        result = InternalLinkValidator().validate(skill_md)
+
+        assert [issue.message for issue in result.errors] == [
+            "Broken link: [gone](references/gone.md) (file not found)"
+        ]

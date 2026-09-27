@@ -105,29 +105,35 @@ CODE_FENCE_PATTERN = r"^(`{3,}|~{3,})[^\n]*\n.*?\n\1\s*$"
 # Regex pattern for inline code spans (single or multiple backticks)
 INLINE_CODE_PATTERN = r"(`+)(?!`)(.+?)(?<!`)\1(?!`)"
 
+# HTML comments (CommonMark 0.31.2 section 6.6) are not rendered, so a link
+# inside one is not a link.
+HTML_COMMENT_PATTERN = r"<!--.*?-->"
+
 
 def _strip_code_blocks(content: str) -> str:
-    """Remove fenced code blocks and inline code spans from content.
+    """Remove fenced code blocks, inline code spans and HTML comments from content.
 
     Strips fenced code blocks delimited by ``` or ~~~ (with optional
-    language specifiers) and inline code spans wrapped in backticks.
-    This prevents code examples from being scanned for markdown links.
+    language specifiers), inline code spans wrapped in backticks, and
+    ``<!-- ... -->`` comments. This prevents code examples and commented-out
+    text from being scanned for markdown links.
 
     Args:
         content: Raw markdown content
 
     Returns:
-        Content with code blocks and inline code spans removed. A fenced
-        block is replaced by its own newlines so every remaining character
-        keeps its original line number.
+        Content with code blocks, inline code spans and comments removed. A
+        fenced block or comment is replaced by its own newlines so every
+        remaining character keeps its original line number.
     """
     # Strip fenced code blocks first (handles nested fences via greedy
     # backreference matching: a 4-backtick fence won't close on 3 backticks)
     stripped = re.sub(
         CODE_FENCE_PATTERN, lambda m: "\n" * m.group(0).count("\n"), content, flags=re.MULTILINE | re.DOTALL
     )
-    # Strip inline code spans
-    return re.sub(INLINE_CODE_PATTERN, "", stripped)
+    # Strip inline code spans, then comments (a `<!--` inside code is code)
+    stripped = re.sub(INLINE_CODE_PATTERN, "", stripped)
+    return re.sub(HTML_COMMENT_PATTERN, lambda m: "\n" * m.group(0).count("\n"), stripped, flags=re.DOTALL)
 
 
 def _should_ignore_link(url: str) -> bool:

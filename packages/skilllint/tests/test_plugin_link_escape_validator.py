@@ -346,3 +346,17 @@ def test_html_href_and_src_escapes_are_reported(tmp_path: Path) -> None:
 
     assert [line for _, line, _ in findings] == [2, 5, 5, 7]
     assert "[<img src>](../../assets/logo.png)" in findings[0][2]
+
+
+def test_html_comments_are_not_links_and_keep_line_numbers(tmp_path: Path) -> None:
+    plugin = _make_plugin(tmp_path / "demo")
+    (plugin / "README.md").write_text(
+        '<!-- <img src="../../old.png"> -->\n'  # 1
+        "<!--\n"  # 2
+        "[x](../../y.md)\n"  # 3
+        "-->\n"  # 4
+        "[after](../after.md)\n",  # 5
+        encoding="utf-8",
+    )
+
+    assert [line for _, line, _ in _lk004(plugin)] == [5]
