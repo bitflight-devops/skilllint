@@ -31,10 +31,11 @@ from urllib.parse import urljoin
 
 from pydantic import BaseModel, Field
 
+from skilllint.models import ValidationIssue
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from skilllint.models import ValidationIssue
 
 _logger = logging.getLogger(__name__)
 
@@ -74,7 +75,6 @@ def _make_issue(
     Returns:
         A frozen ValidationIssue instance.
     """
-    # Import the dependency-light contract rather than the legacy validator module.
     from skilllint.models import ValidationIssue
 
     return ValidationIssue(
