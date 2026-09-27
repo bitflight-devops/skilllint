@@ -18,7 +18,7 @@ Rule IDs and default severities:
     | ID    | Summary                                       | Severity  |
     +-------+-----------------------------------------------+-----------+
     | LK001 | Broken internal link (file does not exist)    | error     |
-    | LK004 | Link resolves outside the plugin root         | error     |
+    | LK004 | Link may dangle once the plugin is installed  | info      |
     +-------+-----------------------------------------------+-----------+
 
 LK003 is reserved for the repo-doc broken-link rule proposed in
@@ -385,7 +385,7 @@ def check_lk001(content: str, path: Path) -> list[ValidationIssue]:
 
 
 # ---------------------------------------------------------------------------
-# LK004 — Link resolves outside the plugin root
+# LK004 — Link may dangle at runtime when the plugin is installed
 # ---------------------------------------------------------------------------
 
 _LK004_COPIED_PLUGINS_URL = "https://code.claude.com/docs/en/plugins/loading.md#in-place-and-copied-plugins"
@@ -393,7 +393,9 @@ _LK004_COPIED_PLUGINS_URL = "https://code.claude.com/docs/en/plugins/loading.md#
 
 @skilllint_rule(
     "LK004",
-    severity="error",
+    # Observation, not a defect: linking outside the plugin is a legitimate
+    # choice; it only means the reference may dangle once installed.
+    severity="info",
     category="link",
     # Codex also installs a plugin into a cache and loads that copy
     # (developers.openai.com/codex/plugins/build.md#how-local-marketplaces-work).
@@ -404,19 +406,33 @@ _LK004_COPIED_PLUGINS_URL = "https://code.claude.com/docs/en/plugins/loading.md#
     # Grounding, not a vendor rule: the cited page states that a marketplace
     # plugin is copied into the plugin cache and that files outside the plugin
     # directory are not copied. No vendor doc requires Markdown links to stay
-    # inside the plugin; flagging them is skilllint's own hygiene rule.
+    # inside the plugin; this is skilllint's own observation.
     authority={"origin": "code.claude.com", "reference": _LK004_COPIED_PLUGINS_URL},
 )
 def check_lk004(content: str, path: Path, plugin_root: Path) -> list[ValidationIssue]:
-    r"""## LK004 — Link resolves outside the plugin root
+    r"""## LK004 — Link may dangle at runtime when the plugin is installed
 
-    A markdown link in a file inside a plugin resolves to a path outside
-    that plugin's root directory: a relative link that climbs past the root
-    (``../../rules/x.md``) or a root-absolute link (``/docs/x.md``). The
-    target's existence does not matter. The link may work in the source
-    repository and still break for every installed user.
+    An observation, reported at ``info`` level so it never fails a check. A
+    markdown link in a plugin points somewhere the installed plugin may not
+    be able to reach. Linking outside the plugin is a legitimate choice; the
+    rule only says the reference may dangle at runtime when the plugin is
+    installed. Two cases are reported:
 
-    **Authority:** skilllint's own hygiene rule, grounded in plugin
+    - A link whose target resolves outside the plugin root: a relative link
+      that climbs past the root (``../../rules/x.md``) or a root-absolute
+      link (``/docs/x.md``), whether or not the target exists. In
+      ``SKILL.md``, ``references/``, ``docs/``, READMEs and every other file
+      except agent files, a relative link resolves against the linking
+      file's own directory.
+    - A relative link in an agent file (``agents/*.md`` at the plugin
+      root). An agent file's body "becomes the system prompt" and "a
+      subagent starts in the main conversation's current working directory"
+      (`code.claude.com/docs/en/sub-agents.md`), so such a link resolves
+      against the user's project, not the plugin. A
+      ``${CLAUDE_PLUGIN_ROOT}`` link or a root-absolute link in an agent
+      file is checked like any other.
+
+    **Authority:** skilllint's own observation, grounded in plugin
     self-containment. Claude Code copies a marketplace plugin into
     ``~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/`` at install
     and loads that copy; "Files outside the plugin directory aren't copied"
@@ -425,8 +441,7 @@ def check_lk004(content: str, path: Path, plugin_root: Path) -> list[ValidationI
     ``~/.codex/plugins/cache/$MARKETPLACE_NAME/$PLUGIN_NAME/$VERSION/`` and
     "loads the installed copy from that cache path"
     (`developers.openai.com/codex/plugins/build.md#how-local-marketplaces-work`).
-    No vendor doc states a rule about Markdown links; the escape is what
-    breaks them. Cursor is not covered: its plugin docs do not say that only
+    No vendor doc states a rule about Markdown links. Cursor is not covered: its plugin docs do not say that only
     the plugin directory is installed.
 
     **Scope:** every ``*.md`` file under a plugin root, a directory that
@@ -459,14 +474,15 @@ def check_lk004(content: str, path: Path, plugin_root: Path) -> list[ValidationI
     ``${CLAUDE_SKILL_DIR}`` becomes the linking file's own directory. A link
     with any other ``${...}`` token is skipped.
 
-    **Fix:** Move or copy the target into the plugin and link to it
-    there, or link to a published URL:
+    **If the reference must work once installed:** move or copy the target
+    into the plugin and link to it there (in an agent file, through
+    ``${CLAUDE_PLUGIN_ROOT}``), or link to a published URL:
 
     ```markdown
-    <!-- Before (escapes the plugin root) -->
+    <!-- May dangle once installed -->
     See [Rules](../../rules/python.md)
 
-    <!-- After (inside the plugin) -->
+    <!-- Inside the plugin -->
     See [Rules](./references/python.md)
     ```
 
@@ -477,7 +493,7 @@ def check_lk004(content: str, path: Path, plugin_root: Path) -> list[ValidationI
         plugin_root: The plugin root directory the links must stay inside.
 
     Returns:
-        One issue per link whose target lies outside *plugin_root*, with
+        One ``info`` issue per reported link (see the two cases above), with
         ``field`` set to the file path relative to *plugin_root* and
         ``line`` set to the link's line in *content*.
 
@@ -487,24 +503,33 @@ def check_lk004(content: str, path: Path, plugin_root: Path) -> list[ValidationI
     root = Path(os.path.normpath(plugin_root.absolute()))
     base_dir = Path(os.path.normpath(path.parent.absolute()))
     relative_file = Path(os.path.normpath(path.absolute())).relative_to(root).as_posix()
+    is_agent_file = relative_file.startswith("agents/")
 
     for link_text, link_url, link_url_no_fragment, line in _iter_links(content, keep_root_absolute=True):
         resolved_url = _resolve_claude_variables(link_url_no_fragment, base_dir)
         if resolved_url is None:
             continue
 
-        target = Path(os.path.normpath(base_dir / resolved_url))
-        if not target.is_relative_to(root):
-            issues.append(
-                _make_issue(
-                    field=relative_file,
-                    severity="error",
-                    message=f"Link resolves outside the plugin root: [{link_text}]({link_url}) -> {target}",
-                    code="LK004",
-                    suggestion="Move the target into the plugin and link to it there, or link to a URL",
-                    line=line,
-                )
+        if is_agent_file and resolved_url == link_url_no_fragment and not resolved_url.startswith("/"):
+            message = (
+                f"Agent file link [{link_text}]({link_url}) resolves against the working directory the agent "
+                "is spawned in, not the plugin, and may dangle at runtime when the plugin is installed"
             )
+            suggestion = "Link through ${CLAUDE_PLUGIN_ROOT}/... to reach a file in the plugin, or link to a URL"
+        else:
+            target = Path(os.path.normpath(base_dir / resolved_url))
+            if target.is_relative_to(root):
+                continue
+            message = (
+                f"Link [{link_text}]({link_url}) points outside the plugin ({target}) "
+                "and may dangle at runtime when the plugin is installed"
+            )
+            suggestion = "If it must work once installed, move the target into the plugin or link to a URL"
+        issues.append(
+            _make_issue(
+                field=relative_file, severity="info", message=message, code="LK004", suggestion=suggestion, line=line
+            )
+        )
 
     return issues
 

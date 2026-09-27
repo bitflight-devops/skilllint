@@ -450,7 +450,7 @@ class ErrorCode(StrEnum):
 
     # Link (LK001, LK004)
     LK001 = "LK001"  # Broken internal link (file does not exist)
-    LK004 = "LK004"  # Link resolves outside the plugin root
+    LK004 = "LK004"  # Link may dangle at runtime when the plugin is installed (info)
 
     # Progressive Disclosure (PD001-PD003)
     PD001 = "PD001"  # No `references/` directory found
@@ -1665,7 +1665,7 @@ def find_link_scope_plugin_dir(path: Path) -> Path | None:
 
 
 class PluginLinkEscapeValidator:
-    """Validates that no markdown link in a plugin resolves outside it (LK004).
+    """Reports markdown links that may dangle once a plugin is installed (LK004).
 
     Detection lives in ``skilllint.rules.lk_series``; this class walks every
     ``*.md`` file under the plugin root and packages the rule results into a
@@ -1681,10 +1681,11 @@ class PluginLinkEscapeValidator:
             path: Path to the plugin directory or a file within it.
 
         Returns:
-            ValidationResult with one error per escaping link; passes when
-            *path* is not inside a plugin.
+            ValidationResult that always passes; LK004 observations are
+            ``info`` issues, and read failures are errors.
         """
         errors: list[ValidationIssue] = []
+        info: list[ValidationIssue] = []
         plugin_dir = find_link_scope_plugin_dir(path)
         if plugin_dir is not None:
             for md_file in sorted(_glob_excluding(plugin_dir, "**/*.md")):
@@ -1701,8 +1702,8 @@ class PluginLinkEscapeValidator:
                         )
                     )
                     continue
-                errors.extend(check_lk004(content, md_file, plugin_dir))
-        return ValidationResult(passed=not errors, errors=errors, warnings=[], info=[])
+                info.extend(check_lk004(content, md_file, plugin_dir))
+        return ValidationResult(passed=not errors, errors=errors, warnings=[], info=info)
 
     def can_fix(self) -> bool:
         """Check if validator supports auto-fixing.

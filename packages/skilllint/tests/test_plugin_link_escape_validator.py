@@ -29,7 +29,7 @@ def _make_plugin(root: Path) -> Path:
 
 def _lk004(plugin: Path) -> list[tuple[str, int | None, str]]:
     result = PluginLinkEscapeValidator().validate(plugin)
-    return [(issue.field, issue.line, issue.message) for issue in result.errors if issue.code == "LK004"]
+    return [(issue.field, issue.line, issue.message) for issue in result.info if issue.code == "LK004"]
 
 
 def test_relative_link_climbing_past_plugin_root_is_reported(tmp_path: Path) -> None:
@@ -177,7 +177,7 @@ def test_file_path_inside_plugin_selects_the_same_plugin(tmp_path: Path) -> None
 
     result = PluginLinkEscapeValidator().validate(plugin / ".claude-plugin" / "plugin.json")
 
-    assert [issue.field for issue in result.errors] == ["README.md"]
+    assert [issue.field for issue in result.info] == ["README.md"]
 
 
 def test_no_plugin_root_means_rule_does_not_apply(tmp_path: Path) -> None:
@@ -196,10 +196,15 @@ def test_cli_check_on_plugin_directory_reports_lk004_with_file_and_line(tmp_path
     plugin = _make_plugin(tmp_path / "demo")
     (plugin / "README.md").write_text("# Demo\n\n[out](../../rules/x.md)\n", encoding="utf-8")
 
-    result = CliRunner().invoke(app, ["check", "--no-color", str(plugin)])
+    quiet = CliRunner().invoke(app, ["check", "--no-color", str(plugin)])
+    result = CliRunner().invoke(app, ["check", "--no-color", "--verbose", str(plugin)])
 
-    assert result.exit_code == 1, result.output
+    # An observation: never fails the run, and shows only with --verbose.
+    assert quiet.exit_code == 0, quiet.output
+    assert "[LK004]" not in quiet.output
+    assert result.exit_code == 0, result.output
     assert "[LK004] README.md:3:" in result.output
+    assert "may dangle at runtime when the plugin is installed" in result.output
 
 
 def test_reference_definitions_are_checked_with_titles_and_real_lines(tmp_path: Path) -> None:
@@ -275,7 +280,7 @@ def test_codex_only_plugin_is_checked(tmp_path: Path) -> None:
 
     assert [(field, line) for field, line, _ in _lk004(plugin)] == [("README.md", 1)]
     result = PluginLinkEscapeValidator().validate(plugin / ".codex-plugin" / "plugin.json")
-    assert [issue.field for issue in result.errors] == ["README.md"]
+    assert [issue.field for issue in result.info] == ["README.md"]
 
 
 def test_cli_check_on_codex_only_plugin_reports_lk004(tmp_path: Path) -> None:
@@ -283,9 +288,9 @@ def test_cli_check_on_codex_only_plugin_reports_lk004(tmp_path: Path) -> None:
     (plugin / "README.md").write_text("# Demo\n\n[out](../../rules/x.md)\n", encoding="utf-8")
 
     for target in (plugin, tmp_path):
-        result = CliRunner().invoke(app, ["check", "--no-color", str(target)])
+        result = CliRunner().invoke(app, ["check", "--no-color", "--verbose", str(target)])
 
-        assert result.exit_code == 1, result.output
+        assert result.exit_code == 0, result.output
         assert result.output.count("[LK004] README.md:3:") == 1, result.output
 
 
@@ -294,7 +299,7 @@ def test_plugin_with_claude_and_codex_manifests_is_reported_once(tmp_path: Path)
     _make_codex_plugin(plugin)
     (plugin / "README.md").write_text("[out](../../rules/x.md)\n", encoding="utf-8")
 
-    result = CliRunner().invoke(app, ["check", "--no-color", str(tmp_path)])
+    result = CliRunner().invoke(app, ["check", "--no-color", "--verbose", str(tmp_path)])
 
     assert result.output.count("[LK004]") == 1, result.output
 
@@ -306,7 +311,7 @@ def test_cursor_only_plugin_is_not_checked(tmp_path: Path) -> None:
     (plugin / "README.md").write_text("[out](../outside.md)\n", encoding="utf-8")
 
     assert _lk004(plugin) == []
-    assert "[LK004]" not in CliRunner().invoke(app, ["check", "--no-color", str(tmp_path)]).output
+    assert "[LK004]" not in CliRunner().invoke(app, ["check", "--no-color", "--verbose", str(tmp_path)]).output
 
 
 def test_inline_links_with_titles_resolve_to_the_destination_only(tmp_path: Path) -> None:
@@ -390,7 +395,7 @@ def test_backslash_is_a_separator_in_html_but_literal_in_markdown(tmp_path: Path
     findings = _lk004(plugin)
 
     assert [line for _, line, _ in findings] == [1]
-    assert findings[0][2].endswith(f"-> {tmp_path.parent / 'outside.md'}")
+    assert f"({tmp_path.parent / 'outside.md'})" in findings[0][2]
 
 
 def test_platform_codex_reports_lk004_and_lk001_on_a_codex_plugin(tmp_path: Path) -> None:
@@ -405,9 +410,9 @@ def test_platform_codex_reports_lk004_and_lk001_on_a_codex_plugin(tmp_path: Path
     (plugin / "README.md").write_text("[out](../../rules/x.md)\n", encoding="utf-8")
 
     for args in (["--platform", "codex"], []):
-        result = CliRunner().invoke(app, ["check", "--no-color", *args, str(tmp_path)])
+        result = CliRunner().invoke(app, ["check", "--no-color", "--verbose", *args, str(tmp_path)])
 
-        assert result.exit_code == 1, result.output
+        assert result.exit_code == 1, result.output  # the LK001 error; LK004 is info
         assert result.output.count("[LK004]") == 1, (args, result.output)
         assert result.output.count("[LK001]") == 1, (args, result.output)
 
@@ -421,6 +426,26 @@ def test_platform_cursor_does_not_run_link_rules(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    result = CliRunner().invoke(app, ["check", "--no-color", "--platform", "cursor", str(tmp_path)])
+    result = CliRunner().invoke(app, ["check", "--no-color", "--verbose", "--platform", "cursor", str(tmp_path)])
 
     assert "[LK00" not in result.output, result.output
+
+
+def test_agent_file_relative_links_resolve_against_the_project_not_the_plugin(tmp_path: Path) -> None:
+    plugin = _make_plugin(tmp_path / "demo")
+    (plugin / "agents").mkdir()
+    (plugin / "docs").mkdir()
+    (plugin / "agents" / "helper.md").write_text(
+        "---\nname: helper\ndescription: Helper agent.\n---\n\n"  # 1-4
+        "Read [guide](../docs/guide.md) first.\n"  # 6: relative, resolves against the project cwd
+        "Or [pinned](${CLAUDE_PLUGIN_ROOT}/docs/guide.md).\n"  # 7: inside the plugin, not reported
+        "And [abs](/etc/x.md).\n",  # 8: root-absolute, outside the plugin
+        encoding="utf-8",
+    )
+    (plugin / "docs" / "guide.md").write_text("[back](../agents/helper.md)\n", encoding="utf-8")
+
+    findings = _lk004(plugin)
+
+    assert [(field, line) for field, line, _ in findings] == [("agents/helper.md", 6), ("agents/helper.md", 8)]
+    assert "working directory the agent is spawned in" in findings[0][2]
+    assert "points outside the plugin" in findings[1][2]
