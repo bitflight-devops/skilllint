@@ -26,7 +26,6 @@ from skilllint.rule_registry import rule_reference, skilllint_rule
 if TYPE_CHECKING:
     from pathlib import Path
 
-
 # ---------------------------------------------------------------------------
 # Spec sources
 # ---------------------------------------------------------------------------
