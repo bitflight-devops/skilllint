@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 import tomllib
 from pathlib import Path
 
@@ -37,13 +38,23 @@ def _surfaces() -> list[dict[str, str]]:
     return data["surface"]
 
 
+def _is_gitignored(path: Path) -> bool:
+    # git check-ignore resolves the full exclude chain (.gitignore, global
+    # excludes, etc.), so generated top-level dirs (.venv, .pytest_cache, ...)
+    # are filtered without hardcoding each one here.
+    result = subprocess.run(["git", "check-ignore", "-q", str(path)], cwd=ROOT, check=False)
+    return result.returncode == 0
+
+
 def test_all_top_level_repository_directories_are_classified() -> None:
     surfaces = _surfaces()
     classified_roots = {entry["path"].split("/", 1)[0] for entry in surfaces}
 
-    actual = {path.name for path in ROOT.iterdir() if path.is_dir() and path.name != ".git"}
+    actual = {
+        path.name for path in ROOT.iterdir() if path.is_dir() and path.name != ".git" and not _is_gitignored(path)
+    }
     assert actual == EXPECTED_TOP_LEVEL_DIRECTORIES
-    assert EXPECTED_TOP_LEVEL_DIRECTORIES <= classified_roots
+    assert classified_roots >= EXPECTED_TOP_LEVEL_DIRECTORIES
 
 
 def test_surface_entries_are_unique_valid_and_existing() -> None:
