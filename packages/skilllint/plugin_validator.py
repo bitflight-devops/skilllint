@@ -40,9 +40,6 @@ from io import StringIO
 from pathlib import Path, PurePath
 from typing import TYPE_CHECKING, Annotated, Literal, NoReturn, TypeAlias, cast
 
-# YAML/JSON at the edge: dict, list, or JSON-serializable scalars. More specific than Any.
-YamlValue: TypeAlias = dict[str, "YamlValue"] | list["YamlValue"] | str | int | float | bool | None
-
 import contextlib
 
 import typer
@@ -60,7 +57,7 @@ import skilllint.rules  # ruff: ignore[unused-import] — ensures all 15 series 
 from skilllint.adapters import PlatformAdapter, load_adapters, matches_file
 from skilllint.adapters.claude_code import ClaudeCodeAdapter
 from skilllint.cli_docs import docs_app
-from skilllint.models import AppliedFix, FileResults, ValidationIssue, ValidationResult, Validator
+from skilllint.models import AppliedFix, FileResults, ValidationIssue, ValidationResult, Validator, YamlValue
 from skilllint.record_export import (
     build_svg_title as _build_svg_title,
     export_recording as _export_recording,
