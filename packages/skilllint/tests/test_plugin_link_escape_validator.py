@@ -505,3 +505,11 @@ def test_command_file_relative_links_resolve_against_the_project_not_the_plugin(
 
     assert [(field, line) for field, line, _ in findings] == [("commands/run.md", 1)]
     assert "agent or command body" in findings[0][2]
+
+
+def test_same_document_anchors_are_not_links_in_agent_and_command_files(tmp_path: Path) -> None:
+    plugin = _make_plugin(tmp_path / "demo")
+    (plugin / "agents").mkdir()
+    (plugin / "agents" / "a.md").write_text('[top](#top) <a href="#sec">s</a>\n', encoding="utf-8")
+
+    assert _lk004(plugin) == []

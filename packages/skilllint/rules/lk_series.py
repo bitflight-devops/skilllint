@@ -247,6 +247,10 @@ def _iter_links(content: str, *, keep_root_absolute: bool = False) -> Iterator[t
         # checking the filter on the undecoded form would let it fall through
         # as an ordinary relative link.
         decoded_destination = unquote(destination.split("#")[0])
+        # A same-document link (``#section``) leaves no path once the fragment
+        # is split off; it names no file, so it is not a link to check.
+        if not decoded_destination:
+            continue
         root_absolute = decoded_destination.startswith("/") and not decoded_destination.startswith("//")
         if _should_ignore_link(decoded_destination) and not (keep_root_absolute and root_absolute):
             continue
