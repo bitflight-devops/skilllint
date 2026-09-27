@@ -2,7 +2,11 @@
 
 `skilllint` is a command-line validation pipeline. The public seam is the
 `skilllint check` command; the implementation is split into discovery,
-validation, rule registration, fixing, and reporting modules.
+validation, rule registration, fixing, and reporting modules. Dependency-light
+validation contracts (`ValidationIssue`, `ValidationResult`, `AppliedFix`, the
+validator protocol, and shared value aliases) are owned by `models.py`.
+`plugin_validator.py` re-exports those names for compatibility while its
+remaining responsibilities are decomposed incrementally under #283.
 
 ## Runtime flow
 
@@ -76,6 +80,7 @@ from resulting errors and usage/validation contracts, not adapter registration.
 
 | Concern | Maintained seam | Proof |
 | --- | --- | --- |
+| validation contracts | `models.py` | model/compatibility contract tests |
 | path selection | `scan_runtime.py` | scan runtime tests |
 | platform metadata | `adapters/protocol.py`, `adapters/registry.py` | adapter protocol tests |
 | schema constraints | `schemas/`, schema validators | schema/frontmatter tests |
