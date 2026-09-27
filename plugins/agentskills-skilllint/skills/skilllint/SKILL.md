@@ -233,7 +233,7 @@ skilllint --version
 
 ```bash
 # Validate only for a specific platform
-skilllint check --platform agentskills ./plugins/my-plugin
+skilllint check --platform claude-code ./plugins/my-plugin
 
 # List rules for a specific platform
 skilllint rules --platform agentskills

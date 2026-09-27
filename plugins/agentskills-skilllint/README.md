@@ -15,17 +15,15 @@ The skill teaches Claude how to:
 
 ## Installation
 
-Install this plugin from the repository:
-
-```bash
-claude plugin install agentskills-skilllint@skilllint
-```
-
-Or load it for a single session:
+Load this repository plugin for a session:
 
 ```bash
 claude --plugin-dir ./plugins/agentskills-skilllint
 ```
+
+This repository does not publish a persistent marketplace entry. Copy or
+package the plugin through your organization's supported Claude distribution
+process when a persistent installation is required.
 
 ## Usage
 
