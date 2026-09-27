@@ -10,7 +10,7 @@ import pytest
 def _reject_marker_override(args: list[str]) -> None:
     """Reject caller marker selection that could override the fast profile."""
     for arg in args:
-        if arg in {"-m", "--markexpr"} or arg.startswith("--markexpr="):
+        if arg in {"-m", "--markexpr"} or (arg.startswith("-m") and arg != "-m") or arg.startswith("--markexpr="):
             raise ValueError("the fast test profile owns pytest marker selection; do not pass -m/--markexpr")
 
 
