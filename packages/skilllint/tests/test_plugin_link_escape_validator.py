@@ -307,6 +307,25 @@ def test_codex_only_plugin_is_checked(tmp_path: Path) -> None:
     assert [issue.field for issue in result.info] == ["skills/doc.md"]
 
 
+def test_codex_only_plugin_claude_plugin_root_escape_is_reported(tmp_path: Path) -> None:
+    """``${CLAUDE_PLUGIN_ROOT}`` must resolve for a Codex-only plugin root.
+
+    Regression test: ``check_lk004`` used to resolve ``${CLAUDE_PLUGIN_ROOT}``
+    via the Claude-only ``find_plugin_dir`` (only checks
+    ``.claude-plugin/plugin.json``) instead of reusing the plugin root
+    ``find_link_scope_plugin_dir`` already resolved (which also recognizes
+    ``.codex-plugin/plugin.json``). For a Codex-only plugin, that
+    re-derivation returned ``None``, so the substitution silently failed and
+    the link was skipped instead of being flagged as an escape.
+    """
+    plugin = _make_codex_plugin(tmp_path / "demo")
+    skill = plugin / "skills" / "one"
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text("[doc](${CLAUDE_PLUGIN_ROOT}/../../x.md)\n", encoding="utf-8")
+
+    assert [(field, line) for field, line, _ in _lk004(plugin)] == [("skills/one/SKILL.md", 1)]
+
+
 def test_cli_check_on_codex_only_plugin_reports_lk004(tmp_path: Path) -> None:
     plugin = _make_codex_plugin(tmp_path / "plugins" / "demo")
     _doc(plugin).write_text("# Demo\n\n[out](../../../rules/x.md)\n", encoding="utf-8")

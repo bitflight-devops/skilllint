@@ -270,17 +270,19 @@ CLAUDE_VAR_PATTERN = r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}"
 _STATICALLY_RESOLVABLE_CLAUDE_VARS: frozenset[str] = frozenset({"CLAUDE_SKILL_DIR", "CLAUDE_PLUGIN_ROOT"})
 
 
-def _resolve_claude_variables(url: str, skill_dir: Path) -> str | None:
+def _resolve_claude_variables(url: str, skill_dir: Path, plugin_root: Path | None = None) -> str | None:
     """Substitute ${CLAUDE_*} variables skilllint can statically resolve.
 
     Claude Code substitutes ``${CLAUDE_SKILL_DIR}``, ``${CLAUDE_PROJECT_DIR}``,
     ``${CLAUDE_PLUGIN_ROOT}``, and ``${CLAUDE_PLUGIN_DATA}`` in skill markdown
     content at runtime (code.claude.com/docs/en/skills.md
     #available-string-substitutions). ``${CLAUDE_SKILL_DIR}`` always resolves to
-    the directory containing ``SKILL.md``. ``${CLAUDE_PLUGIN_ROOT}`` resolves via
-    :func:`skilllint.plugin_validator.find_plugin_dir` when the link's SKILL.md
-    lives inside a plugin (same lookup ``HookValidator`` uses for
-    ``${CLAUDE_PLUGIN_ROOT}`` in hook commands).
+    the directory containing ``SKILL.md``. ``${CLAUDE_PLUGIN_ROOT}`` resolves to
+    *plugin_root* when the caller already knows it (LK004, which must also
+    recognize a Codex-only plugin root); otherwise it falls back to
+    :func:`skilllint.plugin_validator.find_plugin_dir` (LK001, which has no
+    such root and only recognizes a Claude Code plugin, same lookup
+    ``HookValidator`` uses for ``${CLAUDE_PLUGIN_ROOT}`` in hook commands).
 
     ``${CLAUDE_PROJECT_DIR}`` and ``${CLAUDE_PLUGIN_DATA}`` target install-time
     locations skilllint cannot determine from the plugin source tree, and any
@@ -292,8 +294,12 @@ def _resolve_claude_variables(url: str, skill_dir: Path) -> str | None:
         url: The link URL (fragment already stripped) as written in the
             markdown source.
         skill_dir: Directory containing the ``SKILL.md`` file being validated --
-            used both as the ``${CLAUDE_SKILL_DIR}`` target and as the search
-            start for ``${CLAUDE_PLUGIN_ROOT}``.
+            used both as the ``${CLAUDE_SKILL_DIR}`` target and, when
+            *plugin_root* is not given, as the search start for
+            ``${CLAUDE_PLUGIN_ROOT}``.
+        plugin_root: The plugin root to substitute for ``${CLAUDE_PLUGIN_ROOT}``,
+            when the caller already resolved one (LK004). ``None`` falls back
+            to ``find_plugin_dir(skill_dir)``.
 
     Returns:
         The URL with resolvable variables substituted, or ``None`` if the link
@@ -309,9 +315,10 @@ def _resolve_claude_variables(url: str, skill_dir: Path) -> str | None:
     if "${CLAUDE_SKILL_DIR}" in resolved:
         resolved = resolved.replace("${CLAUDE_SKILL_DIR}", str(skill_dir))
     if "${CLAUDE_PLUGIN_ROOT}" in resolved:
-        from skilllint.plugin_validator import find_plugin_dir  # noqa: PLC0415
+        if plugin_root is None:
+            from skilllint.plugin_validator import find_plugin_dir  # noqa: PLC0415
 
-        plugin_root = find_plugin_dir(skill_dir)
+            plugin_root = find_plugin_dir(skill_dir)
         if plugin_root is None:
             return None
         resolved = resolved.replace("${CLAUDE_PLUGIN_ROOT}", str(plugin_root))
@@ -542,7 +549,7 @@ def check_lk004(content: str, path: Path, plugin_root: Path) -> list[ValidationI
     is_prompt_file = relative_file.split("/", 1)[0] in {"agents", "commands"}
 
     for link_text, link_url, link_url_no_fragment, line in _iter_links(content, keep_root_absolute=True):
-        resolved_url = _resolve_claude_variables(link_url_no_fragment, base_dir)
+        resolved_url = _resolve_claude_variables(link_url_no_fragment, base_dir, root)
         if resolved_url is None:
             continue
 
