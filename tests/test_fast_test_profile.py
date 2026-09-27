@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
+
+from pathlib import Path
 
 import scripts.run_fast_tests as fast
 
@@ -31,7 +31,7 @@ def test_fast_runner_rejects_marker_overrides(monkeypatch) -> None:
 
     monkeypatch.setattr(fast.pytest, "main", fake_pytest_main)
 
-    for args in (["-m", "slow"], ["--markexpr", "slow"], ["--markexpr=slow"]):
+    for args in (["-m", "slow"], ["-mslow"], ["--markexpr", "slow"], ["--markexpr=slow"]):
         with pytest.raises(ValueError, match="owns pytest marker selection"):
             fast.main(args)
 
