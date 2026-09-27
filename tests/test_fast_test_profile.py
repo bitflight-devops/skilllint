@@ -20,6 +20,26 @@ def test_fast_runner_excludes_slow_tests_and_forwards_scope(monkeypatch) -> None
     assert calls == [["-m", "not slow", "tests/test_fast_test_profile.py", "-q"]]
 
 
+def test_fast_runner_rejects_marker_overrides(monkeypatch) -> None:
+    calls: list[list[str]] = []
+
+    def fake_pytest_main(args: list[str]) -> int:
+        calls.append(args)
+        return 0
+
+    monkeypatch.setattr(fast.pytest, "main", fake_pytest_main)
+
+    for args in (["-m", "slow"], ["--markexpr", "slow"], ["--markexpr=slow"]):
+        try:
+            fast.main(args)
+        except ValueError as exc:
+            assert "owns pytest marker selection" in str(exc)
+        else:
+            raise AssertionError(f"marker override was accepted: {args!r}")
+
+    assert calls == []
+
+
 def test_agent_contract_distinguishes_fast_loop_from_full_gate() -> None:
     agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
 
