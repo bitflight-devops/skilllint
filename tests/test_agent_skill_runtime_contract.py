@@ -37,7 +37,7 @@ def test_plugin_readme_does_not_maintain_a_second_rule_catalog() -> None:
     assert "skilllint rules" in text
     assert "skilllint rule <ID>" in text
     assert "| Series | Domain |" not in text
-    assert "FM001–FM010" not in text
+    assert "FM001" + chr(0x2013) + "FM010" not in text
 
 
 def test_root_readme_defers_volatile_catalog_and_command_inventory_to_runtime() -> None:
