@@ -38,11 +38,11 @@ from skilllint.boundary.plugin_level_config_ingest import (
     ingest_plugin_level_mcp_server_names,
 )
 from skilllint.frontmatter_core import extract_frontmatter
+from skilllint.models import ValidationIssue, ValidationResult
 from skilllint.rule_registry import skilllint_rule
 
 if TYPE_CHECKING:
     from pathlib import Path
-
 
 
 # Deep link to the table + security paragraph on plugin-packaged subagents.
