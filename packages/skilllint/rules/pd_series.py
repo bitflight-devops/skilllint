@@ -31,7 +31,7 @@ from skilllint.rule_registry import _make_issue, skilllint_rule
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from skilllint.plugin_validator import ValidationIssue
+    from skilllint.models import ValidationIssue
 
 # ---------------------------------------------------------------------------
 # Spec sources
