@@ -413,24 +413,25 @@ def check_lk004(content: str, path: Path, plugin_root: Path) -> list[ValidationI
     r"""## LK004 — Link may dangle at runtime when the plugin is installed
 
     An observation, reported at ``info`` level so it never fails a check. A
-    markdown link in a plugin points somewhere the installed plugin may not
-    be able to reach. Linking outside the plugin is a legitimate choice; the
-    rule only says the reference may dangle at runtime when the plugin is
-    installed. Two cases are reported:
+    markdown link that an agent reads from an installed plugin points
+    somewhere the installed copy may not reach. Linking outside the plugin is
+    a legitimate choice; the rule only says the reference may dangle at
+    runtime when the plugin is installed. Two cases are reported:
 
-    - A link whose target resolves outside the plugin root: a relative link
-      that climbs past the root (``../../rules/x.md``) or a root-absolute
-      link (``/docs/x.md``), whether or not the target exists. In
-      ``SKILL.md``, ``references/``, ``docs/``, READMEs and every other file
-      except agent files, a relative link resolves against the linking
-      file's own directory.
-    - A relative link in an agent file (``agents/*.md`` at the plugin
-      root). An agent file's body "becomes the system prompt" and "a
+    - Under ``skills/``: a link whose target resolves outside the plugin
+      root, whether or not the target exists. A relative link resolves
+      against the linking file's own directory (``SKILL.md`` against its
+      skill directory, ``references/*.md`` against ``references/``), so it
+      escapes by climbing past the root (``../../../rules/x.md``). A
+      root-absolute link (``/docs/x.md``) is always outside.
+    - Under ``agents/`` and ``commands/``: any relative link. These bodies
+      are injected as prompts that run in the user's project, not the
+      plugin: an agent file's body "becomes the system prompt" and "a
       subagent starts in the main conversation's current working directory"
-      (`code.claude.com/docs/en/sub-agents.md`), so such a link resolves
-      against the user's project, not the plugin. A
-      ``${CLAUDE_PLUGIN_ROOT}`` link or a root-absolute link in an agent
-      file is checked like any other.
+      (`code.claude.com/docs/en/sub-agents.md`), and a command body runs in
+      the main conversation. So a relative link resolves against the
+      project root. ``${CLAUDE_PLUGIN_ROOT}`` links and root-absolute links
+      there are checked as under ``skills/``.
 
     **Authority:** skilllint's own observation, grounded in plugin
     self-containment. Claude Code copies a marketplace plugin into
@@ -444,11 +445,15 @@ def check_lk004(content: str, path: Path, plugin_root: Path) -> list[ValidationI
     No vendor doc states a rule about Markdown links. Cursor is not covered: its plugin docs do not say that only
     the plugin directory is installed.
 
-    **Scope:** every ``*.md`` file under a plugin root, a directory that
-    holds ``.claude-plugin/plugin.json`` or ``.codex-plugin/plugin.json``
-    (READMEs, ``CLAUDE.md``, ``AGENTS.md``, ``docs/``, ``skills/**``,
-    ``agents/**``, ``commands/**``), skipping ``.git``, ``node_modules`` and
-    ``.venv``. The rule runs when skilllint validates the plugin itself: the
+    **Scope:** the ``*.md`` files under ``agents/``, ``skills/`` and
+    ``commands/`` of a plugin root, a directory that holds
+    ``.claude-plugin/plugin.json`` or ``.codex-plugin/plugin.json``. Those
+    are the files an agent reads from the installed copy. READMEs,
+    ``CLAUDE.md``, ``AGENTS.md``, ``docs/`` and ADRs are read in the source
+    repository and are not checked. The walk skips ``.git``,
+    ``node_modules``, ``.venv``, files excluded by ``.pluginvalidatorignore``
+    or git, and observations a path-scoped ignore config suppresses for the
+    linking file. The rule runs when skilllint validates the plugin itself: the
     plugin directory, a tree containing it, or its manifest. Passing only one
     Markdown file does not run it. A standalone skill with neither manifest
     has no plugin root, is not copied into a plugin cache, and is not checked.
@@ -503,17 +508,17 @@ def check_lk004(content: str, path: Path, plugin_root: Path) -> list[ValidationI
     root = Path(os.path.normpath(plugin_root.absolute()))
     base_dir = Path(os.path.normpath(path.parent.absolute()))
     relative_file = Path(os.path.normpath(path.absolute())).relative_to(root).as_posix()
-    is_agent_file = relative_file.startswith("agents/")
+    is_prompt_file = relative_file.split("/", 1)[0] in {"agents", "commands"}
 
     for link_text, link_url, link_url_no_fragment, line in _iter_links(content, keep_root_absolute=True):
         resolved_url = _resolve_claude_variables(link_url_no_fragment, base_dir)
         if resolved_url is None:
             continue
 
-        if is_agent_file and resolved_url == link_url_no_fragment and not resolved_url.startswith("/"):
+        if is_prompt_file and resolved_url == link_url_no_fragment and not resolved_url.startswith("/"):
             message = (
-                f"Agent file link [{link_text}]({link_url}) resolves against the working directory the agent "
-                "is spawned in, not the plugin, and may dangle at runtime when the plugin is installed"
+                f"Link [{link_text}]({link_url}) in an agent or command body resolves against the user's project "
+                "root, not the plugin, and may dangle at runtime when the plugin is installed"
             )
             suggestion = "Link through ${CLAUDE_PLUGIN_ROOT}/... to reach a file in the plugin, or link to a URL"
         else:

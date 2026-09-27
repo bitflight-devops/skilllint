@@ -94,7 +94,14 @@ from skilllint.rules.pr_series import check_pr001, check_pr002, check_pr005
 from skilllint.rules.sk_series import check_sk004, check_sk005
 from skilllint.rules.sl_series import check_sl001, iter_symlinks
 from skilllint.rules.tc_series import check_tc001
-from skilllint.scan_runtime import ScanContext, _glob_excluding, _load_plugin_json
+from skilllint.scan_runtime import (
+    ScanContext,
+    _build_gitignore_set,
+    _glob_excluding,
+    _is_ignored,
+    _load_ignore_patterns,
+    _load_plugin_json,
+)
 from skilllint.token_counter import TOKEN_ERROR_THRESHOLD, TOKEN_WARNING_THRESHOLD, count_tokens
 from skilllint.version import __version__
 
@@ -1649,6 +1656,9 @@ class InternalLinkValidator:
 CLAUDE_PLUGIN_MANIFEST = ".claude-plugin/plugin.json"
 CODEX_PLUGIN_MANIFEST = ".codex-plugin/plugin.json"
 _LINK_SCOPE_PLUGIN_MARKERS: tuple[str, ...] = (CLAUDE_PLUGIN_MANIFEST, CODEX_PLUGIN_MANIFEST)
+# Plugin directories an agent reads from the installed copy. READMEs, CLAUDE.md,
+# AGENTS.md and docs/ are read in the source repository, so LK004 skips them.
+LK004_SCOPE_DIRS: tuple[str, ...] = ("agents", "skills", "commands")
 
 
 def find_link_scope_plugin_dir(path: Path) -> Path | None:
@@ -1667,9 +1677,13 @@ def find_link_scope_plugin_dir(path: Path) -> Path | None:
 class PluginLinkEscapeValidator:
     """Reports markdown links that may dangle once a plugin is installed (LK004).
 
-    Detection lives in ``skilllint.rules.lk_series``; this class walks every
-    ``*.md`` file under the plugin root and packages the rule results into a
-    ``ValidationResult``.  The plugin root is a Claude Code
+    Detection lives in ``skilllint.rules.lk_series``; this class walks the
+    ``*.md`` files under the plugin's ``agents/``, ``skills/`` and
+    ``commands/`` directories (the files an agent reads from an installed
+    copy) and packages the rule results into a ``ValidationResult``. The walk
+    skips files excluded by ``.pluginvalidatorignore`` or git, and drops an
+    observation that a path-scoped ignore config suppresses for its own
+    Markdown file. The plugin root is a Claude Code
     (``.claude-plugin/plugin.json``) or Codex (``.codex-plugin/plugin.json``)
     plugin.
     """
@@ -1688,7 +1702,15 @@ class PluginLinkEscapeValidator:
         info: list[ValidationIssue] = []
         plugin_dir = find_link_scope_plugin_dir(path)
         if plugin_dir is not None:
-            for md_file in sorted(_glob_excluding(plugin_dir, "**/*.md")):
+            md_files = sorted(
+                md_file for part in LK004_SCOPE_DIRS for md_file in _glob_excluding(plugin_dir / part, "**/*.md")
+            )
+            ignore_patterns = _load_ignore_patterns()
+            gitignored = _build_gitignore_set(md_files, plugin_dir)
+            ignore_cache: dict[str, tuple[IgnoreConfig, Path | None]] = {}
+            for md_file in md_files:
+                if str(md_file.resolve()) in gitignored or (ignore_patterns and _is_ignored(md_file, ignore_patterns)):
+                    continue
                 try:
                     content = md_file.read_text(encoding="utf-8")
                 except (OSError, UnicodeDecodeError) as e:
@@ -1702,7 +1724,12 @@ class PluginLinkEscapeValidator:
                         )
                     )
                     continue
-                info.extend(check_lk004(content, md_file, plugin_dir))
+                ignore_config, config_root = _resolve_ignore_config(md_file, ignore_cache)
+                info.extend(
+                    issue
+                    for issue in check_lk004(content, md_file, plugin_dir)
+                    if config_root is None or not _is_suppressed(ignore_config, md_file, config_root, str(issue.code))
+                )
         return ValidationResult(passed=not errors, errors=errors, warnings=[], info=info)
 
     def can_fix(self) -> bool:
