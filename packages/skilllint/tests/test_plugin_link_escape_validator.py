@@ -375,3 +375,19 @@ def test_balanced_parentheses_in_bare_destinations(tmp_path: Path) -> None:
 
     assert [line for _, line, _ in findings] == [1, 3]
     assert "[p](../a(b).md)" in findings[0][2]
+
+
+def test_backslash_is_a_separator_in_html_but_literal_in_markdown(tmp_path: Path) -> None:
+    plugin = _make_plugin(tmp_path / "demo")
+    (plugin / "README.md").write_text(
+        '<a href="..\\..\\outside.md">x</a>\n'  # 1: WHATWG reads \ as /, escapes
+        '<img src="assets\\logo.png"> <a href="\\\\host\\x">h</a>\n'  # 2: inside; \\host is //host
+        '<a href="..%5C..%5Cy.md">l</a>\n'  # 3: %5C is a literal backslash, not a separator
+        "[b](..\\..\\outside.md) [c](x\\y/..\\z.md)\n",  # 4: Markdown keeps \ literal (renders as %5C)
+        encoding="utf-8",
+    )
+
+    findings = _lk004(plugin)
+
+    assert [line for _, line, _ in findings] == [1]
+    assert findings[0][2].endswith(f"-> {tmp_path.parent / 'outside.md'}")

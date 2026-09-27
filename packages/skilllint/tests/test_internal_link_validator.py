@@ -816,3 +816,18 @@ class TestParenthesesInDestinations:
         assert [issue.message for issue in result.errors] == [
             "Broken link: [gone](references/c(d).md) (file not found)"
         ]
+
+
+class TestBackslashes:
+    """LK001 reads ``\\`` as ``/`` in HTML href/src and as a literal in Markdown."""
+
+    def test_html_backslash_resolves_and_markdown_backslash_is_literal(self, tmp_path: Path) -> None:
+        skill_dir = tmp_path / "bs-skill"
+        (skill_dir / "assets").mkdir(parents=True)
+        (skill_dir / "assets" / "ok.png").write_bytes(b"")
+        skill_md = skill_dir / "SKILL.md"
+        skill_md.write_text('---\ndescription: Test skill\n---\n\n<img src="assets\\ok.png">\n[md](assets\\ok.png)\n')
+
+        result = InternalLinkValidator().validate(skill_md)
+
+        assert [issue.message for issue in result.errors] == ["Broken link: [md](assets\\ok.png) (file not found)"]

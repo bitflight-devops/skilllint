@@ -171,7 +171,7 @@ def _iter_html_links(stripped: str) -> Iterator[tuple[int, str, str, bool]]:
 
 
 def _iter_links(content: str, *, keep_root_absolute: bool = False) -> Iterator[tuple[str, str, str, int]]:
-    """Yield every relative markdown link in *content*, in document order.
+    r"""Yield every relative markdown link in *content*, in document order.
 
     Inline links (``[text](dest "title")``), link reference definitions
     (``[label]: dest "title"``) and ``href``/``src`` attributes of raw HTML
@@ -188,7 +188,8 @@ def _iter_links(content: str, *, keep_root_absolute: bool = False) -> Iterator[t
         ``(link_text, link_url, link_url_without_fragment, line)`` for each
         relative link. ``link_url`` is the destination as written, without
         any title. The third element is the filesystem path it names:
-        character references decoded (and, outside HTML, backslash escapes), any ``#anchor`` suffix removed, then
+        character references decoded (outside HTML, backslash escapes too;
+        inside HTML, ``\`` read as ``/``), any ``#anchor`` suffix removed, then
         percent-decoded (e.g. ``./references/my%20file.md#heading`` becomes
         ``./references/my file.md``). ``line`` is the 1-based line of the
         link's opening ``[``, or of its HTML attribute, in *content*.
@@ -208,8 +209,12 @@ def _iter_links(content: str, *, keep_root_absolute: bool = False) -> Iterator[t
         # Filter to relative file links only, judged on the decoded
         # destination so an escaped or entity-encoded form cannot hide a link.
         # An HTML attribute value takes character references but no backslash
-        # escapes (CommonMark 0.31.2 section 6.6 leaves raw HTML as HTML).
-        destination = html.unescape(link_url) if is_html else _decode_destination(link_url)
+        # escapes (CommonMark 0.31.2 section 6.6 leaves raw HTML as HTML), and
+        # a browser resolves it as a URL whose ``\`` ends a path segment like
+        # ``/`` (url.spec.whatwg.org/#path-state, special schemes). In a Markdown
+        # destination a ``\`` that survives unescaping stays a literal
+        # character: CommonMark renderers emit it as ``%5C``.
+        destination = html.unescape(link_url).replace("\\", "/") if is_html else _decode_destination(link_url)
         root_absolute = destination.startswith("/") and not destination.startswith("//")
         if _should_ignore_link(destination) and not (keep_root_absolute and root_absolute):
             continue
@@ -444,7 +449,12 @@ def check_lk004(content: str, path: Path, plugin_root: Path) -> list[ValidationI
     ``//host`` links are ignored. A destination is decoded as a Markdown
     renderer decodes it before it is resolved: backslash escapes (not in
     HTML attributes) and character references first (``\.\./`` and
-    ``&#46;&#46;/`` both become ``../``), then percent-encoding (``%2E%2E/``). ``${CLAUDE_PLUGIN_ROOT}`` and
+    ``&#46;&#46;/`` both become ``../``), then percent-encoding (``%2E%2E/``).
+    In an HTML ``href``/``src``, ``\`` separates path segments as ``/`` does,
+    as a browser's URL parser reads it (``..\..\x.md`` escapes); in a
+    Markdown destination a ``\`` left after unescaping is a literal
+    character, which CommonMark renderers emit as ``%5C``.
+    ``${CLAUDE_PLUGIN_ROOT}`` and
     ``${CLAUDE_SKILL_DIR}`` are substituted as in LK001;
     ``${CLAUDE_SKILL_DIR}`` becomes the linking file's own directory. A link
     with any other ``${...}`` token is skipped.
