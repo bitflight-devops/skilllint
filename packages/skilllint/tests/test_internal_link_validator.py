@@ -744,6 +744,31 @@ class TestEncodedDestinations:
 
         assert InternalLinkValidator().validate(skill_md).errors == []
 
+    def test_percent_encoded_absolute_path_is_ignored_not_resolved_against_filesystem(self, tmp_path: Path) -> None:
+        """A percent-encoded absolute destination must be recognized as an
+        absolute path (and ignored) before percent-decoding, not after.
+
+        Regression test: the ignore filter used to run on the undecoded
+        destination, so "%2Fnonexistent.../file.md" did not look absolute
+        (no leading "/") and fell through as an ordinary relative link. It
+        was then percent-decoded to an absolute path, and
+        ``skill_dir / "/nonexistent.../file.md"`` resolves to the bare
+        absolute path (``Path.__truediv__`` discards the relative left
+        operand when the right operand is absolute) -- a real,
+        machine-dependent filesystem existence check instead of the
+        intended ignore. Because this target can never exist, the
+        pre-fix code always reported it as a broken link.
+        """
+        skill_dir = tmp_path / "enc-skill"
+        skill_dir.mkdir()
+        skill_md = skill_dir / "SKILL.md"
+        skill_md.write_text("---\ndescription: Test skill\n---\n\n[x](%2Fnonexistent-should-be-ignored%2Ffile.md)\n")
+
+        result = InternalLinkValidator().validate(skill_md)
+
+        assert result.passed is True
+        assert result.errors == []
+
     def test_backslash_escaped_ampersand_not_reinterpreted_as_entity(self, tmp_path: Path) -> None:
         """``\\&amp;evil.md`` is a backslash-escaped literal ``&`` followed by
         inert text ``amp;evil.md`` -- it must decode to ``&amp;evil.md``, not

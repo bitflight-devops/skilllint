@@ -240,13 +240,19 @@ def _iter_links(content: str, *, keep_root_absolute: bool = False) -> Iterator[t
         # destination a ``\`` that survives unescaping stays a literal
         # character: CommonMark renderers emit it as ``%5C``.
         destination = html.unescape(link_url).replace("\\", "/") if is_html else _decode_destination(link_url)
-        root_absolute = destination.startswith("/") and not destination.startswith("//")
-        if _should_ignore_link(destination) and not (keep_root_absolute and root_absolute):
+        # Split off the #fragment and percent-decode once, before the ignore
+        # filter runs, and reuse that single decoded value for both the
+        # filter and the yielded destination. A percent-encoded absolute path
+        # (e.g. "%2Fetc%2Fpasswd") does not start with "/" before decoding, so
+        # checking the filter on the undecoded form would let it fall through
+        # as an ordinary relative link.
+        decoded_destination = unquote(destination.split("#")[0])
+        root_absolute = decoded_destination.startswith("/") and not decoded_destination.startswith("//")
+        if _should_ignore_link(decoded_destination) and not (keep_root_absolute and root_absolute):
             continue
 
-        # Strip anchor fragment, then percent-decode the path for the filesystem
         line = stripped.count("\n", 0, start) + 1
-        yield link_text, link_url, unquote(destination.split("#")[0]), line
+        yield link_text, link_url, decoded_destination, line
 
 
 # Regex pattern for any ${...} substitution-style token. Matches both
