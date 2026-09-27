@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789301198455,
+  "lastUpdate": 1790511378314,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -2724,6 +2724,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 111.239,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "8cb207dd38d39063a77d10f6be34d15f66f495f0",
+          "message": "refactor(core): extract shared validation contracts (#288)\n\nRefs #283",
+          "timestamp": "2026-09-27T12:13:30Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/8cb207dd38d39063a77d10f6be34d15f66f495f0"
+        },
+        "date": 1790511377551,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 6460.062,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 6719.699,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 7054.287,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 148.965,
             "unit": "files/s"
           }
         ]
