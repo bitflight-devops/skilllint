@@ -74,8 +74,7 @@ def _make_issue(
     Returns:
         A frozen ValidationIssue instance.
     """
-    # Deferred import to break the circular dependency: plugin_validator
-    # imports rules/, so rules/ cannot import plugin_validator at module level.
+    # Import the dependency-light contract rather than the legacy validator module.
     from skilllint.models import ValidationIssue
 
     return ValidationIssue(
