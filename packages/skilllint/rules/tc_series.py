@@ -30,7 +30,7 @@ from skilllint.rule_registry import skilllint_rule
 from skilllint.token_counter import count_tokens
 
 if TYPE_CHECKING:
-    from skilllint.plugin_validator import ValidationIssue
+    from skilllint.models import ValidationIssue
 
 # ---------------------------------------------------------------------------
 # Spec sources
@@ -59,7 +59,7 @@ def _make_issue(
     Returns:
         A frozen ValidationIssue instance.
     """
-    from skilllint.plugin_validator import ValidationIssue  # noqa: PLC0415
+    from skilllint.models import ValidationIssue
 
     return ValidationIssue(field=field, severity=severity, message=message, code=code)
 
