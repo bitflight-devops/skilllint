@@ -30,8 +30,6 @@ from skilllint.models import ValidationIssue
 from skilllint.rule_registry import skilllint_rule
 from skilllint.token_counter import count_tokens
 
-if TYPE_CHECKING:
-
 # ---------------------------------------------------------------------------
 # Spec sources
 # ---------------------------------------------------------------------------
