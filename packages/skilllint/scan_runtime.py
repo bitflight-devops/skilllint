@@ -27,7 +27,7 @@ from .reporting import CIReporter, ConsoleReporter, FileResults, Reporter
 if TYPE_CHECKING:
     from rich.console import Console
 
-    from .plugin_validator import AppliedFix
+    from .models import AppliedFix
 
 # ---------------------------------------------------------------------------
 # Constants
