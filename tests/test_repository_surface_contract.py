@@ -38,21 +38,22 @@ def _surfaces() -> list[dict[str, str]]:
     return data["surface"]
 
 
-def _is_gitignored(path: Path) -> bool:
-    # git check-ignore resolves the full exclude chain (.gitignore, global
-    # excludes, etc.), so generated top-level dirs (.venv, .pytest_cache, ...)
-    # are filtered without hardcoding each one here.
-    result = subprocess.run(["git", "check-ignore", "-q", str(path)], cwd=ROOT, check=False)
-    return result.returncode == 0
+def _tracked_top_level_directories() -> set[str]:
+    result = subprocess.run(
+        ["git", "ls-tree", "-d", "--name-only", "HEAD"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return {line for line in result.stdout.splitlines() if line}
 
 
 def test_all_top_level_repository_directories_are_classified() -> None:
     surfaces = _surfaces()
     classified_roots = {entry["path"].split("/", 1)[0] for entry in surfaces}
 
-    actual = {
-        path.name for path in ROOT.iterdir() if path.is_dir() and path.name != ".git" and not _is_gitignored(path)
-    }
+    actual = _tracked_top_level_directories()
     assert actual == EXPECTED_TOP_LEVEL_DIRECTORIES
     assert classified_roots >= EXPECTED_TOP_LEVEL_DIRECTORIES
 
