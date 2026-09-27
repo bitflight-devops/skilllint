@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 import scripts.run_fast_tests as fast
 
 ROOT = Path(__file__).parents[1]
@@ -30,12 +32,8 @@ def test_fast_runner_rejects_marker_overrides(monkeypatch) -> None:
     monkeypatch.setattr(fast.pytest, "main", fake_pytest_main)
 
     for args in (["-m", "slow"], ["--markexpr", "slow"], ["--markexpr=slow"]):
-        try:
+        with pytest.raises(ValueError, match="owns pytest marker selection"):
             fast.main(args)
-        except ValueError as exc:
-            assert "owns pytest marker selection" in str(exc)
-        else:
-            raise AssertionError(f"marker override was accepted: {args!r}")
 
     assert calls == []
 
