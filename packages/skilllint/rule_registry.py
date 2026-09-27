@@ -75,8 +75,6 @@ def _make_issue(
     Returns:
         A frozen ValidationIssue instance.
     """
-    from skilllint.models import ValidationIssue
-
     return ValidationIssue(
         field=field, severity=severity, message=message, code=code, docs_url=rule_reference(code), suggestion=suggestion
     )

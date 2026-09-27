@@ -72,7 +72,6 @@ def check_cu001(frontmatter: dict[str, object], mdc_schema: dict[str, object]) -
 
     <!-- examples: CU001 -->
     """
-
     required_val: object = mdc_schema.get("required", [])
     required_fields: list[str] = (
         [f for f in required_val if isinstance(f, str)] if isinstance(required_val, list) else []
@@ -133,7 +132,6 @@ def check_cu002(frontmatter: dict[str, object], mdc_schema: dict[str, object]) -
 
     <!-- examples: CU002 -->
     """
-
     additional_properties: object = mdc_schema.get("additionalProperties", True)
     if additional_properties is not False:
         return []

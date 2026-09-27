@@ -24,7 +24,7 @@ Rule IDs and default severities:
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 from skilllint.models import ValidationIssue
 from skilllint.rule_registry import skilllint_rule
@@ -57,7 +57,6 @@ def _make_issue(
     Returns:
         A frozen ValidationIssue instance.
     """
-
     return ValidationIssue(field=field, severity=severity, message=message, code=code)
 
 

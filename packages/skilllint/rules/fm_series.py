@@ -72,7 +72,6 @@ def _make_issue(
     Returns:
         A frozen ValidationIssue instance.
     """
-
     return ValidationIssue(
         field=field,
         severity=severity,

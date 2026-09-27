@@ -29,6 +29,7 @@ Rule IDs and default severities:
 from __future__ import annotations
 
 import re
+
 from skilllint.models import ValidationIssue
 from skilllint.rule_registry import rule_reference, skilllint_rule
 
@@ -82,7 +83,6 @@ def check_cx001(content: str) -> list[ValidationIssue]:
 
     <!-- examples: CX001 -->
     """
-
     if not content.strip():
         return [
             ValidationIssue(
@@ -141,7 +141,6 @@ def check_cx002(content: str, schema: dict[str, object]) -> list[ValidationIssue
 
     <!-- examples: CX002 -->
     """
-
     fields_val: object = schema.get("fields", {})
     if not isinstance(fields_val, dict):
         return []

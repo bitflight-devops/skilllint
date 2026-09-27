@@ -191,7 +191,6 @@ def check_sk005(frontmatter: dict[str, object], path: Path, file_type: str) -> l
 
     <!-- examples: SK005 -->
     """
-
     if file_type != "skill":
         return []
 

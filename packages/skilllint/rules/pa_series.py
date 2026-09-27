@@ -299,11 +299,7 @@ def check_pa001(path: Path) -> ValidationResult:
     - ``mcpServers`` → move to ``.mcp.json`` / ``plugin.json`` at plugin root
     - ``permissionMode`` → remove, or copy agent to ``.claude/agents/`` or ``~/.claude/agents/``; or use session-wide ``permissions.allow`` in settings
     """
-    from skilllint.plugin_validator import (  # noqa: PLC0415
-        FRONTMATTER_EXEMPT_FILENAMES,
-        PA001 as PA001_CODE,
-        find_plugin_dir,
-    )
+    from skilllint.plugin_validator import FRONTMATTER_EXEMPT_FILENAMES, PA001 as PA001_CODE, find_plugin_dir  # noqa: PLC0415
 
     errors: list[ValidationIssue] = []
     warnings: list[ValidationIssue] = []

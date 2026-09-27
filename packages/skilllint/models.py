@@ -12,7 +12,6 @@ from typing import Annotated, Literal, Protocol, TypeAlias
 
 from pydantic import BaseModel, ConfigDict, Field
 
-
 YamlValue: TypeAlias = dict[str, "YamlValue"] | list["YamlValue"] | str | int | float | bool | None
 
 
