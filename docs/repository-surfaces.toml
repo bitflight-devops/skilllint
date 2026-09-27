@@ -23,6 +23,13 @@ architecture_evidence = "supporting"
 description = "Maintained product, architecture, policy, and design documentation; per-file authority is defined by documentation-ownership.toml."
 
 [[surface]]
+path = "docs/architecture.md"
+kind = "product"
+architecture_evidence = "primary"
+description = "Canonical current architecture guide for skilllint."
+
+
+[[surface]]
 path = "scripts"
 kind = "project-tooling"
 architecture_evidence = "supporting"
