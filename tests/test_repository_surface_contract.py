@@ -86,3 +86,5 @@ def test_specific_non_product_overrides_are_task_only() -> None:
 
     assert by_path["packages/skilllint"]["kind"] == "product"
     assert by_path["packages/skilllint"]["architecture_evidence"] == "primary"
+    assert by_path["docs"]["architecture_evidence"] == "supporting"
+    assert by_path["docs/architecture.md"]["architecture_evidence"] == "primary"
