@@ -39,7 +39,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
     from pathlib import Path
 
-    from skilllint.plugin_validator import ValidationIssue
+    from skilllint.models import ValidationIssue
 
 # ---------------------------------------------------------------------------
 # Shared link extraction

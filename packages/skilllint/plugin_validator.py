@@ -13,6 +13,7 @@ Token-based complexity measurement replaces line counting for accurate AI cost e
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import re
@@ -38,18 +39,13 @@ from dataclasses import dataclass
 from enum import StrEnum
 from io import StringIO
 from pathlib import Path, PurePath
-from typing import TYPE_CHECKING, Annotated, Literal, NoReturn, Protocol, TypeAlias, cast
-
-# YAML/JSON at the edge: dict, list, or JSON-serializable scalars. More specific than Any.
-YamlValue: TypeAlias = dict[str, "YamlValue"] | list["YamlValue"] | str | int | float | bool | None
-
-import contextlib
+from typing import TYPE_CHECKING, Annotated, Literal, NoReturn, TypeAlias, cast
 
 import typer
 from git import Repo
 from git.exc import InvalidGitRepositoryError, NoSuchPathError
 from git.index.fun import entry_key
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import ValidationError
 from ruamel.yaml import YAML, YAMLError
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
 from ruamel.yaml.nodes import MappingNode, SequenceNode
@@ -60,6 +56,7 @@ import skilllint.rules  # ruff: ignore[unused-import] — ensures all 15 series 
 from skilllint.adapters import PlatformAdapter, load_adapters, matches_file
 from skilllint.adapters.claude_code import ClaudeCodeAdapter
 from skilllint.cli_docs import docs_app
+from skilllint.models import AppliedFix, FileResults, ValidationIssue, ValidationResult, Validator, YamlValue
 from skilllint.record_export import (
     build_svg_title as _build_svg_title,
     export_recording as _export_recording,
@@ -1277,50 +1274,6 @@ class FileType(StrEnum):
         return result
 
 
-class ValidationIssue(BaseModel):
-    """A single validation issue."""
-
-    model_config = ConfigDict(frozen=True)
-
-    field: str
-    severity: Literal["error", "warning", "info"]
-    message: str
-    code: Annotated[str, Field(pattern=r"^[A-Z]{2}\d{3}$")]
-    line: int | None = None
-    suggestion: str | None = None
-    docs_url: str | None = None
-
-    def format(self) -> str:
-        """Format issue for display.
-
-        Returns:
-            Formatted string with severity icon, code, field, message, and optional docs URL
-        """
-        severity_icon = {"error": ":cross_mark:", "warning": ":warning:", "info": ":information:"}[self.severity]
-
-        location = f":{self.line}" if self.line else ""
-        suggestion_line = f"\n    → {self.suggestion}" if self.suggestion else ""
-        docs = f"\n    → {self.docs_url}" if self.docs_url else ""
-        return f"  {severity_icon} [{self.code}] {self.field}{location}: {self.message}{suggestion_line}{docs}"
-
-
-class ValidationResult(BaseModel):
-    """Result from a validation check."""
-
-    model_config = ConfigDict(frozen=True)
-
-    passed: bool
-    errors: list[ValidationIssue]
-    warnings: list[ValidationIssue]
-    info: list[ValidationIssue]
-
-
-# Type alias: maps each unique file path to a list of (validator_name, result) pairs.
-# This groups validator results by file so reports count unique files, not validator
-# invocations.
-FileResults = dict[Path, list[tuple[str, ValidationResult]]]
-
-
 @dataclass(frozen=True)
 class ComplexityMetrics:
     """Token-based complexity metrics."""
@@ -1357,66 +1310,9 @@ class ComplexityMetrics:
         return f"OK: {self.body_tokens} tokens"
 
 
-@dataclass(frozen=True)
-class AppliedFix:
-    """Record of one fix a validator applied to a file under --fix.
-
-    Attribution is per fixer invocation, not per description: when a single
-    fixer's ``fix()`` call is authorised by more than one rule code and
-    returns multiple description strings, every description from that call
-    carries the full triggering code set. Precise per-description
-    attribution would require passing findings into ``fix()`` (tracked as a
-    follow-up -- see the skilllint#144/#117 design brief, Approach C).
-    """
-
-    path: Path
-    validator: str
-    codes: tuple[str, ...]
-    description: str
-
-
 # ============================================================================
 # VALIDATOR PROTOCOL
 # ============================================================================
-
-
-class Validator(Protocol):
-    """Protocol for all validators.
-
-    Defines the interface that all validator classes must implement to be
-    compatible with the validation framework. Validators check specific aspects
-    of plugin structure and can optionally provide auto-fixing capabilities.
-    """
-
-    def validate(self, path: Path) -> ValidationResult:
-        """Run validation check on path.
-
-        Args:
-            path: Path to file or directory to validate
-
-        Returns:
-            ValidationResult with passed status and any issues found
-        """
-        ...
-
-    def can_fix(self) -> bool:
-        """Whether this validator supports auto-fixing.
-
-        Returns:
-            True if validator can automatically fix issues, False otherwise
-        """
-        ...
-
-    def fix(self, path: Path) -> list[str]:
-        """Auto-fix issues in the file or directory.
-
-        Args:
-            path: Path to file or directory to fix
-
-        Returns:
-            List of human-readable descriptions of fixes applied
-        """
-        ...
 
 
 # ============================================================================

@@ -14,7 +14,7 @@ from rich.measure import Measurement
 from rich.panel import Panel
 
 if TYPE_CHECKING:
-    from skilllint.plugin_validator import AppliedFix, ValidationIssue, ValidationResult
+    from skilllint.models import AppliedFix, ValidationIssue, ValidationResult
 
 FileResults: TypeAlias = dict[Path, list[tuple[str, "ValidationResult"]]]
 
