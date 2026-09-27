@@ -62,6 +62,29 @@ Before declaring success, confirm:
 
 # Project-specific: skilllint
 
+## Repository change map
+
+Use the narrowest owner that matches the change before searching broadly.
+
+| Change | Primary seam |
+| --- | --- |
+| CLI and validation orchestration | `packages/skilllint/plugin_validator.py` (legacy central seam; decomposition tracked in #283) |
+| path selection and discovery | `packages/skilllint/scan_runtime.py` |
+| individual lint rules | `packages/skilllint/rules/` |
+| rule metadata and catalog | `packages/skilllint/rule_registry.py` |
+| provider behavior | `packages/skilllint/adapters/` |
+| untrusted external structures | `packages/skilllint/boundary/` |
+| provider schemas | `packages/skilllint/schemas/` |
+| output and reporting | `packages/skilllint/reporting.py` |
+| repository maintenance tooling | `scripts/` |
+| package unit/integration tests | `packages/skilllint/tests/` |
+| project/tooling tests and benchmarks | `tests/` |
+
+The root `pyproject.toml` owns the Python package configuration even though the
+package lives below `packages/skilllint/`. Do not infer a per-package
+`pyproject.toml` from the directory name.
+
+
 ## Verifying a change
 
 ```sh
@@ -175,28 +198,6 @@ For large cached files, narrow with `docs sections` and `docs section` first.
 ### Relationship to `fetch_platform_docs.py`
 
 `scripts/fetch_platform_docs.py` handles **bulk vendor sync** — git clones and HTTP crawl to `.claude/vendor/{provider}/`. `skilllint docs` handles **on-demand single-page capture** to `.claude/vendor/sources/`. Both scripts import shared low-level utilities from `packages/skilllint/vendor_io.py`. `scripts/fetch_spec_schema.py` also imports from `vendor_io.py`.
-
-## Orchestrator delegation discipline
-
-Claude operates as an orchestrator — it coordinates agents rather than doing file-level work itself.
-
-**The rule:** Never read a source file, config, or test file into your own context unless you are about to Edit or Write it in that same turn. Pass the file path to an agent instead.
-
-**Why this matters:**
-- Reading files consumes shared context window space
-- Agents have fresh, full context — they can discover, diagnose, and fix in one pass
-- The orchestrator stays lightweight and can coordinate multiple agents in parallel
-
-**Correct pattern:**
-- Instead of: read file → understand issue → tell agent where/how to fix
-- Do: tell agent "find the issue in `path/to/file.py` and fix it", let the agent read and act
-
-**For CI failures specifically:**
-- Delegate log fetching + root cause analysis + fix to a single agent
-- Don't grep logs into your own context — pass the run ID and repo to the agent
-
-**For formatting/lint fixes:**
-- Delegate even single-file ruff format calls — the agent handles it without bloating orchestrator context
 
 ## No inline CI code
 
