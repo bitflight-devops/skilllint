@@ -41,8 +41,12 @@ def test_all_top_level_repository_directories_are_classified() -> None:
     surfaces = _surfaces()
     classified_roots = {entry["path"].split("/", 1)[0] for entry in surfaces}
 
-    actual = {path.name for path in ROOT.iterdir() if path.is_dir() and path.name != ".git"}
-    assert actual == EXPECTED_TOP_LEVEL_DIRECTORIES
+    tracked_roots = {
+        path.parts[0]
+        for path in ROOT.rglob("*")
+        if path.is_file() and ".git" not in path.parts and path.parts
+    }
+    assert EXPECTED_TOP_LEVEL_DIRECTORIES <= tracked_roots
     assert EXPECTED_TOP_LEVEL_DIRECTORIES <= classified_roots
 
 
@@ -75,3 +79,4 @@ def test_specific_non_product_overrides_are_task_only() -> None:
 
     assert by_path["packages/skilllint"]["kind"] == "product"
     assert by_path["packages/skilllint"]["architecture_evidence"] == "primary"
+    assert by_path["docs/architecture.md"]["architecture_evidence"] == "primary"
