@@ -732,3 +732,45 @@ class TestEncodedDestinations:
         )
 
         assert InternalLinkValidator().validate(skill_md).errors == []
+
+
+class TestTitlesAndHtmlLinks:
+    """LK001 reads a titled link's destination and checks raw HTML href/src."""
+
+    def test_titled_links_resolve_to_their_destination(self, tmp_path: Path) -> None:
+        skill_dir = tmp_path / "title-skill"
+        (skill_dir / "references").mkdir(parents=True)
+        (skill_dir / "references" / "ok.md").write_text("# ok\n")
+        (skill_dir / "references" / "sp ace.md").write_text("# ok\n")
+        skill_md = skill_dir / "SKILL.md"
+        skill_md.write_text(
+            "---\ndescription: Test skill\n---\n\n"
+            "[ok](references/ok.md \"Title\") [sq](references/ok.md 'T') [pa](references/ok.md (T))\n"
+            '[br](<references/sp ace.md> "T")\n'
+            '[gone](references/missing.md "Title")\n'
+        )
+
+        result = InternalLinkValidator().validate(skill_md)
+
+        assert [issue.message for issue in result.errors] == [
+            "Broken link: [gone](references/missing.md) (file not found)"
+        ]
+
+    def test_html_href_and_src_are_checked(self, tmp_path: Path) -> None:
+        skill_dir = tmp_path / "html-skill"
+        (skill_dir / "assets").mkdir(parents=True)
+        (skill_dir / "assets" / "ok.png").write_bytes(b"")
+        skill_md = skill_dir / "SKILL.md"
+        skill_md.write_text(
+            "---\ndescription: Test skill\n---\n\n"
+            '<img src="assets/ok.png"> <img src="assets/missing.png">\n'
+            '<a href="references/gone.md">x</a> <a href="https://example.com">u</a>\n'
+            '```html\n<img src="assets/in-code.png">\n```\n'
+        )
+
+        result = InternalLinkValidator().validate(skill_md)
+
+        assert [issue.message for issue in result.errors] == [
+            "Broken link: [<img src>](assets/missing.png) (file not found)",
+            "Broken link: [<a href>](references/gone.md) (file not found)",
+        ]

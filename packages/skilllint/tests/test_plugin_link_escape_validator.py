@@ -307,3 +307,42 @@ def test_cursor_only_plugin_is_not_checked(tmp_path: Path) -> None:
 
     assert _lk004(plugin) == []
     assert "[LK004]" not in CliRunner().invoke(app, ["check", "--no-color", str(tmp_path)]).output
+
+
+def test_inline_links_with_titles_resolve_to_the_destination_only(tmp_path: Path) -> None:
+    plugin = _make_plugin(tmp_path / "demo")
+    (plugin / "README.md").write_text(
+        '[a](../a.md "Double")\n'  # 1
+        "[b](../b.md 'Single')\n"  # 2
+        "[c](../c.md (Paren))\n"  # 3
+        '[d](<../with space.md> "Title")\n'  # 4
+        '[in](./docs/a.md "Inside")\n'  # 5
+        "[not a link](../x.md bad title)\n",  # 6: invalid title, not a link
+        encoding="utf-8",
+    )
+
+    findings = _lk004(plugin)
+
+    assert [line for _, line, _ in findings] == [1, 2, 3, 4]
+    assert "[d](../with space.md)" in findings[3][2]
+
+
+def test_html_href_and_src_escapes_are_reported(tmp_path: Path) -> None:
+    plugin = _make_plugin(tmp_path / "demo")
+    (plugin / "README.md").write_text(
+        '<p align="center">\n'  # 1
+        '  <img alt="logo" src="../../assets/logo.png">\n'  # 2
+        "</p>\n"  # 3
+        "\n"  # 4
+        "Inline <a href=\"../../x.md\">x</a> and <a HREF='&#46;&#46;/y.md'>y</a>.\n"  # 5
+        "<img\n"  # 6
+        "  src=../z.png>\n"  # 7
+        '<a href="https://example.com">site</a> <a href="#top">top</a> <img src="./assets/in.png">\n'  # 8
+        '`<a href="../code.md">`\n',  # 9
+        encoding="utf-8",
+    )
+
+    findings = _lk004(plugin)
+
+    assert [line for _, line, _ in findings] == [2, 5, 5, 7]
+    assert "[<img src>](../../assets/logo.png)" in findings[0][2]

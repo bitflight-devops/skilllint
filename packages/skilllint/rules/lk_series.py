@@ -54,8 +54,21 @@ if TYPE_CHECKING:
 # Shared link extraction
 # ---------------------------------------------------------------------------
 
-# Regex pattern for extracting markdown links (Architecture line 1219)
-LINK_PATTERN = r"\[([^\]]+)\]\(([^)]+)\)"
+# Regex pattern for inline markdown links, per CommonMark 0.31.2 section 6.3
+# (spec.commonmark.org/0.31.2/#links): the destination is ``<...>`` (spaces
+# allowed) or a run with no spaces or parentheses, followed by an optional
+# title in double quotes, single quotes or parentheses. Group 2 is a
+# bracketed destination, group 3 a bare one.
+LINK_PATTERN = (
+    r"\[([^\]]+)\]\(\s*(?:<([^>\n]*)>|([^\s()<][^\s()]*))"
+    r"(?:\s+(?:\"[^\"]*\"|'[^']*'|\([^()]*\)))?\s*\)"
+)
+
+# Raw HTML in Markdown (CommonMark 0.31.2 sections 4.6 and 6.6) links with an
+# ``href`` or ``src`` attribute on any tag. A tag spans ``<name ... >``; each
+# attribute value is double-quoted, single-quoted or unquoted.
+HTML_TAG_PATTERN = r"<([A-Za-z][A-Za-z0-9-]*)(\s[^<>]*)>"
+HTML_LINK_ATTRIBUTE_PATTERN = r"\s(href|src)\s*=\s*(?:\"([^\"]*)\"|'([^']*)'|([^\s\"'=<>`]+))"
 
 # Regex pattern for link reference definitions (``[label]: dest "title"``),
 # per CommonMark 0.31.2 section 4.7 (spec.commonmark.org/0.31.2/#link-reference-definitions):
@@ -138,12 +151,23 @@ def _should_ignore_link(url: str) -> bool:
     return bool(url.startswith("/"))
 
 
+def _iter_html_links(stripped: str) -> Iterator[tuple[int, str, str, bool]]:
+    """Yield ``(offset, label, value, True)`` for each ``href``/``src`` attribute."""
+    for tag in re.finditer(HTML_TAG_PATTERN, stripped):
+        attributes_start = tag.start(2)
+        for attribute in re.finditer(HTML_LINK_ATTRIBUTE_PATTERN, tag.group(2), flags=re.IGNORECASE):
+            value = next(group for group in attribute.groups()[1:] if group is not None)
+            label = f"<{tag.group(1)} {attribute.group(1).lower()}>"
+            yield attributes_start + attribute.start(), label, value, True
+
+
 def _iter_links(content: str, *, keep_root_absolute: bool = False) -> Iterator[tuple[str, str, str, int]]:
     """Yield every relative markdown link in *content*, in document order.
 
-    Both inline links (``[text](dest)``) and link reference definitions
-    (``[label]: dest "title"``) are links; for a definition, ``link_text`` is
-    its label. Code blocks and inline code spans are stripped first, then
+    Inline links (``[text](dest "title")``), link reference definitions
+    (``[label]: dest "title"``) and ``href``/``src`` attributes of raw HTML
+    tags are all links. ``link_text`` is the link text, the definition's
+    label, or ``<tag attribute>`` for HTML. Code blocks and inline code spans are stripped first, then
     external, anchor and absolute links are skipped.
 
     Args:
@@ -153,23 +177,30 @@ def _iter_links(content: str, *, keep_root_absolute: bool = False) -> Iterator[t
 
     Yields:
         ``(link_text, link_url, link_url_without_fragment, line)`` for each
-        relative link. ``link_url`` is the destination as written. The third
-        element is the filesystem path it names: backslash escapes and
-        character references decoded, any ``#anchor`` suffix removed, then
+        relative link. ``link_url`` is the destination as written, without
+        any title. The third element is the filesystem path it names:
+        character references decoded (and, outside HTML, backslash escapes), any ``#anchor`` suffix removed, then
         percent-decoded (e.g. ``./references/my%20file.md#heading`` becomes
         ``./references/my file.md``). ``line`` is the 1-based line of the
-        link's opening ``[`` in *content*.
+        link's opening ``[``, or of its HTML attribute, in *content*.
     """
     stripped = _strip_code_blocks(content)
-    inline = ((m.start(), m.group(1), m.group(2)) for m in re.finditer(LINK_PATTERN, stripped))
+    inline = (
+        (m.start(), m.group(1), m.group(2) if m.group(2) is not None else m.group(3), False)
+        for m in re.finditer(LINK_PATTERN, stripped)
+    )
     definitions = (
-        (m.start(), m.group(1), m.group(2) or m.group(3))
+        (m.start(), m.group(1), m.group(2) or m.group(3), False)
         for m in re.finditer(REFERENCE_DEFINITION_PATTERN, stripped, flags=re.MULTILINE)
     )
-    for start, link_text, link_url in sorted([*inline, *definitions]):
+    for start, link_text, link_url, is_html in sorted([*inline, *definitions, *_iter_html_links(stripped)]):
+        if not link_url:
+            continue
         # Filter to relative file links only, judged on the decoded
-        # destination so an escaped or entity-encoded form cannot hide a link
-        destination = _decode_destination(link_url)
+        # destination so an escaped or entity-encoded form cannot hide a link.
+        # An HTML attribute value takes character references but no backslash
+        # escapes (CommonMark 0.31.2 section 6.6 leaves raw HTML as HTML).
+        destination = html.unescape(link_url) if is_html else _decode_destination(link_url)
         root_absolute = destination.startswith("/") and not destination.startswith("//")
         if _should_ignore_link(destination) and not (keep_root_absolute and root_absolute):
             continue
@@ -260,8 +291,10 @@ def check_lk001(content: str, path: Path) -> list[ValidationIssue]:
     """## LK001 — Broken internal link
 
     A relative markdown link in `SKILL.md` points to a file that does not
-    exist on the filesystem. Inline links and link reference definitions
-    (``[label]: path "title"``) are both checked. The destination is decoded
+    exist on the filesystem. Inline links (with or without a title), link
+    reference definitions (``[label]: path "title"``) and the ``href``/``src``
+    attributes of raw HTML tags are all checked: a missing ``<img src>``
+    target is as broken as a missing ``[text](path)`` target. The destination is decoded
     as a Markdown renderer decodes it (backslash escapes, character
     references, then percent-encoding), so ``my%20file.md`` names
     ``my file.md``.  Broken links prevent readers and tools from
@@ -394,12 +427,15 @@ def check_lk004(content: str, path: Path, plugin_root: Path) -> list[ValidationI
     Paths are compared lexically, after ``..`` segments are collapsed and
     without following symlinks, so a symlink inside the plugin does not
     count as an escape. Links are found the same way as LK001: inline links
-    and link reference definitions (``[label]: path "title"``) alike, with
-    code blocks and inline code ignored, and so are URLs, ``#anchor`` links
-    and ``//host`` links. A destination is decoded as a Markdown renderer
-    decodes it before it is resolved: backslash escapes and character
-    references first (``\\.\\./`` and ``&#46;&#46;/`` both become ``../``),
-    then percent-encoding (``%2E%2E/``). ``${CLAUDE_PLUGIN_ROOT}`` and
+    (a title is not part of the path), link reference definitions
+    (``[label]: path "title"``), and the ``href``/``src`` attributes of raw
+    HTML such as ``<a href>`` and ``<img src>``, since a file outside the
+    plugin is missing from the cache whatever syntax links to it. Code
+    blocks and inline code are skipped, and URLs, ``#anchor`` links and
+    ``//host`` links are ignored. A destination is decoded as a Markdown
+    renderer decodes it before it is resolved: backslash escapes (not in
+    HTML attributes) and character references first (``\.\./`` and
+    ``&#46;&#46;/`` both become ``../``), then percent-encoding (``%2E%2E/``). ``${CLAUDE_PLUGIN_ROOT}`` and
     ``${CLAUDE_SKILL_DIR}`` are substituted as in LK001;
     ``${CLAUDE_SKILL_DIR}`` becomes the linking file's own directory. A link
     with any other ``${...}`` token is skipped.
