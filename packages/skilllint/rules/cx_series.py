@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING
 from skilllint.rule_registry import rule_reference, skilllint_rule
 
 if TYPE_CHECKING:
-    from skilllint.plugin_validator import ValidationIssue
+    from skilllint.models import ValidationIssue
 
 # ---------------------------------------------------------------------------
 # Spec sources
@@ -86,7 +86,7 @@ def check_cx001(content: str) -> list[ValidationIssue]:
 
     <!-- examples: CX001 -->
     """
-    from skilllint.plugin_validator import ValidationIssue  # noqa: PLC0415
+    from skilllint.models import ValidationIssue
 
     if not content.strip():
         return [
@@ -146,7 +146,7 @@ def check_cx002(content: str, schema: dict[str, object]) -> list[ValidationIssue
 
     <!-- examples: CX002 -->
     """
-    from skilllint.plugin_validator import ValidationIssue  # noqa: PLC0415
+    from skilllint.models import ValidationIssue
 
     fields_val: object = schema.get("fields", {})
     if not isinstance(fields_val, dict):
