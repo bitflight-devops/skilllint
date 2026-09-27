@@ -47,6 +47,7 @@ def built_artifacts(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, Pat
 
 
 @pytest.mark.slow
+@pytest.mark.xdist_group(name="installed_artifact_build")
 @pytest.mark.parametrize("artifact_index", [0, 1])
 def test_installed_artifact_contract(built_artifacts: tuple[Path, Path], artifact_index: int, tmp_path: Path) -> None:
     artifact = built_artifacts[artifact_index]
@@ -64,6 +65,7 @@ def test_installed_artifact_contract(built_artifacts: tuple[Path, Path], artifac
 
 
 @pytest.mark.slow
+@pytest.mark.xdist_group(name="installed_artifact_build")
 def test_installed_artifact_writes_observed_evidence(built_artifacts: tuple[Path, Path], tmp_path: Path) -> None:
     wheel, sdist = built_artifacts
     evidence_directory = tmp_path / "evidence"

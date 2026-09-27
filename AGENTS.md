@@ -72,6 +72,12 @@ uv run pytest                 # not a prek hook
 Run these, not the individual tools — the hook set is the gate, and a subset of
 it passing is not evidence.
 
+For faster local iteration during development, `uv run pytest -m "not slow"`
+skips tests that build wheels/venvs or shell out to a real subprocess
+build/install/lint tool. This is a dev-loop convenience only — it does **not**
+replace the full `uv run pytest` (no marker filter) run required above as the
+pre-commit/pre-PR evidence gate.
+
 ## Changing dependencies
 
 `scripts/uvu <uv-add-args> <package>...` — never hand-edit a version string.

@@ -5,6 +5,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from skilllint.adapters import PlatformAdapter, load_adapters
 from skilllint.plugin_validator import app, validate_single_path
 from skilllint.rule_registry import get_rule, list_rules
@@ -50,6 +52,7 @@ def test_maintainer_example_is_complete_and_protocol_compatible() -> None:
     assert callable(validate_single_path)
 
 
+@pytest.mark.slow
 def test_retained_adapter_sample_installs_loads_and_emits(monkeypatch, cli_runner, tmp_path: Path) -> None:
     package = tmp_path / "example_skilllint"
     package.mkdir()
