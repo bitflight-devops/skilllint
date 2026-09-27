@@ -21,7 +21,7 @@ from skilllint.rule_registry import rule_reference, skilllint_rule
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from skilllint.plugin_validator import ValidationIssue
+    from skilllint.models import ValidationIssue
 
 
 # ---------------------------------------------------------------------------
@@ -73,7 +73,7 @@ def _make_issue(
     Returns:
         A frozen ValidationIssue instance.
     """
-    from skilllint.plugin_validator import ValidationIssue  # noqa: PLC0415
+    from skilllint.models import ValidationIssue
 
     return ValidationIssue(
         field=field,
