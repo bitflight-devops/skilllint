@@ -44,7 +44,7 @@ from skilllint.rules._mcp_tool_discovery import (
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from skilllint.plugin_validator import ValidationIssue
+    from skilllint.models import ValidationIssue
 
 # ---------------------------------------------------------------------------
 # Spec sources
