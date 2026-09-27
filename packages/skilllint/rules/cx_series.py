@@ -29,12 +29,8 @@ Rule IDs and default severities:
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING
-
 from skilllint.models import ValidationIssue
 from skilllint.rule_registry import rule_reference, skilllint_rule
-
-if TYPE_CHECKING:
 
 # ---------------------------------------------------------------------------
 # Spec sources
