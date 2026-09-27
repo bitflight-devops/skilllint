@@ -42,9 +42,9 @@ def test_all_top_level_repository_directories_are_classified() -> None:
     classified_roots = {entry["path"].split("/", 1)[0] for entry in surfaces}
 
     tracked_roots = {
-        path.parts[0]
+        path.relative_to(ROOT).parts[0]
         for path in ROOT.rglob("*")
-        if path.is_file() and ".git" not in path.parts and path.parts
+        if path.is_file() and ".git" not in path.relative_to(ROOT).parts
     }
     assert EXPECTED_TOP_LEVEL_DIRECTORIES <= tracked_roots
     assert EXPECTED_TOP_LEVEL_DIRECTORIES <= classified_roots
