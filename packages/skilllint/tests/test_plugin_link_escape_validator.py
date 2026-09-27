@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 from skilllint.plugin_validator import PluginLinkEscapeValidator, _get_validators_for_path, app
@@ -225,3 +226,84 @@ def test_reference_definitions_are_checked_with_titles_and_real_lines(tmp_path: 
     assert [line for _, line, _ in findings] == [9, 12]
     assert "[r](../rules/x.md)" in findings[0][2]
     assert "[abs](/abs path.md)" in findings[1][2]
+
+
+@pytest.mark.parametrize(
+    "destination",
+    [
+        r"\.\./outside.md",
+        "%2E%2E/outside.md",
+        "&#46;&#46;/outside.md",
+        "&#x2E;&#x2E;/outside.md",
+        "&period;&period;/outside.md",
+        r"\/abs.md",
+    ],
+    ids=[
+        "backslash-escape",
+        "percent-encoded",
+        "decimal-reference",
+        "hex-reference",
+        "named-reference",
+        "escaped-root",
+    ],
+)
+def test_encoded_escaping_destinations_are_decoded_and_reported(tmp_path: Path, destination: str) -> None:
+    plugin = _make_plugin(tmp_path / "demo")
+    (plugin / "README.md").write_text(f"# Demo\n\n[x]({destination})\n[r]: {destination}\n", encoding="utf-8")
+
+    assert [line for _, line, _ in _lk004(plugin)] == [3, 4]
+
+
+def test_encoded_url_and_in_plugin_destinations_are_not_reported(tmp_path: Path) -> None:
+    plugin = _make_plugin(tmp_path / "demo")
+    (plugin / "README.md").write_text(
+        "[web](&#104;ttps://example.com/../x)\n[inside](docs%2Fa.md)\n[hash](a%23b.md)\n", encoding="utf-8"
+    )
+
+    assert _lk004(plugin) == []
+
+
+def _make_codex_plugin(root: Path) -> Path:
+    (root / ".codex-plugin").mkdir(parents=True)
+    (root / ".codex-plugin" / "plugin.json").write_text('{"name": "demo"}\n', encoding="utf-8")
+    return root
+
+
+def test_codex_only_plugin_is_checked(tmp_path: Path) -> None:
+    plugin = _make_codex_plugin(tmp_path / "demo")
+    (plugin / "README.md").write_text("[out](../outside.md)\n", encoding="utf-8")
+
+    assert [(field, line) for field, line, _ in _lk004(plugin)] == [("README.md", 1)]
+    result = PluginLinkEscapeValidator().validate(plugin / ".codex-plugin" / "plugin.json")
+    assert [issue.field for issue in result.errors] == ["README.md"]
+
+
+def test_cli_check_on_codex_only_plugin_reports_lk004(tmp_path: Path) -> None:
+    plugin = _make_codex_plugin(tmp_path / "plugins" / "demo")
+    (plugin / "README.md").write_text("# Demo\n\n[out](../../rules/x.md)\n", encoding="utf-8")
+
+    for target in (plugin, tmp_path):
+        result = CliRunner().invoke(app, ["check", "--no-color", str(target)])
+
+        assert result.exit_code == 1, result.output
+        assert result.output.count("[LK004] README.md:3:") == 1, result.output
+
+
+def test_plugin_with_claude_and_codex_manifests_is_reported_once(tmp_path: Path) -> None:
+    plugin = _make_plugin(tmp_path / "plugins" / "demo")
+    _make_codex_plugin(plugin)
+    (plugin / "README.md").write_text("[out](../../rules/x.md)\n", encoding="utf-8")
+
+    result = CliRunner().invoke(app, ["check", "--no-color", str(tmp_path)])
+
+    assert result.output.count("[LK004]") == 1, result.output
+
+
+def test_cursor_only_plugin_is_not_checked(tmp_path: Path) -> None:
+    plugin = tmp_path / "demo"
+    (plugin / ".cursor-plugin").mkdir(parents=True)
+    (plugin / ".cursor-plugin" / "plugin.json").write_text('{"name": "demo"}\n', encoding="utf-8")
+    (plugin / "README.md").write_text("[out](../outside.md)\n", encoding="utf-8")
+
+    assert _lk004(plugin) == []
+    assert "[LK004]" not in CliRunner().invoke(app, ["check", "--no-color", str(tmp_path)]).output

@@ -36,10 +36,12 @@ already covered by PL004.
 
 from __future__ import annotations
 
+import html
 import os
 import re
 from pathlib import Path
 from typing import TYPE_CHECKING
+from urllib.parse import unquote
 
 from skilllint.rule_registry import _make_issue, skilllint_rule
 
@@ -64,6 +66,24 @@ REFERENCE_DEFINITION_PATTERN = (
     r"^ {0,3}\[(?!\^)([^\]]+)\]:[ \t]*(?:<([^>\n]+)>|([^\s<]\S*))"
     r"(?:[ \t]+(?:\"[^\"\n]*\"|'[^'\n]*'|\([^)\n]*\)))?[ \t]*$"
 )
+
+# CommonMark 0.31.2 section 2.4 (backslash escapes: any ASCII punctuation) and
+# section 2.5 (entity and numeric character references, which require the
+# trailing ``;``) both apply inside link destinations.
+BACKSLASH_ESCAPE_PATTERN = r"\\([!-/:-@\[-`{-~])"
+CHARACTER_REFERENCE_PATTERN = r"&(?:#[0-9]{1,7}|#[xX][0-9a-fA-F]{1,6}|[A-Za-z][A-Za-z0-9]{1,31});"
+
+
+def _decode_destination(url: str) -> str:
+    """Return the destination a Markdown renderer produces from *url*.
+
+    Backslash escapes and character references are decoded as CommonMark
+    specifies. Percent-encoding is left in place; the caller decodes the path
+    part once the ``#fragment`` is split off, so ``%23`` stays part of the path.
+    """
+    unescaped = re.sub(BACKSLASH_ESCAPE_PATTERN, r"\1", url)
+    return re.sub(CHARACTER_REFERENCE_PATTERN, lambda m: html.unescape(m.group(0)), unescaped)
+
 
 # Regex pattern for fenced code blocks (``` or ~~~, with optional language specifier).
 # Uses backreference to match opening/closing fence of equal or greater length.
@@ -133,9 +153,11 @@ def _iter_links(content: str, *, keep_root_absolute: bool = False) -> Iterator[t
 
     Yields:
         ``(link_text, link_url, link_url_without_fragment, line)`` for each
-        relative link, where the third element has any ``#anchor`` suffix
-        removed (e.g. ``./references/file.md#heading`` becomes
-        ``./references/file.md``) and ``line`` is the 1-based line of the
+        relative link. ``link_url`` is the destination as written. The third
+        element is the filesystem path it names: backslash escapes and
+        character references decoded, any ``#anchor`` suffix removed, then
+        percent-decoded (e.g. ``./references/my%20file.md#heading`` becomes
+        ``./references/my file.md``). ``line`` is the 1-based line of the
         link's opening ``[`` in *content*.
     """
     stripped = _strip_code_blocks(content)
@@ -145,14 +167,16 @@ def _iter_links(content: str, *, keep_root_absolute: bool = False) -> Iterator[t
         for m in re.finditer(REFERENCE_DEFINITION_PATTERN, stripped, flags=re.MULTILINE)
     )
     for start, link_text, link_url in sorted([*inline, *definitions]):
-        # Filter to relative file links only
-        root_absolute = link_url.startswith("/") and not link_url.startswith("//")
-        if _should_ignore_link(link_url) and not (keep_root_absolute and root_absolute):
+        # Filter to relative file links only, judged on the decoded
+        # destination so an escaped or entity-encoded form cannot hide a link
+        destination = _decode_destination(link_url)
+        root_absolute = destination.startswith("/") and not destination.startswith("//")
+        if _should_ignore_link(destination) and not (keep_root_absolute and root_absolute):
             continue
 
-        # Strip anchor fragment before resolving path
+        # Strip anchor fragment, then percent-decode the path for the filesystem
         line = stripped.count("\n", 0, start) + 1
-        yield link_text, link_url, link_url.split("#")[0], line
+        yield link_text, link_url, unquote(destination.split("#")[0]), line
 
 
 # Regex pattern for any ${...} substitution-style token. Matches both
@@ -237,7 +261,10 @@ def check_lk001(content: str, path: Path) -> list[ValidationIssue]:
 
     A relative markdown link in `SKILL.md` points to a file that does not
     exist on the filesystem. Inline links and link reference definitions
-    (``[label]: path "title"``) are both checked.  Broken links prevent readers and tools from
+    (``[label]: path "title"``) are both checked. The destination is decoded
+    as a Markdown renderer decodes it (backslash escapes, character
+    references, then percent-encoding), so ``my%20file.md`` names
+    ``my file.md``.  Broken links prevent readers and tools from
     following references and indicate stale documentation.
 
     **Source:** `InternalLinkValidator` in `plugin_validator.py` — resolves
@@ -321,7 +348,12 @@ _LK004_COPIED_PLUGINS_URL = "https://code.claude.com/docs/en/plugins/loading.md#
     "LK004",
     severity="error",
     category="link",
-    platforms=["claude-code"],
+    # Codex also installs a plugin into a cache and loads that copy
+    # (developers.openai.com/codex/plugins/build.md#how-local-marketplaces-work).
+    # Cursor is excluded: its docs do not say that only the plugin directory is
+    # installed, and a served marketplace is "a synced copy of this repository"
+    # (cursor.com/docs/plugins.md).
+    platforms=["claude-code", "codex"],
     # Grounding, not a vendor rule: the cited page states that a marketplace
     # plugin is copied into the plugin cache and that files outside the plugin
     # directory are not copied. No vendor doc requires Markdown links to stay
@@ -329,7 +361,7 @@ _LK004_COPIED_PLUGINS_URL = "https://code.claude.com/docs/en/plugins/loading.md#
     authority={"origin": "code.claude.com", "reference": _LK004_COPIED_PLUGINS_URL},
 )
 def check_lk004(content: str, path: Path, plugin_root: Path) -> list[ValidationIssue]:
-    """## LK004 — Link resolves outside the plugin root
+    r"""## LK004 — Link resolves outside the plugin root
 
     A markdown link in a file inside a plugin resolves to a path outside
     that plugin's root directory: a relative link that climbs past the root
@@ -342,26 +374,35 @@ def check_lk004(content: str, path: Path, plugin_root: Path) -> list[ValidationI
     ``~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/`` at install
     and loads that copy; "Files outside the plugin directory aren't copied"
     (`code.claude.com/docs/en/plugins/loading.md#in-place-and-copied-plugins`).
+    Codex installs a plugin into
+    ``~/.codex/plugins/cache/$MARKETPLACE_NAME/$PLUGIN_NAME/$VERSION/`` and
+    "loads the installed copy from that cache path"
+    (`developers.openai.com/codex/plugins/build.md#how-local-marketplaces-work`).
     No vendor doc states a rule about Markdown links; the escape is what
-    breaks them.
+    breaks them. Cursor is not covered: its plugin docs do not say that only
+    the plugin directory is installed.
 
-    **Scope:** every ``*.md`` file under a directory that holds
-    ``.claude-plugin/plugin.json`` (READMEs, ``CLAUDE.md``, ``AGENTS.md``,
-    ``docs/``, ``skills/**``, ``agents/**``, ``commands/**``), skipping
-    ``.git``, ``node_modules`` and ``.venv``. The rule runs when skilllint
-    validates the plugin itself: the plugin directory, a tree containing
-    it, or its ``plugin.json``. Passing only one Markdown file does not run
-    it. A standalone skill with no ``plugin.json`` has no plugin root, is
-    not copied into the plugin cache, and is not checked.
+    **Scope:** every ``*.md`` file under a plugin root, a directory that
+    holds ``.claude-plugin/plugin.json`` or ``.codex-plugin/plugin.json``
+    (READMEs, ``CLAUDE.md``, ``AGENTS.md``, ``docs/``, ``skills/**``,
+    ``agents/**``, ``commands/**``), skipping ``.git``, ``node_modules`` and
+    ``.venv``. The rule runs when skilllint validates the plugin itself: the
+    plugin directory, a tree containing it, or its manifest. Passing only one
+    Markdown file does not run it. A standalone skill with neither manifest
+    has no plugin root, is not copied into a plugin cache, and is not checked.
 
     Paths are compared lexically, after ``..`` segments are collapsed and
     without following symlinks, so a symlink inside the plugin does not
-    count as an escape. Links are found the same way as LK001, inline links
-    and link reference definitions (``[label]: path "title"``) alike: code blocks
-    and inline code are ignored, and so are URLs, ``#anchor`` links and
-    ``//host`` links. ``${CLAUDE_PLUGIN_ROOT}`` and ``${CLAUDE_SKILL_DIR}``
-    are substituted as in LK001; ``${CLAUDE_SKILL_DIR}`` becomes the linking
-    file's own directory. A link with any other ``${...}`` token is skipped.
+    count as an escape. Links are found the same way as LK001: inline links
+    and link reference definitions (``[label]: path "title"``) alike, with
+    code blocks and inline code ignored, and so are URLs, ``#anchor`` links
+    and ``//host`` links. A destination is decoded as a Markdown renderer
+    decodes it before it is resolved: backslash escapes and character
+    references first (``\\.\\./`` and ``&#46;&#46;/`` both become ``../``),
+    then percent-encoding (``%2E%2E/``). ``${CLAUDE_PLUGIN_ROOT}`` and
+    ``${CLAUDE_SKILL_DIR}`` are substituted as in LK001;
+    ``${CLAUDE_SKILL_DIR}`` becomes the linking file's own directory. A link
+    with any other ``${...}`` token is skipped.
 
     **Fix:** Move or copy the target into the plugin and link to it
     there, or link to a published URL:

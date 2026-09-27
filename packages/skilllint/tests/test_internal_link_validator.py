@@ -420,9 +420,9 @@ See [file](./references/file%20with%20space.md).
         validator = InternalLinkValidator()
         result = validator.validate(skill_md)
 
-        # Should handle URL encoding
-        # (May pass or fail depending on implementation)
-        assert isinstance(result.passed, bool)
+        # %20 is percent-decoded to a space, so the link resolves
+        assert result.passed is True
+        assert result.errors == []
 
     def test_absolute_path_ignored(self, tmp_path: Path) -> None:
         """Test absolute paths are ignored.
@@ -698,3 +698,37 @@ class TestReferenceDefinitions:
         assert [issue.message for issue in result.errors] == [
             "Broken link: [g](./references/missing.md) (file not found)"
         ]
+
+
+class TestEncodedDestinations:
+    """LK001 resolves the destination a Markdown renderer would produce."""
+
+    @pytest.mark.parametrize(
+        "destination",
+        [r"\.\./gone.md", "%2E%2E/gone.md", "&#46;&#46;/gone.md", "&period;&period;/gone.md"],
+        ids=["backslash-escape", "percent-encoded", "numeric-reference", "named-reference"],
+    )
+    def test_encoded_broken_link_is_reported(self, tmp_path: Path, destination: str) -> None:
+        skill_dir = tmp_path / "enc-skill"
+        # Decoy at the undecoded path: without decoding the link would resolve
+        decoy_dir = skill_dir / destination.removesuffix("/gone.md")
+        decoy_dir.mkdir(parents=True)
+        (decoy_dir / "gone.md").write_text("# decoy\n")
+        skill_md = skill_dir / "SKILL.md"
+        skill_md.write_text(f"---\ndescription: Test skill\n---\n\n[x]({destination})\n")
+
+        result = InternalLinkValidator().validate(skill_md)
+
+        assert [issue.code for issue in result.errors] == ["LK001"]
+
+    def test_encoded_link_to_existing_file_passes(self, tmp_path: Path) -> None:
+        skill_dir = tmp_path / "enc-skill"
+        (skill_dir / "references").mkdir(parents=True)
+        (skill_dir / "references" / "a b.md").write_text("# ok\n")
+        skill_md = skill_dir / "SKILL.md"
+        skill_md.write_text(
+            "---\ndescription: Test skill\n---\n\n"
+            "[p](references/a%20b.md) [e](references&#47;a b.md) [s](references\\/a%20b.md#top)\n"
+        )
+
+        assert InternalLinkValidator().validate(skill_md).errors == []

@@ -1640,12 +1640,38 @@ class InternalLinkValidator:
 # ============================================================================
 
 
+# Manifests that mark a plugin root whose installer copies only the plugin
+# directory (LK004). Each path is a provenance-registry.json claim:
+# Claude Code saves its manifest at .claude-plugin/plugin.json
+# (code.claude.com/docs/en/plugins-reference.md#manifest-file); a Codex
+# overlay keeps its plugin.json inside .codex-plugin/
+# (developers.openai.com/codex/plugins/build.md#plugin-structure).
+CLAUDE_PLUGIN_MANIFEST = ".claude-plugin/plugin.json"
+CODEX_PLUGIN_MANIFEST = ".codex-plugin/plugin.json"
+_LINK_SCOPE_PLUGIN_MARKERS: tuple[str, ...] = (CLAUDE_PLUGIN_MANIFEST, CODEX_PLUGIN_MANIFEST)
+
+
+def find_link_scope_plugin_dir(path: Path) -> Path | None:
+    """Return the nearest plugin root above *path* for LK004, or None.
+
+    Args:
+        path: Path to start searching from (file or directory).
+
+    Returns:
+        The deepest ancestor holding any of ``_LINK_SCOPE_PLUGIN_MARKERS``.
+    """
+    roots = [root for marker in _LINK_SCOPE_PLUGIN_MARKERS if (root := _find_anchor_dir(path, marker)) is not None]
+    return max(roots, key=lambda root: len(root.parts)) if roots else None
+
+
 class PluginLinkEscapeValidator:
     """Validates that no markdown link in a plugin resolves outside it (LK004).
 
     Detection lives in ``skilllint.rules.lk_series``; this class walks every
     ``*.md`` file under the plugin root and packages the rule results into a
-    ``ValidationResult``.
+    ``ValidationResult``.  The plugin root is a Claude Code
+    (``.claude-plugin/plugin.json``) or Codex (``.codex-plugin/plugin.json``)
+    plugin.
     """
 
     def validate(self, path: Path) -> ValidationResult:
@@ -1659,7 +1685,7 @@ class PluginLinkEscapeValidator:
             *path* is not inside a plugin.
         """
         errors: list[ValidationIssue] = []
-        plugin_dir = find_plugin_dir(path)
+        plugin_dir = find_link_scope_plugin_dir(path)
         if plugin_dir is not None:
             for md_file in sorted(_glob_excluding(plugin_dir, "**/*.md")):
                 try:
