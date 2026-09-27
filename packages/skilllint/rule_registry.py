@@ -34,7 +34,7 @@ from pydantic import BaseModel, Field
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from skilllint.plugin_validator import ValidationIssue
+    from skilllint.models import ValidationIssue
 
 _logger = logging.getLogger(__name__)
 
@@ -76,7 +76,7 @@ def _make_issue(
     """
     # Deferred import to break the circular dependency: plugin_validator
     # imports rules/, so rules/ cannot import plugin_validator at module level.
-    from skilllint.plugin_validator import ValidationIssue  # noqa: PLC0415
+    from skilllint.models import ValidationIssue
 
     return ValidationIssue(
         field=field, severity=severity, message=message, code=code, docs_url=rule_reference(code), suggestion=suggestion
