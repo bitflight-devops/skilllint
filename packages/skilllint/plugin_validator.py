@@ -13,6 +13,7 @@ Token-based complexity measurement replaces line counting for accurate AI cost e
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import re
@@ -39,8 +40,6 @@ from enum import StrEnum
 from io import StringIO
 from pathlib import Path, PurePath
 from typing import TYPE_CHECKING, Annotated, Literal, NoReturn, TypeAlias, cast
-
-import contextlib
 
 import typer
 from git import Repo
