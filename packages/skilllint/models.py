@@ -24,7 +24,7 @@ class ValidationIssue(BaseModel):
     field: str
     severity: Literal["error", "warning", "info"]
     message: str
-    code: Annotated[str, Field(pattern=r"^[A-Z]{2}\\d{3}$")]
+    code: Annotated[str, Field(pattern=r"^[A-Z]{2}\d{3}$")]
     line: int | None = None
     suggestion: str | None = None
     docs_url: str | None = None
@@ -37,8 +37,8 @@ class ValidationIssue(BaseModel):
         """
         severity_icon = {"error": ":cross_mark:", "warning": ":warning:", "info": ":information:"}[self.severity]
         location = f":{self.line}" if self.line else ""
-        suggestion_line = f"\\n    → {self.suggestion}" if self.suggestion else ""
-        docs = f"\\n    → {self.docs_url}" if self.docs_url else ""
+        suggestion_line = f"\n    → {self.suggestion}" if self.suggestion else ""
+        docs = f"\n    → {self.docs_url}" if self.docs_url else ""
         return f"  {severity_icon} [{self.code}] {self.field}{location}: {self.message}{suggestion_line}{docs}"
 
 
