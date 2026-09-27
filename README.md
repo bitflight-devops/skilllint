@@ -72,11 +72,11 @@ Exit codes: `0` = all checks passed · `1` = validation errors · `2` = usage er
 Use `bitflight-devops/skilllint` as a GitHub Action to validate skills, plugins, and agents in any repository:
 
 ```yaml
-- uses: bitflight-devops/skilllint@v1.19.0
+- uses: bitflight-devops/skilllint@vX.Y.Z
   with:
     paths: "plugins/"
     platform: "claude-code"
-    version: "1.19.2"
+    version: "X.Y.Z"
     show-summary: "true"
 ```
 
@@ -123,11 +123,11 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Lint skills and plugins
-        uses: bitflight-devops/skilllint@v1.19.0
+        uses: bitflight-devops/skilllint@vX.Y.Z
         with:
           paths: "plugins/ .claude/"
           platform: "claude-code"
-          version: "1.19.2"
+          version: "X.Y.Z"
           show-summary: "true"
           verbose: "false"
 ```
@@ -137,10 +137,10 @@ jobs:
 ```yaml
 - name: Lint skills and plugins
   id: lint
-  uses: bitflight-devops/skilllint@v1.19.0
+  uses: bitflight-devops/skilllint@vX.Y.Z
   with:
     paths: "plugins/"
-    version: "1.19.2"
+    version: "X.Y.Z"
   continue-on-error: true
 
 - name: Print result
@@ -156,7 +156,7 @@ Add to `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/bitflight-devops/skilllint
-    rev: v1.19.0
+    rev: vX.Y.Z
     hooks:
       - id: skilllint
 ```
@@ -193,273 +193,41 @@ skilllint check --platform claude-code plugins/my-plugin
 
 ---
 
-## What gets validated
+## Runtime rule reference
 
-| Code | Category | Description |
-|---|---|---|
-| FM001–FM007, FM009–FM010 | Frontmatter | Required fields, valid values, schema compliance |
-| SK004–SK008 | Skill | Description quality, token limits, complexity, internal links |
-| AS001, AS006, AS008–AS009 | AgentSkills | SKILL.md conformance with the AgentSkills open standard |
-| LK001, LK004 | Links | Broken internal markdown links; links in a plugin's agents/, skills/ and commands/ that may dangle once the plugin is installed (info) |
-| PD001–PD003 | Progressive disclosure | Directory structure for references/, examples/, scripts/ |
-| PL001–PL006 | Plugin | Structure, manifest correctness, marketplace layout, subprocess safety |
-| HK001–HK005 | Hook | Script existence, configuration validity |
-| NR001–NR002 | Namespace refs | Cross-plugin skill/agent/command references |
-| SL001 | Symlinks | Symlink hygiene within plugin directory |
-| TC001 | Token count | Token count reporting and threshold enforcement |
-| PR001, PR002, PR005 | Plugin registration | Capability registration completeness and correctness in plugin.json |
-| PA001 | Plugin agent | Plugin-packaged agents: `hooks` / `mcpServers` / `permissionMode` unsupported per Anthropic (ignored at load; cite sub-agents doc) |
-| AG001–AG003 | Agent frontmatter | Claude Code `agents/*.md` (any scope): unresolvable tool wildcards, MCP server casing/references, and non-string `skills` values or members discarded by the file loader; scalar strings and string-only lists are accepted |
-| CU001–CU002 | Cursor | Cursor `.mdc` frontmatter required fields and enum values |
-| CX001–CX002 | Codex | Codex `AGENTS.md` content non-empty and header presence |
+The installed runtime owns the active rule catalog, severity, platform scope,
+fixability, and rule documentation. Query it directly instead of relying on a
+copied table in this README:
 
----
+```bash
+skilllint rules
+skilllint rule SK006
+```
+
+This keeps rule additions, retirements, and metadata changes synchronized with
+the executable that will perform the scan.
 
 ## CLI reference
 
-```
-Usage: skilllint [OPTIONS] COMMAND [ARGS]...
-
-Commands:
-  check   Validate Claude Code plugins, skills, agents, and commands.
-  docs    Fetch, query, and verify cached vendor documentation.
-  rule    Show documentation for a validation rule.
-  rules   List all available validation rules.
-
-Options:
-  --help  Show this message and exit.
-```
-
-### check
-
-```
-Usage: skilllint check [OPTIONS] [PATHS]...
-
-Arguments:
-  paths              Paths to validate
-
-Options:
-  --check            Validate only, don't auto-fix
-  --fix              Auto-fix issues where possible
-  --verbose, -v      Show detailed output
-  --no-color         Disable color
-  --tokens-only      Output token count only
-  --show-progress    Show per-file status
-  --show-summary     Show summary panel
-  --filter TEXT          Glob pattern to match files within a directory
-  --filter-type TEXT     Filter type (skills | agents | commands)
-  --platform TEXT        Platform adapter
-  --include-gitignore    Scan files excluded by .gitignore (default: skip them)
-  --record PATH          Record terminal output to SVG or HTML file
-  --help                 Show this message and exit
-```
-
-### rules
-
-```
-Usage: skilllint rules [OPTIONS]
-
-Options:
-  --platform, -p TEXT  Filter rules by platform
-  --category, -c TEXT  Filter rules by category
-  --severity, -s TEXT  Filter rules by severity (error, warning, info)
-  --record PATH        Record terminal output to SVG or HTML file
-  --help               Show this message and exit
-```
-
-### rule
-
-```
-Usage: skilllint rule [OPTIONS] RULE_ID
-
-Arguments:
-  rule_id  Rule identifier (e.g., "SK004", "FM002", "AS001")  [required]
-
-Options:
-  --record PATH  Record terminal output to SVG or HTML file
-  --help         Show this message and exit
-```
-
-### docs
-
-Cache and query vendor documentation pages for offline use.
-
-```
-Usage: skilllint docs [OPTIONS] COMMAND [ARGS]...
-
-Commands:
-  fetch     Fetch a documentation page or return a cached copy.
-  fetch-authorities  Fetch documentation for all normalized rule authority URLs.
-  latest    Find the most recent cached file for a page name.
-  sections  Print a table of sections in a cached markdown file.
-  section   Extract the text of a named section from a cached markdown file.
-  verify    Verify a cached file against its .meta.json integrity sidecar.
-```
-
-#### docs fetch
-
-```
-Usage: skilllint docs fetch [OPTIONS] URL
-
-Arguments:
-  url                   Documentation URL to fetch or serve from cache.
-
-Cache Options:
-  --ttl FLOAT           Cache time-to-live in hours before a refresh is attempted.  [default: 4.0]
-  --force               Skip the freshness check and always attempt a network fetch.
-
-Options:
-  --help                Show this message and exit.
-```
-
-Prints the cached file path to stdout. Status messages go to stderr. Exits 1 when no
-cache exists and the network is unavailable.
-
-#### docs fetch-authorities
-
-```
-Usage: skilllint docs fetch-authorities [OPTIONS]
-
-Cache Options:
-  --ttl FLOAT           Cache time-to-live in hours before a refresh is attempted.  [default: 4.0]
-  --force               Skip the freshness check and always attempt a network fetch.
-
-Options:
-  --help                Show this message and exit.
-```
-
-Fetches every unique authority URL declared by the rule registry after normalizing
-origin-relative references against each rule authority origin. Prints one cached file
-path per successful fetch. Exits 1 if any URL cannot be fetched and no stale cache is
-available.
-
-#### docs latest
-
-```
-Usage: skilllint docs latest [OPTIONS] PAGE_NAME
-
-Arguments:
-  page_name             Filesystem-safe page name (e.g. 'claude-code--settings').
-
-Options:
-  --help                Show this message and exit.
-```
-
-Prints the file path to stdout. Exits 1 when no cached file exists for that page name.
-
-#### docs sections
-
-```
-Usage: skilllint docs sections [OPTIONS] FILE_PATH
-
-Arguments:
-  file_path             Path to the cached markdown file to index.
-
-Options:
-  --help                Show this message and exit.
-```
-
-Prints a table of headings with their line ranges to stdout.
-
-#### docs section
-
-```
-Usage: skilllint docs section [OPTIONS] FILE_PATH HEADING
-
-Arguments:
-  file_path             Path to the cached markdown file.
-  heading               Heading text or markdown anchor slug to locate.
-
-Options:
-  --help                Show this message and exit.
-```
-
-Prints the full text of the matching section to stdout. Exits 1 when the heading is not found.
-
-Heading matching is case-insensitive and accepts two forms:
-
-- Heading text: `"Hook input and output"`
-- Markdown anchor slug: `"hook-input-and-output"`
-
-Leading `#` characters are stripped before comparison.
-
-#### docs verify
-
-```
-Usage: skilllint docs verify [OPTIONS] FILE_PATH
-
-Arguments:
-  file_path             Path to the cached markdown file to verify.
-
-Options:
-  --help                Show this message and exit.
-```
-
-Exits 0 when the file is intact. Exits 1 when the file has been modified or when no
-sidecar exists.
-
-All four command names are aliases for the same tool:
+Use the executable's help for the current command and option inventory:
 
 ```bash
-skilllint   # primary
-agentlint   # alias
-pluginlint  # alias
-skillint    # alias
+skilllint --help
+skilllint check --help
+skilllint rules --help
+skilllint rule --help
+skilllint docs --help
 ```
 
----
+See [Usage and integrations](docs/usage.md) for maintained workflows and
+configuration examples.
 
 ## Vendor documentation cache
 
-`skilllint docs` provides an offline-first cache for vendor documentation pages. Pages are
-fetched once and stored locally; subsequent calls within the TTL window are served from
-disk without a network request. When the TTL has expired but the network is unavailable,
-the stale copy is served automatically.
-
-Cached files are written to `.claude/vendor/sources/` with filenames in the format
-`{page-name}-{YYYY-MM-DD-HHMM}.md`. Each file is accompanied by a `.meta.json` integrity
-sidecar that records the SHA-256 digest, byte count, source URL, and fetch timestamp.
-
-```bash
-# Cache a documentation page (default TTL: 4 hours)
-skilllint docs fetch https://docs.anthropic.com/en/docs/claude-code/settings.md
-
-# Pre-fetch all normalized rule authority URLs
-skilllint docs fetch-authorities
-
-# Force a network refresh regardless of TTL
-skilllint docs fetch https://docs.anthropic.com/en/docs/claude-code/settings.md --force
-
-# Find the most recently cached copy of a page
-skilllint docs latest claude-code--settings
-
-# List all sections with line ranges
-skilllint docs sections .claude/vendor/sources/claude-code--settings-2025-01-01-1200.md
-
-# Extract a section by heading text or markdown anchor slug
-skilllint docs section .claude/vendor/sources/claude-code--settings-2025-01-01-1200.md "Hook input and output"
-skilllint docs section .claude/vendor/sources/claude-code--settings-2025-01-01-1200.md "hook-input-and-output"
-
-# Verify a cached file against its sidecar
-skilllint docs verify .claude/vendor/sources/claude-code--settings-2025-01-01-1200.md
-```
-
-Section extraction uses [marko](https://github.com/frostming/marko) for AST-based
-markdown parsing, so `#` characters inside fenced code blocks are never mistaken for
-headings.
-
-If `skilllint` is not installed, use `uvx` to run it without a permanent install:
-
-```bash
-uvx skilllint docs fetch https://docs.anthropic.com/en/docs/claude-code/settings.md
-```
-
-`scripts/fetch_doc_source.py` is a PEP 723 standalone script that exposes the same
-commands via `uv run --script`. It is intended for contributors working directly on
-the skilllint source tree (where `[tool.uv.sources]` points the dependency at the
-local package), not for end users.
-
----
+`skilllint docs` provides the project's offline-first authority cache. Query
+the current command surface with `skilllint docs --help`; see
+[Vendor documentation cache](docs/vendor-cache.md) for cache ownership,
+lifecycle, integrity, and contributor guidance.
 
 ## Suppressing warnings
 
