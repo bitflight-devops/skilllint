@@ -58,7 +58,7 @@ import msgspec
 from skilllint.rule_registry import _make_issue, skilllint_rule
 
 if TYPE_CHECKING:
-    from skilllint.plugin_validator import ValidationIssue, YamlValue
+    from skilllint.models import ValidationIssue, YamlValue
 
 # ---------------------------------------------------------------------------
 # Spec sources
