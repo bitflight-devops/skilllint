@@ -1,0 +1,9 @@
+[fixture]
+rule_id = "LK004"
+tier = 1
+description = "Markdown link in a Codex plugin (.codex-plugin/plugin.json) resolves outside the plugin root"
+
+[[variants]]
+name = "codex-plugin-escape"
+kind = "failing"
+expected_count = 1

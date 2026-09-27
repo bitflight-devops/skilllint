@@ -190,6 +190,62 @@
         "date": "2026-09-04",
         "source": ".claude/vendor/sources/hooks-2026-08-28-0408.md"
       }
+    },
+    "LK004.claude_plugin_manifest": {
+      "rule_code": "LK004",
+      "claim_name": "claude_plugin_manifest",
+      "description": "Path of the Claude Code plugin manifest relative to the plugin root; marks a plugin root LK004 checks",
+      "claim_type": "scalar",
+      "authority": {
+        "vendor_file": ".claude/vendor/sources/plugins-reference-2026-09-27-1051.md",
+        "anchor_selector": "#manifest-file",
+        "authority_url": "https://code.claude.com/docs/en/plugins-reference.md"
+      },
+      "extraction": {
+        "prompt_template": "The following markdown section describes the Claude Code plugin manifest file. Return the path, relative to the plugin root, where the manifest is saved, as a JSON string. {{section}}",
+        "output_schema": {
+          "type": "string"
+        },
+        "post_processing": null
+      },
+      "assertion_location": {
+        "file": "packages/skilllint/plugin_validator.py",
+        "symbol": "CLAUDE_PLUGIN_MANIFEST",
+        "source_type": "python_constant"
+      },
+      "expected_value": ".claude-plugin/plugin.json",
+      "x-audited": {
+        "date": "2026-09-27",
+        "source": ".claude/vendor/sources/plugins-reference-2026-09-27-1051.md"
+      }
+    },
+    "LK004.codex_plugin_manifest": {
+      "rule_code": "LK004",
+      "claim_name": "codex_plugin_manifest",
+      "description": "Path of the Codex plugin manifest overlay relative to the plugin root; marks a plugin root LK004 checks",
+      "claim_type": "scalar",
+      "authority": {
+        "vendor_file": ".claude/vendor/sources/codex--plugins--build-2026-09-27-1158.md",
+        "anchor_selector": "#plugin-structure",
+        "authority_url": "https://developers.openai.com/codex/plugins/build.md"
+      },
+      "extraction": {
+        "prompt_template": "The following markdown section describes the Codex plugin structure. Return the path, relative to the plugin root, of the Codex overlay manifest file, as a JSON string. {{section}}",
+        "output_schema": {
+          "type": "string"
+        },
+        "post_processing": null
+      },
+      "assertion_location": {
+        "file": "packages/skilllint/plugin_validator.py",
+        "symbol": "CODEX_PLUGIN_MANIFEST",
+        "source_type": "python_constant"
+      },
+      "expected_value": ".codex-plugin/plugin.json",
+      "x-audited": {
+        "date": "2026-09-27",
+        "source": ".claude/vendor/sources/codex--plugins--build-2026-09-27-1158.md"
+      }
     }
   }
 }

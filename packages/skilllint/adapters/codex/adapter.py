@@ -21,7 +21,7 @@ _logger = logging.getLogger(__name__)
 
 
 class CodexAdapter:
-    """Adapter for Codex AGENTS.md and .rules files."""
+    """Adapter for Codex AGENTS.md and .rules files, and Codex plugin paths for LK rules."""
 
     def id(self) -> str:
         """Return the adapter ID."""
@@ -29,11 +29,22 @@ class CodexAdapter:
 
     def path_patterns(self) -> list[str]:
         """Return the glob patterns for files this adapter handles."""
-        return [".agents/skills/**/*.md", "AGENTS.md", "**/*.rules", ".codex/**"]
+        # A Codex plugin keeps .codex-plugin/plugin.json and skills/ at its root
+        # (developers.openai.com/codex/plugins/build.md#plugin-structure).
+        return [
+            ".agents/skills/**/*.md",
+            "AGENTS.md",
+            "**/*.rules",
+            ".codex/**",
+            "**/.codex-plugin/plugin.json",
+            "**/skills/*/SKILL.md",
+        ]
 
     def applicable_rules(self) -> set[str]:
         """Return the set of rule prefixes applicable to this adapter."""
-        return {"AS", "CX"}
+        # LK: LK001 applies to every platform, and LK004 lists codex because
+        # Codex installs a plugin into a cache and loads that copy.
+        return {"AS", "CX", "LK"}
 
     def constraint_scopes(self) -> set[str]:
         """Return the set of constraint_scope values from the provider schema.
