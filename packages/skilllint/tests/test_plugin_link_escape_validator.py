@@ -360,3 +360,18 @@ def test_html_comments_are_not_links_and_keep_line_numbers(tmp_path: Path) -> No
     )
 
     assert [line for _, line, _ in _lk004(plugin)] == [5]
+
+
+def test_balanced_parentheses_in_bare_destinations(tmp_path: Path) -> None:
+    plugin = _make_plugin(tmp_path / "demo")
+    (plugin / "README.md").write_text(
+        "[p](../a(b).md)\n"  # 1: escapes, parenthesised name kept whole
+        "[w](https://en.wikipedia.org/wiki/Foo_(bar)) [in](./docs/c(d).md)\n"  # 2: URL ignored, inside
+        '[e](../e\\(f.md "t")\n',  # 3: escaped parenthesis
+        encoding="utf-8",
+    )
+
+    findings = _lk004(plugin)
+
+    assert [line for _, line, _ in findings] == [1, 3]
+    assert "[p](../a(b).md)" in findings[0][2]

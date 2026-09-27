@@ -56,11 +56,14 @@ if TYPE_CHECKING:
 
 # Regex pattern for inline markdown links, per CommonMark 0.31.2 section 6.3
 # (spec.commonmark.org/0.31.2/#links): the destination is ``<...>`` (spaces
-# allowed) or a run with no spaces or parentheses, followed by an optional
-# title in double quotes, single quotes or parentheses. Group 2 is a
-# bracketed destination, group 3 a bare one.
+# allowed) or a run with no spaces in which parentheses are balanced or
+# backslash-escaped, followed by an optional title in double quotes, single
+# quotes or parentheses. Group 2 is a bracketed destination, group 3 a bare one.
+# ponytail: one level of nested parentheses (``a(b).md``, ``Foo_(bar)``);
+# CommonMark allows 32, extend _BARE_DESTINATION if deeper nesting shows up.
+_BARE_DESTINATION = r"(?!<)(?:[^\s()\\]|\\.|\((?:[^\s()\\]|\\.)*\))+"
 LINK_PATTERN = (
-    r"\[([^\]]+)\]\(\s*(?:<([^>\n]*)>|([^\s()<][^\s()]*))"
+    r"\[([^\]]+)\]\(\s*(?:<([^>\n]*)>|(" + _BARE_DESTINATION + r"))"
     r"(?:\s+(?:\"[^\"]*\"|'[^']*'|\([^()]*\)))?\s*\)"
 )
 

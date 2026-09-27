@@ -795,3 +795,24 @@ class TestHtmlComments:
         assert [issue.message for issue in result.errors] == [
             "Broken link: [gone](references/gone.md) (file not found)"
         ]
+
+
+class TestParenthesesInDestinations:
+    """LK001 keeps balanced parentheses in a bare destination (CommonMark 6.3)."""
+
+    def test_parenthesised_names_resolve_and_urls_stay_urls(self, tmp_path: Path) -> None:
+        skill_dir = tmp_path / "paren-skill"
+        (skill_dir / "references").mkdir(parents=True)
+        (skill_dir / "references" / "a(b).md").write_text("# ok\n")
+        skill_md = skill_dir / "SKILL.md"
+        skill_md.write_text(
+            "---\ndescription: Test skill\n---\n\n"
+            "[ok](references/a(b).md) [wiki](https://en.wikipedia.org/wiki/Foo_(bar))\n"
+            "[gone](references/c(d).md)\n"
+        )
+
+        result = InternalLinkValidator().validate(skill_md)
+
+        assert [issue.message for issue in result.errors] == [
+            "Broken link: [gone](references/c(d).md) (file not found)"
+        ]
