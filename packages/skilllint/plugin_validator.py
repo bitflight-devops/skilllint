@@ -4240,6 +4240,8 @@ def run_platform_checks(
 
     Dispatches to adapter.validate(path) for all adapter types.
     For ClaudeCodeAdapter, also routes to the existing SK/PR/HK pipeline.
+    For any other adapter, routes to the same pipeline and keeps only the
+    issues whose series the adapter lists in ``applicable_rules()``.
 
     Args:
         path: File path to validate.
@@ -4279,8 +4281,21 @@ def run_platform_checks(
                 violations.extend(_issue_to_violation(issue) for issue in all_issues)
         return violations
 
-    # Cursor and Codex adapters implement validate() directly
-    return list(adapter.validate(path))
+    # Cursor and Codex adapters implement validate() for their own series.
+    # Core-pipeline series they declare in applicable_rules() are routed
+    # through the same validators as the default scan; AS is excluded because
+    # validate_file() already runs it for every adapter.
+    violations = list(adapter.validate(path))
+    core_series = adapter.applicable_rules() - {"AS"}
+    if core_series and _get_validators_for_path(path):
+        file_results = validate_single_path(
+            path, check=True, fix=False, verbose=False, per_run_policy_cache=policy_cache
+        )
+        for validator_results in file_results.values():
+            for _name, vr_result in validator_results:
+                all_issues = [*vr_result.errors, *vr_result.warnings, *vr_result.info]
+                violations.extend(_issue_to_violation(issue) for issue in all_issues if issue.code[:2] in core_series)
+    return violations
 
 
 def _adapter_runs_frontmatter_pipeline(matching: list[PlatformAdapter]) -> bool:

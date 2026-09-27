@@ -391,3 +391,36 @@ def test_backslash_is_a_separator_in_html_but_literal_in_markdown(tmp_path: Path
 
     assert [line for _, line, _ in findings] == [1]
     assert findings[0][2].endswith(f"-> {tmp_path.parent / 'outside.md'}")
+
+
+def test_platform_codex_reports_lk004_and_lk001_on_a_codex_plugin(tmp_path: Path) -> None:
+    plugin = _make_codex_plugin(tmp_path / "plugins" / "demo")
+    skill = plugin / "skills" / "one"
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text(
+        "---\nname: one\ndescription: Use when checking Codex platform routing of link rules.\n---\n\n"
+        "[gone](./references/missing.md)\n",
+        encoding="utf-8",
+    )
+    (plugin / "README.md").write_text("[out](../../rules/x.md)\n", encoding="utf-8")
+
+    for args in (["--platform", "codex"], []):
+        result = CliRunner().invoke(app, ["check", "--no-color", *args, str(tmp_path)])
+
+        assert result.exit_code == 1, result.output
+        assert result.output.count("[LK004]") == 1, (args, result.output)
+        assert result.output.count("[LK001]") == 1, (args, result.output)
+
+
+def test_platform_cursor_does_not_run_link_rules(tmp_path: Path) -> None:
+    skill = tmp_path / ".agents" / "skills" / "one"
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text(
+        "---\nname: one\ndescription: Use when checking Cursor platform routing of link rules.\n---\n\n"
+        "[gone](./references/missing.md)\n",
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(app, ["check", "--no-color", "--platform", "cursor", str(tmp_path)])
+
+    assert "[LK00" not in result.output, result.output
