@@ -43,7 +43,6 @@ from skilllint.rule_registry import skilllint_rule
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from skilllint.models import ValidationIssue, ValidationResult
 
 
 # Deep link to the table + security paragraph on plugin-packaged subagents.
@@ -226,7 +225,6 @@ def _ingest_agent_frontmatter_for_pa001(
     Returns:
         Snapshot for PA001 checks, or None on YAML failure or non-mapping document root.
     """
-    from skilllint.models import ValidationIssue
     from skilllint.plugin_validator import FM002, FM009, generate_docs_url  # noqa: PLC0415
 
     outcome = ingest_plugin_agent_frontmatter_for_pa001(fm_text)
@@ -301,7 +299,6 @@ def check_pa001(path: Path) -> ValidationResult:
     - ``mcpServers`` → move to ``.mcp.json`` / ``plugin.json`` at plugin root
     - ``permissionMode`` → remove, or copy agent to ``.claude/agents/`` or ``~/.claude/agents/``; or use session-wide ``permissions.allow`` in settings
     """
-    from skilllint.models import ValidationIssue, ValidationResult
     from skilllint.plugin_validator import (  # noqa: PLC0415
         FRONTMATTER_EXEMPT_FILENAMES,
         PA001 as PA001_CODE,
