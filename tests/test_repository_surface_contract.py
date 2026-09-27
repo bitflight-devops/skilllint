@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 import tomllib
 from pathlib import Path
 
@@ -41,11 +42,14 @@ def test_all_top_level_repository_directories_are_classified() -> None:
     surfaces = _surfaces()
     classified_roots = {entry["path"].split("/", 1)[0] for entry in surfaces}
 
-    tracked_roots = {
-        path.relative_to(ROOT).parts[0]
-        for path in ROOT.rglob("*")
-        if path.is_file() and ".git" not in path.relative_to(ROOT).parts
-    }
+    tracked = subprocess.run(
+        ["git", "ls-files"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.splitlines()
+    tracked_roots = {Path(path).parts[0] for path in tracked if Path(path).parts}
     assert EXPECTED_TOP_LEVEL_DIRECTORIES <= tracked_roots
     assert EXPECTED_TOP_LEVEL_DIRECTORIES <= classified_roots
 
