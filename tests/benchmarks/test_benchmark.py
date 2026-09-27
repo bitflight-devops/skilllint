@@ -9,6 +9,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 
 def _get_git_info() -> tuple[str, str]:
     """Return the current git SHA and branch name.
@@ -62,6 +64,7 @@ _RESULTS_FILE = Path(__file__).parent.parent.parent / "scripts" / "results" / "b
 _TIME_LIMIT_SECONDS = 120.0
 
 
+@pytest.mark.slow
 def test_io_scan_1000_skills_timing(extracted_plugin_dir: Path, plugin_file_count: int) -> None:
     """Run skilllint against the 1000-skill fixture and record timing.
 

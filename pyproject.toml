@@ -108,7 +108,7 @@ addopts = [
     "auto",
 ]
 markers = [
-    "slow: tests that build wheels or create venvs (skip with -m 'not slow')",
+    "slow: tests that build wheels or create venvs, or shell out to a real subprocess build/install/lint tool (skip with -m 'not slow')",
 ]
 python_classes = ["Test*"]
 python_files = ["test_*.py"]
