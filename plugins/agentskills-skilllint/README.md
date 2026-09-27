@@ -1,17 +1,23 @@
 # agentskills-skilllint
 
-A Claude Code plugin providing a `/skilllint` skill that guides AI agents through using the `skilllint` CLI to validate, fix, and understand linting violations in Claude Code plugins, skills, agents, and commands.
+A Claude Code plugin that teaches agents a stable procedure for using the
+`skilllint` CLI without duplicating the CLI's changing rule catalog or
+configuration metadata.
 
-## What It Does
+## What it does
 
-The skill teaches Claude how to:
+The `/skilllint` skill directs an agent to:
 
-- **Install** `skilllint` via `uv`, `pipx`, or `pip`
-- **Run** validation scans on plugins, skills, agents, and commands
-- **Read** and interpret violation output (FM, SK, AS, AG, LK, PD, PL, HK, NR, SL, TC, PR, PA, CU, CX rule IDs)
-- **Fix** auto-fixable violations with `skilllint check --fix`
-- **Understand** any rule ID by consulting the built-in rule catalog
-- **Check for updates** and upgrade to the latest version
+- locate or invoke the current `skilllint` executable;
+- scan the requested path with `skilllint check`;
+- use emitted rule IDs rather than guessing which rule applies;
+- query `skilllint rule <ID>` for current explanation and remediation;
+- query `skilllint rules` for current catalog metadata;
+- apply `--fix` only through a currently supported CLI route;
+- re-run validation after edits.
+
+Rule IDs, severities, fixability, thresholds, and command inventory remain
+owned by the installed `skilllint` runtime rather than this plugin.
 
 ## Installation
 
@@ -23,83 +29,46 @@ claude --plugin-dir ./plugins/agentskills-skilllint
 
 This repository does not publish a persistent marketplace entry. Copy or
 package the plugin through your organization's supported Claude distribution
-process when a persistent installation is required.
+process when persistent installation is required.
 
 ## Usage
 
-### Invoke directly
+Invoke the full workflow:
 
-```
+```text
 /skilllint
 ```
 
-Runs the full workflow guide: installation, scanning, reading output, fixing issues, checking versions.
+Explain a finding using the current runtime:
 
-### With a rule ID
-
-```
+```text
 /skilllint FM004
 ```
 
-Explains what rule FM004 means, what causes it, and how to fix it.
+Validate a path:
 
-### With a path
-
-```
+```text
 /skilllint ./plugins/my-plugin
 ```
 
-Runs `skilllint` against the specified path and interprets the output.
+The skill may also be selected automatically for requests to lint or validate
+agent plugins, skills, agents, commands, and related platform files.
 
-### Model-invoked
+## Runtime reference
 
-Claude will automatically load this skill when you ask about linting plugins, fixing FM/SK/AS/AG violations, or validating Claude Code skills and agents.
-
-## Skills
-
-| Skill | Description |
-|-------|-------------|
-| `skilllint` | Full skilllint guide with argument routing, install instructions, workflow, and rule lookup |
-
-## Rule Catalog
-
-Run `skilllint rules` for the full rule listing, or `skilllint rule <ID>` for a single rule's documentation. Series overview:
-
-| Series | Domain |
-|--------|--------|
-| FM001–FM010 | YAML frontmatter validity (FM008 removed) |
-| SK004–SK008 | Skill description and token budget |
-| AS001, AS006, AS008–AS009 | SKILL.md conformance with the AgentSkills open standard |
-| AG001–AG003 | Claude Code agent `tools`, MCP references, and discarded `skills` values |
-| LK001, LK004 | Internal markdown links; agents/, skills/ and commands/ links that may dangle once installed (info) |
-| PD001–PD003 | Progressive disclosure directory structure |
-| PL001–PL006 | Plugin manifest (`plugin.json`) |
-| HK001–HK005 | hooks.json configuration |
-| NR001–NR002 | Namespace references |
-| SL001 | Symlink hygiene |
-| TC001 | Token count reporting |
-| PR001, PR002, PR005 | Plugin registration (`plugin.json` capability paths) |
-| PA001       | Plugin-packaged agent frontmatter                  |
-| CU001–CU002 | Cursor `.mdc` frontmatter validity |
-| CX001–CX002 | Codex `AGENTS.md` and `.rules` file validity |
-
-## skilllint Installation Reference
+Use the CLI rather than this README for changing product facts:
 
 ```bash
-# uv (recommended)
-uv tool install skilllint
-uv tool upgrade skilllint
+skilllint --help
+skilllint rules
+skilllint rule <ID>
+skilllint check --help
+```
 
-# pipx
-pipx install skilllint
-pipx upgrade skilllint
+If `skilllint` is not installed and `uvx` is available:
 
-# pip
-pip install skilllint
-pip install --upgrade skilllint
-
-# Check version
-skilllint --version
+```bash
+uvx skilllint@latest --version
 ```
 
 ## License
