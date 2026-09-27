@@ -101,6 +101,19 @@ evidence by default. The most-specific matching path wins.
 - A failing or passing test is evidence about behavior; deliberately synthetic
   fixtures are not evidence that the product itself has that structure.
 
+## Fast iteration loop
+
+For iterative feedback while a change is still in progress, run the affected
+tests directly or use the repository fast profile:
+
+```sh
+uv run python scripts/run_fast_tests.py
+```
+
+Pass pytest paths/options after the script name to narrow the affected boundary.
+The fast profile excludes tests marked `slow`; it is evidence about the
+selected fast-test boundary only. It does not replace the completion gate below.
+
 ## Verifying a change
 
 ```sh
