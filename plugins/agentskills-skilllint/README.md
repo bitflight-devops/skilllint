@@ -71,7 +71,7 @@ Run `skilllint rules` for the full rule listing, or `skilllint rule <ID>` for a 
 | SK004–SK008 | Skill description and token budget |
 | AS001, AS006, AS008–AS009 | SKILL.md conformance with the AgentSkills open standard |
 | AG001–AG003 | Claude Code agent `tools`, MCP references, and discarded `skills` values |
-| LK001 | Internal markdown links |
+| LK001, LK004 | Internal markdown links; links that escape the plugin root |
 | PD001–PD003 | Progressive disclosure directory structure |
 | PL001–PL006 | Plugin manifest (`plugin.json`) |
 | HK001–HK005 | hooks.json configuration |

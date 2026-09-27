@@ -1,0 +1,14 @@
+[fixture]
+rule_id = "LK004"
+tier = 1
+description = "Markdown link in a plugin resolves outside the plugin root"
+
+[[variants]]
+name = "relative-escape"
+kind = "failing"
+expected_count = 1
+
+[[variants]]
+name = "root-absolute"
+kind = "failing"
+expected_count = 1

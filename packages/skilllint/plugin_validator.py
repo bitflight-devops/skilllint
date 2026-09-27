@@ -77,7 +77,7 @@ from skilllint.rules.hk_series import (
     iter_hook_entries,
     load_hooks_object,
 )
-from skilllint.rules.lk_series import check_lk001
+from skilllint.rules.lk_series import check_lk001, check_lk004
 from skilllint.rules.nr_series import check_nr001, check_nr002
 from skilllint.rules.pd_series import check_pd001, check_pd002, check_pd003
 from skilllint.rules.pl_series import (
@@ -94,7 +94,7 @@ from skilllint.rules.pr_series import check_pr001, check_pr002, check_pr005
 from skilllint.rules.sk_series import check_sk004, check_sk005
 from skilllint.rules.sl_series import check_sl001, iter_symlinks
 from skilllint.rules.tc_series import check_tc001
-from skilllint.scan_runtime import ScanContext, _load_plugin_json
+from skilllint.scan_runtime import ScanContext, _glob_excluding, _load_plugin_json
 from skilllint.token_counter import TOKEN_ERROR_THRESHOLD, TOKEN_WARNING_THRESHOLD, count_tokens
 from skilllint.version import __version__
 
@@ -448,8 +448,9 @@ class ErrorCode(StrEnum):
     SK007 = "SK007"  # Token count exceeds TOKEN_ERROR_THRESHOLD (must split)
     SK008 = "SK008"  # Skill directory name violates naming convention
 
-    # Link (LK001)
+    # Link (LK001, LK004)
     LK001 = "LK001"  # Broken internal link (file does not exist)
+    LK004 = "LK004"  # Link resolves outside the plugin root
 
     # Progressive Disclosure (PD001-PD003)
     PD001 = "PD001"  # No `references/` directory found
@@ -524,7 +525,7 @@ SK004, SK005, SK006, SK007, SK008 = (
     ErrorCode.SK007,
     ErrorCode.SK008,
 )
-LK001 = ErrorCode.LK001
+LK001, LK004 = ErrorCode.LK001, ErrorCode.LK004
 PD001, PD002, PD003 = ErrorCode.PD001, ErrorCode.PD002, ErrorCode.PD003
 PL001, PL002, PL003, PL004, PL005, PL006 = (
     ErrorCode.PL001,
@@ -1632,6 +1633,69 @@ class InternalLinkValidator:
             "Internal link validation cannot be auto-fixed. "
             "Broken links require creating missing files or correcting link paths manually."
         )
+
+
+# ============================================================================
+# PLUGIN LINK ESCAPE VALIDATOR
+# ============================================================================
+
+
+class PluginLinkEscapeValidator:
+    """Validates that no markdown link in a plugin resolves outside it (LK004).
+
+    Detection lives in ``skilllint.rules.lk_series``; this class walks every
+    ``*.md`` file under the plugin root and packages the rule results into a
+    ``ValidationResult``.
+    """
+
+    def validate(self, path: Path) -> ValidationResult:
+        """Validate every markdown file in the plugin containing *path*.
+
+        Args:
+            path: Path to the plugin directory or a file within it.
+
+        Returns:
+            ValidationResult with one error per escaping link; passes when
+            *path* is not inside a plugin.
+        """
+        errors: list[ValidationIssue] = []
+        plugin_dir = find_plugin_dir(path)
+        if plugin_dir is not None:
+            for md_file in sorted(_glob_excluding(plugin_dir, "**/*.md")):
+                try:
+                    content = md_file.read_text(encoding="utf-8")
+                except (OSError, UnicodeDecodeError) as e:
+                    errors.append(
+                        ValidationIssue(
+                            field=md_file.relative_to(plugin_dir).as_posix(),
+                            severity="error",
+                            message=f"Could not read file: {e}",
+                            code=FM002,
+                            docs_url=generate_docs_url(FM002),
+                        )
+                    )
+                    continue
+                errors.extend(check_lk004(content, md_file, plugin_dir))
+        return ValidationResult(passed=not errors, errors=errors, warnings=[], info=[])
+
+    def can_fix(self) -> bool:
+        """Check if validator supports auto-fixing.
+
+        Returns:
+            False (moving a link target into the plugin is a manual decision).
+        """
+        return False
+
+    def fix(self, path: Path) -> list[str]:
+        """Auto-fix escaping links (not supported).
+
+        Args:
+            path: Path to file or directory.
+
+        Raises:
+            NotImplementedError: Escaping links require manual fixes.
+        """
+        raise NotImplementedError("Links that escape the plugin root require moving the target or editing the link.")
 
 
 # ============================================================================
@@ -3743,6 +3807,7 @@ def _get_validators_for_path(path: Path) -> list[Validator]:
             PluginStructureValidator(),
             PluginRegistrationValidator(),
             PluginAgentFrontmatterValidator(),
+            PluginLinkEscapeValidator(),
         ))
     elif file_type == FileType.HOOK_CONFIG:
         validators.append(HookValidator())

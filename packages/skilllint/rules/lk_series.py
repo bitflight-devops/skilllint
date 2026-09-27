@@ -1,22 +1,28 @@
-"""LK-series internal link rules (LK001).
+"""LK-series internal link rules (LK001, LK004).
 
-LK001 detection lives here.  ``InternalLinkValidator`` in
-``plugin_validator.py`` is a thin wrapper that reads the file and calls the
-rule function, packaging its issues into a ``ValidationResult``.
+LK001 and LK004 detection lives here.  ``InternalLinkValidator`` (LK001) and
+``PluginLinkEscapeValidator`` (LK004) in ``plugin_validator.py`` are thin
+wrappers that read files and call the rule functions, packaging their issues
+into a ``ValidationResult``.
 
 ``_iter_links`` strips fenced code blocks and inline code spans, applies the
 external/anchor/absolute skip list, and yields
-``(text, url, url_without_fragment)`` triples.
+``(text, url, url_without_fragment, line)`` tuples.
 
 ``check_lk001`` takes the markdown body plus the ``SKILL.md`` path it resolves
-links against.
+links against. ``check_lk004`` additionally takes the plugin root the links
+must stay inside.
 
 Rule IDs and default severities:
     +-------+-----------------------------------------------+-----------+
     | ID    | Summary                                       | Severity  |
     +-------+-----------------------------------------------+-----------+
     | LK001 | Broken internal link (file does not exist)    | error     |
+    | LK004 | Link resolves outside the plugin root         | error     |
     +-------+-----------------------------------------------+-----------+
+
+LK003 is reserved for the repo-doc broken-link rule proposed in
+``docs/design-markdown-link-conventions.md``.
 
 LK002 ("relative link missing ./ prefix") was deleted: both the
 AgentSkills specification's own worked example
@@ -30,14 +36,15 @@ already covered by PL004.
 
 from __future__ import annotations
 
+import os
 import re
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from skilllint.rule_registry import _make_issue, skilllint_rule
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
-    from pathlib import Path
 
     from skilllint.models import ValidationIssue
 
@@ -67,11 +74,15 @@ def _strip_code_blocks(content: str) -> str:
         content: Raw markdown content
 
     Returns:
-        Content with code blocks and inline code spans removed
+        Content with code blocks and inline code spans removed. A fenced
+        block is replaced by its own newlines so every remaining character
+        keeps its original line number.
     """
     # Strip fenced code blocks first (handles nested fences via greedy
     # backreference matching: a 4-backtick fence won't close on 3 backticks)
-    stripped = re.sub(CODE_FENCE_PATTERN, "", content, flags=re.MULTILINE | re.DOTALL)
+    stripped = re.sub(
+        CODE_FENCE_PATTERN, lambda m: "\n" * m.group(0).count("\n"), content, flags=re.MULTILINE | re.DOTALL
+    )
     # Strip inline code spans
     return re.sub(INLINE_CODE_PATTERN, "", stripped)
 
@@ -97,7 +108,7 @@ def _should_ignore_link(url: str) -> bool:
     return bool(url.startswith("/"))
 
 
-def _iter_links(content: str) -> Iterator[tuple[str, str, str]]:
+def _iter_links(content: str, *, keep_root_absolute: bool = False) -> Iterator[tuple[str, str, str, int]]:
     """Yield every relative markdown link in *content*.
 
     Code blocks and inline code spans are stripped first, then external,
@@ -105,23 +116,29 @@ def _iter_links(content: str) -> Iterator[tuple[str, str, str]]:
 
     Args:
         content: Raw markdown content
+        keep_root_absolute: Also yield root-absolute ``/path`` links. A
+            protocol-relative ``//host/path`` URL is still skipped.
 
     Yields:
-        ``(link_text, link_url, link_url_without_fragment)`` for each
+        ``(link_text, link_url, link_url_without_fragment, line)`` for each
         relative link, where the third element has any ``#anchor`` suffix
         removed (e.g. ``./references/file.md#heading`` becomes
-        ``./references/file.md``).
+        ``./references/file.md``) and ``line`` is the 1-based line of the
+        link's opening ``[`` in *content*.
     """
-    for match in re.finditer(LINK_PATTERN, _strip_code_blocks(content)):
+    stripped = _strip_code_blocks(content)
+    for match in re.finditer(LINK_PATTERN, stripped):
         link_text = match.group(1)
         link_url = match.group(2)
 
         # Filter to relative file links only
-        if _should_ignore_link(link_url):
+        root_absolute = link_url.startswith("/") and not link_url.startswith("//")
+        if _should_ignore_link(link_url) and not (keep_root_absolute and root_absolute):
             continue
 
         # Strip anchor fragment before resolving path
-        yield link_text, link_url, link_url.split("#")[0]
+        line = stripped.count("\n", 0, match.start()) + 1
+        yield link_text, link_url, link_url.split("#")[0], line
 
 
 # Regex pattern for any ${...} substitution-style token. Matches both
@@ -253,7 +270,7 @@ def check_lk001(content: str, path: Path) -> list[ValidationIssue]:
     # only discards the left operand when the right operand is absolute).
     skill_dir = path.parent.resolve()
 
-    for link_text, link_url, link_url_no_fragment in _iter_links(content):
+    for link_text, link_url, link_url_no_fragment, _line in _iter_links(content):
         # Resolve documented ${CLAUDE_*} substitution variables before the
         # existence check. None means the link must be skipped because a
         # variable's target cannot be determined statically.
@@ -278,4 +295,106 @@ def check_lk001(content: str, path: Path) -> list[ValidationIssue]:
     return issues
 
 
-__all__ = ["check_lk001"]
+# ---------------------------------------------------------------------------
+# LK004 — Link resolves outside the plugin root
+# ---------------------------------------------------------------------------
+
+_LK004_COPIED_PLUGINS_URL = "https://code.claude.com/docs/en/plugins/loading.md#in-place-and-copied-plugins"
+
+
+@skilllint_rule(
+    "LK004",
+    severity="error",
+    category="link",
+    platforms=["claude-code"],
+    # Grounding, not a vendor rule: the cited page states that a marketplace
+    # plugin is copied into the plugin cache and that files outside the plugin
+    # directory are not copied. No vendor doc requires Markdown links to stay
+    # inside the plugin; flagging them is skilllint's own hygiene rule.
+    authority={"origin": "code.claude.com", "reference": _LK004_COPIED_PLUGINS_URL},
+)
+def check_lk004(content: str, path: Path, plugin_root: Path) -> list[ValidationIssue]:
+    """## LK004 — Link resolves outside the plugin root
+
+    A markdown link in a file inside a plugin resolves to a path outside
+    that plugin's root directory: a relative link that climbs past the root
+    (``../../rules/x.md``) or a root-absolute link (``/docs/x.md``). The
+    target's existence does not matter. The link may work in the source
+    repository and still break for every installed user.
+
+    **Authority:** skilllint's own hygiene rule, grounded in plugin
+    self-containment. Claude Code copies a marketplace plugin into
+    ``~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/`` at install
+    and loads that copy; "Files outside the plugin directory aren't copied"
+    (`code.claude.com/docs/en/plugins/loading.md#in-place-and-copied-plugins`).
+    No vendor doc states a rule about Markdown links; the escape is what
+    breaks them.
+
+    **Scope:** every ``*.md`` file under a directory that holds
+    ``.claude-plugin/plugin.json`` (READMEs, ``CLAUDE.md``, ``AGENTS.md``,
+    ``docs/``, ``skills/**``, ``agents/**``, ``commands/**``), skipping
+    ``.git``, ``node_modules`` and ``.venv``. The rule runs when skilllint
+    validates the plugin itself: the plugin directory, a tree containing
+    it, or its ``plugin.json``. Passing only one Markdown file does not run
+    it. A standalone skill with no ``plugin.json`` has no plugin root, is
+    not copied into the plugin cache, and is not checked.
+
+    Paths are compared lexically, after ``..`` segments are collapsed and
+    without following symlinks, so a symlink inside the plugin does not
+    count as an escape. Links are found the same way as LK001: code blocks
+    and inline code are ignored, and so are URLs, ``#anchor`` links and
+    ``//host`` links. ``${CLAUDE_PLUGIN_ROOT}`` and ``${CLAUDE_SKILL_DIR}``
+    are substituted as in LK001; ``${CLAUDE_SKILL_DIR}`` becomes the linking
+    file's own directory. A link with any other ``${...}`` token is skipped.
+
+    **Fix:** Move or copy the target into the plugin and link to it
+    there, or link to a published URL:
+
+    ```markdown
+    <!-- Before (escapes the plugin root) -->
+    See [Rules](../../rules/python.md)
+
+    <!-- After (inside the plugin) -->
+    See [Rules](./references/python.md)
+    ```
+
+    Args:
+        content: Raw markdown body of the file being checked.
+        path: Path to the file the links live in; relative links resolve
+            against its parent directory.
+        plugin_root: The plugin root directory the links must stay inside.
+
+    Returns:
+        One issue per link whose target lies outside *plugin_root*, with
+        ``field`` set to the file path relative to *plugin_root* and
+        ``line`` set to the link's line in *content*.
+
+    <!-- examples: LK004 -->
+    """
+    issues: list[ValidationIssue] = []
+    root = Path(os.path.normpath(plugin_root.absolute()))
+    base_dir = Path(os.path.normpath(path.parent.absolute()))
+    relative_file = Path(os.path.normpath(path.absolute())).relative_to(root).as_posix()
+
+    for link_text, link_url, link_url_no_fragment, line in _iter_links(content, keep_root_absolute=True):
+        resolved_url = _resolve_claude_variables(link_url_no_fragment, base_dir)
+        if resolved_url is None:
+            continue
+
+        target = Path(os.path.normpath(base_dir / resolved_url))
+        if not target.is_relative_to(root):
+            issues.append(
+                _make_issue(
+                    field=relative_file,
+                    severity="error",
+                    message=f"Link resolves outside the plugin root: [{link_text}]({link_url}) -> {target}",
+                    code="LK004",
+                    suggestion="Move the target into the plugin and link to it there, or link to a URL",
+                    line=line,
+                )
+            )
+
+    return issues
+
+
+__all__ = ["check_lk001", "check_lk004"]
