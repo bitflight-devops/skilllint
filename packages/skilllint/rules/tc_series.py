@@ -26,11 +26,11 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Literal
 
+from skilllint.models import ValidationIssue
 from skilllint.rule_registry import skilllint_rule
 from skilllint.token_counter import count_tokens
 
 if TYPE_CHECKING:
-    from skilllint.models import ValidationIssue
 
 # ---------------------------------------------------------------------------
 # Spec sources
@@ -59,7 +59,6 @@ def _make_issue(
     Returns:
         A frozen ValidationIssue instance.
     """
-    from skilllint.models import ValidationIssue
 
     return ValidationIssue(field=field, severity=severity, message=message, code=code)
 
