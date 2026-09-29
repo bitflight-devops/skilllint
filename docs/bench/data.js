@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1790685424553,
+  "lastUpdate": 1790717404239,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -2892,6 +2892,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 131.289,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "21ba4590d4668aa3e3d0f08d8c19226d53df2800",
+          "message": "refactor(policy): extract config and suppression ownership (#301)\n\n* refactor(policy): extract config and suppression ownership\n\n* fix(policy): keep platform severity remap self-contained\n\n* refactor(policy): centralize severity reclassification\n\n* fix(policy): preserve extraction compatibility\n\n* style(policy): apply repository formatting\n\n* style(policy): match ruff import formatting",
+          "timestamp": "2026-09-29T21:26:53Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/21ba4590d4668aa3e3d0f08d8c19226d53df2800"
+        },
+        "date": 1790717403131,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 9188.731,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 9566.559,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 10145.888,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 104.635,
             "unit": "files/s"
           }
         ]
