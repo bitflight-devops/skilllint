@@ -4114,7 +4114,7 @@ def _skill_md_violations(
     # default-path remap.
     return [
         {**violation, "severity": configured}
-        if (configured := policy.severity.get(str(violation.get("code")))) in _VALID_SEVERITIES
+        if (configured := policy.severity.get(str(violation.get("code")))) in {"warning", "info"}
         else violation
         for violation in violations
     ]
