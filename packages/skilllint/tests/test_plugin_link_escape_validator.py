@@ -460,7 +460,7 @@ def test_platform_codex_reports_lk004_and_lk001_on_a_codex_plugin(tmp_path: Path
         assert result.output.count("[LK001]") == 1, (args, result.output)
 
 
-def test_platform_cursor_does_not_run_link_rules(tmp_path: Path) -> None:
+def test_platform_cursor_runs_neutral_lk001_but_not_lk004(tmp_path: Path) -> None:
     skill = tmp_path / ".agents" / "skills" / "one"
     skill.mkdir(parents=True)
     (skill / "SKILL.md").write_text(
@@ -471,7 +471,8 @@ def test_platform_cursor_does_not_run_link_rules(tmp_path: Path) -> None:
 
     result = CliRunner().invoke(app, ["check", "--no-color", "--verbose", "--platform", "cursor", str(tmp_path)])
 
-    assert "[LK00" not in result.output, result.output
+    assert result.output.count("[LK001]") == 1, result.output
+    assert "[LK004]" not in result.output, result.output
 
 
 def test_agent_file_relative_links_resolve_against_the_project_not_the_plugin(tmp_path: Path) -> None:

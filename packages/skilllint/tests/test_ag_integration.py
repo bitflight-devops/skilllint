@@ -185,9 +185,17 @@ def test_all_ag_rules_are_registered_for_claude_code_only() -> None:
     assert all(entry.platforms == ["claude-code"] for entry in ag_entries), ag_entries
 
 
-def test_only_claude_adapter_owns_the_ag_rule_series() -> None:
-    """AG is owned by Claude Code, not the Cursor or Codex adapters."""
+def test_only_claude_explicit_routing_emits_ag_rule_series(tmp_path: Path) -> None:
+    """Rule metadata and adapter declarations jointly keep AG Claude-only."""
+    agent_file = _write_agent(tmp_path / "agents" / "bad-skills.md")
     adapters = (ClaudeCodeAdapter(), CursorAdapter(), CodexAdapter())
-    owners = {adapter.id() for adapter in adapters if "AG" in adapter.applicable_rules()}
+    owners = {
+        adapter.id()
+        for adapter in adapters
+        if any(
+            str(violation["code"]).startswith("AG")
+            for violation in validate_file(agent_file, {adapter.id(): adapter}, platform_override=adapter.id())
+        )
+    }
 
     assert owners == {"claude_code"}

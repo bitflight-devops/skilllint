@@ -40,17 +40,37 @@ the `skilllint.adapters` group and instantiates them. A third-party adapter is
 therefore an adapter at this seam, not a change to the core validator.
 
 Adapters provide platform metadata and platform-specific fallback validation.
-Under `--platform`, the bundled Claude adapter enters the existing core
-pipeline for recognized paths and keeps every finding. Any other adapter runs
-its own `validate(path)`; it also enters the core pipeline and keeps only
-findings whose rule series (the two-letter prefix, such as `LK`) it lists in
-`applicable_rules()`. AS is excluded there because it already runs once per
-`SKILL.md` for every adapter. The bundled Codex adapter lists `LK`, so link
-rules run on the Codex plugin paths it discovers (`.codex-plugin/plugin.json`
-and `skills/*/SKILL.md`). Adapters assign severity on finding dictionaries; the
-core interprets it into `ValidationResult`, applies fixer authorization, and
-owns reporter output. Adapter metadata or registration does not prove that a
-rule emits a finding: public fixture/CLI evidence is emitter proof.
+Under `--platform`, every adapter uses the same routing contract:
+`applicable_rules()` is the coarse allow-list of rule-series prefixes, and
+`RuleEntry.platforms` narrows registered rules within those series.
+`platforms=["agentskills"]` is platform-neutral; a named platform applies
+only to that adapter. `ALL_RULE_SERIES` means every registered series whose
+rule metadata applies to the adapter. Claude Code declares that sentinel rather
+than copying the current validator implementation into adapter metadata. Codex
+declares `AS/CX/FM/SK/LK`; Cursor declares `AS/CU/FM/SK/LK`. Both
+adapter-native findings and findings from the core validator pipeline pass
+through this same contract. AS runs once per `SKILL.md` before nested core
+results are collected.
+
+Explicit directory discovery has a separate optional extension seam:
+`PlatformPluginDiscovery.plugin_layouts()`. A layout identifies a manifest
+relative to its plugin root and, when needed, the validation target represented
+by that manifest. The bundled roots are Claude Code
+`.claude-plugin/plugin.json`, portable Agent Plugins `plugin.json` for
+Codex and Cursor, Codex compatibility `.codex-plugin/plugin.json`, and Cursor
+compatibility `.cursor-plugin/plugin.json`. Once a marked plugin root is
+identified, another platform's broad path pattern cannot claim files inside it
+unless that adapter also declares the same root layout. A third-party adapter
+can opt into the same ownership model without a core type check. Directly
+supplied files retain the existing explicit-file behavior.
+
+The adapter boundary remains dictionary-shaped for compatibility, but
+conversion preserves diagnostic identity (`field`, `line`, `suggestion`,
+and `docs_url`) before reporter output. Adapters assign severity on finding
+dictionaries; the core interprets it into `ValidationResult`, applies fixer
+authorization on the non-platform fixing path, and owns reporter output.
+Adapter metadata or registration does not prove that a rule emits a finding:
+public fixture/CLI evidence is emitter proof.
 
 ## Rules, ownership, severity, and provenance
 

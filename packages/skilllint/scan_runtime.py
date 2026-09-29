@@ -14,14 +14,14 @@ import os
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
-from pathlib import Path
+from pathlib import Path, PurePath
 from typing import TYPE_CHECKING, Any, NoReturn
 
 import typer
 from git import Repo
 from git.exc import InvalidGitRepositoryError, NoSuchPathError
 
-from .adapters import PlatformAdapter, matches_file
+from .adapters import PlatformAdapter, PlatformPluginDiscovery, PluginLayout, matches_file
 from .reporting import CIReporter, ConsoleReporter, FileResults, Reporter
 
 if TYPE_CHECKING:
@@ -343,6 +343,80 @@ def _discover_bare_paths(directory: Path) -> list[Path]:
 # ---------------------------------------------------------------------------
 
 
+def _adapter_plugin_layouts(adapter: PlatformAdapter) -> tuple[PluginLayout, ...]:
+    """Return optional plugin layouts without extending PlatformAdapter."""
+    if isinstance(adapter, PlatformPluginDiscovery):
+        return adapter.plugin_layouts()
+    return ()
+
+
+def _plugin_layout_matches(directory: Path, adapter: PlatformAdapter) -> list[tuple[Path, Path, PluginLayout]]:
+    """Return (root, manifest, layout) triples owned by one adapter."""
+    matches: list[tuple[Path, Path, PluginLayout]] = []
+    for layout in _adapter_plugin_layouts(adapter):
+        marker_parts = PurePath(layout.manifest_path).parts
+        if not marker_parts:
+            continue
+        for manifest in _glob_excluding(directory, f"**/{layout.manifest_path}"):
+            if not manifest.is_file():
+                continue
+            # Root plugin.json is the Agent Plugins portable manifest. A
+            # provider overlay such as .claude-plugin/plugin.json or
+            # .cursor-plugin/plugin.json is not another portable plugin rooted
+            # inside that hidden metadata directory.
+            if (
+                marker_parts == ("plugin.json",)
+                and manifest.parent.name.startswith(".")
+                and manifest.parent.name.endswith("-plugin")
+            ):
+                continue
+            root = manifest
+            for _part in marker_parts:
+                root = root.parent
+            matches.append((root, manifest, layout))
+    return matches
+
+
+def _plugin_root_owners(directory: Path, adapters: Sequence[PlatformAdapter]) -> dict[Path, frozenset[str]]:
+    """Map discovered plugin roots to every adapter that declares that layout.
+
+    Returns:
+        Plugin roots mapped to the adapter IDs that claim each root.
+    """
+    mutable: dict[Path, set[str]] = {}
+    for adapter in adapters:
+        for root, _manifest, _layout in _plugin_layout_matches(directory, adapter):
+            mutable.setdefault(root, set()).add(adapter.id())
+    return {root: frozenset(owners) for root, owners in mutable.items()}
+
+
+def _nearest_plugin_root(candidate: Path, owners: dict[Path, frozenset[str]]) -> Path | None:
+    """Return the deepest declared plugin root containing candidate."""
+    roots = [root for root in owners if candidate == root or candidate.is_relative_to(root)]
+    return max(roots, key=lambda root: len(root.parts)) if roots else None
+
+
+def _platform_owns_candidate(candidate: Path, adapter: PlatformAdapter, owners: dict[Path, frozenset[str]]) -> bool:
+    """Reject files inside a plugin root owned only by another platform.
+
+    Returns:
+        True when the candidate is unowned or owned by the selected adapter.
+    """
+    root = _nearest_plugin_root(candidate, owners)
+    return root is None or adapter.id() in owners[root]
+
+
+def _platform_plugin_targets(directory: Path, adapter: PlatformAdapter) -> set[Path]:
+    """Return adapter-declared plugin validation targets under directory."""
+    targets: set[Path] = set()
+    for root, manifest, layout in _plugin_layout_matches(directory, adapter):
+        if layout.validation_target == "root":
+            targets.add(root)
+        elif layout.validation_target == "manifest":
+            targets.add(manifest)
+    return targets
+
+
 def _discover_validatable_paths(directory: Path) -> list[Path]:
     """Auto-discover validatable files using context-appropriate rules.
 
@@ -374,14 +448,23 @@ def _discover_validatable_paths(directory: Path) -> list[Path]:
     return _discover_bare_paths(directory)
 
 
-def _platform_matching_paths(paths: list[Path], directory: Path, adapter: PlatformAdapter | None) -> list[Path]:
+def _platform_matching_paths(
+    paths: list[Path],
+    directory: Path,
+    adapter: PlatformAdapter | None,
+    platform_adapters: Sequence[PlatformAdapter] | None = None,
+) -> list[Path]:
     if adapter is None:
         return paths
+
+    adapter_universe = tuple(platform_adapters) if platform_adapters is not None else (adapter,)
+    plugin_owners = _plugin_root_owners(directory, adapter_universe)
     semantic_targets = sorted(_discover_validatable_paths(directory), key=lambda path: len(path.parts), reverse=True)
     matched = [
         path
         for path in paths
         if path.is_file()
+        and _platform_owns_candidate(path, adapter, plugin_owners)
         and not (adapter.id() == "claude_code" and _is_foreign_provider_target(path, directory))
         and (
             _matches_platform_path(adapter, path, directory)
@@ -417,7 +500,29 @@ def _matches_platform_relative_path(adapter: PlatformAdapter, candidate: Path) -
     )
 
 
+def _plugin_manifest_target(candidate: Path, adapter: PlatformAdapter) -> Path | None:
+    """Normalize an adapter-declared manifest to its validation target.
+
+    Returns:
+        The declared root/manifest target, or None when candidate is not one.
+    """
+    for layout in _adapter_plugin_layouts(adapter):
+        marker_parts = PurePath(layout.manifest_path).parts
+        if not marker_parts or tuple(candidate.parts[-len(marker_parts) :]) != marker_parts:
+            continue
+        root = candidate
+        for _part in marker_parts:
+            root = root.parent
+        if layout.validation_target == "root":
+            return root
+        if layout.validation_target == "manifest":
+            return candidate
+    return None
+
+
 def _semantic_platform_target(candidate: Path, semantic_targets: list[Path], adapter: PlatformAdapter) -> Path:
+    if (plugin_target := _plugin_manifest_target(candidate, adapter)) is not None:
+        return plugin_target
     if adapter.id() not in {"claude_code", "codex", "cursor"}:
         return candidate
     if adapter.id() == "codex" and candidate.name == "AGENTS.md":
@@ -539,17 +644,28 @@ def _matches_semantic_target(adapter: PlatformAdapter, target: Path, directory: 
     )
 
 
-def _discover_platform_paths(directory: Path, adapter: PlatformAdapter) -> list[Path]:
+def _discover_platform_paths(
+    directory: Path, adapter: PlatformAdapter, platform_adapters: Sequence[PlatformAdapter] | None = None
+) -> list[Path]:
+    adapter_universe = tuple(platform_adapters) if platform_adapters is not None else (adapter,)
+    plugin_owners = _plugin_root_owners(directory, adapter_universe)
+
     if adapter.id() == "claude_code":
         return [
             target
             for target in _discover_validatable_paths(directory)
-            if _matches_semantic_target(adapter, target, directory)
+            if _platform_owns_candidate(target, adapter, plugin_owners)
+            and _matches_semantic_target(adapter, target, directory)
         ]
+
     semantic_targets = sorted(_discover_validatable_paths(directory), key=lambda path: len(path.parts), reverse=True)
-    discovered: set[Path] = set()
+    discovered = _platform_plugin_targets(directory, adapter)
     for candidate in _glob_excluding(directory, "**/*"):
-        if not candidate.is_file() or not _matches_platform_path(adapter, candidate, directory):
+        if (
+            not candidate.is_file()
+            or not _platform_owns_candidate(candidate, adapter, plugin_owners)
+            or not _matches_platform_path(adapter, candidate, directory)
+        ):
             continue
         discovered.add(_semantic_platform_target(candidate, semantic_targets, adapter))
     return sorted(discovered)
@@ -572,6 +688,7 @@ def _resolve_filter_and_expand_paths(
     filter_type: str | None,
     *,
     platform_adapter: PlatformAdapter | None = None,
+    platform_adapters: Sequence[PlatformAdapter] | None = None,
 ) -> tuple[list[Path], bool]:
     """Resolve filter options and expand directory paths.
 
@@ -600,7 +717,7 @@ def _resolve_filter_and_expand_paths(
             resolved_glob = filter_glob
         if resolved_glob is not None and path.is_dir():
             matched = _glob_excluding(path, resolved_glob)
-            matched = _platform_matching_paths(matched, path, platform_adapter)
+            matched = _platform_matching_paths(matched, path, platform_adapter, platform_adapters)
             matched.extend(_manifest_filter_type_paths(path, filter_type, platform_adapter))
             if filter_type == "skills" and platform_adapter is None:
                 matched = [match.parent for match in matched]
@@ -610,7 +727,7 @@ def _resolve_filter_and_expand_paths(
             if platform_adapter is None:
                 expanded_paths.extend(_discover_validatable_paths(path))
             else:
-                expanded_paths.extend(_discover_platform_paths(path, platform_adapter))
+                expanded_paths.extend(_discover_platform_paths(path, platform_adapter, platform_adapters))
             is_batch = True
         else:
             expanded_paths.append(path)
