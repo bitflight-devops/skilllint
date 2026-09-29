@@ -855,9 +855,12 @@ class TestPlatformFlag:
 
     def test_platform_cli_ids_preserve_mixed_and_ambiguous_separators(self) -> None:
         """Every advertised adapter spelling maps reversibly to one registered ID."""
-        cli_ids = plugin_validator._build_platform_cli_ids(
-            {"claude_code", "acme_cloud-beta", "collision_name", "collision-name"}
-        )
+        cli_ids = plugin_validator._build_platform_cli_ids({
+            "claude_code",
+            "acme_cloud-beta",
+            "collision_name",
+            "collision-name",
+        })
 
         assert cli_ids["claude-code"] == "claude_code"
         assert cli_ids["acme_cloud-beta"] == "acme_cloud-beta"
