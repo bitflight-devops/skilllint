@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
@@ -39,6 +40,13 @@ def test_agents_exposes_primary_change_routing_seams() -> None:
 
     assert "## Repository change map" in agents
     assert all(value in agents for value in expected)
+
+
+def test_documentation_ownership_matches_instruction_boundary() -> None:
+    ownership = tomllib.loads(_read("docs/documentation-ownership.toml"))["owners"]
+
+    assert ownership["AGENTS.md"] == "Universal contributor/agent repository contract and change routing"
+    assert ownership["CLAUDE.md"] == "Claude-specific orchestration additions"
 
 
 def test_cursor_uses_agents_as_repository_authority() -> None:
