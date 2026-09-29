@@ -8,12 +8,7 @@ matches_file() checks whether a PurePath matches any of an adapter's path patter
 
 from __future__ import annotations
 
-from skilllint.adapters.protocol import (
-    ALL_RULE_SERIES,
-    PlatformAdapter,
-    PlatformPluginDiscovery,
-    PluginLayout,
-)
+from skilllint.adapters.protocol import ALL_RULE_SERIES, PlatformAdapter, PlatformPluginDiscovery, PluginLayout
 from skilllint.adapters.registry import load_adapters, matches_file
 
 __all__ = [
