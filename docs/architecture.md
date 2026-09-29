@@ -5,7 +5,7 @@
 validation, rule registration, fixing, and reporting modules. Dependency-light
 validation contracts (`ValidationIssue`, `ValidationResult`, `AppliedFix`, the
 validator protocol, and shared value aliases) are owned by `models.py`.
-`policy.py` owns configuration discovery, threshold/severity policy, and suppression filtering.
+`policy.py` owns configuration discovery, threshold/severity policy (including finding reclassification), and suppression filtering.
 `plugin_validator.py` re-exports both model and policy names for compatibility while its
 remaining responsibilities are decomposed incrementally under #283.
 

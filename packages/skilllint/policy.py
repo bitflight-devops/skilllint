@@ -308,6 +308,33 @@ def _resolve_policy(
     return result
 
 
+
+def apply_severity_overrides(result: ValidationResult, severity: dict[str, str]) -> ValidationResult:
+    """Apply validated severity overrides to a result.
+
+    Policy loading admits only warning/info overrides, so this function does
+    not re-validate configuration values. It is the single owner for
+    reclassifying validator findings after policy resolution.
+    """
+    if not severity:
+        return result
+
+    issues: list[ValidationIssue] = []
+    for issue in (*result.errors, *result.warnings, *result.info):
+        configured = severity.get(str(issue.code))
+        if configured is None:
+            issues.append(issue)
+        else:
+            issues.append(issue.model_copy(update={"severity": configured}))
+
+    return ValidationResult(
+        passed=not any(issue.severity == "error" for issue in issues),
+        errors=[issue for issue in issues if issue.severity == "error"],
+        warnings=[issue for issue in issues if issue.severity == "warning"],
+        info=[issue for issue in issues if issue.severity == "info"],
+    )
+
+
 def _is_suppressed(ignore_config: IgnoreConfig, file_path: Path, config_root: Path, code: str) -> bool:
     """Check whether an issue code is suppressed for a given file path.
 

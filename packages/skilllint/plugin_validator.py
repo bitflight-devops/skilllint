@@ -69,6 +69,7 @@ from skilllint.policy import (  # noqa: F401 - compatibility re-exports
     _parse_thresholds,
     _resolve_ignore_config,
     _resolve_policy,
+    apply_severity_overrides,
 )
 from skilllint.record_export import (
     build_svg_title as _build_svg_title,
@@ -3646,31 +3647,7 @@ def _collect_validator_results(
         if name == "PluginRegistrationValidator":
             result = _without_duplicate_plugin_errors(result, reported_plugin_structure_counts)
         if policy is not None and policy.severity:
-
-            def remap(issue: ValidationIssue) -> ValidationIssue:
-                configured = policy.severity.get(str(issue.code))
-                severity: Literal["error", "warning", "info"] = issue.severity
-                if configured == "warning":
-                    severity = "warning"
-                elif configured == "info":
-                    severity = "info"
-                return ValidationIssue(
-                    field=issue.field,
-                    severity=severity,
-                    message=issue.message,
-                    code=issue.code,
-                    line=issue.line,
-                    docs_url=issue.docs_url,
-                    suggestion=issue.suggestion,
-                )
-
-            issues = [remap(i) for i in [*result.errors, *result.warnings, *result.info]]
-            result = ValidationResult(
-                passed=not any(i.severity == "error" for i in issues),
-                errors=[i for i in issues if i.severity == "error"],
-                warnings=[i for i in issues if i.severity == "warning"],
-                info=[i for i in issues if i.severity == "info"],
-            )
+            result = apply_severity_overrides(result, policy.severity)
         if raw_codes_out is not None:
             raw_codes_out.update(str(i.code) for i in (*result.errors, *result.warnings, *result.info))
         if config_root is not None:
@@ -4113,8 +4090,8 @@ def _skill_md_violations(
     # Apply configured severity downgrades so --platform matches the
     # default-path remap.
     return [
-        {**violation, "severity": configured}
-        if (configured := policy.severity.get(str(violation.get("code")))) in {"warning", "info"}
+        {**violation, "severity": policy.severity[str(violation.get("code"))]}
+        if str(violation.get("code")) in policy.severity
         else violation
         for violation in violations
     ]
