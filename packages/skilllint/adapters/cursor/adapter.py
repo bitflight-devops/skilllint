@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from skilllint.adapters.protocol import PluginLayout
 from skilllint.frontmatter import load_frontmatter
 from skilllint.rules.cu_series import validate_mdc_frontmatter
 from skilllint.schemas import load_provider_schema
@@ -30,11 +31,24 @@ class CursorAdapter:
     def path_patterns(self) -> list[str]:
         """Return the glob patterns for files this adapter handles."""
         # NOT ".cursor/**/*.md" — too broad (Pitfall 3 in RESEARCH.md)
-        return ["**/*.mdc", ".cursor/skills/**/*.md", ".claude/skills/**/*.md", ".agents/skills/**/*.md"]
+        return [
+            "**/*.mdc",
+            ".cursor/skills/**/*.md",
+            ".claude/skills/**/*.md",
+            ".agents/skills/**/*.md",
+            "**/skills/*/SKILL.md",
+        ]
 
     def applicable_rules(self) -> set[str]:
-        """Return the set of rule prefixes applicable to this adapter."""
-        return {"AS", "CU"}
+        """Return the rule series routed for explicit Cursor validation."""
+        return {"AS", "CU", "FM", "SK", "LK"}
+
+    def plugin_layouts(self) -> tuple[PluginLayout, ...]:
+        """Return portable and Cursor-specific plugin roots."""
+        return (
+            PluginLayout("plugin.json"),
+            PluginLayout(".cursor-plugin/plugin.json"),
+        )
 
     def constraint_scopes(self) -> set[str]:
         """Return the set of constraint_scope values from the provider schema.
@@ -86,4 +100,4 @@ class CursorAdapter:
         fm: dict[str, object] = dict(post.metadata)
 
         issues = validate_mdc_frontmatter(fm, mdc_schema)
-        return [{"code": i.code, "severity": i.severity, "message": i.message} for i in issues]
+        return [i.model_dump(exclude_none=True) for i in issues]
