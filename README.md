@@ -69,7 +69,11 @@ Exit codes: `0` = all checks passed · `1` = validation errors · `2` = usage er
 
 ## GitHub Action
 
-Use `bitflight-devops/skilllint` as a GitHub Action to validate skills, plugins, and agents in any repository:
+Use `bitflight-devops/skilllint` as a GitHub Action to validate skills, plugins, and agents in any repository.
+
+Replace `X.Y.Z` in the examples with the release you intend to pin. The Action
+ref and the `version` input pin the Action and the installed package
+independently.
 
 ```yaml
 - uses: bitflight-devops/skilllint@vX.Y.Z
@@ -151,7 +155,7 @@ jobs:
 
 ## Pre-commit hook
 
-Add to `.pre-commit-config.yaml`:
+Add to `.pre-commit-config.yaml`, replacing `X.Y.Z` with the release you intend to pin:
 
 ```yaml
 repos:

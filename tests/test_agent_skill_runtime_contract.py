@@ -55,3 +55,20 @@ def test_documented_action_examples_use_explicit_release_placeholders() -> None:
         text = path.read_text(encoding="utf-8")
         assert "bitflight-devops/skilllint@vX.Y.Z" in text
         assert 'version: "X.Y.Z"' in text
+
+
+def test_agent_skill_routes_platform_scope_to_per_rule_command() -> None:
+    paragraphs = [" ".join(p.split()) for p in SKILL.read_text(encoding="utf-8").split("\n\n")]
+
+    # `skilllint rules` prints no platform column; `skilllint rule <ID>` does.
+    assert any("per-rule output" in p and "platform scope" in p for p in paragraphs)
+    assert not any("Use `skilllint rules`" in p and "platform" in p for p in paragraphs)
+
+
+def test_root_readme_explains_release_placeholder_replacement() -> None:
+    text = README.read_text(encoding="utf-8")
+
+    action_section = text.split("## GitHub Action", 1)[1].split("```yaml", 1)[0]
+    pre_commit_section = text.split("## Pre-commit hook", 1)[1].split("```yaml", 1)[0]
+    for section in (action_section, pre_commit_section):
+        assert "Replace `X.Y.Z`" in section or "replacing `X.Y.Z`" in section
