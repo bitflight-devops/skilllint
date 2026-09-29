@@ -20,11 +20,26 @@ Prefer an already-installed `skilllint` executable.
 skilllint --version
 ```
 
-When it is unavailable and `uvx` is available, run the published tool without
-a permanent installation:
+When it is unavailable, use the first available package manager.
+
+With `uv`, run the published tool without a permanent installation:
 
 ```bash
 uvx skilllint@latest --version
+```
+
+With `pipx`, run the published tool without a permanent installation:
+
+```bash
+pipx run skilllint --version
+```
+
+With only `pip`, install the package into the active Python environment, then
+use the `skilllint` executable:
+
+```bash
+python -m pip install skilllint
+skilllint --version
 ```
 
 When working inside a skilllint source checkout, follow that repository's

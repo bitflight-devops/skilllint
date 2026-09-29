@@ -65,10 +65,12 @@ skilllint rule <ID>
 skilllint check --help
 ```
 
-If `skilllint` is not installed and `uvx` is available:
+If `skilllint` is not installed, use `uv`, `pipx`, or `pip`:
 
 ```bash
-uvx skilllint@latest --version
+uvx skilllint@latest --version     # uv
+pipx run skilllint --version       # pipx
+python -m pip install skilllint    # pip, then run `skilllint`
 ```
 
 ## License

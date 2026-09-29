@@ -72,3 +72,11 @@ def test_root_readme_explains_release_placeholder_replacement() -> None:
     pre_commit_section = text.split("## Pre-commit hook", 1)[1].split("```yaml", 1)[0]
     for section in (action_section, pre_commit_section):
         assert "Replace `X.Y.Z`" in section or "replacing `X.Y.Z`" in section
+
+
+def test_agent_skill_and_plugin_readme_offer_uv_pipx_and_pip_bootstrap() -> None:
+    # mission.json requires uv, pipx, and pip to be supported equally.
+    for path in (SKILL, PLUGIN_README):
+        text = path.read_text(encoding="utf-8")
+        for command in ("uvx skilllint", "pipx run skilllint", "python -m pip install skilllint"):
+            assert command in text, (path.name, command)
