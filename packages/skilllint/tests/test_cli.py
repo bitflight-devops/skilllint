@@ -829,6 +829,45 @@ _FIXTURES = Path(__file__).parent / "fixtures"
 class TestPlatformFlag:
     """Test --platform flag dispatches to the correct adapter."""
 
+    def test_check_help_lists_every_registered_platform(self, cli_runner: CliRunner) -> None:
+        """``check --help`` names each registered adapter's --platform spelling.
+
+        Tests: check_cmd --platform help text
+        How: Render ``check --help`` and look for each ADAPTERS key in CLI form
+        Why: Agents are told to read accepted platform names from this help
+        """
+        result = cli_runner.invoke(plugin_validator.app, ["check", "--help"])
+
+        assert result.exit_code == 0
+        assert plugin_validator.ADAPTERS
+        expected = ", ".join(sorted(plugin_validator.PLATFORM_CLI_IDS))
+        assert expected == plugin_validator.PLATFORM_CHOICES
+        assert "Platform adapter. Choices:" in result.output
+        for choice in expected.split(", "):
+            assert choice in result.output
+
+    def test_hyphenated_third_party_platform_id_resolves_exactly(self, monkeypatch) -> None:
+        """Registered adapter IDs containing hyphens remain directly selectable."""
+        adapter = next(iter(plugin_validator.ADAPTERS.values()))
+        monkeypatch.setitem(plugin_validator.ADAPTERS, "example-third-party", adapter)
+
+        assert plugin_validator._resolve_platform_override("example-third-party") == "example-third-party"
+
+    def test_platform_cli_ids_preserve_mixed_and_ambiguous_separators(self) -> None:
+        """Every advertised adapter spelling maps reversibly to one registered ID."""
+        cli_ids = plugin_validator._build_platform_cli_ids({
+            "claude_code",
+            "acme_cloud-beta",
+            "collision_name",
+            "collision-name",
+        })
+
+        assert cli_ids["claude-code"] == "claude_code"
+        assert cli_ids["acme_cloud-beta"] == "acme_cloud-beta"
+        assert cli_ids["collision_name"] == "collision_name"
+        assert cli_ids["collision-name"] == "collision-name"
+        assert "acme-cloud-beta" not in cli_ids
+
     def test_platform_claude_code_valid_exits_0(self, cli_runner: CliRunner, no_color_env: None) -> None:
         """--platform claude-code with a valid plugin.json exits 0.
 

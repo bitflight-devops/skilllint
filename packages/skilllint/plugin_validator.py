@@ -134,6 +134,29 @@ _rt_yaml.width = 10000  # prevent line wrapping
 ADAPTERS: dict[str, PlatformAdapter] = {a.id(): a for a in load_adapters()}
 
 
+def _build_platform_cli_ids(adapter_ids: Iterable[str]) -> dict[str, str]:
+    """Map unambiguous CLI display names back to registered adapter IDs.
+
+    Underscore-only IDs retain the established hyphenated CLI spelling when it
+    cannot collide with an exact registered ID. Mixed-separator and ambiguous
+    IDs are displayed exactly so every advertised choice is selectable.
+
+    Returns:
+        Mapping from displayed CLI name to registered adapter ID.
+    """
+    registered = set(adapter_ids)
+    cli_ids: dict[str, str] = {}
+    for adapter_id in registered:
+        alias = adapter_id.replace("_", "-")
+        display = alias if "_" in adapter_id and "-" not in adapter_id and alias not in registered else adapter_id
+        cli_ids[display] = adapter_id
+    return cli_ids
+
+
+PLATFORM_CLI_IDS = _build_platform_cli_ids(ADAPTERS)
+PLATFORM_CHOICES = ", ".join(sorted(PLATFORM_CLI_IDS))
+
+
 def _safe_load_yaml(text: str) -> YamlValue:
     """Parse a YAML string using ruamel.yaml safe loader.
 
@@ -4517,12 +4540,11 @@ def _resolve_platform_override(platform: str | None) -> str | None:
     """
     if platform is None:
         return None
-    platform_key = platform.replace("-", "_")
-    if platform_key not in ADAPTERS:
-        typer.echo(
-            f"Unknown platform: {platform!r}. Valid choices: {', '.join(k.replace('_', '-') for k in ADAPTERS)}",
-            err=True,
-        )
+    if platform in ADAPTERS:
+        return platform
+    platform_key = PLATFORM_CLI_IDS.get(platform)
+    if platform_key is None:
+        typer.echo(f"Unknown platform: {platform!r}. Valid choices: {PLATFORM_CHOICES}", err=True)
         raise typer.Exit(2) from None
     return platform_key
 
@@ -4847,7 +4869,9 @@ def check_cmd(
     show_summary: Annotated[bool, typer.Option("--show-summary", help="Show summary panel")] = False,
     filter_glob: Annotated[str | None, typer.Option("--filter", help="Glob pattern")] = None,
     filter_type: Annotated[str | None, typer.Option("--filter-type", help="Filter type")] = None,
-    platform: Annotated[str | None, typer.Option("--platform", help="Platform adapter")] = None,
+    platform: Annotated[
+        str | None, typer.Option("--platform", help=f"Platform adapter. Choices: {PLATFORM_CHOICES}")
+    ] = None,
     record: Annotated[Path | None, typer.Option("--record", help="Record terminal output to SVG or HTML file")] = None,
     include_gitignore: Annotated[
         bool,
