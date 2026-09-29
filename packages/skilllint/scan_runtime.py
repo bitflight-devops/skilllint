@@ -350,9 +350,7 @@ def _adapter_plugin_layouts(adapter: PlatformAdapter) -> tuple[PluginLayout, ...
     return ()
 
 
-def _plugin_layout_matches(
-    directory: Path, adapter: PlatformAdapter
-) -> list[tuple[Path, Path, PluginLayout]]:
+def _plugin_layout_matches(directory: Path, adapter: PlatformAdapter) -> list[tuple[Path, Path, PluginLayout]]:
     """Return (root, manifest, layout) triples owned by one adapter."""
     matches: list[tuple[Path, Path, PluginLayout]] = []
     for layout in _adapter_plugin_layouts(adapter):
@@ -379,9 +377,7 @@ def _plugin_layout_matches(
     return matches
 
 
-def _plugin_root_owners(
-    directory: Path, adapters: Sequence[PlatformAdapter]
-) -> dict[Path, frozenset[str]]:
+def _plugin_root_owners(directory: Path, adapters: Sequence[PlatformAdapter]) -> dict[Path, frozenset[str]]:
     """Map discovered plugin roots to every adapter that declares that layout."""
     mutable: dict[Path, set[str]] = {}
     for adapter in adapters:
@@ -396,9 +392,7 @@ def _nearest_plugin_root(candidate: Path, owners: dict[Path, frozenset[str]]) ->
     return max(roots, key=lambda root: len(root.parts)) if roots else None
 
 
-def _platform_owns_candidate(
-    candidate: Path, adapter: PlatformAdapter, owners: dict[Path, frozenset[str]]
-) -> bool:
+def _platform_owns_candidate(candidate: Path, adapter: PlatformAdapter, owners: dict[Path, frozenset[str]]) -> bool:
     """Reject files inside a plugin root owned only by another platform."""
     root = _nearest_plugin_root(candidate, owners)
     return root is None or adapter.id() in owners[root]
@@ -639,9 +633,7 @@ def _matches_semantic_target(adapter: PlatformAdapter, target: Path, directory: 
 
 
 def _discover_platform_paths(
-    directory: Path,
-    adapter: PlatformAdapter,
-    platform_adapters: Sequence[PlatformAdapter] | None = None,
+    directory: Path, adapter: PlatformAdapter, platform_adapters: Sequence[PlatformAdapter] | None = None
 ) -> list[Path]:
     adapter_universe = tuple(platform_adapters) if platform_adapters is not None else (adapter,)
     plugin_owners = _plugin_root_owners(directory, adapter_universe)
