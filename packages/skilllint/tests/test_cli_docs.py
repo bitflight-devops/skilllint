@@ -13,6 +13,7 @@ Why: The docs subcommand group is a pure CLI adapter over vendor_cache.
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 import threading
@@ -34,6 +35,10 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+# GitHub Actions and local shells may set FORCE_COLOR=1, so Rich colours a
+# subprocess's piped stderr (same pattern as conftest._ANSI_ESCAPE).
+_ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*[mGKHFJA-Z]")
 
 _TEST_URL = "https://docs.example.com/en/docs/settings.md"
 _TEST_URL_2 = "https://docs.example.com/en/docs/hooks.md"
@@ -269,8 +274,8 @@ class TestDocsFetch:
         sidecar_paths = list(tmp_path.glob("*.meta.json"))
         assert first.returncode == second.returncode == 0
         assert first.stdout == second.stdout == f"{markdown_paths[0]}\n"
-        assert first.stderr == "✅ NEW contract\n"
-        assert second.stderr == "✅ FRESH contract\n"
+        assert _ANSI_ESCAPE.sub("", first.stderr) == "✅ NEW contract\n"
+        assert _ANSI_ESCAPE.sub("", second.stderr) == "✅ FRESH contract\n"
         assert str(markdown_paths[0]) not in first.stderr
         assert str(markdown_paths[0]) not in second.stderr
         assert len(markdown_paths) == len(sidecar_paths) == 1

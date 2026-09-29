@@ -61,9 +61,11 @@ class _PlainCliRunner(CliRunner):
     """
 
     def invoke(self, *args: Any, **kwargs: Any) -> Result:
-        """Invoke CLI and strip ANSI codes from stdout/stderr bytes."""
+        """Invoke CLI and strip ANSI codes from stdout/stderr/output bytes."""
         result = super().invoke(*args, **kwargs)
         result.stdout_bytes = _ANSI_ESCAPE.sub(b"", result.stdout_bytes)
+        # ``Result.output`` reads the interleaved ``output_bytes``, not ``stdout_bytes``.
+        result.output_bytes = _ANSI_ESCAPE.sub(b"", result.output_bytes)
         if result.stderr_bytes is not None:
             result.stderr_bytes = _ANSI_ESCAPE.sub(b"", result.stderr_bytes)
         return result
