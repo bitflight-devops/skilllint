@@ -24,6 +24,7 @@ def test_agents_exposes_primary_change_routing_seams() -> None:
     agents = _read("AGENTS.md")
     expected = {
         "packages/skilllint/plugin_validator.py",
+        "packages/skilllint/models.py",
         "packages/skilllint/scan_runtime.py",
         "packages/skilllint/rules/",
         "packages/skilllint/rule_registry.py",
@@ -37,7 +38,7 @@ def test_agents_exposes_primary_change_routing_seams() -> None:
     }
 
     assert "## Repository change map" in agents
-    assert expected <= {value for value in expected if value in agents}
+    assert all(value in agents for value in expected)
 
 
 def test_cursor_uses_agents_as_repository_authority() -> None:
