@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1790717404239,
+  "lastUpdate": 1790724767229,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -2934,6 +2934,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 104.635,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "359f88a74fbca9372c78dc7976cfd20c863073d8",
+          "message": "fix(platform): make explicit routing contract authoritative (#302)\n\n* refactor(adapters): define explicit routing discovery contracts\n\n* refactor(adapters): export routing discovery contracts\n\n* refactor(adapters): declare Claude routing and plugin root\n\n* refactor(adapters): declare Codex routing and plugin roots\n\n* refactor(adapters): declare Cursor routing and plugin roots\n\n* refactor(routing): make adapter declarations authoritative\n\n* fix(routing): preserve explicit diagnostic identity\n\n* refactor(scan): model plugin ownership through adapter layouts\n\n* fix(scan): constrain explicit discovery to declared plugin roots\n\n* fix(scan): supply registered adapters for plugin ownership\n\n* refactor(routing): keep diagnostic severity statically narrow\n\n* test(platform): protect explicit routing contracts\n\n* docs(architecture): define explicit platform routing contract\n\n* docs(adapters): record Claude plugin-root evidence\n\n* docs(adapters): update Codex plugin-root evidence\n\n* docs(adapters): record Cursor plugin-root evidence\n\n* style: apply ruff formatting to routing changes\n\n* style: apply ruff formatting to routing changes\n\n* style: apply ruff formatting to routing changes\n\n* style: apply ruff formatting to routing changes\n\n* style: apply ruff formatting to routing changes\n\n* fix(platform): preserve compatibility and align contract tests\n\n* fix(platform): preserve compatibility and align contract tests\n\n* fix(platform): preserve compatibility and align contract tests\n\n* fix(platform): preserve compatibility and align contract tests\n\n* fix(platform): align routing tests and formatting\n\n* fix(platform): align routing tests and formatting",
+          "timestamp": "2026-09-29T23:28:53Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/359f88a74fbca9372c78dc7976cfd20c863073d8"
+        },
+        "date": 1790724766140,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 12314.144,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 12722.528,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 13147.603,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 78.679,
             "unit": "files/s"
           }
         ]
