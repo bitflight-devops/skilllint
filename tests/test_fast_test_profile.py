@@ -2,14 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 import scripts.run_fast_tests as fast
 
 ROOT = Path(__file__).parents[1]
 
 
-def test_fast_runner_excludes_slow_tests_and_forwards_scope(monkeypatch) -> None:
+def test_fast_runner_enforces_profile_after_forwarded_options(monkeypatch) -> None:
     calls: list[list[str]] = []
 
     def fake_pytest_main(args: list[str]) -> int:
@@ -18,11 +16,19 @@ def test_fast_runner_excludes_slow_tests_and_forwards_scope(monkeypatch) -> None
 
     monkeypatch.setattr(fast.pytest, "main", fake_pytest_main)
 
-    assert fast.main(["tests/test_fast_test_profile.py", "-q"]) == 0
-    assert calls == [["--no-cov", "-m", "not slow", "tests/test_fast_test_profile.py", "-q"]]
+    assert fast.main(["tests/test_fast_test_profile.py", "-qmslow"]) == 0
+    assert calls == [
+        [
+            "tests/test_fast_test_profile.py",
+            "-qmslow",
+            "--no-cov",
+            "-m",
+            "not slow",
+        ]
+    ]
 
 
-def test_fast_runner_rejects_marker_overrides(monkeypatch) -> None:
+def test_fast_profile_is_inserted_before_option_terminator(monkeypatch) -> None:
     calls: list[list[str]] = []
 
     def fake_pytest_main(args: list[str]) -> int:
@@ -31,11 +37,8 @@ def test_fast_runner_rejects_marker_overrides(monkeypatch) -> None:
 
     monkeypatch.setattr(fast.pytest, "main", fake_pytest_main)
 
-    for args in (["-m", "slow"], ["-mslow"], ["--markexpr", "slow"], ["--markexpr=slow"]):
-        with pytest.raises(ValueError, match="owns pytest marker selection"):
-            fast.main(args)
-
-    assert calls == []
+    assert fast.main(["-q", "--", "-m-named-test.py"]) == 0
+    assert calls == [["-q", "--no-cov", "-m", "not slow", "--", "-m-named-test.py"]]
 
 
 def test_agent_contract_distinguishes_fast_loop_from_full_gate() -> None:
