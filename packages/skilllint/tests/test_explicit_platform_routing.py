@@ -17,21 +17,12 @@ from skilllint.scan_runtime import _resolve_filter_and_expand_paths
 def _write_invalid_skill(root: Path) -> Path:
     skill = root / "skills" / "routing-contract" / "SKILL.md"
     skill.parent.mkdir(parents=True)
-    skill.write_text(
-        "---\n"
-        "name: Bad_Name\n"
-        "description: short\n"
-        "---\n"
-        "# Routing contract\n\n"
-        "[missing](missing.md)\n"
-    )
+    skill.write_text("---\nname: Bad_Name\ndescription: short\n---\n# Routing contract\n\n[missing](missing.md)\n")
     return skill
 
 
 @pytest.mark.parametrize("adapter", [CodexAdapter(), CursorAdapter()])
-def test_explicit_shared_skill_findings_are_declared_by_adapter(
-    tmp_path: Path, adapter: PlatformAdapter
-) -> None:
+def test_explicit_shared_skill_findings_are_declared_by_adapter(tmp_path: Path, adapter: PlatformAdapter) -> None:
     """Representative shared core findings flow only through declared series."""
     skill = _write_invalid_skill(tmp_path)
 
@@ -52,13 +43,7 @@ def test_claude_runtime_consumes_its_declaration_instead_of_type_branching(tmp_p
 
     skill = tmp_path / "skills" / "routing-contract" / "SKILL.md"
     skill.parent.mkdir(parents=True)
-    skill.write_text(
-        "---\n"
-        "description: short\n"
-        "---\n"
-        "# Routing contract\n\n"
-        "[missing](missing.md)\n"
-    )
+    skill.write_text("---\ndescription: short\n---\n# Routing contract\n\n[missing](missing.md)\n")
     adapter = AsOnlyClaude()
 
     violations = validate_file(skill, {adapter.id(): adapter}, platform_override=adapter.id())
@@ -77,8 +62,7 @@ def test_adapter_native_series_flow_through_explicit_router(tmp_path: Path) -> N
     codex = CodexAdapter()
 
     codex_codes = {
-        str(violation["code"])
-        for violation in validate_file(agents, {codex.id(): codex}, platform_override=codex.id())
+        str(violation["code"]) for violation in validate_file(agents, {codex.id(): codex}, platform_override=codex.id())
     }
     assert "CX001" in codex_codes
 
@@ -119,11 +103,7 @@ def test_third_party_adapter_uses_same_route_and_preserves_diagnostic_identity(t
                     "suggestion": "Use a supported mode",
                     "docs_url": "https://example.invalid/tp001",
                 },
-                {
-                    "code": "ZZ001",
-                    "severity": "error",
-                    "message": "Undeclared series must not escape",
-                },
+                {"code": "ZZ001", "severity": "error", "message": "Undeclared series must not escape"},
             ]
 
     target = tmp_path / "rule.third"
