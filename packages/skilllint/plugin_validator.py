@@ -53,8 +53,7 @@ from ruamel.yaml.scalarstring import DoubleQuotedScalarString
 from ruamel.yaml.tokens import CommentToken
 
 import skilllint.rules  # ruff: ignore[unused-import] — ensures all 15 series modules register into RULE_REGISTRY
-from skilllint.adapters import PlatformAdapter, load_adapters, matches_file
-from skilllint.adapters.claude_code import ClaudeCodeAdapter
+from skilllint.adapters import ALL_RULE_SERIES, PlatformAdapter, load_adapters, matches_file
 from skilllint.cli_docs import docs_app
 from skilllint.models import AppliedFix, FileResults, ValidationIssue, ValidationResult, Validator, YamlValue
 from skilllint.policy import (  # noqa: F401 - compatibility re-exports
@@ -77,7 +76,7 @@ from skilllint.record_export import (
     export_recording as _export_recording,
     make_recording_console as _make_recording_console,
 )
-from skilllint.rule_registry import rule_authority, rule_reference
+from skilllint.rule_registry import RULE_REGISTRY, rule_authority, rule_reference
 from skilllint.rules.ag_series import check_ag001, check_ag002, check_ag003
 from skilllint.rules.as_series import run_as_series
 from skilllint.rules.fm_series import check_fm001, check_fm004, check_fm007, check_fm010
@@ -3918,202 +3917,97 @@ def parse_skill_md(path: Path) -> tuple[dict, list[str], str | None, list[str]]:
 
 
 def _issue_to_violation(issue: ValidationIssue) -> dict:
-    """Convert a ValidationIssue to the violation dict shape used by adapters.
+    """Convert a ValidationIssue to the adapter violation boundary.
 
-    Attaches the rule's registry authority so that findings from the validator
-    pipeline carry the same provenance as AS-series violations, which build
-    theirs through ``rule_authority`` in ``rules/as_series.py``.
-
-    Args:
-        issue: Issue emitted by a validator.
-
-    Returns:
-        Violation dict with code, severity and message, plus authority when the
-        rule declares one.
+    The adapter boundary remains dict-based for compatibility, but every
+    diagnostic identity field carried by ValidationIssue is preserved.
     """
-    violation = {"code": str(issue.code), "severity": str(issue.severity), "message": str(issue.message)}
+    violation = issue.model_dump(exclude_none=True)
+    violation["code"] = str(issue.code)
+    violation["severity"] = str(issue.severity)
+    violation["message"] = str(issue.message)
     authority = rule_authority(str(issue.code))
     if authority is not None:
         violation["authority"] = authority
     return violation
 
 
+def _violation_applies_to_adapter(violation: dict, adapter: PlatformAdapter) -> bool:
+    """Return whether an adapter's routing contract permits a violation.
+
+    applicable_rules() is the coarse series allow-list. Registered core rules
+    are additionally narrowed by RuleEntry.platforms: "agentskills" is
+    platform-neutral, while a named platform applies only to that adapter.
+    Unknown third-party rules have no core metadata, so their adapter series
+    declaration is sufficient.
+    """
+    code = str(violation.get("code", "")).upper()
+    if len(code) < 2:
+        return False
+
+    declared_series = adapter.applicable_rules()
+    if ALL_RULE_SERIES not in declared_series and code[:2] not in declared_series:
+        return False
+
+    entry = RULE_REGISTRY.get(code)
+    if entry is None:
+        return True
+
+    platform = adapter.id().replace("_", "-")
+    return "agentskills" in entry.platforms or platform in entry.platforms
+
+
+def _filter_platform_violations(violations: list[dict], adapter: PlatformAdapter) -> list[dict]:
+    """Apply one authoritative routing contract to adapter and core findings."""
+    return [violation for violation in violations if _violation_applies_to_adapter(violation, adapter)]
+
+
 def run_platform_checks(
     path: Path, adapter: PlatformAdapter, *, policy_cache: dict[str, tuple[ValidationPolicy, Path | None]] | None = None
 ) -> list[dict]:
-    """Run platform-specific validation for a single adapter.
+    """Run adapter-native and core validation through one routing contract.
 
-    Dispatches to adapter.validate(path) for all adapter types.
-    For ClaudeCodeAdapter, also routes to the existing SK/PR/HK pipeline.
-    For any other adapter, routes to the same pipeline and keeps only the
-    issues whose series the adapter lists in ``applicable_rules()``.
-
-    Args:
-        path: File path to validate.
-        adapter: PlatformAdapter instance for constraint scope filtering.
-        policy_cache: Optional mutable per-run policy cache, forwarded to the
-            nested Claude pipeline so a multi-file scan reads each config —
-            and emits its diagnostics — once rather than once per file.
-
-    Returns:
-        List of violation dicts with keys: code, severity, message.
+    Adapter-native findings and core-pipeline findings are collected first,
+    then both pass through the same applicable_rules()/rule-metadata filter.
+    AS-series is skipped in the nested core result because validate_file runs
+    it once per SKILL.md before adapter dispatch.
     """
-    if isinstance(adapter, ClaudeCodeAdapter):
-        # Route files through the SK/PR/HK pipeline only when the pipeline
-        # has validators for the file type.  Files the pipeline does not
-        # handle (e.g. test fixtures named "valid_plugin.json" rather than
-        # "plugin.json") go directly to the adapter's own validate().
-        sk_validators = _get_validators_for_path(path)
-        # Filter validators by provider constraint scopes
-        constraint_scopes = adapter.constraint_scopes()
-        sk_validators = filter_validators_by_constraint_scopes(sk_validators, constraint_scopes)
-        if not sk_validators:
-            return list(adapter.validate(path))
+    violations = list(adapter.validate(path))
 
+    if _get_validators_for_path(path):
         file_results = validate_single_path(
             path, check=True, fix=False, verbose=False, per_run_policy_cache=policy_cache
         )
-
-        violations: list[dict] = []
         for validator_results in file_results.values():
             for name, vr_result in validator_results:
-                # AsSeriesValidator is already run unconditionally in validate_file()
-                # before run_platform_checks() is called.  Skipping it here prevents
-                # duplicate AS-series violations in the output.
                 if name == "AsSeriesValidator":
                     continue
                 all_issues = [*vr_result.errors, *vr_result.warnings, *vr_result.info]
                 violations.extend(_issue_to_violation(issue) for issue in all_issues)
-        return violations
 
-    # Cursor and Codex adapters implement validate() for their own series.
-    # Core-pipeline series they declare in applicable_rules() are routed
-    # through the same validators as the default scan; AS is excluded because
-    # validate_file() already runs it for every adapter.
-    violations = list(adapter.validate(path))
-    core_series = adapter.applicable_rules() - {"AS"}
-    if core_series and _get_validators_for_path(path):
-        file_results = validate_single_path(
-            path, check=True, fix=False, verbose=False, per_run_policy_cache=policy_cache
-        )
-        for validator_results in file_results.values():
-            for _name, vr_result in validator_results:
-                all_issues = [*vr_result.errors, *vr_result.warnings, *vr_result.info]
-                violations.extend(_issue_to_violation(issue) for issue in all_issues if issue.code[:2] in core_series)
-    return violations
-
-
-def _adapter_runs_frontmatter_pipeline(matching: list[PlatformAdapter]) -> bool:
-    """Report whether a selected adapter routes SKILL.md through the validator pipeline.
-
-    Only ``ClaudeCodeAdapter`` does — Cursor validates ``.mdc`` files and Codex
-    validates ``AGENTS.md``/``.rules``, so neither runs ``FrontmatterValidator``
-    over a ``SKILL.md``. Callers use this to decide whether the canonical rule
-    owners still need invoking directly, and whether a generic finding would be
-    a duplicate.
-
-    Args:
-        matching: Adapters selected for this file.
-
-    Returns:
-        True when at least one selected adapter runs the frontmatter pipeline.
-    """
-    return any(isinstance(adapter, ClaudeCodeAdapter) for adapter in matching)
-
-
-def _shared_skill_frontmatter_violations(path: Path, frontmatter: dict, policy: ValidationPolicy | None) -> list[dict]:
-    """Return canonical SKILL.md findings for adapters that skip the pipeline.
-
-    AS001-AS003 and AS005 used to cover name syntax, the directory match, the
-    missing description and the token budget on this path. They were duplicates
-    of FM010, FM001 and SK006/SK007 and were retired, so the canonical owners
-    are invoked here instead. Without this a Cursor or Codex skill, or a
-    ``SKILL.md`` no adapter claims, would be checked by nothing but AS006.
-
-    Args:
-        path: Path to the SKILL.md file.
-        frontmatter: Parsed frontmatter mapping.
-        policy: Resolved per-plugin policy, for the configured token thresholds.
-
-    Returns:
-        Violation dicts, with authority attached where the rule declares one.
-    """
-    # FM001 covers both `name` and `description`, but AS001 already owns name
-    # presence for a SKILL.md on this same path, so only the description claim
-    # (the one AS003 used to carry here) is taken.
-    #
-    # check_fm001 grades a skill description as a warning because skills.md calls
-    # it "Recommended". This path runs only where no adapter applies the Claude
-    # Code reading, and the AgentSkills specification the AS series enforces marks
-    # description Required, which is why AS003 was an error here. Keep that grade
-    # so an invalid file still fails the run.
-    issues = [
-        issue.model_copy(update={"severity": "error"})
-        for issue in check_fm001(frontmatter, path, "skill")
-        if issue.field == "description"
-    ]
-    issues.extend(check_fm010(frontmatter, path, "skill"))
-    complexity = ComplexityValidator().validate(path, policy)
-    issues.extend([*complexity.errors, *complexity.warnings])
-    return [_issue_to_violation(issue) for issue in issues]
+    return _filter_platform_violations(violations, adapter)
 
 
 def _skill_md_violations(
-    path: Path, *, pipeline_runs: bool, policy_cache: dict[str, tuple[ValidationPolicy, Path | None]]
+    path: Path, *, policy_cache: dict[str, tuple[ValidationPolicy, Path | None]]
 ) -> list[dict]:
-    """Return everything ``validate_file`` reports for a SKILL.md before dispatch.
+    """Return the once-per-SKILL.md Agent Skills findings for explicit routing."""
+    frontmatter_data, body_lines, _yaml_err, _colon_fields = parse_skill_md(path)
 
-    Args:
-        path: Path to the SKILL.md file.
-        pipeline_runs: Whether a selected adapter runs the frontmatter pipeline,
-            which decides whether the generic FM002 and the canonical rule
-            owners would be duplicates here.
-        policy_cache: Per-run policy cache, shared so a large scan reads each
-            config once.
-
-    Returns:
-        Violation dicts with any configured severity downgrade applied.
-    """
-    frontmatter_data, body_lines, yaml_err, colon_fields = parse_skill_md(path)
-    violations: list[dict] = []
-
-    # Suppress the generic FM002 only when the pipeline will report it — keying
-    # on whether any adapter matched silenced it for Cursor and Codex, neither
-    # of which validates SKILL.md frontmatter.
-    if yaml_err is not None and not pipeline_runs:
-        violations.append({"code": str(FM002), "severity": "error", "message": f"Invalid YAML frontmatter: {yaml_err}"})
-
-    # Resolve per-plugin policy so --platform validation honors the same
-    # configured thresholds AND severity as the default path (PR #97 review:
-    # the two paths must not lint the same skill differently).
     policy, policy_root = _resolve_policy(path, policy_cache)
-    violations.extend(
-        run_as_series(
-            path,
-            frontmatter_data,
-            body_lines,
-            warning_threshold=policy.thresholds.get("SK006", TOKEN_WARNING_THRESHOLD),
-            error_threshold=policy.thresholds.get("SK007", TOKEN_ERROR_THRESHOLD),
-        )
+    violations = run_as_series(
+        path,
+        frontmatter_data,
+        body_lines,
+        warning_threshold=policy.thresholds.get("SK006", TOKEN_WARNING_THRESHOLD),
+        error_threshold=policy.thresholds.get("SK007", TOKEN_ERROR_THRESHOLD),
     )
-    if not pipeline_runs:
-        # FM009 has no reporter here either: parse_skill_md recovers the unquoted
-        # colon in memory and returns no YAML error, and FrontmatterValidator —
-        # which normally raises this — never runs for Cursor or Codex.
-        violations.extend(_issue_to_violation(issue) for issue in _fm009_recovery_warnings(colon_fields))
-        violations.extend(_shared_skill_frontmatter_violations(path, frontmatter_data, policy))
 
-    # Suppression applies to every reporter, so the --platform route must honour
-    # the same ignore config as the default path rather than only its thresholds.
-    # _load_policy fills ValidationPolicy.ignore from the same file it reads the
-    # thresholds from, and policy_root is that file's directory.
     if policy.ignore and policy_root is not None:
         violations = [v for v in violations if not _is_suppressed(policy.ignore, path, policy_root, str(v.get("code")))]
 
     if not policy.severity:
         return violations
-    # Apply configured severity downgrades so --platform matches the
-    # default-path remap.
     return [
         {**violation, "severity": configured}
         if (configured := policy.severity.get(str(violation.get("code")))) in {"warning", "info"}
@@ -4128,24 +4022,11 @@ def validate_file(
     platform_override: str | None = None,
     policy_cache: dict[str, tuple[ValidationPolicy, Path | None]] | None = None,
 ) -> list[dict]:
-    """Dispatch validation for a single file using the adapter registry.
+    """Dispatch explicit-platform validation using adapter routing contracts.
 
-    AS-series fires ONCE per file (before per-adapter loop) — structural dedup.
-
-    Args:
-        path: File to validate.
-        adapters: Dict of adapter_id -> PlatformAdapter.
-        platform_override: If set, restrict to this adapter ID. The selected
-            adapter's constraint_scopes() will be used to filter rules by
-            provider relevance (shared vs provider_specific).
-        policy_cache: Optional mutable per-run policy cache. Sharing it across
-            a scan prevents re-reading config and re-emitting diagnostics once
-            per file.
-
-    Returns:
-        List of violation dicts with keys: code, severity, message.
-        May include 'authority' key with origin and reference when the rule
-        has authority metadata.
+    A SKILL.md runs AS once. Adapter-native and core findings then use the same
+    per-adapter declaration and rule metadata, so the runtime cannot emit a
+    registered series that the selected adapter does not route.
     """
     resolved_policy_cache: dict[str, tuple[ValidationPolicy, Path | None]] = (
         policy_cache if policy_cache is not None else {}
@@ -4154,27 +4035,24 @@ def validate_file(
     if platform_override:
         matching = [adapters[platform_override]]
     else:
-        matching = [a for a in adapters.values() if matches_file(a, pure)]
+        matching = [adapter for adapter in adapters.values() if matches_file(adapter, pure)]
 
-    # AS-series rules are cross-platform — they run before the adapter matching
-    # guard so that a SKILL.md outside a recognised plugin structure is still
-    # checked even when no platform adapter claims the file. They do not extend
-    # to agent files: the AgentSkills specification defines SKILL.md only.
-    violations: list[dict] = (
-        _skill_md_violations(
-            path, pipeline_runs=_adapter_runs_frontmatter_pipeline(matching), policy_cache=resolved_policy_cache
-        )
+    skill_violations = (
+        _skill_md_violations(path, policy_cache=resolved_policy_cache)
         if is_skill_md(path)
         else []
     )
-
     if not matching:
-        return violations
+        return skill_violations
 
-    primary_adapter = matching[0]
-    _logger.debug("Validating %s with adapter %s", path, primary_adapter.id())
+    violations = [
+        violation
+        for violation in skill_violations
+        if any(_violation_applies_to_adapter(violation, adapter) for adapter in matching)
+    ]
 
     for adapter in matching:
+        _logger.debug("Validating %s with adapter %s", path, adapter.id())
         violations.extend(run_platform_checks(path, adapter, policy_cache=resolved_policy_cache))
 
     return violations
