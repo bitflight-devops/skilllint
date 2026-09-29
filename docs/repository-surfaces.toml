@@ -1,0 +1,101 @@
+version = 1
+
+# The most-specific matching path wins. "architecture_evidence" describes how
+# an unfamiliar agent should treat the surface before a task establishes a more
+# specific authority.
+
+[[surface]]
+path = "packages/skilllint"
+kind = "product"
+architecture_evidence = "primary"
+description = "Shipped Python implementation and bundled runtime data."
+
+[[surface]]
+path = "plugins/agentskills-skilllint"
+kind = "product"
+architecture_evidence = "primary"
+description = "Bundled agent-facing skilllint plugin."
+
+[[surface]]
+path = "docs"
+kind = "project-tooling"
+architecture_evidence = "supporting"
+description = "Maintained product, architecture, policy, and design documentation; per-file authority is defined by documentation-ownership.toml."
+
+[[surface]]
+path = "docs/architecture.md"
+kind = "product"
+architecture_evidence = "primary"
+description = "Current maintained product architecture and extension-flow authority."
+
+[[surface]]
+path = "scripts"
+kind = "project-tooling"
+architecture_evidence = "supporting"
+description = "Repository maintenance, release, benchmark, and documentation tooling."
+
+[[surface]]
+path = ".github"
+kind = "project-tooling"
+architecture_evidence = "supporting"
+description = "CI, release, and repository automation."
+
+[[surface]]
+path = "tests"
+kind = "project-tooling"
+architecture_evidence = "supporting"
+description = "Project-level tests and benchmarks; behavior evidence, not product ownership."
+
+[[surface]]
+path = "packages/skilllint/tests"
+kind = "project-tooling"
+architecture_evidence = "supporting"
+description = "Package unit and integration tests; behavior evidence, not product ownership."
+
+[[surface]]
+path = "tests/fixtures"
+kind = "test-fixture"
+architecture_evidence = "task-only"
+description = "Synthetic benchmark and integration inputs."
+
+[[surface]]
+path = "packages/skilllint/tests/fixtures"
+kind = "test-fixture"
+architecture_evidence = "task-only"
+description = "Synthetic passing/failing rule fixtures, including deliberately invalid structures."
+
+[[surface]]
+path = ".agents"
+kind = "agent-runtime"
+architecture_evidence = "task-only"
+description = "Agent skills and helper scripts used to work on this repository."
+
+[[surface]]
+path = ".claude"
+kind = "agent-runtime"
+architecture_evidence = "task-only"
+description = "Claude Code agents, commands, workflows, runtime support, reports, and local development material."
+
+[[surface]]
+path = ".claude/vendor"
+kind = "vendor"
+architecture_evidence = "task-only"
+description = "Retained external authority/vendor sources."
+
+[[surface]]
+path = ".cursor"
+kind = "agent-runtime"
+architecture_evidence = "task-only"
+description = "Cursor-specific repository instructions."
+
+[[surface]]
+path = ".gsd"
+kind = "historical-planning"
+architecture_evidence = "task-only"
+description = "Planning, decision, milestone, and execution records; useful history but not current architecture by themselves."
+
+[[surface]]
+path = ".hermes"
+kind = "historical-planning"
+architecture_evidence = "task-only"
+description = "Historical planning and execution artifacts from Hermes workflows."

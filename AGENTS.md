@@ -85,6 +85,22 @@ package lives below `packages/skilllint/`. Do not infer a per-package
 `pyproject.toml` from the directory name.
 
 
+## Repository surface classes
+
+Before a broad repository search, read `docs/repository-surfaces.toml`. It
+classifies the main trees by their role and whether they are architectural
+evidence by default. The most-specific matching path wins.
+
+- Treat `product` and current architecture documentation as primary evidence.
+- Treat `project-tooling` and tests as supporting evidence for the behavior
+  they exercise, not automatic ownership of product behavior.
+- Treat `agent-runtime`, `generated-state`, `vendor`,
+  `historical-planning`, and `test-fixture` content as non-authoritative for
+  current product architecture unless the task explicitly concerns that
+  surface or current product code/documentation cites it as authority.
+- A failing or passing test is evidence about behavior; deliberately synthetic
+  fixtures are not evidence that the product itself has that structure.
+
 ## Verifying a change
 
 ```sh
