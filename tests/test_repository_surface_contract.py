@@ -7,19 +7,6 @@ from pathlib import Path
 ROOT = Path(__file__).parents[1]
 CONTRACT = ROOT / "docs/repository-surfaces.toml"
 
-EXPECTED_TOP_LEVEL_DIRECTORIES = {
-    ".agents",
-    ".claude",
-    ".cursor",
-    ".github",
-    ".gsd",
-    ".hermes",
-    "docs",
-    "packages",
-    "plugins",
-    "scripts",
-    "tests",
-}
 ALLOWED_KINDS = {
     "product",
     "project-tooling",
@@ -38,7 +25,7 @@ def _surfaces() -> list[dict[str, str]]:
     return data["surface"]
 
 
-def test_all_top_level_repository_directories_are_classified() -> None:
+def test_all_tracked_top_level_repository_directories_are_classified() -> None:
     surfaces = _surfaces()
     classified_roots = {entry["path"].split("/", 1)[0] for entry in surfaces}
 
@@ -49,9 +36,17 @@ def test_all_top_level_repository_directories_are_classified() -> None:
         capture_output=True,
         text=True,
     ).stdout.splitlines()
-    tracked_roots = {Path(path).parts[0] for path in tracked if Path(path).parts}
-    assert EXPECTED_TOP_LEVEL_DIRECTORIES <= tracked_roots
-    assert EXPECTED_TOP_LEVEL_DIRECTORIES <= classified_roots
+    tracked_roots = {
+        path.split("/", 1)[0]
+        for path in tracked
+        if "/" in path
+    }
+    unclassified_roots = tracked_roots - classified_roots
+
+    assert not unclassified_roots, (
+        f"tracked top-level directories missing repository surface classification: "
+        f"{sorted(unclassified_roots)}"
+    )
 
 
 def test_surface_entries_are_unique_valid_and_existing() -> None:
