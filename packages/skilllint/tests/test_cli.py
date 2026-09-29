@@ -843,6 +843,13 @@ class TestPlatformFlag:
         for adapter_id in plugin_validator.ADAPTERS:
             assert adapter_id.replace("_", "-") in result.output
 
+    def test_hyphenated_third_party_platform_id_resolves_exactly(self, monkeypatch) -> None:
+        """Registered adapter IDs containing hyphens remain directly selectable."""
+        adapter = next(iter(plugin_validator.ADAPTERS.values()))
+        monkeypatch.setitem(plugin_validator.ADAPTERS, "example-third-party", adapter)
+
+        assert plugin_validator._resolve_platform_override("example-third-party") == "example-third-party"
+
     def test_platform_claude_code_valid_exits_0(self, cli_runner: CliRunner, no_color_env: None) -> None:
         """--platform claude-code with a valid plugin.json exits 0.
 
