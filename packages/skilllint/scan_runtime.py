@@ -27,7 +27,7 @@ from .reporting import CIReporter, ConsoleReporter, FileResults, Reporter
 if TYPE_CHECKING:
     from rich.console import Console
 
-    from .plugin_validator import AppliedFix
+    from .models import AppliedFix
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -46,6 +46,9 @@ DEFAULT_SCAN_PATTERNS: tuple[str, ...] = (
     "**/commands/*.md",
     "**/.claude-plugin/plugin.json",
     "**/.claude-plugin/marketplace.json",
+    # A Codex plugin manifest is its own target (not its root) so only the
+    # PLUGIN validators that recognise .codex-plugin run on it (LK004).
+    "**/.codex-plugin/plugin.json",
     "**/hooks/hooks.json",
     "**/CLAUDE.md",
 )

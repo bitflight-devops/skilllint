@@ -31,10 +31,11 @@ from urllib.parse import urljoin
 
 from pydantic import BaseModel, Field
 
+from skilllint.models import ValidationIssue
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from skilllint.plugin_validator import ValidationIssue
 
 _logger = logging.getLogger(__name__)
 
@@ -57,7 +58,13 @@ def rule_reference(code: str) -> str:
 
 
 def _make_issue(
-    *, field: str, severity: Literal["error", "warning", "info"], message: str, code: str, suggestion: str | None = None
+    *,
+    field: str,
+    severity: Literal["error", "warning", "info"],
+    message: str,
+    code: str,
+    suggestion: str | None = None,
+    line: int | None = None,
 ) -> ValidationIssue:
     """Construct a ValidationIssue for a rule.
 
@@ -70,16 +77,19 @@ def _make_issue(
         message: Human-readable description.
         code: Rule code (e.g. "FM001").
         suggestion: Optional repair hint.
+        line: Optional 1-based line number the issue refers to.
 
     Returns:
         A frozen ValidationIssue instance.
     """
-    # Deferred import to break the circular dependency: plugin_validator
-    # imports rules/, so rules/ cannot import plugin_validator at module level.
-    from skilllint.plugin_validator import ValidationIssue  # noqa: PLC0415
-
     return ValidationIssue(
-        field=field, severity=severity, message=message, code=code, docs_url=rule_reference(code), suggestion=suggestion
+        field=field,
+        severity=severity,
+        message=message,
+        code=code,
+        line=line,
+        docs_url=rule_reference(code),
+        suggestion=suggestion,
     )
 
 

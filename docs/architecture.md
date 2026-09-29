@@ -2,7 +2,11 @@
 
 `skilllint` is a command-line validation pipeline. The public seam is the
 `skilllint check` command; the implementation is split into discovery,
-validation, rule registration, fixing, and reporting modules.
+validation, rule registration, fixing, and reporting modules. Dependency-light
+validation contracts (`ValidationIssue`, `ValidationResult`, `AppliedFix`, the
+validator protocol, and shared value aliases) are owned by `models.py`.
+`plugin_validator.py` re-exports those names for compatibility while its
+remaining responsibilities are decomposed incrementally under #283.
 
 ## Runtime flow
 
@@ -34,10 +38,14 @@ the `skilllint.adapters` group and instantiates them. A third-party adapter is
 therefore an adapter at this seam, not a change to the core validator.
 
 Adapters provide platform metadata and platform-specific fallback validation.
-For third-party adapters, non-`SKILL.md` files use the adapter's
-`validate(path)` route directly and do not run core validators; the bundled
-Claude adapter is the limited exception that enters the existing core pipeline
-for recognized paths. Adapters assign severity on finding dictionaries; the
+Under `--platform`, the bundled Claude adapter enters the existing core
+pipeline for recognized paths and keeps every finding. Any other adapter runs
+its own `validate(path)`; it also enters the core pipeline and keeps only
+findings whose rule series (the two-letter prefix, such as `LK`) it lists in
+`applicable_rules()`. AS is excluded there because it already runs once per
+`SKILL.md` for every adapter. The bundled Codex adapter lists `LK`, so link
+rules run on the Codex plugin paths it discovers (`.codex-plugin/plugin.json`
+and `skills/*/SKILL.md`). Adapters assign severity on finding dictionaries; the
 core interprets it into `ValidationResult`, applies fixer authorization, and
 owns reporter output. Adapter metadata or registration does not prove that a
 rule emits a finding: public fixture/CLI evidence is emitter proof.
@@ -76,6 +84,7 @@ from resulting errors and usage/validation contracts, not adapter registration.
 
 | Concern | Maintained seam | Proof |
 | --- | --- | --- |
+| validation contracts | `models.py` | model/compatibility contract tests |
 | path selection | `scan_runtime.py` | scan runtime tests |
 | platform metadata | `adapters/protocol.py`, `adapters/registry.py` | adapter protocol tests |
 | schema constraints | `schemas/`, schema validators | schema/frontmatter tests |

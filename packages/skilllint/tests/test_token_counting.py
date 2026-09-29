@@ -22,6 +22,7 @@ Why:
 
 from __future__ import annotations
 
+import bisect
 from pathlib import Path
 
 import pytest
@@ -29,6 +30,10 @@ from hypothesis import given, settings, strategies as st
 
 from skilllint.plugin_validator import TOKEN_ERROR_THRESHOLD, TOKEN_WARNING_THRESHOLD, ComplexityValidator
 from skilllint.token_counter import _SPECIAL_TOKENS, count_tokens
+
+
+def _content_for_word_count(word_count: int) -> str:
+    return " ".join(f"word{i}" for i in range(word_count))
 
 
 def generate_exact_token_content(target_tokens: int) -> str:
@@ -41,38 +46,46 @@ def generate_exact_token_content(target_tokens: int) -> str:
         Text content with exactly target_tokens tokens
 
     Note:
-        Uses iterative approach to hit exact token count
+        Token count is monotonic non-decreasing in word count, so this
+        binary-searches (via bisect) the smallest word count whose content
+        has >= target_tokens tokens, in O(log target_tokens) real encoder
+        calls instead of walking word-by-word (which re-encoded the whole
+        growing string at every single word, i.e. O(target_tokens) calls
+        each on an ever-longer string).
     """
-    # Build up content word by word
-    words = []
-    for i in range(target_tokens * 2):  # Overestimate to reach target
-        words.append(f"word{i}")
-        content = " ".join(words)
-        token_count = count_tokens(content)
+    max_words = target_tokens * 2  # Overestimate to guarantee reaching target
+    word_counts = range(max_words + 1)
+    index = bisect.bisect_left(word_counts, target_tokens, key=lambda wc: count_tokens(_content_for_word_count(wc)))
 
+    if index >= len(word_counts):
+        # Overestimate wasn't enough - return what the search space allows.
+        return _content_for_word_count(max_words)
+
+    word_count = word_counts[index]
+    content = _content_for_word_count(word_count)
+    token_count = count_tokens(content)
+
+    if token_count == target_tokens:
+        return content
+
+    # bisect_left found the smallest word count at or above target, and it
+    # wasn't an exact match, so it overshot: back off one word, then bridge
+    # the remaining gap with single characters (mirrors the original
+    # word-by-word algorithm's tail behavior for an inexact target).
+    word_count -= 1
+    content = _content_for_word_count(word_count)
+    token_count = count_tokens(content)
+
+    while token_count < target_tokens:
+        content += "x"
+        token_count = count_tokens(content)
         if token_count == target_tokens:
             return content
         if token_count > target_tokens:
-            # Went over - try removing last word
-            words.pop()
-            content = " ".join(words)
-            token_count = count_tokens(content)
+            # Remove the x we just added - target isn't exactly reachable.
+            return content[:-1]
 
-            # If still over or exact match, return
-            if token_count <= target_tokens:
-                # Add single characters until we hit exact count
-                while token_count < target_tokens:
-                    content += "x"
-                    token_count = count_tokens(content)
-                    if token_count == target_tokens:
-                        return content
-                    if token_count > target_tokens:
-                        # Remove the x we just added
-                        return content[:-1]
-                return content
-
-    # If we get here, return what we have
-    return " ".join(words)
+    return content
 
 
 class TestTokenCountDeterminism:

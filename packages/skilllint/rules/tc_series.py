@@ -24,13 +24,11 @@ Rule IDs and default severities:
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
+from skilllint.models import ValidationIssue
 from skilllint.rule_registry import skilllint_rule
 from skilllint.token_counter import count_tokens
-
-if TYPE_CHECKING:
-    from skilllint.plugin_validator import ValidationIssue
 
 # ---------------------------------------------------------------------------
 # Spec sources
@@ -59,8 +57,6 @@ def _make_issue(
     Returns:
         A frozen ValidationIssue instance.
     """
-    from skilllint.plugin_validator import ValidationIssue  # noqa: PLC0415
-
     return ValidationIssue(field=field, severity=severity, message=message, code=code)
 
 

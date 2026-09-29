@@ -13,6 +13,7 @@ Token-based complexity measurement replaces line counting for accurate AI cost e
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import re
@@ -38,18 +39,13 @@ from dataclasses import dataclass
 from enum import StrEnum
 from io import StringIO
 from pathlib import Path, PurePath
-from typing import TYPE_CHECKING, Annotated, Literal, NoReturn, Protocol, TypeAlias, cast
-
-# YAML/JSON at the edge: dict, list, or JSON-serializable scalars. More specific than Any.
-YamlValue: TypeAlias = dict[str, "YamlValue"] | list["YamlValue"] | str | int | float | bool | None
-
-import contextlib
+from typing import TYPE_CHECKING, Annotated, Literal, NoReturn, TypeAlias, cast
 
 import typer
 from git import Repo
 from git.exc import InvalidGitRepositoryError, NoSuchPathError
 from git.index.fun import entry_key
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import ValidationError
 from ruamel.yaml import YAML, YAMLError
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
 from ruamel.yaml.nodes import MappingNode, SequenceNode
@@ -60,6 +56,7 @@ import skilllint.rules  # ruff: ignore[unused-import] — ensures all 15 series 
 from skilllint.adapters import PlatformAdapter, load_adapters, matches_file
 from skilllint.adapters.claude_code import ClaudeCodeAdapter
 from skilllint.cli_docs import docs_app
+from skilllint.models import AppliedFix, FileResults, ValidationIssue, ValidationResult, Validator, YamlValue
 from skilllint.record_export import (
     build_svg_title as _build_svg_title,
     export_recording as _export_recording,
@@ -80,7 +77,7 @@ from skilllint.rules.hk_series import (
     iter_hook_entries,
     load_hooks_object,
 )
-from skilllint.rules.lk_series import check_lk001
+from skilllint.rules.lk_series import check_lk001, check_lk004
 from skilllint.rules.nr_series import check_nr001, check_nr002
 from skilllint.rules.pd_series import check_pd001, check_pd002, check_pd003
 from skilllint.rules.pl_series import (
@@ -97,7 +94,14 @@ from skilllint.rules.pr_series import check_pr001, check_pr002, check_pr005
 from skilllint.rules.sk_series import check_sk004, check_sk005
 from skilllint.rules.sl_series import check_sl001, iter_symlinks
 from skilllint.rules.tc_series import check_tc001
-from skilllint.scan_runtime import ScanContext, _load_plugin_json
+from skilllint.scan_runtime import (
+    ScanContext,
+    _build_gitignore_set,
+    _glob_excluding,
+    _is_ignored,
+    _load_ignore_patterns,
+    _load_plugin_json,
+)
 from skilllint.token_counter import TOKEN_ERROR_THRESHOLD, TOKEN_WARNING_THRESHOLD, count_tokens
 from skilllint.version import __version__
 
@@ -451,8 +455,9 @@ class ErrorCode(StrEnum):
     SK007 = "SK007"  # Token count exceeds TOKEN_ERROR_THRESHOLD (must split)
     SK008 = "SK008"  # Skill directory name violates naming convention
 
-    # Link (LK001)
+    # Link (LK001, LK004)
     LK001 = "LK001"  # Broken internal link (file does not exist)
+    LK004 = "LK004"  # Link may dangle at runtime when the plugin is installed (info)
 
     # Progressive Disclosure (PD001-PD003)
     PD001 = "PD001"  # No `references/` directory found
@@ -527,7 +532,7 @@ SK004, SK005, SK006, SK007, SK008 = (
     ErrorCode.SK007,
     ErrorCode.SK008,
 )
-LK001 = ErrorCode.LK001
+LK001, LK004 = ErrorCode.LK001, ErrorCode.LK004
 PD001, PD002, PD003 = ErrorCode.PD001, ErrorCode.PD002, ErrorCode.PD003
 PL001, PL002, PL003, PL004, PL005, PL006 = (
     ErrorCode.PL001,
@@ -1277,50 +1282,6 @@ class FileType(StrEnum):
         return result
 
 
-class ValidationIssue(BaseModel):
-    """A single validation issue."""
-
-    model_config = ConfigDict(frozen=True)
-
-    field: str
-    severity: Literal["error", "warning", "info"]
-    message: str
-    code: Annotated[str, Field(pattern=r"^[A-Z]{2}\d{3}$")]
-    line: int | None = None
-    suggestion: str | None = None
-    docs_url: str | None = None
-
-    def format(self) -> str:
-        """Format issue for display.
-
-        Returns:
-            Formatted string with severity icon, code, field, message, and optional docs URL
-        """
-        severity_icon = {"error": ":cross_mark:", "warning": ":warning:", "info": ":information:"}[self.severity]
-
-        location = f":{self.line}" if self.line else ""
-        suggestion_line = f"\n    → {self.suggestion}" if self.suggestion else ""
-        docs = f"\n    → {self.docs_url}" if self.docs_url else ""
-        return f"  {severity_icon} [{self.code}] {self.field}{location}: {self.message}{suggestion_line}{docs}"
-
-
-class ValidationResult(BaseModel):
-    """Result from a validation check."""
-
-    model_config = ConfigDict(frozen=True)
-
-    passed: bool
-    errors: list[ValidationIssue]
-    warnings: list[ValidationIssue]
-    info: list[ValidationIssue]
-
-
-# Type alias: maps each unique file path to a list of (validator_name, result) pairs.
-# This groups validator results by file so reports count unique files, not validator
-# invocations.
-FileResults = dict[Path, list[tuple[str, ValidationResult]]]
-
-
 @dataclass(frozen=True)
 class ComplexityMetrics:
     """Token-based complexity metrics."""
@@ -1357,66 +1318,9 @@ class ComplexityMetrics:
         return f"OK: {self.body_tokens} tokens"
 
 
-@dataclass(frozen=True)
-class AppliedFix:
-    """Record of one fix a validator applied to a file under --fix.
-
-    Attribution is per fixer invocation, not per description: when a single
-    fixer's ``fix()`` call is authorised by more than one rule code and
-    returns multiple description strings, every description from that call
-    carries the full triggering code set. Precise per-description
-    attribution would require passing findings into ``fix()`` (tracked as a
-    follow-up -- see the skilllint#144/#117 design brief, Approach C).
-    """
-
-    path: Path
-    validator: str
-    codes: tuple[str, ...]
-    description: str
-
-
 # ============================================================================
 # VALIDATOR PROTOCOL
 # ============================================================================
-
-
-class Validator(Protocol):
-    """Protocol for all validators.
-
-    Defines the interface that all validator classes must implement to be
-    compatible with the validation framework. Validators check specific aspects
-    of plugin structure and can optionally provide auto-fixing capabilities.
-    """
-
-    def validate(self, path: Path) -> ValidationResult:
-        """Run validation check on path.
-
-        Args:
-            path: Path to file or directory to validate
-
-        Returns:
-            ValidationResult with passed status and any issues found
-        """
-        ...
-
-    def can_fix(self) -> bool:
-        """Whether this validator supports auto-fixing.
-
-        Returns:
-            True if validator can automatically fix issues, False otherwise
-        """
-        ...
-
-    def fix(self, path: Path) -> list[str]:
-        """Auto-fix issues in the file or directory.
-
-        Args:
-            path: Path to file or directory to fix
-
-        Returns:
-            List of human-readable descriptions of fixes applied
-        """
-        ...
 
 
 # ============================================================================
@@ -1736,6 +1640,116 @@ class InternalLinkValidator:
             "Internal link validation cannot be auto-fixed. "
             "Broken links require creating missing files or correcting link paths manually."
         )
+
+
+# ============================================================================
+# PLUGIN LINK ESCAPE VALIDATOR
+# ============================================================================
+
+
+# Manifests that mark a plugin root whose installer copies only the plugin
+# directory (LK004). Each path is a provenance-registry.json claim:
+# Claude Code saves its manifest at .claude-plugin/plugin.json
+# (code.claude.com/docs/en/plugins-reference.md#manifest-file); a Codex
+# overlay keeps its plugin.json inside .codex-plugin/
+# (developers.openai.com/codex/plugins/build.md#plugin-structure).
+CLAUDE_PLUGIN_MANIFEST = ".claude-plugin/plugin.json"
+CODEX_PLUGIN_MANIFEST = ".codex-plugin/plugin.json"
+_LINK_SCOPE_PLUGIN_MARKERS: tuple[str, ...] = (CLAUDE_PLUGIN_MANIFEST, CODEX_PLUGIN_MANIFEST)
+# Plugin directories an agent reads from the installed copy. READMEs, CLAUDE.md,
+# AGENTS.md and docs/ are read in the source repository, so LK004 skips them.
+LK004_SCOPE_DIRS: tuple[str, ...] = ("agents", "skills", "commands")
+
+
+def find_link_scope_plugin_dir(path: Path) -> Path | None:
+    """Return the nearest plugin root above *path* for LK004, or None.
+
+    Args:
+        path: Path to start searching from (file or directory).
+
+    Returns:
+        The deepest ancestor holding any of ``_LINK_SCOPE_PLUGIN_MARKERS``.
+    """
+    roots = [root for marker in _LINK_SCOPE_PLUGIN_MARKERS if (root := _find_anchor_dir(path, marker)) is not None]
+    return max(roots, key=lambda root: len(root.parts)) if roots else None
+
+
+class PluginLinkEscapeValidator:
+    """Reports markdown links that may dangle once a plugin is installed (LK004).
+
+    Detection lives in ``skilllint.rules.lk_series``; this class walks the
+    ``*.md`` files under the plugin's ``agents/``, ``skills/`` and
+    ``commands/`` directories (the files an agent reads from an installed
+    copy) and packages the rule results into a ``ValidationResult``. The walk
+    skips files excluded by ``.pluginvalidatorignore`` or git, and drops an
+    observation that a path-scoped ignore config suppresses for its own
+    Markdown file. The plugin root is a Claude Code
+    (``.claude-plugin/plugin.json``) or Codex (``.codex-plugin/plugin.json``)
+    plugin.
+    """
+
+    def validate(self, path: Path) -> ValidationResult:
+        """Validate every markdown file in the plugin containing *path*.
+
+        Args:
+            path: Path to the plugin directory or a file within it.
+
+        Returns:
+            ValidationResult that always passes; LK004 observations are
+            ``info`` issues, and read failures are errors.
+        """
+        errors: list[ValidationIssue] = []
+        info: list[ValidationIssue] = []
+        plugin_dir = find_link_scope_plugin_dir(path)
+        if plugin_dir is not None:
+            md_files = sorted(
+                md_file for part in LK004_SCOPE_DIRS for md_file in _glob_excluding(plugin_dir / part, "**/*.md")
+            )
+            ignore_patterns = _load_ignore_patterns()
+            gitignored = _build_gitignore_set(md_files, plugin_dir)
+            ignore_cache: dict[str, tuple[IgnoreConfig, Path | None]] = {}
+            for md_file in md_files:
+                if str(md_file.resolve()) in gitignored or (ignore_patterns and _is_ignored(md_file, ignore_patterns)):
+                    continue
+                try:
+                    content = md_file.read_text(encoding="utf-8")
+                except (OSError, UnicodeDecodeError) as e:
+                    errors.append(
+                        ValidationIssue(
+                            field=md_file.relative_to(plugin_dir).as_posix(),
+                            severity="error",
+                            message=f"Could not read file: {e}",
+                            code=FM002,
+                            docs_url=generate_docs_url(FM002),
+                        )
+                    )
+                    continue
+                ignore_config, config_root = _resolve_ignore_config(md_file, ignore_cache)
+                info.extend(
+                    issue
+                    for issue in check_lk004(content, md_file, plugin_dir)
+                    if config_root is None or not _is_suppressed(ignore_config, md_file, config_root, str(issue.code))
+                )
+        return ValidationResult(passed=not errors, errors=errors, warnings=[], info=info)
+
+    def can_fix(self) -> bool:
+        """Check if validator supports auto-fixing.
+
+        Returns:
+            False (moving a link target into the plugin is a manual decision).
+        """
+        return False
+
+    def fix(self, path: Path) -> list[str]:
+        """Auto-fix escaping links (not supported).
+
+        Args:
+            path: Path to file or directory.
+
+        Raises:
+            NotImplementedError: Escaping links require manual fixes.
+        """
+        raise NotImplementedError("Links that escape the plugin root require moving the target or editing the link.")
 
 
 # ============================================================================
@@ -3847,6 +3861,7 @@ def _get_validators_for_path(path: Path) -> list[Validator]:
             PluginStructureValidator(),
             PluginRegistrationValidator(),
             PluginAgentFrontmatterValidator(),
+            PluginLinkEscapeValidator(),
         ))
     elif file_type == FileType.HOOK_CONFIG:
         validators.append(HookValidator())
@@ -4253,6 +4268,8 @@ def run_platform_checks(
 
     Dispatches to adapter.validate(path) for all adapter types.
     For ClaudeCodeAdapter, also routes to the existing SK/PR/HK pipeline.
+    For any other adapter, routes to the same pipeline and keeps only the
+    issues whose series the adapter lists in ``applicable_rules()``.
 
     Args:
         path: File path to validate.
@@ -4292,8 +4309,21 @@ def run_platform_checks(
                 violations.extend(_issue_to_violation(issue) for issue in all_issues)
         return violations
 
-    # Cursor and Codex adapters implement validate() directly
-    return list(adapter.validate(path))
+    # Cursor and Codex adapters implement validate() for their own series.
+    # Core-pipeline series they declare in applicable_rules() are routed
+    # through the same validators as the default scan; AS is excluded because
+    # validate_file() already runs it for every adapter.
+    violations = list(adapter.validate(path))
+    core_series = adapter.applicable_rules() - {"AS"}
+    if core_series and _get_validators_for_path(path):
+        file_results = validate_single_path(
+            path, check=True, fix=False, verbose=False, per_run_policy_cache=policy_cache
+        )
+        for validator_results in file_results.values():
+            for _name, vr_result in validator_results:
+                all_issues = [*vr_result.errors, *vr_result.warnings, *vr_result.info]
+                violations.extend(_issue_to_violation(issue) for issue in all_issues if issue.code[:2] in core_series)
+    return violations
 
 
 def _adapter_runs_frontmatter_pipeline(matching: list[PlatformAdapter]) -> bool:

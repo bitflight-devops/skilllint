@@ -16,12 +16,11 @@ import re
 from typing import TYPE_CHECKING, Literal
 
 from skilllint._spec_constants import MAX_NAME_LENGTH
+from skilllint.models import ValidationIssue
 from skilllint.rule_registry import rule_reference, skilllint_rule
 
 if TYPE_CHECKING:
     from pathlib import Path
-
-    from skilllint.plugin_validator import ValidationIssue
 
 
 # ---------------------------------------------------------------------------
@@ -73,8 +72,6 @@ def _make_issue(
     Returns:
         A frozen ValidationIssue instance.
     """
-    from skilllint.plugin_validator import ValidationIssue  # noqa: PLC0415
-
     return ValidationIssue(
         field=field,
         severity=severity,
