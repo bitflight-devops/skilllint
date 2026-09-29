@@ -10,7 +10,11 @@ _FAST_PROFILE = ["--no-cov", "-m", "not slow"]
 
 
 def _apply_fast_profile(args: list[str]) -> list[str]:
-    """Append mandatory fast-profile options before pytest's option terminator."""
+    """Append mandatory fast-profile options before pytest's option terminator.
+
+    Returns:
+        Pytest arguments with the fast profile applied.
+    """
     try:
         separator = args.index("--")
     except ValueError:
