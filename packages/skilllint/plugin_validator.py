@@ -4087,9 +4087,12 @@ def violations_to_result(violations: list[dict]) -> ValidationResult:
     for violation in violations:
         code = str(violation["code"])
         raw_severity = violation.get("severity", "error")
-        severity: Literal["error", "warning", "info"] = (
-            raw_severity if raw_severity in {"error", "warning", "info"} else "error"
-        )
+        if raw_severity == "warning":
+            severity: Literal["error", "warning", "info"] = "warning"
+        elif raw_severity == "info":
+            severity = "info"
+        else:
+            severity = "error"
         line = violation.get("line")
         issues.append(
             ValidationIssue(
