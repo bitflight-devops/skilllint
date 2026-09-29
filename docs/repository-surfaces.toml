@@ -26,8 +26,7 @@ description = "Maintained product, architecture, policy, and design documentatio
 path = "docs/architecture.md"
 kind = "product"
 architecture_evidence = "primary"
-description = "Canonical current architecture guide for skilllint."
-
+description = "Current maintained product architecture and extension-flow authority."
 
 [[surface]]
 path = "scripts"
