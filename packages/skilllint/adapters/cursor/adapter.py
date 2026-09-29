@@ -44,7 +44,10 @@ class CursorAdapter:
         return {"AS", "CU", "FM", "SK", "LK"}
 
     def plugin_layouts(self) -> tuple[PluginLayout, ...]:
-        """Return portable and Cursor-specific plugin roots."""
+        """Return portable and Cursor-specific plugin-root markers.
+
+        Source: https://docs.cursor.com/reference/plugins
+        """
         return (
             PluginLayout("plugin.json"),
             PluginLayout(".cursor-plugin/plugin.json"),
