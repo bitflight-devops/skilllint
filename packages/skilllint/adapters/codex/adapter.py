@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from skilllint.adapters.protocol import PluginLayout
 from skilllint.rules.cx_series import validate_codex_content
 from skilllint.schemas import load_provider_schema
 
@@ -36,15 +37,24 @@ class CodexAdapter:
             "AGENTS.md",
             "**/*.rules",
             ".codex/**",
+            "plugin.json",
             "**/.codex-plugin/plugin.json",
             "**/skills/*/SKILL.md",
         ]
 
     def applicable_rules(self) -> set[str]:
-        """Return the set of rule prefixes applicable to this adapter."""
-        # LK: LK001 applies to every platform, and LK004 lists codex because
-        # Codex installs a plugin into a cache and loads that copy.
-        return {"AS", "CX", "LK"}
+        """Return the rule series routed for explicit Codex validation."""
+        # FM/SK are the shared Agent Skills frontmatter/quality owners that the
+        # explicit path already emitted before this contract became authoritative.
+        # LK includes cross-platform LK001 plus Codex-scoped LK004.
+        return {"AS", "CX", "FM", "SK", "LK"}
+
+    def plugin_layouts(self) -> tuple[PluginLayout, ...]:
+        """Return portable and Codex compatibility plugin roots."""
+        return (
+            PluginLayout("plugin.json", validation_target="manifest"),
+            PluginLayout(".codex-plugin/plugin.json", validation_target="manifest"),
+        )
 
     def constraint_scopes(self) -> set[str]:
         """Return the set of constraint_scope values from the provider schema.
@@ -90,13 +100,13 @@ class CodexAdapter:
         if path.name == "AGENTS.md":
             content = path.read_text(encoding="utf-8")
             issues = validate_codex_content(content, "agents_md")
-            return [{"code": i.code, "severity": i.severity, "message": i.message} for i in issues]
+            return [i.model_dump(exclude_none=True) for i in issues]
 
         if path.suffix == ".rules":
             content = path.read_text(encoding="utf-8")
             schema = self.get_schema("prefix_rule")
             prefix_rule_schema: dict[str, object] | None = schema if isinstance(schema, dict) else None
             issues = validate_codex_content(content, "prefix_rule", prefix_rule_schema)
-            return [{"code": i.code, "severity": i.severity, "message": i.message} for i in issues]
+            return [i.model_dump(exclude_none=True) for i in issues]
 
         return []
