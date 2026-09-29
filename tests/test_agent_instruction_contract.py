@@ -24,6 +24,7 @@ def test_agents_exposes_primary_change_routing_seams() -> None:
     agents = _read("AGENTS.md")
     expected = {
         "packages/skilllint/plugin_validator.py",
+        "packages/skilllint/models.py",
         "packages/skilllint/scan_runtime.py",
         "packages/skilllint/rules/",
         "packages/skilllint/rule_registry.py",
