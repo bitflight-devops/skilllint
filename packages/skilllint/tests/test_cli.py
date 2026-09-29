@@ -840,7 +840,7 @@ class TestPlatformFlag:
 
         assert result.exit_code == 0
         assert plugin_validator.ADAPTERS
-        expected = ", ".join(sorted(adapter_id.replace("_", "-") for adapter_id in plugin_validator.ADAPTERS))
+        expected = ", ".join(sorted(plugin_validator.PLATFORM_CLI_IDS))
         assert expected == plugin_validator.PLATFORM_CHOICES
         assert "Platform adapter. Choices:" in result.output
         for choice in expected.split(", "):
@@ -852,6 +852,18 @@ class TestPlatformFlag:
         monkeypatch.setitem(plugin_validator.ADAPTERS, "example-third-party", adapter)
 
         assert plugin_validator._resolve_platform_override("example-third-party") == "example-third-party"
+
+    def test_platform_cli_ids_preserve_mixed_and_ambiguous_separators(self) -> None:
+        """Every advertised adapter spelling maps reversibly to one registered ID."""
+        cli_ids = plugin_validator._build_platform_cli_ids(
+            {"claude_code", "acme_cloud-beta", "collision_name", "collision-name"}
+        )
+
+        assert cli_ids["claude-code"] == "claude_code"
+        assert cli_ids["acme_cloud-beta"] == "acme_cloud-beta"
+        assert cli_ids["collision_name"] == "collision_name"
+        assert cli_ids["collision-name"] == "collision-name"
+        assert "acme-cloud-beta" not in cli_ids
 
     def test_platform_claude_code_valid_exits_0(self, cli_runner: CliRunner, no_color_env: None) -> None:
         """--platform claude-code with a valid plugin.json exits 0.
