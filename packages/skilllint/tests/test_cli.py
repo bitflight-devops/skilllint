@@ -829,6 +829,20 @@ _FIXTURES = Path(__file__).parent / "fixtures"
 class TestPlatformFlag:
     """Test --platform flag dispatches to the correct adapter."""
 
+    def test_check_help_lists_every_registered_platform(self, cli_runner: CliRunner) -> None:
+        """``check --help`` names each registered adapter's --platform spelling.
+
+        Tests: check_cmd --platform help text
+        How: Render ``check --help`` and look for each ADAPTERS key in CLI form
+        Why: Agents are told to read accepted platform names from this help
+        """
+        result = cli_runner.invoke(plugin_validator.app, ["check", "--help"])
+
+        assert result.exit_code == 0
+        assert plugin_validator.ADAPTERS
+        for adapter_id in plugin_validator.ADAPTERS:
+            assert adapter_id.replace("_", "-") in result.output
+
     def test_platform_claude_code_valid_exits_0(self, cli_runner: CliRunner, no_color_env: None) -> None:
         """--platform claude-code with a valid plugin.json exits 0.
 

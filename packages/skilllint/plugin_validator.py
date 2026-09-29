@@ -132,6 +132,8 @@ _rt_yaml.width = 10000  # prevent line wrapping
 # Platform adapter registry — loaded once at module level.
 # Keys are adapter IDs (e.g. "claude_code", "cursor", "codex").
 ADAPTERS: dict[str, PlatformAdapter] = {a.id(): a for a in load_adapters()}
+# CLI spellings of the registered adapter IDs (e.g. "claude-code, codex, cursor").
+PLATFORM_CHOICES = ", ".join(k.replace("_", "-") for k in ADAPTERS)
 
 
 def _safe_load_yaml(text: str) -> YamlValue:
@@ -4519,10 +4521,7 @@ def _resolve_platform_override(platform: str | None) -> str | None:
         return None
     platform_key = platform.replace("-", "_")
     if platform_key not in ADAPTERS:
-        typer.echo(
-            f"Unknown platform: {platform!r}. Valid choices: {', '.join(k.replace('_', '-') for k in ADAPTERS)}",
-            err=True,
-        )
+        typer.echo(f"Unknown platform: {platform!r}. Valid choices: {PLATFORM_CHOICES}", err=True)
         raise typer.Exit(2) from None
     return platform_key
 
@@ -4847,7 +4846,9 @@ def check_cmd(
     show_summary: Annotated[bool, typer.Option("--show-summary", help="Show summary panel")] = False,
     filter_glob: Annotated[str | None, typer.Option("--filter", help="Glob pattern")] = None,
     filter_type: Annotated[str | None, typer.Option("--filter-type", help="Filter type")] = None,
-    platform: Annotated[str | None, typer.Option("--platform", help="Platform adapter")] = None,
+    platform: Annotated[
+        str | None, typer.Option("--platform", help=f"Platform adapter. Choices: {PLATFORM_CHOICES}")
+    ] = None,
     record: Annotated[Path | None, typer.Option("--record", help="Record terminal output to SVG or HTML file")] = None,
     include_gitignore: Annotated[
         bool,
