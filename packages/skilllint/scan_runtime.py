@@ -14,14 +14,14 @@ import os
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
-from pathlib import Path
+from pathlib import Path, PurePath
 from typing import TYPE_CHECKING, Any, NoReturn
 
 import typer
 from git import Repo
 from git.exc import InvalidGitRepositoryError, NoSuchPathError
 
-from .adapters import PlatformAdapter, matches_file
+from .adapters import PlatformAdapter, PlatformPluginDiscovery, PluginLayout, matches_file
 from .reporting import CIReporter, ConsoleReporter, FileResults, Reporter
 
 if TYPE_CHECKING:
@@ -341,6 +341,78 @@ def _discover_bare_paths(directory: Path) -> list[Path]:
 # ---------------------------------------------------------------------------
 # Path discovery and filtering
 # ---------------------------------------------------------------------------
+
+
+def _adapter_plugin_layouts(adapter: PlatformAdapter) -> tuple[PluginLayout, ...]:
+    """Return optional plugin layouts without extending PlatformAdapter."""
+    if isinstance(adapter, PlatformPluginDiscovery):
+        return adapter.plugin_layouts()
+    return ()
+
+
+def _plugin_layout_matches(
+    directory: Path, adapter: PlatformAdapter
+) -> list[tuple[Path, Path, PluginLayout]]:
+    """Return (root, manifest, layout) triples owned by one adapter."""
+    matches: list[tuple[Path, Path, PluginLayout]] = []
+    for layout in _adapter_plugin_layouts(adapter):
+        marker_parts = PurePath(layout.manifest_path).parts
+        if not marker_parts:
+            continue
+        for manifest in _glob_excluding(directory, f"**/{layout.manifest_path}"):
+            if not manifest.is_file():
+                continue
+            # Root plugin.json is the Agent Plugins portable manifest. A
+            # provider overlay such as .claude-plugin/plugin.json or
+            # .cursor-plugin/plugin.json is not another portable plugin rooted
+            # inside that hidden metadata directory.
+            if (
+                marker_parts == ("plugin.json",)
+                and manifest.parent.name.startswith(".")
+                and manifest.parent.name.endswith("-plugin")
+            ):
+                continue
+            root = manifest
+            for _part in marker_parts:
+                root = root.parent
+            matches.append((root, manifest, layout))
+    return matches
+
+
+def _plugin_root_owners(
+    directory: Path, adapters: Sequence[PlatformAdapter]
+) -> dict[Path, frozenset[str]]:
+    """Map discovered plugin roots to every adapter that declares that layout."""
+    mutable: dict[Path, set[str]] = {}
+    for adapter in adapters:
+        for root, _manifest, _layout in _plugin_layout_matches(directory, adapter):
+            mutable.setdefault(root, set()).add(adapter.id())
+    return {root: frozenset(owners) for root, owners in mutable.items()}
+
+
+def _nearest_plugin_root(candidate: Path, owners: dict[Path, frozenset[str]]) -> Path | None:
+    """Return the deepest declared plugin root containing candidate."""
+    roots = [root for root in owners if candidate == root or candidate.is_relative_to(root)]
+    return max(roots, key=lambda root: len(root.parts)) if roots else None
+
+
+def _platform_owns_candidate(
+    candidate: Path, adapter: PlatformAdapter, owners: dict[Path, frozenset[str]]
+) -> bool:
+    """Reject files inside a plugin root owned only by another platform."""
+    root = _nearest_plugin_root(candidate, owners)
+    return root is None or adapter.id() in owners[root]
+
+
+def _platform_plugin_targets(directory: Path, adapter: PlatformAdapter) -> set[Path]:
+    """Return adapter-declared plugin validation targets under directory."""
+    targets: set[Path] = set()
+    for root, manifest, layout in _plugin_layout_matches(directory, adapter):
+        if layout.validation_target == "root":
+            targets.add(root)
+        elif layout.validation_target == "manifest":
+            targets.add(manifest)
+    return targets
 
 
 def _discover_validatable_paths(directory: Path) -> list[Path]:
