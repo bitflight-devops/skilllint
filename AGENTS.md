@@ -69,6 +69,7 @@ Use the narrowest owner that matches the change before searching broadly.
 | Change | Primary seam |
 | --- | --- |
 | CLI and validation orchestration | `packages/skilllint/plugin_validator.py` (legacy central seam; decomposition tracked in #283) |
+| shared validation contracts | `packages/skilllint/models.py` |
 | path selection and discovery | `packages/skilllint/scan_runtime.py` |
 | individual lint rules | `packages/skilllint/rules/` |
 | rule metadata and catalog | `packages/skilllint/rule_registry.py` |
@@ -111,8 +112,10 @@ uv run python scripts/run_fast_tests.py
 ```
 
 Pass pytest paths/options after the script name to narrow the affected boundary.
-The fast profile excludes tests marked `slow`; it is evidence about the
-selected fast-test boundary only. It does not replace the completion gate below.
+The fast profile excludes tests marked `slow` and disables repository-wide
+coverage collection so a narrowed scope is judged only on that affected boundary.
+It is evidence about the selected fast-test boundary only and does not replace
+the completion gate below.
 
 ## Verifying a change
 
