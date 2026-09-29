@@ -30,8 +30,9 @@ class CodexAdapter:
 
     def path_patterns(self) -> list[str]:
         """Return the glob patterns for files this adapter handles."""
-        # A Codex plugin keeps .codex-plugin/plugin.json and skills/ at its root
-        # (developers.openai.com/codex/plugins/build.md#plugin-structure).
+        # Codex supports portable root plugin.json plus the .codex-plugin
+        # compatibility overlay; skills stay at the plugin root.
+        # Source: https://developers.openai.com/plugins/build/plugins
         return [
             ".agents/skills/**/*.md",
             "AGENTS.md",
@@ -50,7 +51,10 @@ class CodexAdapter:
         return {"AS", "CX", "FM", "SK", "LK"}
 
     def plugin_layouts(self) -> tuple[PluginLayout, ...]:
-        """Return portable and Codex compatibility plugin roots."""
+        """Return portable and Codex compatibility plugin-root markers.
+
+        Source: https://developers.openai.com/plugins/build/plugins
+        """
         return (
             PluginLayout("plugin.json", validation_target="manifest"),
             PluginLayout(".codex-plugin/plugin.json", validation_target="manifest"),
