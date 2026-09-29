@@ -25,10 +25,10 @@ alwaysApply: true
 
 - **DRY** real duplication only—do not abstract for two copies or speculative reuse.
 - Prefer explicit names and small helpers over clever one-offs.
-- Match existing project patterns (imports, error handling, test layout per `CLAUDE.md`).
+- Match existing project patterns (imports, error handling, test layout per `AGENTS.md`).
 
 ## Non-negotiables
 
-- **No invented constraints** (magic numbers, timeouts, length limits) without a spec, config, or comment citing the source (`CLAUDE.md`).
+- **No invented constraints** (magic numbers, timeouts, length limits) without a spec, config, or comment citing the source (`AGENTS.md`).
 - **No drive-by refactors** unrelated to the task; every changed line should serve the request.
 - Prefer one principled fix over a quick hack; if a shortcut is unavoidable, isolate it, document why, and keep it out of domain code.

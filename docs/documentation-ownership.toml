@@ -1,6 +1,6 @@
 [owners]
-"AGENTS.md" = "Contributor and agent operating contract"
-"CLAUDE.md" = "Claude-specific agent instructions"
+"AGENTS.md" = "Universal contributor/agent repository contract and change routing"
+"CLAUDE.md" = "Claude-specific orchestration additions"
 "README.md" = "Product purpose, quickstart, and navigation"
 "docs/TYPING_POLICY.md" = "Python typing policy"
 "docs/design-markdown-link-conventions.md" = "Markdown link design conventions"
