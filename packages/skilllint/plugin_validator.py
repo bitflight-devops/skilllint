@@ -132,8 +132,29 @@ _rt_yaml.width = 10000  # prevent line wrapping
 # Platform adapter registry — loaded once at module level.
 # Keys are adapter IDs (e.g. "claude_code", "cursor", "codex").
 ADAPTERS: dict[str, PlatformAdapter] = {a.id(): a for a in load_adapters()}
-# CLI spellings of the registered adapter IDs (e.g. "claude-code, codex, cursor").
-PLATFORM_CHOICES = ", ".join(sorted(k.replace("_", "-") for k in ADAPTERS))
+
+
+def _build_platform_cli_ids(adapter_ids: Iterable[str]) -> dict[str, str]:
+    """Map unambiguous CLI display names back to registered adapter IDs.
+
+    Underscore-only IDs retain the established hyphenated CLI spelling when it
+    cannot collide with an exact registered ID. Mixed-separator and ambiguous
+    IDs are displayed exactly so every advertised choice is selectable.
+
+    Returns:
+        Mapping from displayed CLI name to registered adapter ID.
+    """
+    registered = set(adapter_ids)
+    cli_ids: dict[str, str] = {}
+    for adapter_id in registered:
+        alias = adapter_id.replace("_", "-")
+        display = alias if "_" in adapter_id and "-" not in adapter_id and alias not in registered else adapter_id
+        cli_ids[display] = adapter_id
+    return cli_ids
+
+
+PLATFORM_CLI_IDS = _build_platform_cli_ids(ADAPTERS)
+PLATFORM_CHOICES = ", ".join(sorted(PLATFORM_CLI_IDS))
 
 
 def _safe_load_yaml(text: str) -> YamlValue:
@@ -4521,8 +4542,8 @@ def _resolve_platform_override(platform: str | None) -> str | None:
         return None
     if platform in ADAPTERS:
         return platform
-    platform_key = platform.replace("-", "_")
-    if platform_key not in ADAPTERS:
+    platform_key = PLATFORM_CLI_IDS.get(platform)
+    if platform_key is None:
         typer.echo(f"Unknown platform: {platform!r}. Valid choices: {PLATFORM_CHOICES}", err=True)
         raise typer.Exit(2) from None
     return platform_key
