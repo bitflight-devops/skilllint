@@ -4082,29 +4082,38 @@ def _resolve_platform_override(platform: str | None) -> str | None:
 
 
 def violations_to_result(violations: list[dict]) -> ValidationResult:
-    """Convert a list of violation dicts into a ValidationResult.
-
-    Args:
-        violations: List of dicts with keys: code, severity, message.
-
-    Returns:
-        A ValidationResult grouping issues by severity.
-    """
-    issues = [
-        ValidationIssue(
-            field=v["code"],
-            severity=(
-                v.get("severity", "error") if v.get("severity", "error") in {"error", "warning", "info"} else "error"
-            ),
-            message=v.get("message", ""),
-            code=v["code"],
+    """Convert adapter-boundary violations without losing diagnostic identity."""
+    issues: list[ValidationIssue] = []
+    for violation in violations:
+        code = str(violation["code"])
+        raw_severity = violation.get("severity", "error")
+        severity: Literal["error", "warning", "info"] = (
+            raw_severity if raw_severity in {"error", "warning", "info"} else "error"
         )
-        for v in violations
-    ]
-    errors = [i for i in issues if i.severity == "error"]
-    warnings = [i for i in issues if i.severity == "warning"]
-    info = [i for i in issues if i.severity == "info"]
-    return ValidationResult(passed=len(errors) == 0, errors=errors, warnings=warnings, info=info)
+        line = violation.get("line")
+        issues.append(
+            ValidationIssue(
+                field=str(violation.get("field", code)),
+                severity=severity,
+                message=str(violation.get("message", "")),
+                code=code,
+                line=line if isinstance(line, int) else None,
+                suggestion=(
+                    str(violation["suggestion"])
+                    if violation.get("suggestion") is not None
+                    else None
+                ),
+                docs_url=(
+                    str(violation["docs_url"])
+                    if violation.get("docs_url") is not None
+                    else None
+                ),
+            )
+        )
+    errors = [issue for issue in issues if issue.severity == "error"]
+    warnings = [issue for issue in issues if issue.severity == "warning"]
+    info = [issue for issue in issues if issue.severity == "info"]
+    return ValidationResult(passed=not errors, errors=errors, warnings=warnings, info=info)
 
 
 def main(
