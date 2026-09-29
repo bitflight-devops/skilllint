@@ -22,12 +22,8 @@ def test_action_examples_pin_package_version_separately_from_action_ref() -> Non
                 break
             input_lines.append(line.strip())
 
-        versions = [
-            input_line.removeprefix("version: ").strip('"').split(".")
-            for input_line in input_lines
-            if input_line.startswith("version: ")
-        ]
-        assert any(len(version) == 3 and all(part.isdigit() for part in version) for version in versions), lines[index]
+        assert lines[index].strip().endswith("@vX.Y.Z")
+        assert 'version: "X.Y.Z"' in input_lines, lines[index]
 
 
 def test_action_outputs_table_documents_every_public_output() -> None:

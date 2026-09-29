@@ -68,8 +68,8 @@ def test_published_manifest_keeps_only_documented_hooks_and_current_reference() 
     assert [hook["id"] for hook in hooks] == ["skilllint", "skilllint-fix"]
     manifest = MANIFEST_PATH.read_text(encoding="utf-8")
     readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
-    assert "rev: v1.19.0" in manifest
-    assert "bitflight-devops/skilllint@v1.19.0" in readme
+    assert "rev: vX.Y.Z" in manifest
+    assert "bitflight-devops/skilllint@vX.Y.Z" in readme
 
 
 @pytest.mark.slow
