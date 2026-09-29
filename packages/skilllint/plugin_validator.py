@@ -4519,6 +4519,8 @@ def _resolve_platform_override(platform: str | None) -> str | None:
     """
     if platform is None:
         return None
+    if platform in ADAPTERS:
+        return platform
     platform_key = platform.replace("-", "_")
     if platform_key not in ADAPTERS:
         typer.echo(f"Unknown platform: {platform!r}. Valid choices: {PLATFORM_CHOICES}", err=True)
