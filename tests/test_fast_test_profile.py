@@ -17,15 +17,7 @@ def test_fast_runner_enforces_profile_after_forwarded_options(monkeypatch) -> No
     monkeypatch.setattr(fast.pytest, "main", fake_pytest_main)
 
     assert fast.main(["tests/test_fast_test_profile.py", "-qmslow"]) == 0
-    assert calls == [
-        [
-            "tests/test_fast_test_profile.py",
-            "-qmslow",
-            "--no-cov",
-            "-m",
-            "not slow",
-        ]
-    ]
+    assert calls == [["tests/test_fast_test_profile.py", "-qmslow", "--no-cov", "-m", "not slow"]]
 
 
 def test_fast_profile_is_inserted_before_option_terminator(monkeypatch) -> None:
