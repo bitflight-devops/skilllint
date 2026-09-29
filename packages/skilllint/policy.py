@@ -308,7 +308,6 @@ def _resolve_policy(
     return result
 
 
-
 def _is_suppressed(ignore_config: IgnoreConfig, file_path: Path, config_root: Path, code: str) -> bool:
     """Check whether an issue code is suppressed for a given file path.
 

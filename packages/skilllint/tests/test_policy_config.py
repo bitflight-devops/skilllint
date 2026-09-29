@@ -16,7 +16,12 @@ import json
 from pathlib import Path
 
 from skilllint import plugin_validator
-from skilllint.policy import DEFAULT_THRESHOLDS, ValidationPolicy, _load_policy, _resolve_policy
+from skilllint.policy import (
+    DEFAULT_THRESHOLDS,
+    ValidationPolicy,
+    _load_policy,
+    _resolve_policy,
+)
 
 
 def test_plugin_validator_reexports_policy_contract() -> None:
