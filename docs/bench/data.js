@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1790521530493,
+  "lastUpdate": 1790682275691,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -2808,6 +2808,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 79.875,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "79f21f14fc54c91eac0c4531eb705dfdf1343015",
+          "message": "refactor(agent-context): separate universal rules from Claude orchestration (#286)\n\n* docs(agent-context): make AGENTS host-neutral\n\n* docs(agent-context): move Claude orchestration policy\n\n* docs(agent-context): point Cursor at universal authority\n\n* docs(agent-context): align instruction ownership\n\n* test(agent-context): lock instruction ownership\n\n* docs: route validation contracts to models\n\n* test: cover current validation contract owner\n\n* test: lock instruction ownership metadata\n\n* style: order contract test imports\n\n* docs: keep routing map branch-valid\n\n* test: match branch-local routing seams",
+          "timestamp": "2026-09-29T11:41:34Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/79f21f14fc54c91eac0c4531eb705dfdf1343015"
+        },
+        "date": 1790682274151,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 9975.083,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 10365.743,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 11126.107,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 96.568,
             "unit": "files/s"
           }
         ]
