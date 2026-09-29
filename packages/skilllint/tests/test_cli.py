@@ -840,8 +840,9 @@ class TestPlatformFlag:
 
         assert result.exit_code == 0
         assert plugin_validator.ADAPTERS
-        for adapter_id in plugin_validator.ADAPTERS:
-            assert adapter_id.replace("_", "-") in result.output
+        expected = ", ".join(sorted(adapter_id.replace("_", "-") for adapter_id in plugin_validator.ADAPTERS))
+        assert plugin_validator.PLATFORM_CHOICES == expected
+        assert f"Choices: {expected}" in result.output
 
     def test_hyphenated_third_party_platform_id_resolves_exactly(self, monkeypatch) -> None:
         """Registered adapter IDs containing hyphens remain directly selectable."""
