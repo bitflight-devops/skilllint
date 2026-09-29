@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 import msgspec.json
 
+from skilllint.adapters.protocol import ALL_RULE_SERIES, PluginLayout
 from skilllint.schemas import load_provider_schema
 
 if TYPE_CHECKING:
@@ -42,8 +43,12 @@ class ClaudeCodeAdapter:
         ]
 
     def applicable_rules(self) -> set[str]:
-        """Return the set of rule prefixes applicable to this adapter."""
-        return {"SK", "PR", "HK", "AS", "AG"}
+        """Route every registered core series applicable to Claude Code."""
+        return {ALL_RULE_SERIES}
+
+    def plugin_layouts(self) -> tuple[PluginLayout, ...]:
+        """Return Claude Code plugin-root manifests used for explicit discovery."""
+        return (PluginLayout(".claude-plugin/plugin.json", validation_target="root"),)
 
     def constraint_scopes(self) -> set[str]:
         """Return the set of constraint_scope values from the provider schema.
