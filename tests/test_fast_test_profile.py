@@ -19,7 +19,7 @@ def test_fast_runner_excludes_slow_tests_and_forwards_scope(monkeypatch) -> None
     monkeypatch.setattr(fast.pytest, "main", fake_pytest_main)
 
     assert fast.main(["tests/test_fast_test_profile.py", "-q"]) == 0
-    assert calls == [["-m", "not slow", "tests/test_fast_test_profile.py", "-q"]]
+    assert calls == [["--no-cov", "-m", "not slow", "tests/test_fast_test_profile.py", "-q"]]
 
 
 def test_fast_runner_rejects_marker_overrides(monkeypatch) -> None:
@@ -43,6 +43,7 @@ def test_agent_contract_distinguishes_fast_loop_from_full_gate() -> None:
 
     assert "uv run python scripts/run_fast_tests.py" in agents
     assert "excludes tests marked `slow`" in agents
+    assert "disables repository-wide" in agents
     assert "uv run prek run --all-files" in agents
     assert "uv run pytest" in agents
 
