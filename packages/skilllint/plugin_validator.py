@@ -4210,6 +4210,7 @@ def main(
             filter_glob,
             filter_type,
             platform_adapter=ADAPTERS[platform_override] if platform_override is not None else None,
+            platform_adapters=tuple(ADAPTERS.values()) if platform_override is not None else None,
         )
         if platform_override is not None:
             expanded_paths = [_normalize_skill_folder(path) for path in expanded_paths]
