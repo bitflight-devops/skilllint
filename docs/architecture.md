@@ -5,7 +5,8 @@
 validation, rule registration, fixing, and reporting modules. Dependency-light
 validation contracts (`ValidationIssue`, `ValidationResult`, `AppliedFix`, the
 validator protocol, and shared value aliases) are owned by `models.py`.
-`plugin_validator.py` re-exports those names for compatibility while its
+`policy.py` owns configuration discovery, threshold/severity policy, and suppression filtering.
+`plugin_validator.py` re-exports both model and policy names for compatibility while its
 remaining responsibilities are decomposed incrementally under #283.
 
 ## Runtime flow
@@ -15,6 +16,7 @@ CLI (plugin_validator.main)
   -> scan_runtime._resolve_filter_and_expand_paths
   -> scan_runtime._discover_validatable_paths
   -> plugin_validator.validate_file / validate_single_path
+  -> policy._resolve_policy / _resolve_ignore_config
   -> schema validators and registered rules
   -> optional fixer, then revalidation
   -> reporting.ConsoleReporter or CIReporter
@@ -85,6 +87,7 @@ from resulting errors and usage/validation contracts, not adapter registration.
 | Concern | Maintained seam | Proof |
 | --- | --- | --- |
 | validation contracts | `models.py` | model/compatibility contract tests |
+| policy/config/suppression | `policy.py` | policy/config discovery and compatibility tests |
 | path selection | `scan_runtime.py` | scan runtime tests |
 | platform metadata | `adapters/protocol.py`, `adapters/registry.py` | adapter protocol tests |
 | schema constraints | `schemas/`, schema validators | schema/frontmatter tests |
