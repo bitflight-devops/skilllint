@@ -43,7 +43,11 @@ class ClaudeCodeAdapter:
         ]
 
     def applicable_rules(self) -> set[str]:
-        """Route every registered core series applicable to Claude Code."""
+        """Route every registered core series applicable to Claude Code.
+
+        Returns:
+            The all-applicable-series sentinel.
+        """
         return {ALL_RULE_SERIES}
 
     def plugin_layouts(self) -> tuple[PluginLayout, ...]:
