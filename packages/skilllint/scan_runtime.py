@@ -446,14 +446,23 @@ def _discover_validatable_paths(directory: Path) -> list[Path]:
     return _discover_bare_paths(directory)
 
 
-def _platform_matching_paths(paths: list[Path], directory: Path, adapter: PlatformAdapter | None) -> list[Path]:
+def _platform_matching_paths(
+    paths: list[Path],
+    directory: Path,
+    adapter: PlatformAdapter | None,
+    platform_adapters: Sequence[PlatformAdapter] | None = None,
+) -> list[Path]:
     if adapter is None:
         return paths
+
+    adapter_universe = tuple(platform_adapters) if platform_adapters is not None else (adapter,)
+    plugin_owners = _plugin_root_owners(directory, adapter_universe)
     semantic_targets = sorted(_discover_validatable_paths(directory), key=lambda path: len(path.parts), reverse=True)
     matched = [
         path
         for path in paths
         if path.is_file()
+        and _platform_owns_candidate(path, adapter, plugin_owners)
         and not (adapter.id() == "claude_code" and _is_foreign_provider_target(path, directory))
         and (
             _matches_platform_path(adapter, path, directory)
@@ -489,7 +498,25 @@ def _matches_platform_relative_path(adapter: PlatformAdapter, candidate: Path) -
     )
 
 
+def _plugin_manifest_target(candidate: Path, adapter: PlatformAdapter) -> Path | None:
+    """Normalize an adapter-declared manifest to its validation target."""
+    for layout in _adapter_plugin_layouts(adapter):
+        marker_parts = PurePath(layout.manifest_path).parts
+        if not marker_parts or tuple(candidate.parts[-len(marker_parts) :]) != marker_parts:
+            continue
+        root = candidate
+        for _part in marker_parts:
+            root = root.parent
+        if layout.validation_target == "root":
+            return root
+        if layout.validation_target == "manifest":
+            return candidate
+    return None
+
+
 def _semantic_platform_target(candidate: Path, semantic_targets: list[Path], adapter: PlatformAdapter) -> Path:
+    if (plugin_target := _plugin_manifest_target(candidate, adapter)) is not None:
+        return plugin_target
     if adapter.id() not in {"claude_code", "codex", "cursor"}:
         return candidate
     if adapter.id() == "codex" and candidate.name == "AGENTS.md":
@@ -611,17 +638,30 @@ def _matches_semantic_target(adapter: PlatformAdapter, target: Path, directory: 
     )
 
 
-def _discover_platform_paths(directory: Path, adapter: PlatformAdapter) -> list[Path]:
+def _discover_platform_paths(
+    directory: Path,
+    adapter: PlatformAdapter,
+    platform_adapters: Sequence[PlatformAdapter] | None = None,
+) -> list[Path]:
+    adapter_universe = tuple(platform_adapters) if platform_adapters is not None else (adapter,)
+    plugin_owners = _plugin_root_owners(directory, adapter_universe)
+
     if adapter.id() == "claude_code":
         return [
             target
             for target in _discover_validatable_paths(directory)
-            if _matches_semantic_target(adapter, target, directory)
+            if _platform_owns_candidate(target, adapter, plugin_owners)
+            and _matches_semantic_target(adapter, target, directory)
         ]
+
     semantic_targets = sorted(_discover_validatable_paths(directory), key=lambda path: len(path.parts), reverse=True)
-    discovered: set[Path] = set()
+    discovered = _platform_plugin_targets(directory, adapter)
     for candidate in _glob_excluding(directory, "**/*"):
-        if not candidate.is_file() or not _matches_platform_path(adapter, candidate, directory):
+        if (
+            not candidate.is_file()
+            or not _platform_owns_candidate(candidate, adapter, plugin_owners)
+            or not _matches_platform_path(adapter, candidate, directory)
+        ):
             continue
         discovered.add(_semantic_platform_target(candidate, semantic_targets, adapter))
     return sorted(discovered)
@@ -644,6 +684,7 @@ def _resolve_filter_and_expand_paths(
     filter_type: str | None,
     *,
     platform_adapter: PlatformAdapter | None = None,
+    platform_adapters: Sequence[PlatformAdapter] | None = None,
 ) -> tuple[list[Path], bool]:
     """Resolve filter options and expand directory paths.
 
@@ -672,7 +713,7 @@ def _resolve_filter_and_expand_paths(
             resolved_glob = filter_glob
         if resolved_glob is not None and path.is_dir():
             matched = _glob_excluding(path, resolved_glob)
-            matched = _platform_matching_paths(matched, path, platform_adapter)
+            matched = _platform_matching_paths(matched, path, platform_adapter, platform_adapters)
             matched.extend(_manifest_filter_type_paths(path, filter_type, platform_adapter))
             if filter_type == "skills" and platform_adapter is None:
                 matched = [match.parent for match in matched]
@@ -682,7 +723,7 @@ def _resolve_filter_and_expand_paths(
             if platform_adapter is None:
                 expanded_paths.extend(_discover_validatable_paths(path))
             else:
-                expanded_paths.extend(_discover_platform_paths(path, platform_adapter))
+                expanded_paths.extend(_discover_platform_paths(path, platform_adapter, platform_adapters))
             is_batch = True
         else:
             expanded_paths.append(path)
