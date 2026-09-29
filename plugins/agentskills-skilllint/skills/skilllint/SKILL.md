@@ -60,8 +60,11 @@ For each finding that needs explanation, run:
 skilllint rule <ID>
 ```
 
-Use `skilllint rules` when catalog metadata such as current severity, platform
-scope, or fixability is needed.
+The per-rule output includes the rule's severity, category, and platform
+scope.
+
+Use `skilllint rules` to compare current severity and fixability across the
+catalog.
 
 ## 4. Fix from runtime evidence
 
