@@ -37,6 +37,7 @@ def test_agent_contract_distinguishes_fast_loop_from_full_gate() -> None:
     agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
 
     assert "uv run python scripts/run_fast_tests.py" in agents
+    assert "Do not run narrowed `uv run pytest <path>` directly" in agents
     assert "excludes tests marked `slow`" in agents
     assert "disables repository-wide" in agents
     assert "uv run prek run --all-files" in agents
