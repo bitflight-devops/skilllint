@@ -200,14 +200,25 @@ class TestExternalLinkFiltering:
 
     @pytest.mark.parametrize(
         "external_link",
-        ["https://example.com", "http://example.com", "ftp://example.com", "https://docs.python.org/3/"],
+        [
+            "https://example.com",
+            "http://example.com",
+            "ftp://example.com",
+            "https://docs.python.org/3/",
+            "mailto:someone@example.com",
+            "tel:+15551234567",
+            "urn:isbn:0451450523",
+        ],
     )
     def test_external_links_ignored(self, tmp_path: Path, external_link: str) -> None:
         """Test external links are not validated.
 
         Tests: External link filtering
         How: Create SKILL.md with external links, validate
-        Why: Ensure validator ignores http://, https://, ftp:// links
+        Why: Ensure validator ignores any absolute-URI-scheme link
+            (CommonMark 0.31.2 section 6.9), not just the three
+            hardcoded http(s)/ftp schemes -- mailto:, tel: and other
+            schemes must not be treated as relative filesystem paths.
         """
         skill_md = tmp_path / "SKILL.md"
         skill_md.write_text(f"""---
@@ -420,9 +431,9 @@ See [file](./references/file%20with%20space.md).
         validator = InternalLinkValidator()
         result = validator.validate(skill_md)
 
-        # Should handle URL encoding
-        # (May pass or fail depending on implementation)
-        assert isinstance(result.passed, bool)
+        # %20 is percent-decoded to a space, so the link resolves
+        assert result.passed is True
+        assert result.errors == []
 
     def test_absolute_path_ignored(self, tmp_path: Path) -> None:
         """Test absolute paths are ignored.
@@ -675,3 +686,205 @@ See [foo](${CLAUDE_SKILL_DIR}/${SOME_UNKNOWN_VAR}/foo.md) for details.
 
         assert result.passed is True
         assert not any(issue.code == "LK001" for issue in result.errors)
+
+
+class TestReferenceDefinitions:
+    """LK001 also checks link reference definitions (``[label]: dest``)."""
+
+    def test_broken_reference_definition_reported_with_title_and_code_block_ignored(self, tmp_path: Path) -> None:
+        skill_dir = tmp_path / "ref-skill"
+        (skill_dir / "references").mkdir(parents=True)
+        (skill_dir / "references" / "ok.md").write_text("# ok\n")
+        skill_md = skill_dir / "SKILL.md"
+        skill_md.write_text(
+            "---\ndescription: Test skill\n---\n\n"
+            "See [guide][g] and [ok][o].\n\n"
+            "```markdown\n[fenced]: ./references/in-code.md\n```\n\n"
+            '[g]: ./references/missing.md "Guide"\n'
+            "[o]: <./references/ok.md> 'OK'\n"
+        )
+
+        result = InternalLinkValidator().validate(skill_md)
+
+        assert [issue.message for issue in result.errors] == [
+            "Broken link: [g](./references/missing.md) (file not found)"
+        ]
+
+
+class TestEncodedDestinations:
+    """LK001 resolves the destination a Markdown renderer would produce."""
+
+    @pytest.mark.parametrize(
+        "destination",
+        [r"\.\./gone.md", "%2E%2E/gone.md", "&#46;&#46;/gone.md", "&period;&period;/gone.md"],
+        ids=["backslash-escape", "percent-encoded", "numeric-reference", "named-reference"],
+    )
+    def test_encoded_broken_link_is_reported(self, tmp_path: Path, destination: str) -> None:
+        skill_dir = tmp_path / "enc-skill"
+        # Decoy at the undecoded path: without decoding the link would resolve
+        decoy_dir = skill_dir / destination.removesuffix("/gone.md")
+        decoy_dir.mkdir(parents=True)
+        (decoy_dir / "gone.md").write_text("# decoy\n")
+        skill_md = skill_dir / "SKILL.md"
+        skill_md.write_text(f"---\ndescription: Test skill\n---\n\n[x]({destination})\n")
+
+        result = InternalLinkValidator().validate(skill_md)
+
+        assert [issue.code for issue in result.errors] == ["LK001"]
+
+    def test_encoded_link_to_existing_file_passes(self, tmp_path: Path) -> None:
+        skill_dir = tmp_path / "enc-skill"
+        (skill_dir / "references").mkdir(parents=True)
+        (skill_dir / "references" / "a b.md").write_text("# ok\n")
+        skill_md = skill_dir / "SKILL.md"
+        skill_md.write_text(
+            "---\ndescription: Test skill\n---\n\n"
+            "[p](references/a%20b.md) [e](references&#47;a b.md) [s](references\\/a%20b.md#top)\n"
+        )
+
+        assert InternalLinkValidator().validate(skill_md).errors == []
+
+    def test_percent_encoded_absolute_path_is_ignored_not_resolved_against_filesystem(self, tmp_path: Path) -> None:
+        """A percent-encoded absolute destination must be recognized as an
+        absolute path (and ignored) before percent-decoding, not after.
+
+        Regression test: the ignore filter used to run on the undecoded
+        destination, so "%2Fnonexistent.../file.md" did not look absolute
+        (no leading "/") and fell through as an ordinary relative link. It
+        was then percent-decoded to an absolute path, and
+        ``skill_dir / "/nonexistent.../file.md"`` resolves to the bare
+        absolute path (``Path.__truediv__`` discards the relative left
+        operand when the right operand is absolute) -- a real,
+        machine-dependent filesystem existence check instead of the
+        intended ignore. Because this target can never exist, the
+        pre-fix code always reported it as a broken link.
+        """
+        skill_dir = tmp_path / "enc-skill"
+        skill_dir.mkdir()
+        skill_md = skill_dir / "SKILL.md"
+        skill_md.write_text("---\ndescription: Test skill\n---\n\n[x](%2Fnonexistent-should-be-ignored%2Ffile.md)\n")
+
+        result = InternalLinkValidator().validate(skill_md)
+
+        assert result.passed is True
+        assert result.errors == []
+
+    def test_backslash_escaped_ampersand_not_reinterpreted_as_entity(self, tmp_path: Path) -> None:
+        """``\\&amp;evil.md`` is a backslash-escaped literal ``&`` followed by
+        inert text ``amp;evil.md`` -- it must decode to ``&amp;evil.md``, not
+        to ``&evil.md``.
+
+        Regression test: decoding backslash escapes and character references
+        as two independent sequential passes lets pass 1's bare ``&`` output
+        be re-read by pass 2 as the entity ``&amp;``, producing the wrong
+        path and silently pointing this link at a different (here,
+        nonexistent) file.
+        """
+        skill_dir = tmp_path / "amp-skill"
+        skill_dir.mkdir()
+        (skill_dir / "&evil.md").write_text("# should not be the resolved target\n")
+        skill_md = skill_dir / "SKILL.md"
+        skill_md.write_text("---\ndescription: Test skill\n---\n\n[x](\\&amp;evil.md)\n")
+
+        result = InternalLinkValidator().validate(skill_md)
+
+        assert [issue.message for issue in result.errors] == ["Broken link: [x](\\&amp;evil.md) (file not found)"]
+
+
+class TestTitlesAndHtmlLinks:
+    """LK001 reads a titled link's destination and checks raw HTML href/src."""
+
+    def test_titled_links_resolve_to_their_destination(self, tmp_path: Path) -> None:
+        skill_dir = tmp_path / "title-skill"
+        (skill_dir / "references").mkdir(parents=True)
+        (skill_dir / "references" / "ok.md").write_text("# ok\n")
+        (skill_dir / "references" / "sp ace.md").write_text("# ok\n")
+        skill_md = skill_dir / "SKILL.md"
+        skill_md.write_text(
+            "---\ndescription: Test skill\n---\n\n"
+            "[ok](references/ok.md \"Title\") [sq](references/ok.md 'T') [pa](references/ok.md (T))\n"
+            '[br](<references/sp ace.md> "T")\n'
+            '[gone](references/missing.md "Title")\n'
+        )
+
+        result = InternalLinkValidator().validate(skill_md)
+
+        assert [issue.message for issue in result.errors] == [
+            "Broken link: [gone](references/missing.md) (file not found)"
+        ]
+
+    def test_html_href_and_src_are_checked(self, tmp_path: Path) -> None:
+        skill_dir = tmp_path / "html-skill"
+        (skill_dir / "assets").mkdir(parents=True)
+        (skill_dir / "assets" / "ok.png").write_bytes(b"")
+        skill_md = skill_dir / "SKILL.md"
+        skill_md.write_text(
+            "---\ndescription: Test skill\n---\n\n"
+            '<img src="assets/ok.png"> <img src="assets/missing.png">\n'
+            '<a href="references/gone.md">x</a> <a href="https://example.com">u</a>\n'
+            '```html\n<img src="assets/in-code.png">\n```\n'
+        )
+
+        result = InternalLinkValidator().validate(skill_md)
+
+        assert [issue.message for issue in result.errors] == [
+            "Broken link: [<img src>](assets/missing.png) (file not found)",
+            "Broken link: [<a href>](references/gone.md) (file not found)",
+        ]
+
+
+class TestHtmlComments:
+    """LK001 skips links inside HTML comments."""
+
+    def test_commented_links_ignored(self, tmp_path: Path) -> None:
+        skill_dir = tmp_path / "comment-skill"
+        skill_dir.mkdir()
+        skill_md = skill_dir / "SKILL.md"
+        skill_md.write_text(
+            "---\ndescription: Test skill\n---\n\n"
+            '<!-- <img src="assets/old.png"> [old](references/old.md) -->\n'
+            "<!--\n[older](references/older.md)\n-->\n"
+            "[gone](references/gone.md)\n"
+        )
+
+        result = InternalLinkValidator().validate(skill_md)
+
+        assert [issue.message for issue in result.errors] == [
+            "Broken link: [gone](references/gone.md) (file not found)"
+        ]
+
+
+class TestParenthesesInDestinations:
+    """LK001 keeps balanced parentheses in a bare destination (CommonMark 6.3)."""
+
+    def test_parenthesised_names_resolve_and_urls_stay_urls(self, tmp_path: Path) -> None:
+        skill_dir = tmp_path / "paren-skill"
+        (skill_dir / "references").mkdir(parents=True)
+        (skill_dir / "references" / "a(b).md").write_text("# ok\n")
+        skill_md = skill_dir / "SKILL.md"
+        skill_md.write_text(
+            "---\ndescription: Test skill\n---\n\n"
+            "[ok](references/a(b).md) [wiki](https://en.wikipedia.org/wiki/Foo_(bar))\n"
+            "[gone](references/c(d).md)\n"
+        )
+
+        result = InternalLinkValidator().validate(skill_md)
+
+        assert [issue.message for issue in result.errors] == [
+            "Broken link: [gone](references/c(d).md) (file not found)"
+        ]
+
+
+class TestBackslashes:
+    """LK001 reads ``\\`` as ``/`` in HTML href/src and as a literal in Markdown."""
+
+    def test_html_backslash_resolves_and_markdown_backslash_is_literal(self, tmp_path: Path) -> None:
+        skill_dir = tmp_path / "bs-skill"
+        (skill_dir / "assets").mkdir(parents=True)
+        (skill_dir / "assets" / "ok.png").write_bytes(b"")
+        skill_md = skill_dir / "SKILL.md"
+        skill_md.write_text('---\ndescription: Test skill\n---\n\n<img src="assets\\ok.png">\n[md](assets\\ok.png)\n')
+
+        result = InternalLinkValidator().validate(skill_md)
+
+        assert [issue.message for issue in result.errors] == ["Broken link: [md](assets\\ok.png) (file not found)"]

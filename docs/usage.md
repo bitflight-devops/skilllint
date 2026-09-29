@@ -93,15 +93,15 @@ fallback.
 
 ## GitHub Action
 
-Pin the Action ref and the package version independently. The Action exposes
+Pin the Action ref and the package version independently. Replace `X.Y.Z` in the examples with the release you intend to pin. The Action exposes
 `result` (`passed` or `failed`) and `exit-code` (`0`, `1`, or `2`).
 
 ```yaml
-- uses: bitflight-devops/skilllint@v1.7.0
+- uses: bitflight-devops/skilllint@vX.Y.Z
   id: skilllint
   with:
     paths: "plugins/"
-    version: "1.7.0"
+    version: "X.Y.Z"
     platform: "claude-code"
     show-summary: "true"
     no-color: "true"
@@ -111,12 +111,12 @@ To observe a failure without blocking a later step, use
 `continue-on-error: true` and inspect both outputs:
 
 ```yaml
-- uses: bitflight-devops/skilllint@v1.7.0
+- uses: bitflight-devops/skilllint@vX.Y.Z
   id: lint
   continue-on-error: true
   with:
     paths: "plugins/"
-    version: "1.7.0"
+    version: "X.Y.Z"
 - run: echo "skilllint result=${{ steps.lint.outputs.result }} exit=${{ steps.lint.outputs.exit-code }}"
 ```
 

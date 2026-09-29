@@ -68,10 +68,11 @@ def test_published_manifest_keeps_only_documented_hooks_and_current_reference() 
     assert [hook["id"] for hook in hooks] == ["skilllint", "skilllint-fix"]
     manifest = MANIFEST_PATH.read_text(encoding="utf-8")
     readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
-    assert "rev: v1.19.0" in manifest
-    assert "bitflight-devops/skilllint@v1.19.0" in readme
+    assert "rev: vX.Y.Z" in manifest
+    assert "bitflight-devops/skilllint@vX.Y.Z" in readme
 
 
+@pytest.mark.slow
 def test_skilllint_hook_runs_matching_files_and_skips_unmatched_paths(staged_repository: Path) -> None:
     clean_result = _run(
         ["uv", "run", "prek", "try-repo", str(REPO_ROOT), "skilllint", "--files", "skills/my-skill/SKILL.md"],
@@ -98,6 +99,7 @@ def test_skilllint_hook_runs_matching_files_and_skips_unmatched_paths(staged_rep
     assert "Skipped" in excluded_result.stdout
 
 
+@pytest.mark.slow
 def test_skilllint_fix_hook_edits_once_then_is_idempotent(staged_repository: Path) -> None:
     skill_file = staged_repository / "skills" / "fixable" / "SKILL.md"
     before = skill_file.read_text(encoding="utf-8")
@@ -118,6 +120,7 @@ def test_skilllint_fix_hook_edits_once_then_is_idempotent(staged_repository: Pat
     assert skill_file.read_text(encoding="utf-8") == after_first_run
 
 
+@pytest.mark.slow
 def test_pre_commit_smoke_runs_published_check_hook(staged_repository: Path) -> None:
     result = _run(
         [
