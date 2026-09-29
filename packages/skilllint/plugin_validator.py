@@ -3988,9 +3988,7 @@ def run_platform_checks(
     return _filter_platform_violations(violations, adapter)
 
 
-def _skill_md_violations(
-    path: Path, *, policy_cache: dict[str, tuple[ValidationPolicy, Path | None]]
-) -> list[dict]:
+def _skill_md_violations(path: Path, *, policy_cache: dict[str, tuple[ValidationPolicy, Path | None]]) -> list[dict]:
     """Return the once-per-SKILL.md Agent Skills findings for explicit routing."""
     frontmatter_data, body_lines, _yaml_err, _colon_fields = parse_skill_md(path)
 
@@ -4037,11 +4035,7 @@ def validate_file(
     else:
         matching = [adapter for adapter in adapters.values() if matches_file(adapter, pure)]
 
-    skill_violations = (
-        _skill_md_violations(path, policy_cache=resolved_policy_cache)
-        if is_skill_md(path)
-        else []
-    )
+    skill_violations = _skill_md_violations(path, policy_cache=resolved_policy_cache) if is_skill_md(path) else []
     if not matching:
         return skill_violations
 
@@ -4101,16 +4095,8 @@ def violations_to_result(violations: list[dict]) -> ValidationResult:
                 message=str(violation.get("message", "")),
                 code=code,
                 line=line if isinstance(line, int) else None,
-                suggestion=(
-                    str(violation["suggestion"])
-                    if violation.get("suggestion") is not None
-                    else None
-                ),
-                docs_url=(
-                    str(violation["docs_url"])
-                    if violation.get("docs_url") is not None
-                    else None
-                ),
+                suggestion=(str(violation["suggestion"]) if violation.get("suggestion") is not None else None),
+                docs_url=(str(violation["docs_url"]) if violation.get("docs_url") is not None else None),
             )
         )
     errors = [issue for issue in issues if issue.severity == "error"]
