@@ -1,255 +1,116 @@
 ---
 name: skilllint
-description: 'Guide for using the skilllint CLI to validate, lint, and fix Claude Code plugins, skills, agents, and commands. Use when encountering FM, SK, AS, AG, LK, PD, PL, HK, NR, SL, TC, PR, PA, CU, CX rule violations, when asked to lint or validate a plugin, or when asked how to install or check the version of skilllint.'
+description: 'Use the skilllint CLI to validate, explain, and fix agent plugins, skills, agents, commands, and platform files. Use when asked to lint agent artifacts, investigate a skilllint rule ID, or verify a plugin before commit.'
 argument-hint: '[rule-id | path]'
 ---
 
-# skilllint Guide
+# skilllint
+
+Use the installed CLI as the source of truth for commands, rules, severity,
+platform applicability, fixability, and thresholds. Do not reproduce those
+runtime-owned facts from this skill.
 
 Arguments received: `$ARGUMENTS`
 
-## Argument Routing
+## 1. Resolve the invocation
 
-- **No arguments** → Run full workflow guide below
-- **Rule ID** (e.g. `FM010`, `AG003`, `SK006`) → Run `skilllint rule <ID>`
-- **A path** (e.g. `./plugins/my-plugin`) → Run `skilllint check <path>` and interpret the output
+Prefer an already-installed `skilllint` executable.
 
----
-
-## Installation
-
-Install `skilllint` once using whichever package manager is available:
-
-```bash
-# With uv (recommended — fastest, isolated tool environment)
-uv tool install skilllint
-
-# With pipx (isolated tool environment)
-pipx install skilllint
-
-# With pip (installs into current Python environment)
-pip install skilllint
-```
-
-**Verify installation:**
 ```bash
 skilllint --version
 ```
 
----
+When it is unavailable, use the first available package manager.
 
-## Running skilllint
-
-`skilllint` uses subcommands. The three commands are: `check`, `rule`, and `rules`.
-
-### Validate a plugin, skill, or directory
+With `uv`, run the published tool without a permanent installation:
 
 ```bash
-# Validate a whole plugin directory
-skilllint check ./plugins/my-plugin
-
-# Validate a single skill file
-skilllint check ./plugins/my-plugin/skills/my-skill/SKILL.md
-
-# Validate with detailed per-file output
-skilllint check --show-progress --show-summary ./plugins/my-plugin
-
-# Validate and see detailed messages including explanations
-skilllint check --verbose ./plugins/my-plugin
+uvx skilllint@latest --version
 ```
 
-### Filter to specific file types
+With `pipx`, run the published tool without a permanent installation:
 
 ```bash
-# Only validate skills
-skilllint check --filter-type skills ./plugins/my-plugin
-
-# Only validate agents
-skilllint check --filter-type agents ./plugins/my-plugin
-
-# Only validate commands
-skilllint check --filter-type commands ./plugins/my-plugin
-
-# Custom glob filter
-skilllint check --filter '**/skills/*/SKILL.md' ./plugins/my-plugin
+pipx run skilllint --version
 ```
 
-### Validate only (no auto-fix)
+With only `pip`, install the package into the active Python environment, then
+use the `skilllint` executable:
 
 ```bash
-skilllint check --check ./plugins/my-plugin
-```
-
----
-
-## Reading skilllint Output
-
-Each violation is reported as:
-
-```
-<FILE>:<LINE>  <SEVERITY>  <MESSAGE>  [RULE-ID]
-```
-
-Example:
-```
-skills/my-skill/SKILL.md:3  error  Description uses YAML multiline block scalar (>-); use a single-line string  [FM004]
-skills/my-skill/SKILL.md:5  error  allowed-tools must be a comma-separated string, not a YAML array  [FM007]
-skills/my-skill/SKILL.md:1  warning  SKILL.md body exceeds token threshold  [SK006]
-```
-
-Severity levels:
-- **error** — must fix before the skill/plugin works correctly
-- **warning** — should fix; may cause degraded behavior
-- **info** — informational; no action required
-
-**To look up any rule ID:**
-
-```bash
-# Show source, severity, platforms, examples, and remediation for one rule
-skilllint rule AG003
-
-# List all documented rules
-skilllint rules
-
-# Filter by severity or category
-skilllint rules --severity error
-skilllint rules --category skill
-```
-
-Every registered rule is available through `skilllint rule <ID>`. Run `skilllint rules` for a compact overview of every series.
-
----
-
-## Auto-Fixing Issues
-
-Many frontmatter errors can be fixed automatically:
-
-```bash
-# Auto-fix in place
-skilllint check --fix ./plugins/my-plugin
-
-# Preview what would be fixed (validate-only first, then fix)
-skilllint check --check ./plugins/my-plugin
-skilllint check --fix ./plugins/my-plugin
-```
-
-> **Note:** `--check` and `--fix` are mutually exclusive. Passing both flags at the same time is an error.
-
-**Auto-fixable rules:** FM004, FM007, FM009, FM010, SL001, HK005
-
-**Not auto-fixable:** AG series, SK006/SK007 (token size — requires manual refactoring), PD series, AS006, LK series, most PL/HK rules.
-
----
-
-## Common Fix Patterns
-
-### FM004 — YAML multiline block scalar in description
-
-```yaml
-# Wrong
-description: >-
-  This is a long description
-  that spans multiple lines
-
-# Correct — single-line string
-description: 'This is a long description that spans multiple lines.'
-```
-
-### FM007 — tools / allowed-tools / disallowedTools as YAML array
-
-```yaml
-# Wrong
-allowed-tools:
-  - Read
-  - Bash
-  - Glob
-
-# Correct — comma-separated string
-allowed-tools: 'Read, Bash, Glob'
-```
-
-### FM009 — Unquoted colon in description
-
-```yaml
-# Wrong
-description: Validate files: plugins, skills, and agents
-
-# Correct — quote the value
-description: 'Validate files: plugins, skills, and agents'
-```
-
-### SK006 / SK007 — Skill exceeds token limit
-
-Move large reference content to a `references/` subdirectory and link to it:
-```markdown
-For background, see the [architecture guide](../../../../docs/architecture.md).
-```
-Token thresholds are defined by `TOKEN_WARNING_THRESHOLD` (warning) and `TOKEN_ERROR_THRESHOLD` (error) in the skilllint source. Run `skilllint rules` to see current threshold values. Body text only — frontmatter is excluded from the count.
-
-### FM010 — Name/directory mismatch
-
-The `name:` frontmatter field must match the directory name:
-```
-skills/my-skill/SKILL.md  →  name: my-skill
-```
-
-
-
-If the `description:` contains unquoted colons like `Examples: Context:`,
-YAML parsing will fail. Quote the string to fix.
-
----
-
-## Checking for Updates
-
-```bash
-# With uv
-uv tool upgrade skilllint
-
-# With pipx
-pipx upgrade skilllint
-
-# With pip
-pip install --upgrade skilllint
-
-# Check current version
+python -m pip install skilllint
 skilllint --version
 ```
 
----
+When working inside a skilllint source checkout, follow that repository's
+development instructions instead of installing a second copy.
 
-## Workflow: Scan → Identify → Explain → Fix
+Use the same invocation form for the remaining commands.
 
-1. **Scan**: `skilllint check --show-summary --show-progress <path>`
-2. **Identify** rule IDs in the output (e.g. `[FM004]`, `[SK006]`, `[FM010]`)
-3. **Explain**: Run `skilllint rule <ID>` for full documentation on that rule
-4. **Fix auto-fixable**: `skilllint check --fix <path>`
-5. **Fix manual issues**: Apply the patterns above based on rule ID
-6. **Verify**: `skilllint check --check <path>` — should exit 0 with no errors
+## 2. Route the request
 
----
+- A rule ID such as `FM010`: run `skilllint rule <ID>`.
+- A supplied path: run `skilllint check --show-summary --show-progress <path>`.
+- No argument: scan the user-requested repository scope; when no narrower scope
+  is established, use the current working directory.
+- A request that names a target platform: add `--platform <platform>` to the
+  `check` command. Without it, every matching platform adapter runs. Take the
+  accepted platform names from `skilllint check --help`.
 
-## Platform-Specific Validation
+If command syntax or available subcommands are uncertain, run
+`skilllint --help` or the relevant subcommand's `--help`. Do not rely on a
+command inventory copied into this skill.
 
-```bash
-# Validate only for a specific platform
-skilllint check --platform claude-code ./plugins/my-plugin
+## 3. Scan and identify findings
 
-# List rules for a specific platform
-skilllint rules --platform agentskills
-```
-
----
-
-## Token Count
+Run:
 
 ```bash
-# Get token count for a skill (integer only, for scripting)
-skilllint check --tokens-only ./plugins/my-plugin/skills/my-skill/SKILL.md
+skilllint check --show-summary --show-progress <path>
 ```
 
-SK006 (warning) and SK007 (error) fire when body token count exceeds `TOKEN_WARNING_THRESHOLD` or `TOKEN_ERROR_THRESHOLD` respectively — frontmatter excluded. Run `skilllint rules` to see current values.
+Collect the rule IDs emitted by the actual scan. Do not infer a rule from a
+similar-looking problem when the tool can identify it directly.
 
----
+For each finding that needs explanation, run:
 
-Run `skilllint rules` for the full rule catalog — all rule IDs, descriptions, severity, and auto-fix flags.
+```bash
+skilllint rule <ID>
+```
+
+The per-rule output includes the rule's severity, category, and platform
+scope.
+
+Use `skilllint rules` to compare current severity and fixability across the
+catalog.
+
+## 4. Fix from runtime evidence
+
+For a manual finding, use the remediation returned by `skilllint rule <ID>`.
+
+For findings currently reported as fixable, apply the tool's supported fixer:
+
+```bash
+skilllint check --fix <path>
+```
+
+Do not assume a rule is fixable because an older copy of this skill said so.
+If `--fix` is rejected for the selected invocation, inspect
+`skilllint check --help` and use the supported route.
+
+Review the resulting diff before treating an automatic edit as correct.
+
+## 5. Verify
+
+Re-run validation without mutation:
+
+```bash
+skilllint check --check --show-summary <path>
+```
+
+Report remaining findings by rule ID. A zero exit status establishes the
+current scan's exit contract; it does not prove that unrelated paths or
+platforms were selected.
+
+When the repository being edited defines additional test, lint, or completion
+gates, run those separately before declaring the repository change complete.

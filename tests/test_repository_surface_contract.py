@@ -30,22 +30,13 @@ def test_all_tracked_top_level_repository_directories_are_classified() -> None:
     classified_roots = {entry["path"].split("/", 1)[0] for entry in surfaces}
 
     tracked = subprocess.run(
-        ["git", "ls-files"],
-        cwd=ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
+        ["git", "ls-files"], cwd=ROOT, check=True, capture_output=True, text=True
     ).stdout.splitlines()
-    tracked_roots = {
-        path.split("/", 1)[0]
-        for path in tracked
-        if "/" in path
-    }
+    tracked_roots = {path.split("/", 1)[0] for path in tracked if "/" in path}
     unclassified_roots = tracked_roots - classified_roots
 
     assert not unclassified_roots, (
-        f"tracked top-level directories missing repository surface classification: "
-        f"{sorted(unclassified_roots)}"
+        f"tracked top-level directories missing repository surface classification: {sorted(unclassified_roots)}"
     )
 
 
