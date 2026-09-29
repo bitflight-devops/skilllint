@@ -69,7 +69,6 @@ Use the narrowest owner that matches the change before searching broadly.
 | Change | Primary seam |
 | --- | --- |
 | CLI and validation orchestration | `packages/skilllint/plugin_validator.py` (legacy central seam; decomposition tracked in #283) |
-| shared validation contracts | `packages/skilllint/models.py` |
 | path selection and discovery | `packages/skilllint/scan_runtime.py` |
 | individual lint rules | `packages/skilllint/rules/` |
 | rule metadata and catalog | `packages/skilllint/rule_registry.py` |
