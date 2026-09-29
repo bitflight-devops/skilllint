@@ -47,7 +47,13 @@ class ClaudeCodeAdapter:
         return {ALL_RULE_SERIES}
 
     def plugin_layouts(self) -> tuple[PluginLayout, ...]:
-        """Return Claude Code plugin-root manifests used for explicit discovery."""
+        """Return the structural marker for a manifest-backed Claude plugin root.
+
+        Claude also accepts a manifestless directory passed explicitly with
+        --plugin-dir. Static recursive discovery has no unique marker for that
+        case, so unmarked directories continue through ordinary path semantics.
+        Source: https://code.claude.com/docs/en/plugins-reference
+        """
         return (PluginLayout(".claude-plugin/plugin.json", validation_target="root"),)
 
     def constraint_scopes(self) -> set[str]:
