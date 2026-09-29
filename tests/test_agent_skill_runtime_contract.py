@@ -80,3 +80,9 @@ def test_agent_skill_and_plugin_readme_offer_uv_pipx_and_pip_bootstrap() -> None
         text = path.read_text(encoding="utf-8")
         for command in ("uvx skilllint", "pipx run skilllint", "python -m pip install skilllint"):
             assert command in text, (path.name, command)
+
+
+def test_agent_skill_preserves_requested_platform_when_routing_scans() -> None:
+    text = " ".join(SKILL.read_text(encoding="utf-8").split())
+
+    assert "`--platform <platform>`" in text

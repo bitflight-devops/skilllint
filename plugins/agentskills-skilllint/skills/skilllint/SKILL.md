@@ -53,6 +53,9 @@ Use the same invocation form for the remaining commands.
 - A supplied path: run `skilllint check --show-summary --show-progress <path>`.
 - No argument: scan the user-requested repository scope; when no narrower scope
   is established, use the current working directory.
+- A request that names a target platform: add `--platform <platform>` to the
+  `check` command. Without it, every matching platform adapter runs. Take the
+  accepted platform names from `skilllint check --help`.
 
 If command syntax or available subcommands are uncertain, run
 `skilllint --help` or the relevant subcommand's `--help`. Do not rely on a
