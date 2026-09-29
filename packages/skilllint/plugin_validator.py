@@ -4027,10 +4027,7 @@ def _shared_skill_compatibility_violations(
 
 
 def _skill_md_violations(
-    path: Path,
-    *,
-    compatibility_fallback: bool,
-    policy_cache: dict[str, tuple[ValidationPolicy, Path | None]],
+    path: Path, *, compatibility_fallback: bool, policy_cache: dict[str, tuple[ValidationPolicy, Path | None]]
 ) -> list[dict]:
     """Return once-per-SKILL.md findings before adapter dispatch.
 
@@ -4097,9 +4094,7 @@ def validate_file(
 
     skill_violations = (
         _skill_md_violations(
-            path,
-            compatibility_fallback=platform_override is None and not matching,
-            policy_cache=resolved_policy_cache,
+            path, compatibility_fallback=platform_override is None and not matching, policy_cache=resolved_policy_cache
         )
         if is_skill_md(path)
         else []
