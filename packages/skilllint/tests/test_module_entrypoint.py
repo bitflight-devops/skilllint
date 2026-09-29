@@ -2,14 +2,21 @@
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 
 from skilllint.version import __version__
 
+# GitHub Actions sets FORCE_COLOR=1, so Rich emits ANSI codes even into a pipe
+# (same pattern as conftest._ANSI_ESCAPE).
+_ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*[mGKHFJA-Z]")
+
 
 def _run_module(*args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run([sys.executable, "-m", "skilllint", *args], capture_output=True, check=False, text=True)
+    result = subprocess.run([sys.executable, "-m", "skilllint", *args], capture_output=True, check=False, text=True)
+    result.stdout = _ANSI_ESCAPE.sub("", result.stdout)
+    return result
 
 
 def test_python_dash_m_skilllint_shows_cli_help_under_the_skilllint_name() -> None:
