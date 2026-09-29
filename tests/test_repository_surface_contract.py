@@ -25,19 +25,28 @@ def _surfaces() -> list[dict[str, str]]:
     return data["surface"]
 
 
-def test_all_tracked_top_level_repository_directories_are_classified() -> None:
-    surfaces = _surfaces()
-    classified_roots = {entry["path"].split("/", 1)[0] for entry in surfaces}
+def _is_classified(path: str, surface_paths: set[str]) -> bool:
+    return any(path == surface or path.startswith(f"{surface}/") for surface in surface_paths)
+
+
+def test_all_tracked_repository_subtrees_are_classified() -> None:
+    surface_paths = {entry["path"] for entry in _surfaces()}
 
     tracked = subprocess.run(
         ["git", "ls-files"], cwd=ROOT, check=True, capture_output=True, text=True
     ).stdout.splitlines()
-    tracked_roots = {path.split("/", 1)[0] for path in tracked if "/" in path}
-    unclassified_roots = tracked_roots - classified_roots
+    tracked_paths = {path for path in tracked if "/" in path}
+    unclassified_paths = sorted(path for path in tracked_paths if not _is_classified(path, surface_paths))
 
-    assert not unclassified_roots, (
-        f"tracked top-level directories missing repository surface classification: {sorted(unclassified_roots)}"
-    )
+    assert not unclassified_paths, f"tracked paths missing repository surface classification: {unclassified_paths}"
+
+
+def test_surface_matching_is_segment_aware() -> None:
+    surfaces = {"packages/skilllint"}
+
+    assert _is_classified("packages/skilllint/models.py", surfaces)
+    assert not _is_classified("packages/skilllint-extra/module.py", surfaces)
+    assert not _is_classified("packages/another-product/module.py", surfaces)
 
 
 def test_surface_entries_are_unique_valid_and_existing() -> None:
