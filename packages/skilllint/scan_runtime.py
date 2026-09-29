@@ -378,7 +378,11 @@ def _plugin_layout_matches(directory: Path, adapter: PlatformAdapter) -> list[tu
 
 
 def _plugin_root_owners(directory: Path, adapters: Sequence[PlatformAdapter]) -> dict[Path, frozenset[str]]:
-    """Map discovered plugin roots to every adapter that declares that layout."""
+    """Map discovered plugin roots to every adapter that declares that layout.
+
+    Returns:
+        Plugin roots mapped to the adapter IDs that claim each root.
+    """
     mutable: dict[Path, set[str]] = {}
     for adapter in adapters:
         for root, _manifest, _layout in _plugin_layout_matches(directory, adapter):
@@ -393,7 +397,11 @@ def _nearest_plugin_root(candidate: Path, owners: dict[Path, frozenset[str]]) ->
 
 
 def _platform_owns_candidate(candidate: Path, adapter: PlatformAdapter, owners: dict[Path, frozenset[str]]) -> bool:
-    """Reject files inside a plugin root owned only by another platform."""
+    """Reject files inside a plugin root owned only by another platform.
+
+    Returns:
+        True when the candidate is unowned or owned by the selected adapter.
+    """
     root = _nearest_plugin_root(candidate, owners)
     return root is None or adapter.id() in owners[root]
 
@@ -493,7 +501,11 @@ def _matches_platform_relative_path(adapter: PlatformAdapter, candidate: Path) -
 
 
 def _plugin_manifest_target(candidate: Path, adapter: PlatformAdapter) -> Path | None:
-    """Normalize an adapter-declared manifest to its validation target."""
+    """Normalize an adapter-declared manifest to its validation target.
+
+    Returns:
+        The declared root/manifest target, or None when candidate is not one.
+    """
     for layout in _adapter_plugin_layouts(adapter):
         marker_parts = PurePath(layout.manifest_path).parts
         if not marker_parts or tuple(candidate.parts[-len(marker_parts) :]) != marker_parts:
