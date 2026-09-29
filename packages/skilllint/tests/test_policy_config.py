@@ -15,7 +15,15 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from skilllint.plugin_validator import DEFAULT_THRESHOLDS, ValidationPolicy, _load_policy, _resolve_policy
+from skilllint import plugin_validator
+from skilllint.policy import DEFAULT_THRESHOLDS, ValidationPolicy, _load_policy, _resolve_policy
+
+
+def test_plugin_validator_reexports_policy_contract() -> None:
+    assert plugin_validator.ValidationPolicy is ValidationPolicy
+    assert plugin_validator.DEFAULT_THRESHOLDS is DEFAULT_THRESHOLDS
+    assert plugin_validator._load_policy is _load_policy
+    assert plugin_validator._resolve_policy is _resolve_policy
 
 
 def test_policy_defaults_and_invalid_values_report_and_default(tmp_path: Path) -> None:
