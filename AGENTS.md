@@ -103,14 +103,16 @@ evidence by default. The most-specific matching path wins.
 
 ## Fast iteration loop
 
-For iterative feedback while a change is still in progress, run the affected
-tests directly or use the repository fast profile:
+For iterative feedback while a change is still in progress, use the repository
+fast profile:
 
 ```sh
 uv run python scripts/run_fast_tests.py
 ```
 
-Pass pytest paths/options after the script name to narrow the affected boundary.
+Pass affected pytest paths/options after the script name to narrow the boundary.
+Do not run narrowed `uv run pytest <path>` directly because repository-wide
+coverage settings can make an otherwise passing narrow test exit nonzero.
 The fast profile excludes tests marked `slow` and disables repository-wide
 coverage collection so a narrowed scope is judged only on that affected boundary.
 It is evidence about the selected fast-test boundary only and does not replace
