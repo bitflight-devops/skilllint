@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1790682275691,
+  "lastUpdate": 1790685424553,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -2850,6 +2850,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 96.568,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "f0f9e7b019192bb63a772da56d346c61a6d5047f",
+          "message": "fix(cli): list platforms in check help; make docs CLI tests colour-independent (#300)\n\n* test(cli): make docs CLI tests independent of FORCE_COLOR\n\nWith FORCE_COLOR=1, five test_cli_docs.py tests failed locally.\n_PlainCliRunner stripped ANSI from stdout_bytes but not output_bytes,\nwhich Result.output reads; the real-subprocess test compared raw\ncoloured stderr. Strip output_bytes too, and strip the subprocess\nstderr with the module-local pattern other subprocess tests use.\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01K5rAHJfvZyEEaUQghV7hCQ\n\n* fix(cli): list registered platforms in check --platform help\n\n`skilllint check --help` described --platform only as \"Platform\nadapter\", so agents told to read the accepted names there found none.\nBuild the choice list from the loaded ADAPTERS registry and share it\nwith the \"Unknown platform\" error.\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01K5rAHJfvZyEEaUQghV7hCQ\n\n* fix(cli): sort advertised platform choices\n\n* fix(cli): accept exact third-party platform ids\n\n* test: cover hyphenated third-party adapter id\n\n* test: lock deterministic platform help choices\n\n* test: normalize wrapped platform help output\n\n* test: tolerate wrapped platform help table\n\n* fix(cli): make platform display IDs reversible\n\n* test: cover mixed platform ID separators\n\n* style: format platform ID mapping test\n\n---------\n\nCo-authored-by: Claude <noreply@anthropic.com>",
+          "timestamp": "2026-09-29T12:34:12Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/f0f9e7b019192bb63a772da56d346c61a6d5047f"
+        },
+        "date": 1790685423784,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 7411.455,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 7624.395,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 8011.72,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 131.289,
             "unit": "files/s"
           }
         ]
