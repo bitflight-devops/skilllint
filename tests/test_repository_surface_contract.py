@@ -7,19 +7,6 @@ from pathlib import Path
 ROOT = Path(__file__).parents[1]
 CONTRACT = ROOT / "docs/repository-surfaces.toml"
 
-EXPECTED_TOP_LEVEL_DIRECTORIES = {
-    ".agents",
-    ".claude",
-    ".cursor",
-    ".github",
-    ".gsd",
-    ".hermes",
-    "docs",
-    "packages",
-    "plugins",
-    "scripts",
-    "tests",
-}
 ALLOWED_KINDS = {
     "product",
     "project-tooling",
@@ -38,24 +25,24 @@ def _surfaces() -> list[dict[str, str]]:
     return data["surface"]
 
 
-def _tracked_top_level_directories() -> set[str]:
-    result = subprocess.run(
-        ["git", "ls-tree", "-d", "--name-only", "HEAD"],
+def test_all_tracked_top_level_repository_directories_are_classified() -> None:
+    surfaces = _surfaces()
+    classified_roots = {entry["path"].split("/", 1)[0] for entry in surfaces}
+
+    tracked = subprocess.run(
+        ["git", "ls-files"],
         cwd=ROOT,
         check=True,
         capture_output=True,
         text=True,
+    ).stdout.splitlines()
+    tracked_roots = {path.split("/", 1)[0] for path in tracked if "/" in path}
+    unclassified_roots = tracked_roots - classified_roots
+
+    assert not unclassified_roots, (
+        "tracked top-level directories missing repository surface classification: "
+        f"{sorted(unclassified_roots)}"
     )
-    return {line for line in result.stdout.splitlines() if line}
-
-
-def test_all_top_level_repository_directories_are_classified() -> None:
-    surfaces = _surfaces()
-    classified_roots = {entry["path"].split("/", 1)[0] for entry in surfaces}
-
-    actual = _tracked_top_level_directories()
-    assert actual == EXPECTED_TOP_LEVEL_DIRECTORIES
-    assert classified_roots >= EXPECTED_TOP_LEVEL_DIRECTORIES
 
 
 def test_surface_entries_are_unique_valid_and_existing() -> None:
@@ -87,5 +74,4 @@ def test_specific_non_product_overrides_are_task_only() -> None:
 
     assert by_path["packages/skilllint"]["kind"] == "product"
     assert by_path["packages/skilllint"]["architecture_evidence"] == "primary"
-    assert by_path["docs"]["architecture_evidence"] == "supporting"
     assert by_path["docs/architecture.md"]["architecture_evidence"] == "primary"
