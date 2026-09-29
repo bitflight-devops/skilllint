@@ -48,10 +48,7 @@ class CursorAdapter:
 
         Source: https://docs.cursor.com/reference/plugins
         """
-        return (
-            PluginLayout("plugin.json"),
-            PluginLayout(".cursor-plugin/plugin.json"),
-        )
+        return (PluginLayout("plugin.json"), PluginLayout(".cursor-plugin/plugin.json"))
 
     def constraint_scopes(self) -> set[str]:
         """Return the set of constraint_scope values from the provider schema.
