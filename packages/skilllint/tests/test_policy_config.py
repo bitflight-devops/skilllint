@@ -16,8 +16,7 @@ import json
 from pathlib import Path
 
 from skilllint import plugin_validator
-from skilllint.models import ValidationIssue, ValidationResult
-from skilllint.policy import DEFAULT_THRESHOLDS, ValidationPolicy, _load_policy, _resolve_policy, apply_severity_overrides
+from skilllint.policy import DEFAULT_THRESHOLDS, ValidationPolicy, _load_policy, _resolve_policy
 
 
 def test_plugin_validator_reexports_policy_contract() -> None:
@@ -25,19 +24,6 @@ def test_plugin_validator_reexports_policy_contract() -> None:
     assert plugin_validator.DEFAULT_THRESHOLDS is DEFAULT_THRESHOLDS
     assert plugin_validator._load_policy is _load_policy
     assert plugin_validator._resolve_policy is _resolve_policy
-    assert plugin_validator.apply_severity_overrides is apply_severity_overrides
-
-
-def test_apply_severity_overrides_reclassifies_without_mutating_issue() -> None:
-    issue = ValidationIssue(field="SK006", severity="error", message="over budget", code="SK006")
-    result = ValidationResult(passed=False, errors=[issue])
-
-    remapped = apply_severity_overrides(result, {"SK006": "info"})
-
-    assert remapped.passed is True
-    assert remapped.errors == []
-    assert remapped.info[0].severity == "info"
-    assert issue.severity == "error"
 
 
 def test_policy_defaults_and_invalid_values_report_and_default(tmp_path: Path) -> None:

@@ -23,6 +23,8 @@ import subprocess
 import sys
 from io import TextIOWrapper
 
+import msgspec.json
+
 # Module-level logger for debug output
 _logger = logging.getLogger(__name__)
 
@@ -69,7 +71,6 @@ from skilllint.policy import (  # noqa: F401 - compatibility re-exports
     _parse_thresholds,
     _resolve_ignore_config,
     _resolve_policy,
-    apply_severity_overrides,
 )
 from skilllint.record_export import (
     build_svg_title as _build_svg_title,
@@ -116,7 +117,7 @@ from skilllint.scan_runtime import (
     _load_ignore_patterns,
     _load_plugin_json,
 )
-from skilllint.token_counter import count_tokens
+from skilllint.token_counter import TOKEN_ERROR_THRESHOLD, TOKEN_WARNING_THRESHOLD, count_tokens
 from skilllint.version import __version__
 
 from .frontmatter_core import (
@@ -3647,7 +3648,31 @@ def _collect_validator_results(
         if name == "PluginRegistrationValidator":
             result = _without_duplicate_plugin_errors(result, reported_plugin_structure_counts)
         if policy is not None and policy.severity:
-            result = apply_severity_overrides(result, policy.severity)
+
+            def remap(issue: ValidationIssue) -> ValidationIssue:
+                configured = policy.severity.get(str(issue.code))
+                severity: Literal["error", "warning", "info"] = issue.severity
+                if configured == "warning":
+                    severity = "warning"
+                elif configured == "info":
+                    severity = "info"
+                return ValidationIssue(
+                    field=issue.field,
+                    severity=severity,
+                    message=issue.message,
+                    code=issue.code,
+                    line=issue.line,
+                    docs_url=issue.docs_url,
+                    suggestion=issue.suggestion,
+                )
+
+            issues = [remap(i) for i in [*result.errors, *result.warnings, *result.info]]
+            result = ValidationResult(
+                passed=not any(i.severity == "error" for i in issues),
+                errors=[i for i in issues if i.severity == "error"],
+                warnings=[i for i in issues if i.severity == "warning"],
+                info=[i for i in issues if i.severity == "info"],
+            )
         if raw_codes_out is not None:
             raw_codes_out.update(str(i.code) for i in (*result.errors, *result.warnings, *result.info))
         if config_root is not None:
@@ -4090,8 +4115,8 @@ def _skill_md_violations(
     # Apply configured severity downgrades so --platform matches the
     # default-path remap.
     return [
-        {**violation, "severity": policy.severity[str(violation.get("code"))]}
-        if str(violation.get("code")) in policy.severity
+        {**violation, "severity": configured}
+        if (configured := policy.severity.get(str(violation.get("code")))) in {"warning", "info"}
         else violation
         for violation in violations
     ]
