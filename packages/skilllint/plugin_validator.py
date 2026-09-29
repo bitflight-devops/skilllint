@@ -3916,11 +3916,17 @@ def parse_skill_md(path: Path) -> tuple[dict, list[str], str | None, list[str]]:
     return frontmatter_dict, body_lines, yaml_err, colon_fields
 
 
+RULE_SERIES_PREFIX_LENGTH = 2
+
+
 def _issue_to_violation(issue: ValidationIssue) -> dict:
     """Convert a ValidationIssue to the adapter violation boundary.
 
     The adapter boundary remains dict-based for compatibility, but every
     diagnostic identity field carried by ValidationIssue is preserved.
+
+    Returns:
+        Compatibility violation dictionary retaining diagnostic identity.
     """
     violation = issue.model_dump(exclude_none=True)
     violation["code"] = str(issue.code)
@@ -3942,11 +3948,11 @@ def _violation_applies_to_adapter(violation: dict, adapter: PlatformAdapter) -> 
     declaration is sufficient.
     """
     code = str(violation.get("code", "")).upper()
-    if len(code) < 2:
+    if len(code) < RULE_SERIES_PREFIX_LENGTH:
         return False
 
     declared_series = adapter.applicable_rules()
-    if ALL_RULE_SERIES not in declared_series and code[:2] not in declared_series:
+    if ALL_RULE_SERIES not in declared_series and code[:RULE_SERIES_PREFIX_LENGTH] not in declared_series:
         return False
 
     entry = RULE_REGISTRY.get(code)
@@ -3958,7 +3964,11 @@ def _violation_applies_to_adapter(violation: dict, adapter: PlatformAdapter) -> 
 
 
 def _filter_platform_violations(violations: list[dict], adapter: PlatformAdapter) -> list[dict]:
-    """Apply one authoritative routing contract to adapter and core findings."""
+    """Apply one authoritative routing contract to adapter and core findings.
+
+    Returns:
+        Findings permitted by the selected adapter and rule metadata.
+    """
     return [violation for violation in violations if _violation_applies_to_adapter(violation, adapter)]
 
 
@@ -3971,6 +3981,9 @@ def run_platform_checks(
     then both pass through the same applicable_rules()/rule-metadata filter.
     AS-series is skipped in the nested core result because validate_file runs
     it once per SKILL.md before adapter dispatch.
+
+    Returns:
+        Adapter-native and core findings permitted by the routing contract.
     """
     violations = list(adapter.validate(path))
 
@@ -3988,18 +4001,62 @@ def run_platform_checks(
     return _filter_platform_violations(violations, adapter)
 
 
-def _skill_md_violations(path: Path, *, policy_cache: dict[str, tuple[ValidationPolicy, Path | None]]) -> list[dict]:
-    """Return the once-per-SKILL.md Agent Skills findings for explicit routing."""
-    frontmatter_data, body_lines, _yaml_err, _colon_fields = parse_skill_md(path)
+def _shared_skill_compatibility_violations(
+    path: Path, frontmatter: dict, policy: ValidationPolicy | None
+) -> list[dict]:
+    """Preserve the omitted-platform no-adapter SKILL.md behavior.
+
+    This is deliberately outside the explicit-platform routing contract.
+    validate_file historically reports canonical FM/SK checks even when no
+    adapter claims a directly supplied SKILL.md; retaining that library seam
+    avoids changing the default/omitted route while explicit adapters consume
+    the authoritative declaration-driven core pipeline.
+
+    Returns:
+        Legacy FM/SK findings for an otherwise unclaimed SKILL.md.
+    """
+    issues = [
+        issue.model_copy(update={"severity": "error"})
+        for issue in check_fm001(frontmatter, path, "skill")
+        if issue.field == "description"
+    ]
+    issues.extend(check_fm010(frontmatter, path, "skill"))
+    complexity = ComplexityValidator().validate(path, policy)
+    issues.extend([*complexity.errors, *complexity.warnings])
+    return [_issue_to_violation(issue) for issue in issues]
+
+
+def _skill_md_violations(
+    path: Path,
+    *,
+    compatibility_fallback: bool,
+    policy_cache: dict[str, tuple[ValidationPolicy, Path | None]],
+) -> list[dict]:
+    """Return once-per-SKILL.md findings before adapter dispatch.
+
+    Returns:
+        AS findings plus the legacy no-adapter FM/SK compatibility findings
+        when the omitted route has no matching adapter.
+    """
+    frontmatter_data, body_lines, yaml_err, colon_fields = parse_skill_md(path)
+    violations: list[dict] = []
+
+    if yaml_err is not None and compatibility_fallback:
+        violations.append({"code": str(FM002), "severity": "error", "message": f"Invalid YAML frontmatter: {yaml_err}"})
 
     policy, policy_root = _resolve_policy(path, policy_cache)
-    violations = run_as_series(
-        path,
-        frontmatter_data,
-        body_lines,
-        warning_threshold=policy.thresholds.get("SK006", TOKEN_WARNING_THRESHOLD),
-        error_threshold=policy.thresholds.get("SK007", TOKEN_ERROR_THRESHOLD),
+    violations.extend(
+        run_as_series(
+            path,
+            frontmatter_data,
+            body_lines,
+            warning_threshold=policy.thresholds.get("SK006", TOKEN_WARNING_THRESHOLD),
+            error_threshold=policy.thresholds.get("SK007", TOKEN_ERROR_THRESHOLD),
+        )
     )
+    if compatibility_fallback:
+        violations.extend(_issue_to_violation(issue) for issue in _fm009_recovery_warnings(colon_fields))
+        violations.extend(_shared_skill_compatibility_violations(path, frontmatter_data, policy))
 
     if policy.ignore and policy_root is not None:
         violations = [v for v in violations if not _is_suppressed(policy.ignore, path, policy_root, str(v.get("code")))]
@@ -4025,6 +4082,9 @@ def validate_file(
     A SKILL.md runs AS once. Adapter-native and core findings then use the same
     per-adapter declaration and rule metadata, so the runtime cannot emit a
     registered series that the selected adapter does not route.
+
+    Returns:
+        Violation dictionaries produced by the selected routing mode.
     """
     resolved_policy_cache: dict[str, tuple[ValidationPolicy, Path | None]] = (
         policy_cache if policy_cache is not None else {}
@@ -4035,7 +4095,15 @@ def validate_file(
     else:
         matching = [adapter for adapter in adapters.values() if matches_file(adapter, pure)]
 
-    skill_violations = _skill_md_violations(path, policy_cache=resolved_policy_cache) if is_skill_md(path) else []
+    skill_violations = (
+        _skill_md_violations(
+            path,
+            compatibility_fallback=platform_override is None and not matching,
+            policy_cache=resolved_policy_cache,
+        )
+        if is_skill_md(path)
+        else []
+    )
     if not matching:
         return skill_violations
 
@@ -4076,7 +4144,11 @@ def _resolve_platform_override(platform: str | None) -> str | None:
 
 
 def violations_to_result(violations: list[dict]) -> ValidationResult:
-    """Convert adapter-boundary violations without losing diagnostic identity."""
+    """Convert adapter-boundary violations without losing diagnostic identity.
+
+    Returns:
+        Structured result retaining supported diagnostic identity fields.
+    """
     issues: list[ValidationIssue] = []
     for violation in violations:
         code = str(violation["code"])
