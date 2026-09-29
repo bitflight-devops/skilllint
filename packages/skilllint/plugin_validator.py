@@ -133,7 +133,7 @@ _rt_yaml.width = 10000  # prevent line wrapping
 # Keys are adapter IDs (e.g. "claude_code", "cursor", "codex").
 ADAPTERS: dict[str, PlatformAdapter] = {a.id(): a for a in load_adapters()}
 # CLI spellings of the registered adapter IDs (e.g. "claude-code, codex, cursor").
-PLATFORM_CHOICES = ", ".join(k.replace("_", "-") for k in ADAPTERS)
+PLATFORM_CHOICES = ", ".join(sorted(k.replace("_", "-") for k in ADAPTERS))
 
 
 def _safe_load_yaml(text: str) -> YamlValue:
