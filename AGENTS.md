@@ -101,6 +101,23 @@ evidence by default. The most-specific matching path wins.
 - A failing or passing test is evidence about behavior; deliberately synthetic
   fixtures are not evidence that the product itself has that structure.
 
+## Fast iteration loop
+
+For iterative feedback while a change is still in progress, use the repository
+fast profile:
+
+```sh
+uv run python scripts/run_fast_tests.py
+```
+
+Pass affected pytest paths/options after the script name to narrow the boundary.
+Do not run narrowed `uv run pytest <path>` directly because repository-wide
+coverage settings can make an otherwise passing narrow test exit nonzero.
+The fast profile excludes tests marked `slow` and disables repository-wide
+coverage collection so a narrowed scope is judged only on that affected boundary.
+It is evidence about the selected fast-test boundary only and does not replace
+the completion gate below.
+
 ## Verifying a change
 
 ```sh
@@ -110,12 +127,6 @@ uv run pytest                 # not a prek hook
 
 Run these, not the individual tools — the hook set is the gate, and a subset of
 it passing is not evidence.
-
-For faster local iteration during development, `uv run pytest -m "not slow"`
-skips tests that build wheels/venvs or shell out to a real subprocess
-build/install/lint tool. This is a dev-loop convenience only — it does **not**
-replace the full `uv run pytest` (no marker filter) run required above as the
-pre-commit/pre-PR evidence gate.
 
 ## Changing dependencies
 
