@@ -4,8 +4,9 @@ These tests prove the full refresh → package → install → CLI validation ch
 They build a wheel, install it into a temporary venv, and run `skilllint check` via
 subprocess against existing fixtures.
 
-Tests are marked with @pytest.mark.slow to avoid running on every pytest invocation
-since they build wheels and create virtual environments.
+Tests are marked with @pytest.mark.slow because they build wheels and create virtual
+environments. The fast iteration profile excludes them; the full completion suite still
+runs them.
 """
 
 from __future__ import annotations
