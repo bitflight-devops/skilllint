@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import re
 import subprocess
 import sys
@@ -16,6 +17,36 @@ ROOT = Path(__file__).parents[3]
 
 def _read(relative: str) -> str:
     return (ROOT / relative).read_text(encoding="utf-8")
+
+
+def test_rule_modules_do_not_import_legacy_validator() -> None:
+    """Rules depend on domain owners, never the legacy validation/CLI facade."""
+    offenders: list[str] = []
+    for path in sorted((ROOT / "packages" / "skilllint" / "rules").glob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module == "skilllint.plugin_validator":
+                offenders.append(f"{path.name}:{node.lineno}")
+            elif isinstance(node, ast.Import) and any(
+                alias.name == "skilllint.plugin_validator" for alias in node.names
+            ):
+                offenders.append(f"{path.name}:{node.lineno}")
+    assert not offenders, f"rule modules import legacy plugin_validator: {offenders}"
+
+
+def test_legacy_validator_reexports_dependency_owned_utilities() -> None:
+    """Existing legacy imports remain identical to their current owner symbols."""
+    import skilllint.plugin_validator as legacy
+    from skilllint.frontmatter_core import FRONTMATTER_EXEMPT_FILENAMES
+    from skilllint.frontmatter_yaml import parse_skill_md
+    from skilllint.rules.hk_series import _git_file_has_execute_bit
+    from skilllint.scan_runtime import find_marketplace_dir, find_plugin_dir
+
+    assert legacy.FRONTMATTER_EXEMPT_FILENAMES is FRONTMATTER_EXEMPT_FILENAMES
+    assert legacy.parse_skill_md is parse_skill_md
+    assert legacy.find_plugin_dir is find_plugin_dir
+    assert legacy.find_marketplace_dir is find_marketplace_dir
+    assert legacy._git_file_has_execute_bit is _git_file_has_execute_bit
 
 
 def test_architecture_names_current_runtime_seams() -> None:
