@@ -14,8 +14,8 @@ __all__ = [
     "AsSeriesValidator",
     "ComplexityValidator",
     "DescriptionValidator",
-    "MarkdownTokenCounter",
     "InternalLinkValidator",
+    "MarkdownTokenCounter",
     "NamespaceReferenceValidator",
     "ProgressiveDisclosureValidator",
 ]
