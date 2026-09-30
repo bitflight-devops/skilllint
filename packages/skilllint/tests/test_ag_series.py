@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from skilllint import frontmatter_yaml
 from skilllint.frontmatter_core import AgentFrontmatter, extract_frontmatter
 from skilllint.plugin_validator import FrontmatterValidator, safe_load_yaml_with_colon_fix
 from skilllint.rules.ag_series import check_ag001, check_ag002, check_ag003
@@ -25,6 +26,10 @@ from skilllint.rules.ag_series import check_ag001, check_ag002, check_ag003
 if TYPE_CHECKING:
     from pathlib import Path
 
+
+def test_plugin_validator_reexports_frontmatter_yaml_parser() -> None:
+    """Legacy parser import remains identical to the dependency-light owner."""
+    assert safe_load_yaml_with_colon_fix is frontmatter_yaml.safe_load_yaml_with_colon_fix
 
 def _write_agent(tmp_path: Path, name: str, body: str) -> Path:
     """Write an agent file under an ``agents/`` directory and return its path.
