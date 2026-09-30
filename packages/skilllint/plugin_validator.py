@@ -1825,6 +1825,11 @@ def main(
 app = typer.Typer(
     help="Validate Claude Code plugins and skills",
     add_completion=False,
+    # Help is read by agents, so it must not wrap or truncate to the caller's
+    # terminal. Click uses terminal_width as the exact help width (otherwise
+    # min(terminal columns, 80) - 2; typer/_click/formatting.py). 800 matches the
+    # Typer apps in claude_skills (daily-releases, receiving-pr-reviews,
+    # create-merge-request-changelog); lines longer than 800 columns still wrap.
     context_settings={"terminal_width": 800},
     rich_markup_mode=None,
     pretty_exceptions_enable=False,
