@@ -7,6 +7,7 @@ validation contracts (`ValidationIssue`, `ValidationResult`, `AppliedFix`, the
 validator protocol, and shared value aliases) are owned by `models.py`.
 `policy.py` owns configuration discovery, threshold/severity policy, and suppression filtering.
 `frontmatter_yaml.py` owns dependency-light YAML parsing and round-trip repair primitives shared by validation and rules.
+`frontmatter_fixing.py` owns pure schema-aware frontmatter fix planning; validators retain filesystem mutation and diagnostics.
 `fixing.py` owns fail-closed fixer authorization and generic ordered execution.
 `plugin_validator.py` re-exports model, policy, and fixing names for compatibility while its
 remaining responsibilities are decomposed incrementally under #283.
@@ -105,8 +106,9 @@ instances, and tells its caller whether revalidation is required. It does not
 select concrete validators or own mutation implementations.
 
 `frontmatter_yaml.py` now supplies syntax-level parsing and repair primitives without importing validators or rules.
-`FrontmatterValidator` still owns schema-aware frontmatter mutation orchestration; this keeps the YAML owner
-below rule and validation dispatch rather than creating a reverse dependency.
+`frontmatter_fixing.py` consumes those primitives plus the schema registry to compute immutable fix plans.
+`FrontmatterValidator` applies the planned content to disk and queues post-fix FM009 diagnostics, keeping filesystem
+mutation and reporting side effects at the validator boundary.
 
 `plugin_validator._get_fixers_for_path` still owns fixer selection and ordering
 for this migration slice, while `plugin_validator.validate_single_path` owns
@@ -125,6 +127,7 @@ contracts, not adapter registration.
 | platform metadata | `adapters/protocol.py`, `adapters/registry.py` | adapter protocol tests |
 | schema constraints | `schemas/`, schema validators | schema/frontmatter tests |
 | frontmatter YAML parsing/repair | `frontmatter_yaml.py` | frontmatter and rule-deduplication tests |
+| frontmatter fix planning | `frontmatter_fixing.py` | frontmatter/fixer behavior tests |
 | lint rules | `rules/`, `rule_registry.py` | rule fixture and CLI tests |
 | fix authorization/execution | `fixing.py` | fixer-gating and compatibility tests |
 | fix selection/revalidation | `plugin_validator.py` | fixer ordering/revalidation tests |
