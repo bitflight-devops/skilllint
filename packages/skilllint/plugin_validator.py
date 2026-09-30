@@ -62,7 +62,7 @@ from skilllint.frontmatter_yaml import (  # noqa: F401 - compatibility re-export
     parse_skill_md,
     safe_load_yaml_with_colon_fix,
 )
-from skilllint.models import AppliedFix, FileResults, ValidationIssue, ValidationResult, Validator, YamlValue
+from skilllint.models import AppliedFix, FileResults, ValidationIssue, ValidationResult, Validator
 from skilllint.policy import (  # noqa: F401 - compatibility re-exports
     DEFAULT_THRESHOLDS,
     IgnoreConfig,
@@ -110,7 +110,6 @@ from skilllint.scan_runtime import (
 )
 from skilllint.token_counter import TOKEN_ERROR_THRESHOLD, TOKEN_WARNING_THRESHOLD
 from skilllint.validators.content import ComplexityValidator, DescriptionValidator, MarkdownTokenCounter
-from skilllint.validators.hooks import HookValidator
 from skilllint.validators.frontmatter import FrontmatterValidator, NameFormatValidator
 from skilllint.validators.frontmatter import (  # noqa: F401 - compatibility re-exports
     NAME_PATTERN,
@@ -128,6 +127,7 @@ from skilllint.validators.frontmatter import (  # noqa: F401 - compatibility re-
     _validate_skill_directory_name,
     _validation_result_with_error,
 )
+from skilllint.validators.hooks import HookValidator
 from skilllint.validators.metadata import (  # noqa: F401 - compatibility re-exports
     VALIDATOR_CONSTRAINT_SCOPES,
     VALIDATOR_OWNERSHIP,
@@ -145,7 +145,7 @@ from skilllint.validators.rule_series import (
 from skilllint.validators.symlinks import SymlinkTargetValidator
 from skilllint.version import __version__
 
-from .frontmatter_core import (  # noqa: F401 - compatibility re-exports
+from .frontmatter_core import (
     FRONTMATTER_EXEMPT_FILENAMES,  # noqa: F401 - compatibility re-export
     AgentFrontmatter,
     CommandFrontmatter,
