@@ -284,7 +284,7 @@ def _resolve_claude_variables(url: str, skill_dir: Path, plugin_root: Path | Non
     the directory containing ``SKILL.md``. ``${CLAUDE_PLUGIN_ROOT}`` resolves to
     *plugin_root* when the caller already knows it (LK004, which must also
     recognize a Codex-only plugin root); otherwise it falls back to
-    :func:`skilllint.plugin_validator.find_plugin_dir` (LK001, which has no
+    :func:`skilllint.scan_runtime.find_plugin_dir` (LK001, which has no
     such root and only recognizes a Claude Code plugin, same lookup
     ``HookValidator`` uses for ``${CLAUDE_PLUGIN_ROOT}`` in hook commands).
 
@@ -320,7 +320,7 @@ def _resolve_claude_variables(url: str, skill_dir: Path, plugin_root: Path | Non
         resolved = resolved.replace("${CLAUDE_SKILL_DIR}", str(skill_dir))
     if "${CLAUDE_PLUGIN_ROOT}" in resolved:
         if plugin_root is None:
-            from skilllint.plugin_validator import find_plugin_dir  # noqa: PLC0415
+            from skilllint.scan_runtime import find_plugin_dir  # noqa: PLC0415
 
             plugin_root = find_plugin_dir(skill_dir)
         if plugin_root is None:
