@@ -35,6 +35,9 @@ class HookValidator:
     def validate(self, path: Path) -> ValidationResult:
         """Validate hook structure and referenced scripts.
 
+        Args:
+            path: Path to hooks.json.
+
         Returns:
             Result containing HK001-HK005 findings.
         """
@@ -54,6 +57,9 @@ class HookValidator:
 
     def fix(self, path: Path) -> list[str]:
         """Make existing non-executable hook scripts executable.
+
+        Args:
+            path: Path to hooks.json.
 
         Returns:
             Human-readable descriptions of applied repairs.
