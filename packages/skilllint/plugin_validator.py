@@ -126,9 +126,8 @@ from skilllint.scan_runtime import (
     find_plugin_dir,
 )
 from skilllint.token_counter import TOKEN_ERROR_THRESHOLD, TOKEN_WARNING_THRESHOLD
-import skilllint.validators.metadata as validator_metadata
 from skilllint.validators.content import ComplexityValidator, DescriptionValidator, MarkdownTokenCounter
-from skilllint.validators.metadata import (
+from skilllint.validators.metadata import (  # noqa: F401 - compatibility re-exports
     VALIDATOR_CONSTRAINT_SCOPES,
     VALIDATOR_OWNERSHIP,
     ValidatorOwnership,
@@ -156,7 +155,7 @@ from .frontmatter_core import (
 from .scan_runtime import _resolve_filter_and_expand_paths, run_validation_loop
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping, Sequence
+    from collections.abc import Iterable, Mapping
 
     from pydantic_core import ErrorDetails
 
