@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 from io import StringIO
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from ruamel.yaml import YAML, YAMLError
@@ -16,6 +17,8 @@ from ruamel.yaml.comments import CommentedMap, CommentedSeq
 from ruamel.yaml.nodes import MappingNode, SequenceNode
 from ruamel.yaml.scalarstring import DoubleQuotedScalarString
 from ruamel.yaml.tokens import CommentToken
+
+from skilllint.frontmatter_core import extract_frontmatter
 
 if TYPE_CHECKING:
     from skilllint.models import YamlValue
@@ -230,4 +233,31 @@ def safe_load_yaml_with_colon_fix(fm_text: str) -> tuple[dict | None, str | None
         return parsed, None, [], fm_text
 
 
-__all__ = ["safe_load_yaml_with_colon_fix"]
+
+
+def parse_skill_md(path: Path) -> tuple[dict, list[str], str | None, list[str]]:
+    """Parse a SKILL.md file into frontmatter data and body lines.
+
+    Args:
+        path: Path to the SKILL.md file.
+
+    Returns:
+        Tuple of (frontmatter dict, body lines, YAML error message,
+        colon-recovered field names). Body lines exclude the closing
+        frontmatter delimiter. An unterminated opening delimiter has no
+        recoverable body and returns an empty body.
+    """
+    content = path.read_text(encoding="utf-8")
+    fm_text, _start, end_line = extract_frontmatter(content)
+    if fm_text is None:
+        if content.startswith("---"):
+            return {}, [], None, []
+        return {}, content.splitlines(), None, []
+
+    parsed, yaml_err, colon_fields, _used_text = safe_load_yaml_with_colon_fix(fm_text)
+    frontmatter_dict: dict = parsed if parsed is not None else {}
+    body_lines = content.splitlines()[end_line + 1 :]
+    return frontmatter_dict, body_lines, yaml_err, colon_fields
+
+
+__all__ = ["parse_skill_md", "safe_load_yaml_with_colon_fix"]
