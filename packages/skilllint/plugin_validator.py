@@ -116,6 +116,7 @@ from skilllint.rules.tc_series import check_tc001
 from skilllint.scan_runtime import (
     ScanContext,
     _build_gitignore_set,
+    _find_anchor_dir,
     _glob_excluding,
     _is_ignored,
     _load_ignore_patterns,
