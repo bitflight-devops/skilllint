@@ -251,7 +251,7 @@ def check_sk006(frontmatter: dict[str, object], path: Path, file_type: str) -> l
 
     Returns:
         Always an empty list. SK006 is emitted by `ComplexityValidator` in
-        `plugin_validator.py` after computing the body token count; this
+        `validators/content.py` after computing the body token count; this
         function exists for rule metadata registration only.
 
     <!-- examples: SK006 -->
@@ -287,7 +287,7 @@ def check_sk007(frontmatter: dict[str, object], path: Path, file_type: str) -> l
 
     Returns:
         Always an empty list. SK007 is emitted by `ComplexityValidator` in
-        `plugin_validator.py` after computing the body token count; this
+        `validators/content.py` after computing the body token count; this
         function exists for rule metadata registration only.
 
     <!-- examples: SK007 -->

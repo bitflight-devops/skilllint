@@ -96,6 +96,12 @@ whose detection already lives in `rules/`: AS, LK001, NR, and PD. Keeping
 these adapters outside `rules/` avoids adding policy/frontmatter dependencies
 to the eagerly imported rule-registration path.
 
+`validators/content.py` owns read-only per-file content validation that adds
+frontmatter parsing or token measurement on top of rule functions:
+`DescriptionValidator`, `ComplexityValidator`, and `MarkdownTokenCounter`.
+Mutation, plugin-tree traversal, and subprocess-backed validators remain
+separate responsibilities.
+
 `ValidatorOwnership` in `plugin_validator.py` records whether a validator is
 schema-backed or lint-owned. These are separate dimensions: ownership does
 not wire severity, and registry membership does not create an emitter.
@@ -154,6 +160,7 @@ contracts, not adapter registration.
 | frontmatter YAML/document parsing | `frontmatter_yaml.py` | frontmatter and rule-deduplication tests |
 | lint rules | `rules/`, `rule_registry.py` | rule fixture and CLI tests |
 | rule-series validator adapters | `validators/rule_series.py` | validator behavior and compatibility tests |
+| content quality/token validators | `validators/content.py` | description/complexity/token and compatibility tests |
 | fix authorization/execution | `fixing.py` | fixer-gating and compatibility tests |
 | fix selection/revalidation | `plugin_validator.py` | fixer ordering/revalidation tests |
 | output | `reporting.py` | reporter/CLI tests |
