@@ -31,6 +31,7 @@ def test_plugin_validator_reexports_frontmatter_yaml_parser() -> None:
     """Legacy parser import remains identical to the dependency-light owner."""
     assert safe_load_yaml_with_colon_fix is frontmatter_yaml.safe_load_yaml_with_colon_fix
 
+
 def _write_agent(tmp_path: Path, name: str, body: str) -> Path:
     """Write an agent file under an ``agents/`` directory and return its path.
 
