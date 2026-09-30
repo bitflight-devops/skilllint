@@ -115,9 +115,7 @@ from skilllint.rules.pl_series import (
     claude_validation_failure_issue,
 )
 from skilllint.rules.pr_series import check_pr001, check_pr002, check_pr005
-from skilllint.rules.sk_series import check_sk004, check_sk005
 from skilllint.rules.sl_series import check_sl001, iter_symlinks
-from skilllint.rules.tc_series import check_tc001
 from skilllint.scan_runtime import (
     _build_gitignore_set,
     _find_anchor_dir,
@@ -127,7 +125,7 @@ from skilllint.scan_runtime import (
     find_marketplace_dir,
     find_plugin_dir,
 )
-from skilllint.token_counter import TOKEN_ERROR_THRESHOLD, TOKEN_WARNING_THRESHOLD, count_tokens
+from skilllint.token_counter import TOKEN_ERROR_THRESHOLD, TOKEN_WARNING_THRESHOLD
 from skilllint.validators.content import ComplexityValidator, DescriptionValidator, MarkdownTokenCounter
 from skilllint.validators.rule_series import (
     AsSeriesValidator,
@@ -207,7 +205,7 @@ def _normalize_skill_name(name: str) -> str:
 
 
 # Trigger phrase requirements — duplicated from sk_series._REQUIRED_TRIGGER_PHRASES.
-# Dead code: DescriptionValidator._check_description_quality delegates to check_sk005.
+# Dead compatibility constant: validators/content.py delegates description checks to SK-series rules.
 # Kept only for import compatibility; consumers should import from sk_series instead.
 REQUIRED_TRIGGER_PHRASES = [
     "use when",
