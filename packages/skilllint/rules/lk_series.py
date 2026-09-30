@@ -1,9 +1,8 @@
 """LK-series internal link rules (LK001, LK004).
 
-LK001 and LK004 detection lives here.  ``InternalLinkValidator`` (LK001) and
-``PluginLinkEscapeValidator`` (LK004) in ``plugin_validator.py`` are thin
-wrappers that read files and call the rule functions, packaging their issues
-into a ``ValidationResult``.
+LK001 and LK004 detection lives here. ``InternalLinkValidator`` (LK001) in
+``validators/rule_series.py`` and ``PluginLinkEscapeValidator`` (LK004) in
+``plugin_validator.py`` adapt these checks into the validation pipeline.
 
 ``_iter_links`` strips fenced code blocks and inline code spans, applies the
 external/anchor/absolute skip list, and yields
@@ -356,7 +355,7 @@ def check_lk001(content: str, path: Path) -> list[ValidationIssue]:
     ``my file.md``.  Broken links prevent readers and tools from
     following references and indicate stale documentation.
 
-    **Source:** `InternalLinkValidator` in `plugin_validator.py` — resolves
+    **Source:** `InternalLinkValidator` in `validators/rule_series.py` — resolves
     each relative link path against the `SKILL.md` parent directory and
     checks for existence via ``Path.exists()``.
 
