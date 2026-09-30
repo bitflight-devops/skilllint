@@ -207,7 +207,7 @@ def _collect_servers_from_frontmatter(file_path: pathlib.Path) -> set[str]:
         return set()
 
     from skilllint.frontmatter_core import extract_frontmatter  # noqa: PLC0415
-    from skilllint.plugin_validator import safe_load_yaml_with_colon_fix  # noqa: PLC0415
+    from skilllint.frontmatter_yaml import safe_load_yaml_with_colon_fix  # noqa: PLC0415
 
     try:
         content = file_path.read_text(encoding="utf-8")

@@ -78,8 +78,8 @@ def _parse_skill_md(path: pathlib.Path) -> tuple[dict, list[str]]:
         (frontmatter, body_lines) where frontmatter is a dict of parsed YAML
         fields and body_lines is the content after the frontmatter block.
     """
-    # Deferred import to break circular dependency; plugin_validator imports
-    # rules modules, so we defer here rather than at module level.
+    # Keep the parser import deferred so loading the rule registry does not
+    # eagerly initialize the ruamel YAML repair machinery.
     from skilllint.plugin_validator import parse_skill_md  # noqa: PLC0415
 
     frontmatter, body_lines, _yaml_err, _colon_fields = parse_skill_md(path)
@@ -184,7 +184,7 @@ def _extract_tools_list(path: pathlib.Path, field: str = "allowed-tools") -> lis
     # Deferred import to break circular dependency; plugin_validator imports
     # rules modules, so we defer here rather than at module level.
     from skilllint.frontmatter_core import extract_frontmatter  # noqa: PLC0415
-    from skilllint.plugin_validator import safe_load_yaml_with_colon_fix  # noqa: PLC0415
+    from skilllint.frontmatter_yaml import safe_load_yaml_with_colon_fix  # noqa: PLC0415
 
     try:
         content = path.read_text(encoding="utf-8")
