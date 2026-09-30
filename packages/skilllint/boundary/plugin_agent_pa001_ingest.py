@@ -111,7 +111,7 @@ def ingest_plugin_agent_frontmatter_for_pa001(fm_text: str) -> Pa001YamlIngestOu
     Returns:
         Outcome with optional snapshot, YAML error string, and colon-fix field names.
     """
-    from skilllint.frontmatter_yaml import safe_load_yaml_with_colon_fix  # noqa: PLC0415 — breaks import cycle
+    from skilllint.frontmatter_yaml import safe_load_yaml_with_colon_fix  # noqa: PLC0415 - preserve lazy import cost
 
     parsed, yaml_err, colon_fields, _used_text = safe_load_yaml_with_colon_fix(fm_text)
     fixed = tuple(colon_fields)
