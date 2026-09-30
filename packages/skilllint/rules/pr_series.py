@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from skilllint.frontmatter_core import FRONTMATTER_EXEMPT_FILENAMES
 from skilllint.rule_registry import _make_issue, skilllint_rule
 
 if TYPE_CHECKING:
@@ -41,8 +42,6 @@ def find_actual_capabilities(plugin_dir: Path) -> tuple[set[Path], set[Path], se
         Tuple of (actual_skills, actual_agents, actual_commands) as sets of
         paths relative to plugin_dir.
     """
-    from skilllint.plugin_validator import FRONTMATTER_EXEMPT_FILENAMES  # noqa: PLC0415
-
     actual_skills: set[Path] = set()
     actual_agents: set[Path] = set()
     actual_commands: set[Path] = set()
