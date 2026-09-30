@@ -128,7 +128,7 @@ from skilllint.scan_runtime import (
     find_plugin_dir,
 )
 from skilllint.token_counter import TOKEN_ERROR_THRESHOLD, TOKEN_WARNING_THRESHOLD, count_tokens
-from skilllint.validators.rule_series import (  # noqa: F401 - compatibility re-exports
+from skilllint.validators.rule_series import (
     AsSeriesValidator,
     InternalLinkValidator,
     NamespaceReferenceValidator,
