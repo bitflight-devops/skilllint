@@ -117,7 +117,7 @@ def check_pd001(path: Path) -> list[ValidationIssue]:
     not prevent the skill from functioning; it is a recommendation for better
     content organisation.
 
-    **Source:** ``ProgressiveDisclosureValidator`` in ``plugin_validator.py`` —
+    **Source:** ``ProgressiveDisclosureValidator`` in ``validators/rule_series.py`` —
     calls this rule, which checks for the presence of ``references/`` under the skill directory.
 
     **Fix:** Create a ``references/`` directory and populate it with supporting
@@ -223,7 +223,7 @@ def check_pd003(path: Path) -> list[ValidationIssue]:
     not prevent the skill from functioning; it is a recommendation for better
     content organisation.
 
-    **Source:** ``ProgressiveDisclosureValidator`` in ``plugin_validator.py`` —
+    **Source:** ``ProgressiveDisclosureValidator`` in ``validators/rule_series.py`` —
     calls this rule, which checks for the presence of ``scripts/`` under the skill directory.
 
     **Fix:** Create a ``scripts/`` directory and populate it with helper
