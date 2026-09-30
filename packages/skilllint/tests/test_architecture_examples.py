@@ -70,11 +70,7 @@ def test_file_classification_owner_does_not_depend_on_orchestration() -> None:
     path = ROOT / "packages" / "skilllint" / "file_types.py"
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     forbidden = {"skilllint.plugin_validator", "skilllint.scan_runtime"}
-    imported = {
-        node.module
-        for node in ast.walk(tree)
-        if isinstance(node, ast.ImportFrom) and node.module is not None
-    }
+    imported = {node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) and node.module is not None}
     assert not imported & forbidden
 
 
