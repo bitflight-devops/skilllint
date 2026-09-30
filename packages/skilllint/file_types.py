@@ -86,31 +86,32 @@ class FileType(StrEnum):
             return FileType.UNKNOWN
 
         if path.name == "SKILL.md":
-            return FileType.SKILL
-        if (
+            result = FileType.SKILL
+        elif (
             path.name in {"plugin.json", "marketplace.json"}
             or (path / ".claude-plugin/plugin.json").exists()
             or (path / ".claude-plugin/marketplace.json").exists()
         ):
-            return FileType.PLUGIN
-        if (manifest_type := FileType._manifest_declared_type(path)) is not None:
-            return manifest_type
-        if "agents" in path.parts:
-            return FileType.AGENT
-        if "commands" in path.parts:
-            return FileType.COMMAND
-        if path.name == "hooks.json":
-            return FileType.HOOK_CONFIG
-        if "hooks" in path.parts:
-            return FileType.HOOK_SCRIPT
-        if path.name == "CLAUDE.md":
-            return FileType.CLAUDE_MD
-        if "references" in path.parts and path.suffix == ".md":
-            return FileType.REFERENCE
-        if path.suffix == ".md":
-            return FileType.MARKDOWN
-        return FileType.UNKNOWN
-
+            result = FileType.PLUGIN
+        elif (manifest_type := FileType._manifest_declared_type(path)) is not None:
+            result = manifest_type
+        elif "agents" in path.parts:
+            result = FileType.AGENT
+        elif "commands" in path.parts:
+            result = FileType.COMMAND
+        elif path.name == "hooks.json":
+            result = FileType.HOOK_CONFIG
+        elif "hooks" in path.parts:
+            result = FileType.HOOK_SCRIPT
+        elif path.name == "CLAUDE.md":
+            result = FileType.CLAUDE_MD
+        elif "references" in path.parts and path.suffix == ".md":
+            result = FileType.REFERENCE
+        elif path.suffix == ".md":
+            result = FileType.MARKDOWN
+        else:
+            result = FileType.UNKNOWN
+        return result
 
 class FrontmatterRequirement(StrEnum):
     """Whether a capability path requires YAML frontmatter."""
@@ -151,9 +152,9 @@ def file_has_frontmatter(path: Path) -> bool:
 
 
 __all__ = [
+    "NAME_BEARING_FILE_TYPES",
     "FileType",
     "FrontmatterRequirement",
-    "NAME_BEARING_FILE_TYPES",
     "ScanContext",
     "file_has_frontmatter",
     "frontmatter_requirement",
