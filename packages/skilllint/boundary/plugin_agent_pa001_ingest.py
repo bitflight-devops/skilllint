@@ -105,13 +105,13 @@ def parse_plugin_agent_pa001_snapshot_from_mapping(mapping: Mapping[str, object]
 def ingest_plugin_agent_frontmatter_for_pa001(fm_text: str) -> Pa001YamlIngestOutcome:
     """Parse frontmatter text via the shared YAML loader and return a typed outcome.
 
-    Imports ``safe_load_yaml_with_colon_fix`` lazily to avoid an import cycle with
-    ``plugin_validator`` (which loads rule modules).
+    Imports ``safe_load_yaml_with_colon_fix`` lazily so importing the rule registry
+    does not eagerly initialize the ruamel YAML repair machinery.
 
     Returns:
         Outcome with optional snapshot, YAML error string, and colon-fix field names.
     """
-    from skilllint.plugin_validator import safe_load_yaml_with_colon_fix  # noqa: PLC0415 — breaks import cycle
+    from skilllint.frontmatter_yaml import safe_load_yaml_with_colon_fix  # noqa: PLC0415 — breaks import cycle
 
     parsed, yaml_err, colon_fields, _used_text = safe_load_yaml_with_colon_fix(fm_text)
     fixed = tuple(colon_fields)
