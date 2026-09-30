@@ -78,8 +78,8 @@ def _parse_skill_md(path: pathlib.Path) -> tuple[dict, list[str]]:
         (frontmatter, body_lines) where frontmatter is a dict of parsed YAML
         fields and body_lines is the content after the frontmatter block.
     """
-    # Deferred import to break circular dependency; plugin_validator imports
-    # rules modules, so we defer here rather than at module level.
+    # Keep the parser import deferred so loading the rule registry does not
+    # eagerly initialize the ruamel YAML repair machinery.
     from skilllint.plugin_validator import parse_skill_md  # noqa: PLC0415
 
     frontmatter, body_lines, _yaml_err, _colon_fields = parse_skill_md(path)
