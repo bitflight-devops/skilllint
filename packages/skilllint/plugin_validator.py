@@ -55,6 +55,7 @@ from ruamel.yaml.tokens import CommentToken
 import skilllint.rules  # ruff: ignore[unused-import] — ensures all 15 series modules register into RULE_REGISTRY
 from skilllint.adapters import ALL_RULE_SERIES, PlatformAdapter, load_adapters, matches_file
 from skilllint.cli_docs import docs_app
+from skilllint.fixing import FIXER_TRIGGER_CODES, apply_authorized_fixes, get_fixer_trigger_codes  # noqa: F401
 from skilllint.models import AppliedFix, FileResults, ValidationIssue, ValidationResult, Validator, YamlValue
 from skilllint.policy import (  # noqa: F401 - compatibility re-exports
     DEFAULT_THRESHOLDS,
@@ -690,42 +691,6 @@ def get_validator_constraint_scopes(class_name: str) -> set[str]:
         Defaults to {"shared", "provider_specific"} for unknown validators.
     """
     return VALIDATOR_CONSTRAINT_SCOPES.get(class_name, {"shared", "provider_specific"})
-
-
-# Rule codes that authorise a fixer to run against a path under --fix.
-# Keyed by validator class name, the same convention as VALIDATOR_OWNERSHIP
-# and VALIDATOR_CONSTRAINT_SCOPES above. A fixer whose class is not a key
-# here gets an empty set from get_fixer_trigger_codes() and therefore never
-# runs (fail closed) -- see test_every_can_fix_validator_has_trigger_codes.
-#
-# The trigger set for a validator is not always the codes it *reports* in
-# the normal validate() pipeline:
-# - NameFormatValidator is a fix-only participant appended by
-#   _get_fixers_for_path; FM010 is reported by FrontmatterValidator, but
-#   only NameFormatValidator implements the repair.
-# - FrontmatterValidator.fix() also repairs a missing `name` field (AS001),
-#   a code owned by AsSeriesValidator in the reporting pipeline, via
-#   fix_skill_name_field() -- see skilllint#144/#117 design brief.
-FIXER_TRIGGER_CODES: dict[str, frozenset[str]] = {
-    "SymlinkTargetValidator": frozenset({"SL001"}),
-    "FrontmatterValidator": frozenset({"FM004", "FM007", "FM009", "FM010", "AS001"}),
-    "NameFormatValidator": frozenset({"FM010"}),
-    "HookValidator": frozenset({"HK005"}),
-}
-
-
-def get_fixer_trigger_codes(validator: Validator) -> frozenset[str]:
-    """Get the rule codes that authorise a validator's fixer to run.
-
-    Args:
-        validator: A validator instance being considered for --fix.
-
-    Returns:
-        Frozenset of rule codes declared in FIXER_TRIGGER_CODES for this
-        validator's class. Empty for any class not declared there, so an
-        undeclared or third-party fixer never runs (fail closed).
-    """
-    return FIXER_TRIGGER_CODES.get(type(validator).__name__, frozenset())
 
 
 def filter_validators_by_constraint_scopes(
@@ -3779,29 +3744,9 @@ def validate_single_path(
         if "failing-examples" in path.parts:
             _logger.debug("Skipping auto-fix for fixture file: %s", path)
         else:
-            fixes_applied: list[str] = []
-            for validator in _get_fixers_for_path(validators, path):
-                if not validator.can_fix():
-                    continue
-                # A fixer may only run when this path's findings include at
-                # least one rule code it is declared to repair (issue #144).
-                # Unmapped fixers get an empty set from get_fixer_trigger_codes
-                # and are skipped -- fail closed rather than fixing on an
-                # undeclared trigger.
-                triggered_codes = get_fixer_trigger_codes(validator) & raw_codes
-                if not triggered_codes:
-                    continue
-                try:
-                    validator_fixes = validator.fix(path)
-                except NotImplementedError:
-                    continue  # Validator doesn't support fixing
-                fixes_applied.extend(validator_fixes)
-                if fixes_out is not None and validator_fixes:
-                    codes = tuple(sorted(triggered_codes))
-                    fixes_out.extend(
-                        AppliedFix(path=path, validator=type(validator).__name__, codes=codes, description=description)
-                        for description in validator_fixes
-                    )
+            fixes_applied = apply_authorized_fixes(
+                _get_fixers_for_path(validators, path), path, raw_codes=raw_codes, fixes_out=fixes_out
+            )
 
             # Re-validate after fixes
             if fixes_applied:

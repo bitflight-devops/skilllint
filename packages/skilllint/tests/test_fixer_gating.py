@@ -22,13 +22,20 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
-from skilllint import plugin_validator as pv
+from skilllint import fixing, plugin_validator as pv
 from skilllint.rule_registry import get_rule, list_rules
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     from pytest_mock import MockerFixture
+
+
+def test_plugin_validator_reexports_fixer_contract() -> None:
+    """Legacy imports remain identical to the new fixing owner."""
+    assert pv.FIXER_TRIGGER_CODES is fixing.FIXER_TRIGGER_CODES
+    assert pv.get_fixer_trigger_codes is fixing.get_fixer_trigger_codes
+    assert pv.apply_authorized_fixes is fixing.apply_authorized_fixes
 
 
 def _write_skill(directory: Path, frontmatter: str, body: str = "\n# Skill\n\nBody.\n") -> Path:

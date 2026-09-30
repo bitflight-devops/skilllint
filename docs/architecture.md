@@ -6,7 +6,8 @@ validation, rule registration, fixing, and reporting modules. Dependency-light
 validation contracts (`ValidationIssue`, `ValidationResult`, `AppliedFix`, the
 validator protocol, and shared value aliases) are owned by `models.py`.
 `policy.py` owns configuration discovery, threshold/severity policy, and suppression filtering.
-`plugin_validator.py` re-exports both model and policy names for compatibility while its
+`fixing.py` owns fail-closed fixer authorization and generic ordered execution.
+`plugin_validator.py` re-exports model, policy, and fixing names for compatibility while its
 remaining responsibilities are decomposed incrementally under #283.
 
 ## Runtime flow
@@ -18,7 +19,8 @@ CLI (plugin_validator.main)
   -> plugin_validator.validate_file / validate_single_path
   -> policy._resolve_policy / _resolve_ignore_config
   -> schema validators and registered rules
-  -> optional fixer, then revalidation
+  -> fixing.apply_authorized_fixes
+  -> optional revalidation
   -> reporting.ConsoleReporter or CIReporter
 ```
 
@@ -95,12 +97,18 @@ A future LLM/general provenance pipeline is proposed only; it is not shipped.
 
 ## Fixing and reporting
 
-`scan_runtime.run_validation_loop` orchestrates file iteration and sends
-resulting `FileResults` to the selected reporter. The
-`plugin_validator.validate_single_path` function owns per-path validation,
-fixer authorization, revalidation, and
-the distinction between a fixer and its reporting rule. Exit status is derived
-from resulting errors and usage/validation contracts, not adapter registration.
+`fixing.py` owns the rule-to-fixer authorization map and the generic execution
+coordinator. It receives an already ordered fixer sequence and pre-suppression
+finding codes, fails closed for undeclared fixers, records `AppliedFix`
+instances, and tells its caller whether revalidation is required. It does not
+select concrete validators or own mutation implementations.
+
+`plugin_validator._get_fixers_for_path` still owns fixer selection and ordering
+for this migration slice, while `plugin_validator.validate_single_path` owns
+per-path validation and revalidation. `scan_runtime.run_validation_loop`
+orchestrates file iteration and sends resulting `FileResults` to the selected
+reporter. Exit status is derived from resulting errors and usage/validation
+contracts, not adapter registration.
 
 ## Maintainer map
 
@@ -112,7 +120,8 @@ from resulting errors and usage/validation contracts, not adapter registration.
 | platform metadata | `adapters/protocol.py`, `adapters/registry.py` | adapter protocol tests |
 | schema constraints | `schemas/`, schema validators | schema/frontmatter tests |
 | lint rules | `rules/`, `rule_registry.py` | rule fixture and CLI tests |
-| fix authorization | `plugin_validator.py` trigger map | fixer/revalidation tests |
+| fix authorization/execution | `fixing.py` | fixer-gating and compatibility tests |
+| fix selection/revalidation | `plugin_validator.py` | fixer ordering/revalidation tests |
 | output | `reporting.py` | reporter/CLI tests |
 
 The versioned Claude runtime contract remains evidence for the version named
