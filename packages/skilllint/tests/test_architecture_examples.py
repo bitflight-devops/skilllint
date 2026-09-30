@@ -36,8 +36,18 @@ def test_rule_modules_do_not_import_legacy_validator() -> None:
 def test_legacy_validator_reexports_dependency_owned_utilities() -> None:
     """Existing legacy imports remain identical to their current owner symbols."""
     import skilllint.plugin_validator as legacy
+    import skilllint.scan_runtime as scan_runtime
+    from skilllint.file_types import (
+        NAME_BEARING_FILE_TYPES,
+        FileType,
+        FrontmatterRequirement,
+        ScanContext,
+        file_has_frontmatter,
+        frontmatter_requirement,
+    )
     from skilllint.frontmatter_core import FRONTMATTER_EXEMPT_FILENAMES
     from skilllint.frontmatter_yaml import parse_skill_md
+    from skilllint.plugin_manifest import load_plugin_json
     from skilllint.rules.hk_series import _git_file_has_execute_bit
     from skilllint.scan_runtime import find_marketplace_dir, find_plugin_dir
 
@@ -46,6 +56,26 @@ def test_legacy_validator_reexports_dependency_owned_utilities() -> None:
     assert legacy.find_plugin_dir is find_plugin_dir
     assert legacy.find_marketplace_dir is find_marketplace_dir
     assert legacy._git_file_has_execute_bit is _git_file_has_execute_bit
+    assert legacy.FileType is FileType
+    assert legacy._FrontmatterRequirement is FrontmatterRequirement
+    assert legacy._NAME_BEARING_FILE_TYPES is NAME_BEARING_FILE_TYPES
+    assert legacy._frontmatter_requirement is frontmatter_requirement
+    assert legacy._file_has_frontmatter is file_has_frontmatter
+    assert scan_runtime.ScanContext is ScanContext
+    assert scan_runtime._load_plugin_json is load_plugin_json
+
+
+def test_file_classification_owner_does_not_depend_on_orchestration() -> None:
+    """Classification stays below scan and legacy validation orchestration."""
+    path = ROOT / "packages" / "skilllint" / "file_types.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    forbidden = {"skilllint.plugin_validator", "skilllint.scan_runtime"}
+    imported = {
+        node.module
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.module is not None
+    }
+    assert not imported & forbidden
 
 
 def test_architecture_names_current_runtime_seams() -> None:
