@@ -99,8 +99,11 @@ to the eagerly imported rule-registration path.
 `validators/content.py` owns read-only per-file content validation that adds
 frontmatter parsing or token measurement on top of rule functions:
 `DescriptionValidator`, `ComplexityValidator`, and `MarkdownTokenCounter`.
-Mutation, plugin-tree traversal, and subprocess-backed validators remain
-separate responsibilities.
+
+`validators/hooks.py` and `validators/symlinks.py` own the non-frontmatter
+filesystem mutations: HK005 execute-bit repair and verified SL001 symlink-target
+rewrite. Detection remains in the corresponding rule modules. Frontmatter
+mutation and plugin-tree/subprocess validation remain separate responsibilities.
 
 `validators/metadata.py` records schema-vs-lint ownership and provider
 constraint-scope applicability by validator class name. The metadata owner
@@ -139,7 +142,7 @@ schema-aware mutation orchestration.
 Plugin-root ancestry lives in `scan_runtime.py`, so link, MCP, and plugin-agent
 rules can resolve structural context without reaching upward into the legacy
 validator. HK005 owns its Git execute-bit observation beside the hook rule;
-`HookValidator` continues to own the filesystem mutation.
+`validators/hooks.py::HookValidator` owns the filesystem mutation.
 
 `plugin_validator._get_fixers_for_path` still owns fixer selection and ordering
 for this migration slice, while `plugin_validator.validate_single_path` owns
@@ -165,6 +168,7 @@ contracts, not adapter registration.
 | rule-series validator adapters | `validators/rule_series.py` | validator behavior and compatibility tests |
 | content quality/token validators | `validators/content.py` | description/complexity/token and compatibility tests |
 | validator ownership/applicability | `validators/metadata.py` | ownership/routing and compatibility tests |
+| hook/symlink mutation validators | `validators/hooks.py`, `validators/symlinks.py` | hook/symlink/fixer-gating tests |
 | fix authorization/execution | `fixing.py` | fixer-gating and compatibility tests |
 | fix selection/revalidation | `plugin_validator.py` | fixer ordering/revalidation tests |
 | output | `reporting.py` | reporter/CLI tests |
