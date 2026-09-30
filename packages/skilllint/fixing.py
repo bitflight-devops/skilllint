@@ -42,11 +42,7 @@ def get_fixer_trigger_codes(validator: Validator) -> frozenset[str]:
 
 
 def apply_authorized_fixes(
-    fixers: Sequence[Validator],
-    path: Path,
-    *,
-    raw_codes: Collection[str],
-    fixes_out: list[AppliedFix] | None = None,
+    fixers: Sequence[Validator], path: Path, *, raw_codes: Collection[str], fixes_out: list[AppliedFix] | None = None
 ) -> bool:
     """Run ordered fixers whose declared rule codes fired for path.
 
