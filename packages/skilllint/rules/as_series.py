@@ -23,7 +23,7 @@ import functools
 import logging
 from typing import TYPE_CHECKING
 
-from skilllint.frontmatter_core import normalize_tools_value
+from skilllint.frontmatter_core import extract_frontmatter, normalize_tools_value
 from skilllint.rule_registry import rule_authority, skilllint_rule
 from skilllint.rules._mcp_tool_discovery import (
     analyze_mcp_tool_reference,
@@ -64,7 +64,7 @@ AS_RULES: dict[str, str] = {
 def _parse_skill_md(path: pathlib.Path) -> tuple[dict, list[str]]:
     """Parse a SKILL.md file into frontmatter dict and body lines.
 
-    Delegates to plugin_validator.parse_skill_md — the same real-YAML
+    Delegates to frontmatter_yaml.parse_skill_md — the same real-YAML
     extract+parse+body-slice sequence AsSeriesValidator.validate already
     uses for the production AS-series entry point — instead of
     reimplementing it a third time (the other existing copy is
@@ -80,7 +80,7 @@ def _parse_skill_md(path: pathlib.Path) -> tuple[dict, list[str]]:
     """
     # Keep the parser import deferred so loading the rule registry does not
     # eagerly initialize the ruamel YAML repair machinery.
-    from skilllint.plugin_validator import parse_skill_md  # noqa: PLC0415
+    from skilllint.frontmatter_yaml import parse_skill_md  # noqa: PLC0415
 
     frontmatter, body_lines, _yaml_err, _colon_fields = parse_skill_md(path)
     return frontmatter, body_lines
@@ -181,9 +181,7 @@ def _extract_tools_list(path: pathlib.Path, field: str = "allowed-tools") -> lis
         List of tool name strings. Empty list if the field is absent or
         the file cannot be parsed.
     """
-    # Deferred import to break circular dependency; plugin_validator imports
-    # rules modules, so we defer here rather than at module level.
-    from skilllint.frontmatter_core import extract_frontmatter  # noqa: PLC0415
+    # Keep ruamel-backed YAML machinery off the rule-registry import path.
     from skilllint.frontmatter_yaml import safe_load_yaml_with_colon_fix  # noqa: PLC0415
 
     try:

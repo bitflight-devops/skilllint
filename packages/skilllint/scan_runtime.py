@@ -80,6 +80,38 @@ PLUGIN_FILTER_TYPE_MAP: dict[str, str] = {
 
 
 # ---------------------------------------------------------------------------
+# Plugin root anchors
+# ---------------------------------------------------------------------------
+
+
+def _find_anchor_dir(path: Path, marker_relpath: str) -> Path | None:
+    """Walk upward from path looking for a marker relative to a root.
+
+    Args:
+        path: File or directory from which to start the ancestry walk.
+        marker_relpath: Marker path relative to a candidate root.
+
+    Returns:
+        The nearest directory containing the marker, or None.
+    """
+    search_path = path.parent if path.is_file() else path
+    for parent in [search_path, *search_path.parents]:
+        if (parent / marker_relpath).exists():
+            return parent
+    return None
+
+
+def find_plugin_dir(path: Path) -> Path | None:
+    """Return the nearest Claude plugin root containing plugin.json."""
+    return _find_anchor_dir(path, ".claude-plugin/plugin.json")
+
+
+def find_marketplace_dir(path: Path) -> Path | None:
+    """Return the nearest marketplace root containing marketplace.json."""
+    return _find_anchor_dir(path, ".claude-plugin/marketplace.json")
+
+
+# ---------------------------------------------------------------------------
 # Plugin manifest
 # ---------------------------------------------------------------------------
 

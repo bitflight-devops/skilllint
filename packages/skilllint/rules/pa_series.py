@@ -37,9 +37,9 @@ from skilllint.boundary.plugin_level_config_ingest import (
     ingest_plugin_hook_event_names,
     ingest_plugin_level_mcp_server_names,
 )
-from skilllint.frontmatter_core import extract_frontmatter
+from skilllint.frontmatter_core import FRONTMATTER_EXEMPT_FILENAMES, extract_frontmatter
 from skilllint.models import ValidationIssue, ValidationResult
-from skilllint.rule_registry import skilllint_rule
+from skilllint.rule_registry import rule_reference, skilllint_rule
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -49,6 +49,10 @@ if TYPE_CHECKING:
 _DOCS_SUBAGENTS_PLUGIN_SCOPE = "https://docs.anthropic.com/en/docs/claude-code/sub-agents.md#choose-the-subagent-scope"
 _DOCS_PLUGIN_AGENTS_COMPONENT = "https://code.claude.com/docs/en/plugins-reference.md#agents"
 _DOCS_SETTINGS_PERMISSIONS = "https://docs.anthropic.com/en/settings.md#permission-settings"
+
+_FM002_CODE = "FM002"
+_FM009_CODE = "FM009"
+_PA001_CODE = "PA001"
 
 
 def _check_hooks(
@@ -225,8 +229,6 @@ def _ingest_agent_frontmatter_for_pa001(
     Returns:
         Snapshot for PA001 checks, or None on YAML failure or non-mapping document root.
     """
-    from skilllint.plugin_validator import FM002, FM009, generate_docs_url  # noqa: PLC0415
-
     outcome = ingest_plugin_agent_frontmatter_for_pa001(fm_text)
 
     # The ingestor quotes unquoted colon values in memory and reports no YAML
@@ -242,8 +244,8 @@ def _ingest_agent_frontmatter_for_pa001(
                     f"{rel}: Unquoted value containing a colon in field '{field_name}' breaks YAML parsing "
                     "(parsed here only after quoting it)"
                 ),
-                code=FM009,
-                docs_url=generate_docs_url(FM009),
+                code=_FM009_CODE,
+                docs_url=rule_reference(_FM009_CODE),
                 suggestion=f"Quote the value of '{field_name}', or run with --fix",
             )
         )
@@ -255,8 +257,8 @@ def _ingest_agent_frontmatter_for_pa001(
                 field="(yaml)",
                 severity="error",
                 message=f"{rel}: Invalid YAML frontmatter: {outcome.yaml_error}",
-                code=FM002,
-                docs_url=generate_docs_url(FM002),
+                code=_FM002_CODE,
+                docs_url=rule_reference(_FM002_CODE),
             )
         )
         return None
@@ -265,7 +267,7 @@ def _ingest_agent_frontmatter_for_pa001(
 
 
 @skilllint_rule(
-    "PA001",
+    _PA001_CODE,
     severity="error",
     category="plugin",
     authority={"origin": "anthropic.com", "reference": _DOCS_SUBAGENTS_PLUGIN_SCOPE},
@@ -299,7 +301,7 @@ def check_pa001(path: Path) -> ValidationResult:
     - ``mcpServers`` → move to ``.mcp.json`` / ``plugin.json`` at plugin root
     - ``permissionMode`` → remove, or copy agent to ``.claude/agents/`` or ``~/.claude/agents/``; or use session-wide ``permissions.allow`` in settings
     """
-    from skilllint.plugin_validator import FRONTMATTER_EXEMPT_FILENAMES, PA001 as PA001_CODE, find_plugin_dir  # noqa: PLC0415
+    from skilllint.scan_runtime import find_plugin_dir  # noqa: PLC0415
 
     errors: list[ValidationIssue] = []
     warnings: list[ValidationIssue] = []
@@ -332,13 +334,13 @@ def check_pa001(path: Path) -> ValidationResult:
         rel_path = str(agent_md.relative_to(plugin_dir))
 
         # permissionMode — always error
-        errors.extend(_check_permission_mode(snap, rel_path, PA001_CODE, ValidationIssue))
+        errors.extend(_check_permission_mode(snap, rel_path, _PA001_CODE, ValidationIssue))
 
         # hooks — warning, silenced if plugin hooks.json covers same events
-        warnings.extend(_check_hooks(snap, rel_path, plugin_hooks_events, PA001_CODE, ValidationIssue))
+        warnings.extend(_check_hooks(snap, rel_path, plugin_hooks_events, _PA001_CODE, ValidationIssue))
 
         # mcpServers — warning with cross-checking
-        warnings.extend(_check_mcp_servers(snap, rel_path, plugin_mcp_servers, PA001_CODE, ValidationIssue))
+        warnings.extend(_check_mcp_servers(snap, rel_path, plugin_mcp_servers, _PA001_CODE, ValidationIssue))
 
     return ValidationResult(passed=len(errors) == 0, errors=errors, warnings=warnings, info=info)
 

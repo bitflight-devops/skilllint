@@ -43,7 +43,6 @@ from typing import TYPE_CHECKING, Annotated, Literal, NoReturn, cast
 import typer
 from git import Repo
 from git.exc import InvalidGitRepositoryError, NoSuchPathError
-from git.index.fun import entry_key
 from pydantic import ValidationError
 from ruamel.yaml import YAMLError
 
@@ -57,6 +56,7 @@ from skilllint.frontmatter_yaml import (
     _is_losslessly_scalar_tool_list,
     _replace_list_valued_tool_fields,
     _safe_load_yaml,
+    parse_skill_md,
     safe_load_yaml_with_colon_fix,
 )
 from skilllint.models import AppliedFix, FileResults, ValidationIssue, ValidationResult, Validator, YamlValue
@@ -85,6 +85,7 @@ from skilllint.rules.ag_series import check_ag001, check_ag002, check_ag003
 from skilllint.rules.as_series import run_as_series
 from skilllint.rules.fm_series import check_fm001, check_fm004, check_fm007, check_fm010
 from skilllint.rules.hk_series import (
+    _git_file_has_execute_bit,
     check_hk002,
     check_hk003,
     check_hk004,
@@ -115,15 +116,19 @@ from skilllint.rules.tc_series import check_tc001
 from skilllint.scan_runtime import (
     ScanContext,
     _build_gitignore_set,
+    _find_anchor_dir,
     _glob_excluding,
     _is_ignored,
     _load_ignore_patterns,
     _load_plugin_json,
+    find_marketplace_dir,
+    find_plugin_dir,
 )
 from skilllint.token_counter import TOKEN_ERROR_THRESHOLD, TOKEN_WARNING_THRESHOLD, count_tokens
 from skilllint.version import __version__
 
 from .frontmatter_core import (
+    FRONTMATTER_EXEMPT_FILENAMES,
     AgentFrontmatter,
     CommandFrontmatter,
     SkillFrontmatter,
@@ -165,60 +170,6 @@ def _build_platform_cli_ids(adapter_ids: Iterable[str]) -> dict[str, str]:
 
 PLATFORM_CLI_IDS = _build_platform_cli_ids(ADAPTERS)
 PLATFORM_CHOICES = ", ".join(sorted(PLATFORM_CLI_IDS))
-
-
-def _find_anchor_dir(path: Path, marker_relpath: str) -> Path | None:
-    """Walk up from *path* looking for a marker file relative to a root.
-
-    Shared upward walk behind :func:`find_plugin_dir` and
-    :func:`find_marketplace_dir` (skilllint#118).
-
-    Args:
-        path: Path to start searching from (file or directory).
-        marker_relpath: Marker path relative to a candidate root, e.g.
-            ``".claude-plugin/plugin.json"``.
-
-    Returns:
-        The directory containing the marker, or None if not found.
-    """
-    search_path = path.parent if path.is_file() else path
-    for parent in [search_path, *search_path.parents]:
-        if (parent / marker_relpath).exists():
-            return parent
-    return None
-
-
-def find_plugin_dir(path: Path) -> Path | None:
-    """Find the plugin directory containing .claude-plugin/plugin.json.
-
-    Walks up the directory tree from *path* (or its parent, if *path* is a
-    file) looking for a ``.claude-plugin/plugin.json`` marker.
-
-    Args:
-        path: Path to start searching from.
-
-    Returns:
-        Plugin directory path, or None if not found.
-    """
-    return _find_anchor_dir(path, ".claude-plugin/plugin.json")
-
-
-def find_marketplace_dir(path: Path) -> Path | None:
-    """Find the directory containing .claude-plugin/marketplace.json.
-
-    Walks up the directory tree from *path* (or its parent, if *path* is a
-    file) looking for a ``.claude-plugin/marketplace.json`` marker. Used as a
-    fallback root anchor when no ``plugin.json`` exists anywhere in the
-    ancestry (skilllint#118): a repository whose only Claude-plugin artifact
-    is a marketplace manifest still needs a root for PL006 to validate.
-
-    Args:
-        path: Path to start searching from.
-
-    Returns:
-        Marketplace root directory path, or None if not found.
-    """
-    return _find_anchor_dir(path, ".claude-plugin/marketplace.json")
 
 
 SKILL_FRONTMATTER_SCHEMA_URL = "https://code.claude.com/docs/en/skills.md#frontmatter-reference"
@@ -510,18 +461,6 @@ def filter_validators_by_constraint_scopes(
         if validator_scopes & constraint_scopes:
             filtered.append(validator)
     return filtered
-
-
-GIT_MODE_EXECUTABLE = 0o100755  # Git mode for executable files (100755)
-
-# Filenames exempt from frontmatter requirement (case-sensitive)
-FRONTMATTER_EXEMPT_FILENAMES: frozenset[str] = frozenset({
-    "AGENT.md",
-    "AGENTS.md",
-    "GEMINI.md",
-    "CLAUDE.md",
-    "README.md",
-})
 
 
 def _run_claude_plugin_validate(claude_path: str, plugin_dir: Path) -> subprocess.CompletedProcess[str]:
@@ -2534,50 +2473,6 @@ class MarkdownTokenCounter:
 # ============================================================================
 
 
-def _git_file_has_execute_bit(file_path: Path) -> bool | None:
-    """Check if a file has the execute bit in Git's index or HEAD.
-
-    Uses Git's tracked mode (100755 = executable, 100644 = not) so validation
-    is consistent across platforms. On Windows, os.access(X_OK) is unreliable;
-    checking Git ensures plugins that pass on Windows will also pass on Linux.
-
-    Uses GitPython (project dependency) for consistency with other scripts.
-
-    Args:
-        file_path: Absolute path to the file.
-
-    Returns:
-        True if executable in Git, False if not, None if not in a Git repo or
-        file is untracked.
-    """
-    resolved = file_path.resolve()
-    try:
-        repo = Repo(resolved.parent, search_parent_directories=True)
-    except (InvalidGitRepositoryError, NoSuchPathError, OSError):
-        return None
-
-    if repo.working_tree_dir is None:
-        return None
-
-    try:
-        rel = resolved.relative_to(Path(repo.working_tree_dir))
-    except ValueError:
-        return None  # file is outside the working tree
-
-    rel_str = str(rel).replace("\\", "/")
-
-    # Prefer index (staged/unstaged); fall back to HEAD
-    entry = repo.index.entries.get(entry_key(rel_str, 0))
-    if entry is not None:
-        return entry.mode == GIT_MODE_EXECUTABLE
-
-    try:
-        blob = repo.head.commit.tree[rel_str]
-    except KeyError:
-        return None
-    return blob.mode == GIT_MODE_EXECUTABLE
-
-
 class PluginRegistrationValidator:
     """Validates capability registration against plugin.json.
 
@@ -3617,42 +3512,6 @@ def _show_help_and_exit(ctx: typer.Context, code: int = 0) -> NoReturn:
 def is_skill_md(path: Path) -> bool:
     """Return True if the path is a SKILL.md file."""
     return path.name == "SKILL.md"
-
-
-def parse_skill_md(path: Path) -> tuple[dict, list[str], str | None, list[str]]:
-    """Parse a SKILL.md file into frontmatter dict and body lines.
-
-    Uses extract_frontmatter (from frontmatter_core) and _safe_load_yaml
-    to avoid the namespace conflict between the ``frontmatter`` and
-    ``python-frontmatter`` PyPI packages.
-
-    When YAML parsing fails due to unquoted colons, the frontmatter is
-    auto-fixed (colons quoted) and the fixed data is returned along with
-    a list of fields that were fixed.
-
-    Args:
-        path: Path to the SKILL.md file.
-
-    Returns:
-        Tuple of (frontmatter dict, body lines, yaml_error_message,
-        colon_fixed_fields).  yaml_error_message is None when parsing
-        succeeds (or when the colon auto-fix succeeds).
-        colon_fixed_fields lists field names where unquoted colons were
-        detected and auto-fixed. body_lines excludes the closing '---'
-        delimiter. When frontmatter opens with '---' but never closes,
-        body_lines is empty — there is no recoverable body.
-    """
-    content = path.read_text(encoding="utf-8")
-    fm_text, _start, end_line = extract_frontmatter(content)
-    if fm_text is None:
-        if content.startswith("---"):
-            # Opening delimiter present but never closed — no recoverable body.
-            return {}, [], None, []
-        return {}, content.splitlines(), None, []
-    parsed, yaml_err, colon_fields, _used_text = safe_load_yaml_with_colon_fix(fm_text)
-    frontmatter_dict: dict = parsed if parsed is not None else {}
-    body_lines = content.splitlines()[end_line + 1 :]
-    return frontmatter_dict, body_lines, yaml_err, colon_fields
 
 
 RULE_SERIES_PREFIX_LENGTH = 2

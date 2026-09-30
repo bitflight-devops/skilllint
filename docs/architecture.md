@@ -5,10 +5,13 @@
 validation, rule registration, fixing, and reporting modules. Dependency-light
 validation contracts (`ValidationIssue`, `ValidationResult`, `AppliedFix`, the
 validator protocol, and shared value aliases) are owned by `models.py`.
-`policy.py` owns configuration discovery, threshold/severity policy, and suppression filtering.
-`frontmatter_yaml.py` owns dependency-light YAML parsing and round-trip repair primitives shared by validation and rules.
+`policy.py` owns configuration discovery, threshold/severity policy, and
+suppression filtering. `frontmatter_core.py` owns frontmatter schema and
+classification contracts, including the frontmatter-exempt filename set.
+`frontmatter_yaml.py` owns YAML parsing/repair and SKILL.md document parsing.
+`scan_runtime.py` owns path discovery and plugin/marketplace root ancestry.
 `fixing.py` owns fail-closed fixer authorization and generic ordered execution.
-`plugin_validator.py` re-exports model, policy, and fixing names for compatibility while its
+`plugin_validator.py` re-exports migrated names for compatibility while its
 remaining responsibilities are decomposed incrementally under #283.
 
 ## Runtime flow
@@ -79,6 +82,11 @@ public fixture/CLI evidence is emitter proof.
 
 The `@skilllint_rule` decorator in `rule_registry.py` registers documentation,
 category, platform, severity, fixability, and optional authority metadata.
+Product rule modules depend on these domain owners and must not import the
+legacy `plugin_validator.py` validation/CLI facade. The facade may import
+rules to assemble the runtime pipeline; reversing that dependency recreates
+the central-module cycle #283 is removing.
+
 `ValidatorOwnership` in `plugin_validator.py` records whether a validator is
 schema-backed or lint-owned. These are separate dimensions: ownership does
 not wire severity, and registry membership does not create an emitter.
@@ -104,9 +112,15 @@ finding codes, fails closed for undeclared fixers, records `AppliedFix`
 instances, and tells its caller whether revalidation is required. It does not
 select concrete validators or own mutation implementations.
 
-`frontmatter_yaml.py` now supplies syntax-level parsing and repair primitives without importing validators or rules.
-`FrontmatterValidator` still owns schema-aware frontmatter mutation orchestration; this keeps the YAML owner
-below rule and validation dispatch rather than creating a reverse dependency.
+`frontmatter_yaml.py` supplies syntax-level parsing/repair and SKILL.md document
+parsing without importing validators or rules. `frontmatter_core.py` owns the
+schema-level frontmatter contracts used by both rules and validators.
+`FrontmatterValidator` still owns schema-aware mutation orchestration.
+
+Plugin-root ancestry lives in `scan_runtime.py`, so link, MCP, and plugin-agent
+rules can resolve structural context without reaching upward into the legacy
+validator. HK005 owns its Git execute-bit observation beside the hook rule;
+`HookValidator` continues to own the filesystem mutation.
 
 `plugin_validator._get_fixers_for_path` still owns fixer selection and ordering
 for this migration slice, while `plugin_validator.validate_single_path` owns
@@ -121,10 +135,11 @@ contracts, not adapter registration.
 | --- | --- | --- |
 | validation contracts | `models.py` | model/compatibility contract tests |
 | policy/config/suppression | `policy.py` | policy/config discovery and compatibility tests |
-| path selection | `scan_runtime.py` | scan runtime tests |
+| path selection and plugin-root ancestry | `scan_runtime.py` | scan runtime and compatibility tests |
 | platform metadata | `adapters/protocol.py`, `adapters/registry.py` | adapter protocol tests |
 | schema constraints | `schemas/`, schema validators | schema/frontmatter tests |
-| frontmatter YAML parsing/repair | `frontmatter_yaml.py` | frontmatter and rule-deduplication tests |
+| frontmatter contracts | `frontmatter_core.py` | schema and architecture contract tests |
+| frontmatter YAML/document parsing | `frontmatter_yaml.py` | frontmatter and rule-deduplication tests |
 | lint rules | `rules/`, `rule_registry.py` | rule fixture and CLI tests |
 | fix authorization/execution | `fixing.py` | fixer-gating and compatibility tests |
 | fix selection/revalidation | `plugin_validator.py` | fixer ordering/revalidation tests |
