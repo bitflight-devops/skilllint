@@ -23,7 +23,7 @@ import functools
 import logging
 from typing import TYPE_CHECKING
 
-from skilllint.frontmatter_core import normalize_tools_value
+from skilllint.frontmatter_core import extract_frontmatter, normalize_tools_value
 from skilllint.rule_registry import rule_authority, skilllint_rule
 from skilllint.rules._mcp_tool_discovery import (
     analyze_mcp_tool_reference,
@@ -181,9 +181,7 @@ def _extract_tools_list(path: pathlib.Path, field: str = "allowed-tools") -> lis
         List of tool name strings. Empty list if the field is absent or
         the file cannot be parsed.
     """
-    # Deferred import to break circular dependency; plugin_validator imports
-    # rules modules, so we defer here rather than at module level.
-    from skilllint.frontmatter_core import extract_frontmatter  # noqa: PLC0415
+    # Keep ruamel-backed YAML machinery off the rule-registry import path.
     from skilllint.frontmatter_yaml import safe_load_yaml_with_colon_fix  # noqa: PLC0415
 
     try:
