@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1790770195733,
+  "lastUpdate": 1790771423749,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -3312,6 +3312,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 82.261,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "416ad9ce4a06282486565fdadf3a13aad1e0f7ec",
+          "message": "refactor(validators): extract frontmatter validation subsystem (#311)\n\n* refactor(validators): extract frontmatter validation subsystem\n\n* refactor(core): consume frontmatter validator owner\n\n* refactor(validators): export frontmatter validators\n\n* docs(rules): point frontmatter validation at owner\n\n* docs(rules): point frontmatter validation at owner\n\n* test(validators): protect frontmatter owner compatibility\n\n* docs(architecture): record frontmatter validator owner\n\n* style(frontmatter): normalize facade imports\n\n* style(frontmatter): normalize module spacing\n\n* style(frontmatter): consolidate compatibility imports\n\n* fix(frontmatter): preserve YamlValue compatibility export\n\n* style(frontmatter): preserve typed compatibility export",
+          "timestamp": "2026-09-30T12:27:19Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/416ad9ce4a06282486565fdadf3a13aad1e0f7ec"
+        },
+        "date": 1790771423193,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 9058.745,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 9272.624,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 9697.501,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 107.952,
             "unit": "files/s"
           }
         ]
