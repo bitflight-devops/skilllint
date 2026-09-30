@@ -86,9 +86,7 @@ class HookValidator:
             if git_bin:
                 try:
                     subprocess.run(
-                        [git_bin, "update-index", "--chmod=+x", str(resolved_path)],
-                        check=True,
-                        capture_output=True,
+                        [git_bin, "update-index", "--chmod=+x", str(resolved_path)], check=True, capture_output=True
                     )
                 except (subprocess.CalledProcessError, OSError):
                     pass
