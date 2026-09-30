@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1790731105855,
+  "lastUpdate": 1790731766559,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -3018,6 +3018,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 145.946,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "81692d832549a713ec2a326210e025d2d48d624d",
+          "message": "refactor(frontmatter): extract dependency-light YAML repair owner (#304)\n\n* refactor(frontmatter): extract YAML repair primitives\n\n* refactor(frontmatter): delegate YAML helpers to owner\n\n* refactor(frontmatter): route YAML recovery to owner\n\n* refactor(frontmatter): route YAML recovery to owner\n\n* refactor(frontmatter): route YAML recovery to owner\n\n* test(frontmatter): protect YAML owner compatibility seam\n\n* docs(architecture): record frontmatter YAML ownership\n\n* style(frontmatter): normalize owner spacing\n\n* docs(frontmatter): explain lazy owner import\n\n* style(frontmatter): normalize compatibility test spacing\n\n* docs(frontmatter): explain deferred parser import\n\n* style(frontmatter): normalize module spacing\n\n* docs(architecture): wrap frontmatter ownership text\n\n* perf(frontmatter): keep model types out of runtime imports",
+          "timestamp": "2026-09-30T01:26:01Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/81692d832549a713ec2a326210e025d2d48d624d"
+        },
+        "date": 1790731765685,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 12249.887,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 12751.586,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 13467.917,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 78.5,
             "unit": "files/s"
           }
         ]
