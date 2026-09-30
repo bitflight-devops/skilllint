@@ -591,6 +591,46 @@ def check_hk004(hook_entries: Iterable[object], base_dir: Path) -> list[Validati
 # ---------------------------------------------------------------------------
 
 
+_GIT_MODE_EXECUTABLE = 0o100755  # Git index mode for an executable regular file.
+
+
+def _git_file_has_execute_bit(file_path: Path) -> bool | None:
+    """Return the executable bit recorded by Git for a tracked file.
+
+    Git's index mode is used rather than os.access so the result is portable
+    across Windows and Unix checkouts. None means the path is not tracked in a
+    readable Git working tree.
+    """
+    # Keep GitPython internals off the rule-registry import path.
+    from git import Repo  # noqa: PLC0415
+    from git.exc import InvalidGitRepositoryError, NoSuchPathError  # noqa: PLC0415
+    from git.index.fun import entry_key  # noqa: PLC0415
+
+    resolved = file_path.resolve()
+    try:
+        repo = Repo(resolved.parent, search_parent_directories=True)
+    except (InvalidGitRepositoryError, NoSuchPathError, OSError):
+        return None
+
+    if repo.working_tree_dir is None:
+        return None
+    try:
+        rel = resolved.relative_to(Path(repo.working_tree_dir))
+    except ValueError:
+        return None
+
+    rel_str = str(rel).replace("\\", "/")
+    entry = repo.index.entries.get(entry_key(rel_str, 0))
+    if entry is not None:
+        return entry.mode == _GIT_MODE_EXECUTABLE
+
+    try:
+        blob = repo.head.commit.tree[rel_str]
+    except KeyError:
+        return None
+    return blob.mode == _GIT_MODE_EXECUTABLE
+
+
 @skilllint_rule(
     "HK005",
     severity="warning",
@@ -636,8 +676,6 @@ def check_hk005(hook_entries: Iterable[object], base_dir: Path) -> list[Validati
 
     <!-- examples: HK005 -->
     """
-    from skilllint.plugin_validator import _git_file_has_execute_bit  # noqa: PLC0415
-
     issues: list[ValidationIssue] = []
 
     for command, resolved_path in iter_command_scripts(hook_entries, base_dir):
