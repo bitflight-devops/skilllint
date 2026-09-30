@@ -177,7 +177,7 @@ def _is_plugin_packaged_agent(file_path: pathlib.Path) -> bool:
     Returns:
         True if *file_path* is a direct child of a plugin's ``agents/`` directory.
     """
-    from skilllint.plugin_validator import find_plugin_dir  # noqa: PLC0415
+    from skilllint.scan_runtime import find_plugin_dir  # noqa: PLC0415
 
     plugin_dir = find_plugin_dir(file_path)
     if plugin_dir is None:
