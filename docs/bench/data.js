@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1790763764240,
+  "lastUpdate": 1790764223778,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -3228,6 +3228,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 82.403,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "01bd16cd2d2166cff90cdf3ed1501dd09b989344",
+          "message": "refactor(validators): extract ownership and applicability metadata (#309)\n\n* refactor(validators): extract routing metadata\n\n* refactor(core): consume validator metadata owner\n\n* style(validators): mark metadata compatibility reexports\n\n* test(validators): protect metadata owner compatibility\n\n* docs(architecture): record validator metadata owner",
+          "timestamp": "2026-09-30T10:26:55Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/01bd16cd2d2166cff90cdf3ed1501dd09b989344"
+        },
+        "date": 1790764223206,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 12093.22,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 12598.026,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 13475.292,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 79.457,
             "unit": "files/s"
           }
         ]
