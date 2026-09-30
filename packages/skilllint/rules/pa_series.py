@@ -52,7 +52,7 @@ _DOCS_SETTINGS_PERMISSIONS = "https://docs.anthropic.com/en/settings.md#permissi
 
 _FM002_CODE = "FM002"
 _FM009_CODE = "FM009"
-__PA001_CODE = "PA001"
+_PA001_CODE = "PA001"
 
 
 def _check_hooks(
