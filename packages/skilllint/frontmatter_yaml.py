@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 from io import StringIO
+from typing import TYPE_CHECKING
 
 from ruamel.yaml import YAML, YAMLError
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
@@ -16,7 +17,8 @@ from ruamel.yaml.nodes import MappingNode, SequenceNode
 from ruamel.yaml.scalarstring import DoubleQuotedScalarString
 from ruamel.yaml.tokens import CommentToken
 
-from skilllint.models import YamlValue
+if TYPE_CHECKING:
+    from skilllint.models import YamlValue
 
 # Safe-mode parser for validation/ingestion.
 _yaml_safe = YAML(typ="safe")
