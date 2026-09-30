@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1790749688386,
+  "lastUpdate": 1790757751079,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -3102,6 +3102,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 92.581,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "f5bde25b5dd4b7ac87ae9555b32c86d1b62b3e64",
+          "message": "refactor(core): extract file and capability classification (#306)\n\n* refactor(classification): extract cached manifest loader\n\n* refactor(classification): extract file type contracts\n\n* refactor(scan): consume classification and manifest owners\n\n* refactor(boundary): consume manifest owner directly\n\n* refactor(core): consume file classification owner\n\n* test(classification): protect owner and compatibility seams\n\n* docs(architecture): record classification ownership\n\n* fix(classification): preserve frontmatter exemption re-export\n\n* style(classification): preserve single-return detector shape\n\n* style(classification): mark legacy exemption re-export\n\n* style(classification): match ruff spacing\n\n* style(test): match ruff classification guard\n\n* style(classification): restore top-level class spacing",
+          "timestamp": "2026-09-30T08:39:08Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/f5bde25b5dd4b7ac87ae9555b32c86d1b62b3e64"
+        },
+        "date": 1790757750165,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 12119.249,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 12458.784,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 13085.812,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 80.345,
             "unit": "files/s"
           }
         ]
