@@ -13,12 +13,10 @@ Token-based complexity measurement replaces line counting for accurate AI cost e
 
 from __future__ import annotations
 
-import contextlib
 import logging
 import os
 import re
 import shutil
-import stat
 import subprocess
 import sys
 from io import TextIOWrapper
@@ -91,18 +89,7 @@ from skilllint.rule_registry import RULE_REGISTRY, rule_authority, rule_referenc
 from skilllint.rules.ag_series import check_ag001, check_ag002, check_ag003
 from skilllint.rules.as_series import run_as_series
 from skilllint.rules.fm_series import check_fm001, check_fm004, check_fm007, check_fm010
-from skilllint.rules.hk_series import (
-    _git_file_has_execute_bit,
-    check_hk002,
-    check_hk003,
-    check_hk004,
-    check_hk005,
-    find_hook_plugin_dir,
-    is_file_path_reference,
-    iter_command_scripts,
-    iter_hook_entries,
-    load_hooks_object,
-)
+from skilllint.rules.hk_series import _git_file_has_execute_bit  # noqa: F401 - compatibility re-export
 from skilllint.rules.lk_series import check_lk004
 from skilllint.rules.pl_series import (
     _check_pl004_manifest_paths,
@@ -115,7 +102,6 @@ from skilllint.rules.pl_series import (
     claude_validation_failure_issue,
 )
 from skilllint.rules.pr_series import check_pr001, check_pr002, check_pr005
-from skilllint.rules.sl_series import check_sl001, iter_symlinks
 from skilllint.scan_runtime import (
     _build_gitignore_set,
     _find_anchor_dir,
@@ -127,6 +113,7 @@ from skilllint.scan_runtime import (
 )
 from skilllint.token_counter import TOKEN_ERROR_THRESHOLD, TOKEN_WARNING_THRESHOLD
 from skilllint.validators.content import ComplexityValidator, DescriptionValidator, MarkdownTokenCounter
+from skilllint.validators.hooks import HookValidator
 from skilllint.validators.metadata import (  # noqa: F401 - compatibility re-exports
     VALIDATOR_CONSTRAINT_SCOPES,
     VALIDATOR_OWNERSHIP,
@@ -141,6 +128,7 @@ from skilllint.validators.rule_series import (
     NamespaceReferenceValidator,
     ProgressiveDisclosureValidator,
 )
+from skilllint.validators.symlinks import SymlinkTargetValidator
 from skilllint.version import __version__
 
 from .frontmatter_core import (
@@ -155,7 +143,7 @@ from .frontmatter_core import (
 from .scan_runtime import _resolve_filter_and_expand_paths, run_validation_loop
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Iterable
 
     from pydantic_core import ErrorDetails
 
@@ -788,94 +776,6 @@ class PluginLinkEscapeValidator:
             NotImplementedError: Escaping links require manual fixes.
         """
         raise NotImplementedError("Links that escape the plugin root require moving the target or editing the link.")
-
-
-# ============================================================================
-# SYMLINK TARGET VALIDATOR
-# ============================================================================
-
-
-class SymlinkTargetValidator:
-    r"""Validates that symlinks within the validated path have clean target paths.
-
-    Detects symlinks whose targets contain trailing whitespace or newlines
-    (e.g. ``os.readlink()`` returns ``'../../python3-development/skills/uv\\n'``).
-    Such symlinks cause ``Path.resolve()`` and ``is_file()``/``is_dir()`` to
-    fail silently, producing false-positive errors in other validators.
-
-    When ``path`` is a file: checks whether the file itself is a symlink with
-    a dirty target.  When ``path`` is a directory: scans all symlinks found
-    recursively within the directory.
-
-    Auto-fix (SL001): strips trailing whitespace from the target, removes the
-    old symlink, and recreates it pointing to the clean target.  The fix is
-    only applied when the cleaned target resolves to an existing path.
-    """
-
-    def validate(self, path: Path) -> ValidationResult:
-        """Detect symlinks with trailing whitespace in their target paths.
-
-        Args:
-            path: Path to a file or directory to inspect for dirty symlinks.
-
-        Returns:
-            ValidationResult with errors for each dirty symlink found.
-        """
-        errors = check_sl001(path)
-        return ValidationResult(passed=not errors, errors=errors, warnings=[], info=[])
-
-    def can_fix(self) -> bool:
-        """Check if validator supports auto-fixing.
-
-        Returns:
-            True (trailing whitespace in symlink targets can be stripped automatically)
-        """
-        return True
-
-    def fix(self, path: Path) -> list[str]:
-        """Strip trailing whitespace from symlink targets and recreate affected symlinks.
-
-        Only recreates symlinks whose cleaned target resolves to an existing path.
-        Symlinks whose cleaned target does not exist are left untouched and reported
-        as unfixable.
-
-        Args:
-            path: Path to a file or directory to scan for dirty symlinks.
-
-        Returns:
-            List of human-readable descriptions of fixes applied.
-        """
-        fixes: list[str] = []
-
-        for symlink_path in iter_symlinks(path):
-            try:
-                raw_target = str(Path(symlink_path).readlink())
-            except OSError:
-                continue
-
-            if raw_target == raw_target.rstrip():
-                continue  # Target is already clean
-
-            clean_target = raw_target.rstrip()
-
-            # Resolve the cleaned target to verify it exists before recreating
-            resolved = (symlink_path.parent / clean_target).resolve()
-            if not resolved.exists():
-                continue  # Cannot verify cleaned target — leave untouched
-
-            try:
-                Path(symlink_path).unlink()
-                Path(symlink_path).symlink_to(clean_target)
-                fixes.append(
-                    f"Fixed symlink {symlink_path}: stripped trailing whitespace from target "
-                    f"({raw_target!r} -> {clean_target!r})"
-                )
-            except OSError:
-                # Best-effort: if remove/symlink fails, leave the original in place
-                with contextlib.suppress(OSError):
-                    Path(symlink_path).symlink_to(raw_target)
-
-        return fixes
 
 
 # SkillFrontmatter, CommandFrontmatter, AgentFrontmatter imported from frontmatter_core
@@ -1960,179 +1860,6 @@ class PluginStructureValidator:
         if not errors:
             issue = claude_validation_failure_issue(stdout, stderr)
             (errors if issue.severity == "error" else warnings).append(issue)
-
-
-# ============================================================================
-# HOOK VALIDATOR
-# ============================================================================
-
-
-class HookValidator:
-    """Validates Claude Code hooks.json configuration files.
-
-    Validates JSON structure, event types, and hook entries.
-    Hook scripts themselves are language-agnostic (any executable) and validated
-    by their respective language linters (oxlint, ruff, shellcheck, etc.).
-
-    Detection lives in ``skilllint.rules.hk_series``.  This class packages rule
-    output into a ValidationResult and owns the HK005 auto-fix, which mutates
-    the filesystem.
-    """
-
-    def validate(self, path: Path) -> ValidationResult:
-        """Validate a hooks.json configuration file.
-
-        HK001 is terminal: an unreadable file, invalid JSON, or a missing /
-        non-object top-level ``hooks`` key leaves nothing for the remaining
-        rules to inspect.  Otherwise HK002/HK003 check the structure and
-        HK004/HK005 check the referenced scripts.  HK004 (missing script) is
-        a hard error and goes to ``errors``; HK005 (non-executable script) is
-        a warning and goes to ``warnings``.  ``passed`` reflects ``errors``
-        only, so HK005 findings alone do not fail validation.
-
-        Args:
-            path: Path to hooks.json
-
-        Returns:
-            ValidationResult with errors/warnings for hook issues
-        """
-        hooks_obj, errors = load_hooks_object(path)
-        if hooks_obj is None:
-            return ValidationResult(passed=False, errors=errors, warnings=[], info=[])
-
-        warnings: list[ValidationIssue] = []
-        errors.extend(check_hk002(hooks_obj))
-        errors.extend(check_hk003(hooks_obj))
-        self.validate_hook_script_references_in_hooks_dict(hooks_obj, path.parent, errors, warnings)
-
-        return ValidationResult(passed=not errors, errors=errors, warnings=warnings, info=[])
-
-    def can_fix(self) -> bool:
-        """Check if validator supports auto-fixing.
-
-        Returns:
-            True (HK005 non-executable scripts can be fixed with chmod/git)
-        """
-        return True
-
-    def fix(self, path: Path) -> list[str]:
-        """Auto-fix HK005 by making non-executable hook scripts executable.
-
-        For each command script referenced in hooks.json that exists but is not
-        executable, applies ``git update-index --chmod=+x`` when the file is
-        git-tracked, or ``os.chmod`` with execute bits otherwise.
-
-        Args:
-            path: Path to hooks.json file
-
-        Returns:
-            List of human-readable descriptions of fixes applied
-        """
-        hooks_dict, _ = load_hooks_object(path)
-        if hooks_dict is None:
-            return []
-
-        fixes: list[str] = []
-
-        for command, resolved_path in iter_command_scripts(iter_hook_entries(hooks_dict), path.parent):
-            if not resolved_path.exists():
-                continue
-            fix_desc = self._fix_execute_bit(resolved_path, command)
-            if fix_desc:
-                fixes.append(fix_desc)
-
-        return fixes
-
-    def _fix_execute_bit(self, resolved_path: Path, command: str) -> str | None:
-        git_exec = _git_file_has_execute_bit(resolved_path)
-        if git_exec is True:
-            return None
-        if git_exec is False:
-            git_bin = shutil.which("git")
-            if git_bin:
-                try:
-                    subprocess.run(
-                        [git_bin, "update-index", "--chmod=+x", str(resolved_path)], check=True, capture_output=True
-                    )
-                except (subprocess.CalledProcessError, OSError):
-                    pass
-                else:
-                    return f"Made hook script executable: {command}"
-            return None
-        if not os.access(resolved_path, os.X_OK):
-            try:
-                current_mode = resolved_path.stat().st_mode
-                resolved_path.chmod(current_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-            except OSError:
-                pass
-            else:
-                return f"Made hook script executable: {command}"
-        return None
-
-    @staticmethod
-    def _is_file_path_reference(command: str) -> bool:
-        """Return True if *command* looks like a file path rather than a bare shell command.
-
-        Args:
-            command: The ``command`` value from a hook entry.
-
-        Returns:
-            True if command is a file path reference, False otherwise.
-        """
-        return is_file_path_reference(command)
-
-    @staticmethod
-    def _find_hook_plugin_dir(base_dir: Path) -> Path:
-        """Find the hook plugin directory by checking .claude-plugin/ directory existence.
-
-        Args:
-            base_dir: Base directory to search from.
-
-        Returns:
-            Plugin directory path if .claude-plugin/ exists, otherwise base_dir.
-        """
-        return find_hook_plugin_dir(base_dir)
-
-    def _validate_command_script_references(
-        self,
-        hook_entries: Iterable[object],
-        base_dir: Path,
-        errors: list[ValidationIssue],
-        warnings: list[ValidationIssue],
-    ) -> None:
-        """Check that file-path ``command`` values in hook entries exist and are executable.
-
-        Args:
-            hook_entries: List of hook entry dicts to inspect.
-            base_dir: Directory to use as the resolution base for relative paths.
-            errors: List to append HK004 (error-severity) issues to.
-            warnings: List to append HK005 (warning-severity) issues to.
-        """
-        errors.extend(check_hk004(hook_entries, base_dir))
-        for issue in check_hk005(hook_entries, base_dir):
-            (errors if issue.severity == "error" else warnings).append(issue)
-
-    def validate_hook_script_references_in_hooks_dict(
-        self,
-        hooks_dict: Mapping[str, YamlValue],
-        base_dir: Path,
-        errors: list[ValidationIssue],
-        warnings: list[ValidationIssue],
-    ) -> None:
-        """Validate command file-path references in a hooks configuration dict.
-
-        Iterates over a hooks configuration dict (same structure as the root
-        ``"hooks"`` key in ``hooks.json``) and runs HK004/HK005 against every
-        hook entry found.
-
-        Args:
-            hooks_dict: Hooks configuration mapping event types to groups.
-            base_dir: Directory used as base for resolving relative script paths.
-            errors: List to append HK004 (error-severity) issues to.
-            warnings: List to append HK005 (warning-severity) issues to.
-        """
-        for entry in iter_hook_entries(hooks_dict):
-            self._validate_command_script_references([entry], base_dir, errors, warnings)
 
 
 # ============================================================================

@@ -1,6 +1,6 @@
 """HK-series hooks validation rules (HK001-HK005).
 
-HK001-HK005 detection lives here.  ``HookValidator`` in ``plugin_validator.py``
+HK001-HK005 detection lives here.  ``HookValidator`` in ``validators/hooks.py``
 is a thin wrapper that calls these functions and packages the result; it
 retains the auto-fix, which mutates the filesystem and is a validator concern
 rather than a rule concern.

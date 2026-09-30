@@ -65,6 +65,28 @@ def test_legacy_validator_reexports_dependency_owned_utilities() -> None:
     assert scan_runtime._load_plugin_json is load_plugin_json
 
 
+def test_filesystem_mutation_validators_reexport_from_legacy_facade() -> None:
+    """Legacy hook/symlink validator imports resolve to focused owners."""
+    import skilllint.plugin_validator as legacy
+    from skilllint.validators.hooks import HookValidator
+    from skilllint.validators.symlinks import SymlinkTargetValidator
+
+    assert legacy.HookValidator is HookValidator
+    assert legacy.SymlinkTargetValidator is SymlinkTargetValidator
+
+
+def test_filesystem_mutation_validator_owners_do_not_import_orchestration() -> None:
+    """Filesystem mutation validators stay below legacy/scan/fixing orchestration."""
+    forbidden = {"skilllint.plugin_validator", "skilllint.scan_runtime", "skilllint.fixing"}
+    for relative in ("validators/hooks.py", "validators/symlinks.py"):
+        path = ROOT / "packages" / "skilllint" / relative
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        imported = {
+            node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) and node.module is not None
+        }
+        assert not imported & forbidden
+
+
 def test_validator_metadata_reexports_from_legacy_facade() -> None:
     """Legacy routing metadata resolves to the dependency-light owner."""
     import skilllint.plugin_validator as legacy

@@ -1,7 +1,7 @@
 """SL-series symlink validation rules (SL001).
 
 SL001 detection lives here. ``SymlinkTargetValidator`` in
-``plugin_validator.py`` is a thin wrapper that calls ``check_sl001`` and
+``validators/symlinks.py`` is a thin wrapper that calls ``check_sl001`` and
 packages the result; it retains the auto-fix, which mutates the filesystem
 and is a validator concern rather than a rule concern.
 
@@ -96,7 +96,7 @@ def check_sl001(path: Path) -> list[ValidationIssue]:
     failures in other validators that depend on resolved paths.
 
     **Source:** ``SymlinkTargetValidator.validate`` in
-    ``plugin_validator.py`` — reads symlink targets via ``Path.readlink()``,
+    ``validators/symlinks.py`` — reads symlink targets via ``Path.readlink()``,
     compares the raw target string against its ``rstrip()`` form, and emits
     this rule for any mismatch.
 
