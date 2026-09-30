@@ -233,8 +233,6 @@ def safe_load_yaml_with_colon_fix(fm_text: str) -> tuple[dict | None, str | None
         return parsed, None, [], fm_text
 
 
-
-
 def parse_skill_md(path: Path) -> tuple[dict, list[str], str | None, list[str]]:
     """Parse a SKILL.md file into frontmatter data and body lines.
 
