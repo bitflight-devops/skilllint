@@ -102,9 +102,12 @@ frontmatter parsing or token measurement on top of rule functions:
 Mutation, plugin-tree traversal, and subprocess-backed validators remain
 separate responsibilities.
 
-`ValidatorOwnership` in `plugin_validator.py` records whether a validator is
-schema-backed or lint-owned. These are separate dimensions: ownership does
-not wire severity, and registry membership does not create an emitter.
+`validators/metadata.py` records schema-vs-lint ownership and provider
+constraint-scope applicability by validator class name. The metadata owner
+depends only on the shared `Validator` protocol; it does not import concrete
+validator implementations. These are separate dimensions from rule registry
+metadata: validator ownership does not wire severity, and registry membership
+does not create an emitter.
 
 `skilllint rules` renders the active registry. `skilllint rule CODE` renders a
 single registered rule. PR001, PR002, and PR005 are active public-route rules:
@@ -161,6 +164,7 @@ contracts, not adapter registration.
 | lint rules | `rules/`, `rule_registry.py` | rule fixture and CLI tests |
 | rule-series validator adapters | `validators/rule_series.py` | validator behavior and compatibility tests |
 | content quality/token validators | `validators/content.py` | description/complexity/token and compatibility tests |
+| validator ownership/applicability | `validators/metadata.py` | ownership/routing and compatibility tests |
 | fix authorization/execution | `fixing.py` | fixer-gating and compatibility tests |
 | fix selection/revalidation | `plugin_validator.py` | fixer ordering/revalidation tests |
 | output | `reporting.py` | reporter/CLI tests |

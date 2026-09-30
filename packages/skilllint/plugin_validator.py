@@ -127,6 +127,14 @@ from skilllint.scan_runtime import (
 )
 from skilllint.token_counter import TOKEN_ERROR_THRESHOLD, TOKEN_WARNING_THRESHOLD
 from skilllint.validators.content import ComplexityValidator, DescriptionValidator, MarkdownTokenCounter
+from skilllint.validators.metadata import (  # noqa: F401 - compatibility re-exports
+    VALIDATOR_CONSTRAINT_SCOPES,
+    VALIDATOR_OWNERSHIP,
+    ValidatorOwnership,
+    filter_validators_by_constraint_scopes,
+    get_validator_constraint_scopes,
+    get_validator_ownership,
+)
 from skilllint.validators.rule_series import (
     AsSeriesValidator,
     InternalLinkValidator,
@@ -147,7 +155,7 @@ from .frontmatter_core import (
 from .scan_runtime import _resolve_filter_and_expand_paths, run_validation_loop
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping, Sequence
+    from collections.abc import Iterable, Mapping
 
     from pydantic_core import ErrorDetails
 
@@ -352,37 +360,6 @@ AG001, AG002, AG003 = ErrorCode.AG001, ErrorCode.AG002, ErrorCode.AG003
 # ============================================================================
 
 
-class ValidatorOwnership(StrEnum):
-    """Ownership classification for validators.
-
-    Used to distinguish between schema-backed validation (hard failures)
-    and lint-rule validation (warnings/findings).
-    """
-
-    SCHEMA = "schema"  # Schema-backed validation (hard failures = exit code 1)
-    LINT = "lint"  # Lint rules (warnings = exit code 0 with findings)
-
-
-# Mapping from validator class name to ownership classification.
-# This establishes the explicit boundary between schema and lint validation.
-VALIDATOR_OWNERSHIP: dict[str, ValidatorOwnership] = {
-    # Schema-backed validators (hard failures)
-    "FrontmatterValidator": ValidatorOwnership.SCHEMA,
-    "PluginStructureValidator": ValidatorOwnership.SCHEMA,
-    "PluginRegistrationValidator": ValidatorOwnership.SCHEMA,
-    "HookValidator": ValidatorOwnership.SCHEMA,
-    "SymlinkTargetValidator": ValidatorOwnership.SCHEMA,
-    # Lint validators (warnings/findings)
-    "NameFormatValidator": ValidatorOwnership.LINT,
-    "DescriptionValidator": ValidatorOwnership.LINT,
-    "ComplexityValidator": ValidatorOwnership.LINT,
-    "InternalLinkValidator": ValidatorOwnership.LINT,
-    "ProgressiveDisclosureValidator": ValidatorOwnership.LINT,
-    "NamespaceReferenceValidator": ValidatorOwnership.LINT,
-    "MarkdownTokenCounter": ValidatorOwnership.LINT,
-    "AsSeriesValidator": ValidatorOwnership.LINT,
-}
-
 # ============================================================================
 # RULE TRUTH CLASSIFICATION (S04 — M002)
 # ============================================================================
@@ -395,80 +372,6 @@ VALIDATOR_OWNERSHIP: dict[str, ValidatorOwnership] = {
 
 # Evidence: Official repos (claude-plugins-official, skills, claude-code-plugins)
 #   contain these patterns and Claude Code runtime accepts them.
-
-
-def get_validator_ownership(validator: Validator) -> ValidatorOwnership:
-    """Get the ownership classification for a validator.
-
-    Args:
-        validator: A validator instance.
-
-    Returns:
-        ValidatorOwnership enum value (SCHEMA or LINT).
-
-    Defaults to LINT for unknown validators (conservative assumption).
-    """
-    class_name = type(validator).__name__
-    return VALIDATOR_OWNERSHIP.get(class_name, ValidatorOwnership.LINT)
-
-
-# Mapping from validator class name to constraint scope applicability.
-# Validators that are provider-specific will only run when the adapter's
-# constraint_scopes() includes "provider_specific".
-VALIDATOR_CONSTRAINT_SCOPES: dict[str, set[str]] = {
-    # Shared validators (run for all providers)
-    "FrontmatterValidator": {"shared", "provider_specific"},
-    "PluginStructureValidator": {"shared", "provider_specific"},
-    "PluginRegistrationValidator": {"shared", "provider_specific"},
-    "HookValidator": {"shared", "provider_specific"},
-    "SymlinkTargetValidator": {"shared", "provider_specific"},
-    "NameFormatValidator": {"shared", "provider_specific"},
-    "DescriptionValidator": {"shared", "provider_specific"},
-    "ComplexityValidator": {"shared", "provider_specific"},
-    "InternalLinkValidator": {"shared", "provider_specific"},
-    "ProgressiveDisclosureValidator": {"shared", "provider_specific"},
-    "NamespaceReferenceValidator": {"shared", "provider_specific"},
-    "MarkdownTokenCounter": {"shared", "provider_specific"},
-    "AsSeriesValidator": {"shared", "provider_specific"},
-}
-
-
-def get_validator_constraint_scopes(class_name: str) -> set[str]:
-    """Get the constraint scopes a validator applies to.
-
-    Args:
-        class_name: Validator class name (e.g. "FrontmatterValidator").
-
-    Returns:
-        Set of constraint scope strings (e.g. {"shared", "provider_specific"}).
-        Defaults to {"shared", "provider_specific"} for unknown validators.
-    """
-    return VALIDATOR_CONSTRAINT_SCOPES.get(class_name, {"shared", "provider_specific"})
-
-
-def filter_validators_by_constraint_scopes(
-    validators: Sequence[Validator], constraint_scopes: set[str]
-) -> list[Validator]:
-    """Filter validators based on provider constraint scopes.
-
-    Validators are included if their applicable constraint scopes intersect
-    with the provider's constraint_scopes().
-
-    Args:
-        validators: List of validator instances.
-        constraint_scopes: Set of constraint scope strings from adapter.
-
-    Returns:
-        Filtered list of validators that match the constraint scopes.
-    """
-    filtered: list[Validator] = []
-    for validator in validators:
-        class_name = type(validator).__name__
-        validator_scopes = get_validator_constraint_scopes(class_name)
-        # Include validator if there's any intersection
-        if validator_scopes & constraint_scopes:
-            filtered.append(validator)
-    return filtered
 
 
 def _run_claude_plugin_validate(claude_path: str, plugin_dir: Path) -> subprocess.CompletedProcess[str]:
