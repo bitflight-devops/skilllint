@@ -102,8 +102,10 @@ frontmatter parsing or token measurement on top of rule functions:
 
 `validators/hooks.py` and `validators/symlinks.py` own the non-frontmatter
 filesystem mutations: HK005 execute-bit repair and verified SL001 symlink-target
-rewrite. Detection remains in the corresponding rule modules. Frontmatter
-mutation and plugin-tree/subprocess validation remain separate responsibilities.
+rewrite. `validators/frontmatter.py` owns frontmatter schema validation,
+normalization, FM010 name repair, and the frontmatter-specific result helpers.
+Detection and metadata remain in their rule modules. Plugin-tree/subprocess
+validation remains a separate responsibility.
 
 `validators/metadata.py` records schema-vs-lint ownership and provider
 constraint-scope applicability by validator class name. The metadata owner
@@ -136,8 +138,9 @@ select concrete validators or own mutation implementations.
 `frontmatter_yaml.py` supplies syntax-level parsing/repair and SKILL.md document
 parsing without importing validators or rules. `frontmatter_core.py` owns the
 schema-level frontmatter contracts, while `file_types.py` owns capability type
-and frontmatter-requirement classification. `FrontmatterValidator` still owns
-schema-aware mutation orchestration.
+and frontmatter-requirement classification. `validators/frontmatter.py` composes
+those seams into schema-aware validation and mutation without depending on
+validation/CLI orchestration.
 
 Plugin-root ancestry lives in `scan_runtime.py`, so link, MCP, and plugin-agent
 rules can resolve structural context without reaching upward into the legacy
@@ -169,6 +172,7 @@ contracts, not adapter registration.
 | content quality/token validators | `validators/content.py` | description/complexity/token and compatibility tests |
 | validator ownership/applicability | `validators/metadata.py` | ownership/routing and compatibility tests |
 | hook/symlink mutation validators | `validators/hooks.py`, `validators/symlinks.py` | hook/symlink/fixer-gating tests |
+| frontmatter validation/mutation | `validators/frontmatter.py` | frontmatter/name/fixer-gating and compatibility tests |
 | fix authorization/execution | `fixing.py` | fixer-gating and compatibility tests |
 | fix selection/revalidation | `plugin_validator.py` | fixer ordering/revalidation tests |
 | output | `reporting.py` | reporter/CLI tests |
