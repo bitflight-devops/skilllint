@@ -184,7 +184,7 @@ def _extract_tools_list(path: pathlib.Path, field: str = "allowed-tools") -> lis
     # Deferred import to break circular dependency; plugin_validator imports
     # rules modules, so we defer here rather than at module level.
     from skilllint.frontmatter_core import extract_frontmatter  # noqa: PLC0415
-    from skilllint.plugin_validator import safe_load_yaml_with_colon_fix  # noqa: PLC0415
+    from skilllint.frontmatter_yaml import safe_load_yaml_with_colon_fix  # noqa: PLC0415
 
     try:
         content = path.read_text(encoding="utf-8")
