@@ -21,6 +21,7 @@ Design constraints (SOLID, DRY):
 
 Public API:
   Constants:
+    FRONTMATTER_EXEMPT_FILENAMES -- well-known markdown files that do not carry capability frontmatter
     RECOMMENDED_DESCRIPTION_LENGTH -- warn when description exceeds this many characters
 
   Pydantic models:
@@ -73,6 +74,17 @@ MAX_DESCRIPTION_LENGTH: int = DESCRIPTION_MAX_LENGTH
 
 RECOMMENDED_DESCRIPTION_LENGTH: int = DESCRIPTION_MAX_LENGTH
 """Warn when a description exceeds this many characters."""
+
+# Well-known markdown files are documentation/instruction surfaces rather than
+# capability definitions and therefore do not require capability frontmatter.
+FRONTMATTER_EXEMPT_FILENAMES: frozenset[str] = frozenset({
+    "AGENT.md",
+    "AGENTS.md",
+    "GEMINI.md",
+    "CLAUDE.md",
+    "README.md",
+})
+"""Case-sensitive filenames exempt from capability frontmatter requirements."""
 
 _SKILL_DIR_NAME_PATTERN: re.Pattern[str] = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 """Pattern for valid skill directory names (and 'name' field values).
