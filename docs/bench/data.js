@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1790757751079,
+  "lastUpdate": 1790763197069,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -3144,6 +3144,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 80.345,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "9c5c845f5271f12ed3b8bef2541436a995670995",
+          "message": "refactor(validators): extract rule-series protocol adapters (#307)\n\n* refactor(validators): establish validator adapter package\n\n* refactor(validators): extract rule-series adapters\n\n* refactor(core): consume rule-series validator owner\n\n* docs(rules): point adapters at validator owner\n\n* docs(rules): point adapters at validator owner\n\n* docs(rules): point adapters at validator owner\n\n* docs(architecture): record rule-series validator owner\n\n* test(validators): protect adapter owner compatibility\n\n* style(validators): remove unnecessary re-export suppression\n\n* docs(validators): restore validate return contracts",
+          "timestamp": "2026-09-30T10:09:55Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/9c5c845f5271f12ed3b8bef2541436a995670995"
+        },
+        "date": 1790763196469,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 12163.057,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 12485.492,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 13094.532,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 80.173,
             "unit": "files/s"
           }
         ]
