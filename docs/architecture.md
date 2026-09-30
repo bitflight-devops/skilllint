@@ -104,7 +104,9 @@ finding codes, fails closed for undeclared fixers, records `AppliedFix`
 instances, and tells its caller whether revalidation is required. It does not
 select concrete validators or own mutation implementations.
 
-`frontmatter_yaml.py` now supplies syntax-level parsing and repair primitives without importing validators or rules. `FrontmatterValidator` still owns schema-aware frontmatter mutation orchestration; this keeps the YAML owner below rule and validation dispatch rather than creating a reverse dependency.
+`frontmatter_yaml.py` now supplies syntax-level parsing and repair primitives without importing validators or rules.
+`FrontmatterValidator` still owns schema-aware frontmatter mutation orchestration; this keeps the YAML owner
+below rule and validation dispatch rather than creating a reverse dependency.
 
 `plugin_validator._get_fixers_for_path` still owns fixer selection and ordering
 for this migration slice, while `plugin_validator.validate_single_path` owns
