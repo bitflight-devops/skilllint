@@ -1822,7 +1822,12 @@ def main(
 # =============================================================================
 
 # Create Typer app
-app = typer.Typer(help="Validate Claude Code plugins and skills", add_completion=False)
+app = typer.Typer(
+    help="Validate Claude Code plugins and skills",
+    add_completion=False,
+    context_settings={"terminal_width": 800},
+    rich_markup_mode=None,
+)
 app.add_typer(docs_app, name="docs")
 
 # Version option handled via callback

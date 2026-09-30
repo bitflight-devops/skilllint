@@ -836,15 +836,14 @@ class TestPlatformFlag:
         How: Render ``check --help`` and look for each ADAPTERS key in CLI form
         Why: Agents are told to read accepted platform names from this help
         """
-        result = cli_runner.invoke(plugin_validator.app, ["check", "--help"])
+        # A narrow terminal must not wrap or truncate help: the app fixes terminal_width.
+        result = cli_runner.invoke(plugin_validator.app, ["check", "--help"], env={"COLUMNS": "40"})
 
         assert result.exit_code == 0
         assert plugin_validator.ADAPTERS
         expected = ", ".join(sorted(plugin_validator.PLATFORM_CLI_IDS))
         assert expected == plugin_validator.PLATFORM_CHOICES
-        assert "Platform adapter. Choices:" in result.output
-        for choice in expected.split(", "):
-            assert choice in result.output
+        assert f"Platform adapter. Choices: {expected}" in result.output
 
     def test_hyphenated_third_party_platform_id_resolves_exactly(self, monkeypatch) -> None:
         """Registered adapter IDs containing hyphens remain directly selectable."""
