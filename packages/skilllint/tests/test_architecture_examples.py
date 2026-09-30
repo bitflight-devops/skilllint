@@ -81,7 +81,9 @@ def test_filesystem_mutation_validator_owners_do_not_import_orchestration() -> N
     for relative in ("validators/hooks.py", "validators/symlinks.py"):
         path = ROOT / "packages" / "skilllint" / relative
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        imported = {node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) and node.module is not None}
+        imported = {
+            node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) and node.module is not None
+        }
         assert not imported & forbidden
 
 
