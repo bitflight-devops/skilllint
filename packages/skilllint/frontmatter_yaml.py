@@ -26,6 +26,7 @@ _rt_yaml = YAML(typ="rt")
 _rt_yaml.preserve_quotes = False
 _rt_yaml.width = 10000  # prevent line wrapping
 
+
 def _safe_load_yaml(text: str) -> YamlValue:
     """Parse a YAML string using ruamel.yaml safe loader.
 
