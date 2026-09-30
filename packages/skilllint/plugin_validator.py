@@ -56,8 +56,8 @@ import skilllint.rules  # ruff: ignore[unused-import] — ensures all 15 series 
 from skilllint.adapters import ALL_RULE_SERIES, PlatformAdapter, load_adapters, matches_file
 from skilllint.cli_docs import docs_app
 from skilllint.fixing import (  # noqa: F401 - compatibility re-exports
-    FIXER_TRIGGER_CODES,
     apply_authorized_fixes,
+    FIXER_TRIGGER_CODES,
     get_fixer_trigger_codes,
 )
 from skilllint.models import AppliedFix, FileResults, ValidationIssue, ValidationResult, Validator, YamlValue
@@ -3749,10 +3749,7 @@ def validate_single_path(
             _logger.debug("Skipping auto-fix for fixture file: %s", path)
         else:
             fixes_applied = apply_authorized_fixes(
-                _get_fixers_for_path(validators, path),
-                path,
-                raw_codes=raw_codes,
-                fixes_out=fixes_out,
+                _get_fixers_for_path(validators, path), path, raw_codes=raw_codes, fixes_out=fixes_out
             )
 
             # Re-validate after fixes
