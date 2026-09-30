@@ -1,6 +1,6 @@
 """TC-series token count rules (TC001).
 
-TC001 detection lives here.  ``MarkdownTokenCounter`` in ``plugin_validator.py``
+TC001 detection lives here.  ``MarkdownTokenCounter`` in ``validators/content.py``
 is a thin wrapper: it reads the file (reporting FM002 when the read fails, which
 is an FM-series concern rather than a TC one) and hands the content to
 ``check_tc001``.
@@ -10,7 +10,7 @@ file content.
 
 General token-counting infrastructure — ``count_tokens``, the threshold
 constants, and ``count_file_tokens`` — stays in ``skilllint.token_counter`` and
-on ``MarkdownTokenCounter``; other callers depend on it and none of it is
+on ``validators/content.py::MarkdownTokenCounter``; other callers depend on it and none of it is
 TC001-specific.
 
 Rule IDs and default severities:
