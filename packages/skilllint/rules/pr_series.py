@@ -99,8 +99,6 @@ def _component_paths(manifest: dict[str, YamlValue], plugin_dir: Path, field: st
 
 
 def _registered_component_files(manifest: dict[str, YamlValue], plugin_dir: Path, field: str) -> set[Path]:
-    from skilllint.plugin_validator import FRONTMATTER_EXEMPT_FILENAMES  # noqa: PLC0415
-
     registered: set[Path] = set()
     for reference in _component_paths(manifest, plugin_dir, field):
         target = plugin_dir / reference
