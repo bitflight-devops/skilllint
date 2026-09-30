@@ -113,6 +113,7 @@ class FileType(StrEnum):
             result = FileType.UNKNOWN
         return result
 
+
 class FrontmatterRequirement(StrEnum):
     """Whether a capability path requires YAML frontmatter."""
 
