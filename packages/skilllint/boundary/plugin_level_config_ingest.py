@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError
 
-from skilllint.scan_runtime import _load_plugin_json
+from skilllint.plugin_manifest import load_plugin_json
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -88,8 +88,8 @@ def mcp_server_names_from_mcp_servers_document(raw: object) -> frozenset[str]:
 def ingest_plugin_level_mcp_server_names(plugin_dir: Path) -> frozenset[str]:
     """Union MCP server names from plugin-root ``.mcp.json`` and ``.claude-plugin/plugin.json``.
 
-    Uses the cached manifest loader in ``scan_runtime`` for ``plugin.json`` so PA001
-    shares one disk read with other callers.
+    Uses the shared cached plugin manifest loader so PA001 shares one disk read
+    with scan and classification callers.
 
     Args:
         plugin_dir: Plugin root directory.
@@ -106,7 +106,7 @@ def ingest_plugin_level_mcp_server_names(plugin_dir: Path) -> frozenset[str]:
             pass
         else:
             names.update(mcp_server_names_from_mcp_servers_document(raw_mcp))
-    manifest = _load_plugin_json(plugin_dir)
+    manifest = load_plugin_json(plugin_dir)
     if manifest is not None:
         names.update(mcp_server_names_from_mcp_servers_document(manifest))
     return frozenset(names)
