@@ -267,7 +267,7 @@ def _ingest_agent_frontmatter_for_pa001(
 
 
 @skilllint_rule(
-    "PA001",
+    _PA001_CODE,
     severity="error",
     category="plugin",
     authority={"origin": "anthropic.com", "reference": _DOCS_SUBAGENTS_PLUGIN_SCOPE},
