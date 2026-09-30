@@ -65,6 +65,35 @@ def test_legacy_validator_reexports_dependency_owned_utilities() -> None:
     assert scan_runtime._load_plugin_json is load_plugin_json
 
 
+def test_frontmatter_validators_and_helpers_reexport_from_legacy_facade() -> None:
+    """Legacy frontmatter imports resolve to the focused subsystem owner."""
+    import skilllint.plugin_validator as legacy
+    from skilllint.validators import frontmatter
+
+    for name in (
+        "FrontmatterValidator",
+        "NameFormatValidator",
+        "NAME_PATTERN",
+        "_normalize_skill_name",
+        "_pydantic_error_to_validation_issue",
+        "_validate_skill_directory_name",
+        "_validate_frontmatter_yaml",
+        "_fm009_recovery_warnings",
+        "_build_validation_result",
+        "_validation_result_with_error",
+    ):
+        assert getattr(legacy, name) is getattr(frontmatter, name)
+
+
+def test_frontmatter_validator_owner_does_not_import_orchestration() -> None:
+    """Frontmatter validation stays below legacy/scan/fixing orchestration."""
+    path = ROOT / "packages" / "skilllint" / "validators" / "frontmatter.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    forbidden = {"skilllint.plugin_validator", "skilllint.scan_runtime", "skilllint.fixing", "skilllint.reporting"}
+    imported = {node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) and node.module is not None}
+    assert not imported & forbidden
+
+
 def test_filesystem_mutation_validators_reexport_from_legacy_facade() -> None:
     """Legacy hook/symlink validator imports resolve to focused owners."""
     import skilllint.plugin_validator as legacy
