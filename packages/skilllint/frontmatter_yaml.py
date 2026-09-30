@@ -40,6 +40,7 @@ def _safe_load_yaml(text: str) -> YamlValue:
         return {}
     return _yaml_safe.load(text)
 
+
 def _dump_yaml(data: dict[str, YamlValue]) -> str:
     """Serialize a dict to YAML using the round-trip handler.
 
@@ -225,5 +226,6 @@ def safe_load_yaml_with_colon_fix(fm_text: str) -> tuple[dict | None, str | None
     else:
         parsed = dict(data) if isinstance(data, dict) else None
         return parsed, None, [], fm_text
+
 
 __all__ = ["safe_load_yaml_with_colon_fix"]
