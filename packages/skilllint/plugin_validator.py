@@ -63,6 +63,7 @@ from skilllint.frontmatter_yaml import (  # noqa: F401 - compatibility re-export
     safe_load_yaml_with_colon_fix,
 )
 from skilllint.models import AppliedFix, FileResults, ValidationIssue, ValidationResult, Validator
+from skilllint.models import YamlValue as YamlValue  # noqa: F401 - compatibility re-export
 from skilllint.policy import (  # noqa: F401 - compatibility re-exports
     DEFAULT_THRESHOLDS,
     IgnoreConfig,
