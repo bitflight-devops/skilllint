@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1790731766559,
+  "lastUpdate": 1790749688386,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -3060,6 +3060,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 78.5,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "2c5fe7e25edff8b2a2f3144af92b001754a9b052",
+          "message": "refactor(core): invert rule dependencies from legacy validator (#305)\n\n* refactor(frontmatter): own exemption contract\n\n* refactor(frontmatter): own skill document parsing\n\n* refactor(scan): own plugin ancestry lookup\n\n* refactor(core): re-export dependency-owned utilities\n\n* refactor(rules): route skill parsing to owner\n\n* refactor(rules): use frontmatter exemption owner\n\n* refactor(rules): remove PA legacy dependencies\n\n* refactor(rules): own HK005 git-mode observation\n\n* refactor(rules): route plugin ancestry to scan owner\n\n* refactor(rules): route link ancestry to scan owner\n\n* fix(rules): correct PA001 local code constant\n\n* fix(rules): remove remaining legacy reverse import\n\n* test(architecture): prohibit rule reverse dependencies\n\n* docs(architecture): record one-way rule dependencies\n\n* refactor(rules): remove stale circular dependency note\n\n* style(frontmatter): normalize parser spacing\n\n* style(core): order frontmatter compatibility imports\n\n* refactor(rules): make PA001 code canonical\n\n* fix(core): import moved generic ancestry helper\n\n* style(test): simplify legacy import detector\n\n* style(core): order frontmatter imports by type\n\n* fix(test): keep architecture failure reporting typed",
+          "timestamp": "2026-09-30T06:23:15Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/2c5fe7e25edff8b2a2f3144af92b001754a9b052"
+        },
+        "date": 1790749686719,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 10464.473,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 10812.123,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 11495.877,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 92.581,
             "unit": "files/s"
           }
         ]
