@@ -986,6 +986,7 @@ class NameFormatValidator:
 
         return fixes
 
+
 __all__ = [
     "NAME_PATTERN",
     "FrontmatterValidator",
