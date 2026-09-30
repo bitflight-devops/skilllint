@@ -29,7 +29,7 @@ def test_rule_modules_do_not_import_legacy_validator() -> None:
             if isinstance(node, ast.Import):
                 imports_legacy = any(alias.name == "skilllint.plugin_validator" for alias in node.names)
             if imports_legacy:
-                offenders.append(f"{path.name}:{node.lineno}")
+                offenders.append(path.name)
     assert not offenders, f"rule modules import legacy plugin_validator: {offenders}"
 
 
