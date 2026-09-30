@@ -15,6 +15,9 @@ class SymlinkTargetValidator:
     def validate(self, path: Path) -> ValidationResult:
         """Validate symlink targets under a file or directory.
 
+        Args:
+            path: File or directory to inspect.
+
         Returns:
             Result containing SL001 errors.
         """
@@ -27,6 +30,9 @@ class SymlinkTargetValidator:
 
     def fix(self, path: Path) -> list[str]:
         """Strip trailing whitespace from verified symlink targets.
+
+        Args:
+            path: File or directory whose symlinks may be repaired.
 
         Returns:
             Human-readable descriptions of applied repairs.
