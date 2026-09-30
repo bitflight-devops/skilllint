@@ -13,12 +13,10 @@ Token-based complexity measurement replaces line counting for accurate AI cost e
 
 from __future__ import annotations
 
-import contextlib
 import logging
 import os
 import re
 import shutil
-import stat
 import subprocess
 import sys
 from io import TextIOWrapper
@@ -91,18 +89,6 @@ from skilllint.rule_registry import RULE_REGISTRY, rule_authority, rule_referenc
 from skilllint.rules.ag_series import check_ag001, check_ag002, check_ag003
 from skilllint.rules.as_series import run_as_series
 from skilllint.rules.fm_series import check_fm001, check_fm004, check_fm007, check_fm010
-from skilllint.rules.hk_series import (
-    _git_file_has_execute_bit,
-    check_hk002,
-    check_hk003,
-    check_hk004,
-    check_hk005,
-    find_hook_plugin_dir,
-    is_file_path_reference,
-    iter_command_scripts,
-    iter_hook_entries,
-    load_hooks_object,
-)
 from skilllint.rules.lk_series import check_lk004
 from skilllint.rules.pl_series import (
     _check_pl004_manifest_paths,
@@ -115,7 +101,6 @@ from skilllint.rules.pl_series import (
     claude_validation_failure_issue,
 )
 from skilllint.rules.pr_series import check_pr001, check_pr002, check_pr005
-from skilllint.rules.sl_series import check_sl001, iter_symlinks
 from skilllint.scan_runtime import (
     _build_gitignore_set,
     _find_anchor_dir,
@@ -157,7 +142,7 @@ from .frontmatter_core import (
 from .scan_runtime import _resolve_filter_and_expand_paths, run_validation_loop
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Iterable
 
     from pydantic_core import ErrorDetails
 
