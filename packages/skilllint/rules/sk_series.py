@@ -330,8 +330,9 @@ def check_sk008(frontmatter: dict[str, object], path: Path, file_type: str) -> l
     ```
 
     Returns:
-        Always an empty list. SK008 is emitted by `_check_skill_directory_name`
-        in `plugin_validator.py` after inspecting the filesystem path; this
+        Always an empty list. SK008 is emitted by
+        `validators/frontmatter.py::_check_skill_directory_name` after inspecting
+        the filesystem path; this
         function exists for rule metadata registration only.
 
     <!-- examples: SK008 -->
