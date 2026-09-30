@@ -1,7 +1,7 @@
 """NR-series namespace reference validation rules (NR001-NR002).
 
-NR001 and NR002 detection lives here.  ``NamespaceReferenceValidator`` in
-``plugin_validator.py`` is a thin wrapper that reads the file and packages the
+NR001 and NR002 detection lives here. ``NamespaceReferenceValidator`` in
+``validators/rule_series.py`` is a thin wrapper that reads the file and packages the
 results into a ``ValidationResult``; it retains only the unreadable-file case
 (an I/O failure, not a namespace-reference finding) and the ``can_fix`` /
 ``fix`` pair.
