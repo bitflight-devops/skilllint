@@ -8,12 +8,9 @@ validation loop to a dedicated module without changing user-facing behavior.
 from __future__ import annotations
 
 import fnmatch
-import functools
-import json
 import os
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from enum import StrEnum
 from pathlib import Path, PurePath
 from typing import TYPE_CHECKING, Any, NoReturn
 
@@ -22,6 +19,8 @@ from git import Repo
 from git.exc import InvalidGitRepositoryError, NoSuchPathError
 
 from .adapters import PlatformAdapter, PlatformPluginDiscovery, PluginLayout, matches_file
+from .file_types import ScanContext
+from .plugin_manifest import _load_plugin_json
 from .reporting import CIReporter, ConsoleReporter, FileResults, Reporter
 
 if TYPE_CHECKING:
@@ -52,14 +51,6 @@ DEFAULT_SCAN_PATTERNS: tuple[str, ...] = (
     "**/hooks/hooks.json",
     "**/CLAUDE.md",
 )
-
-
-class ScanContext(StrEnum):
-    """The structural context of a scan target directory."""
-
-    PLUGIN = "plugin"
-    PROVIDER = "provider"
-    BARE = "bare"
 
 
 KNOWN_PROVIDER_DIRS: frozenset[str] = frozenset({".claude", ".cursor", ".gemini", ".codex"})
@@ -129,28 +120,6 @@ class PluginManifest:
     def is_manifest_driven(self) -> bool:
         """True if plugin.json declares any explicit paths."""
         return any(v is not None for v in (self.agents, self.commands, self.skills))
-
-
-@functools.cache
-def _load_plugin_json(plugin_root: Path) -> dict | None:
-    """Load and cache .claude-plugin/plugin.json for a given plugin root.
-
-    Cached per ``plugin_root`` so multiple callers within a single
-    ``skilllint check`` run (e.g. path discovery in scan_runtime and
-    PA001 cross-checking in pa_series) share a single disk read.
-
-    Args:
-        plugin_root: Directory containing ``.claude-plugin/plugin.json``.
-
-    Returns:
-        Parsed dict, or None if the file is missing or invalid JSON.
-    """
-    manifest_path = plugin_root / ".claude-plugin" / "plugin.json"
-    try:
-        raw = json.loads(manifest_path.read_text(encoding="utf-8"))
-        return raw if isinstance(raw, dict) else None
-    except (OSError, json.JSONDecodeError):
-        return None
 
 
 def _parse_plugin_manifest(plugin_root: Path) -> PluginManifest:

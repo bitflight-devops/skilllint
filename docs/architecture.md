@@ -6,11 +6,13 @@ validation, rule registration, fixing, and reporting modules. Dependency-light
 validation contracts (`ValidationIssue`, `ValidationResult`, `AppliedFix`, the
 validator protocol, and shared value aliases) are owned by `models.py`.
 `policy.py` owns configuration discovery, threshold/severity policy, and
-suppression filtering. `frontmatter_core.py` owns frontmatter schema and
-classification contracts, including the frontmatter-exempt filename set.
-`frontmatter_yaml.py` owns YAML parsing/repair and SKILL.md document parsing.
-`scan_runtime.py` owns path discovery and plugin/marketplace root ancestry.
-`fixing.py` owns fail-closed fixer authorization and generic ordered execution.
+suppression filtering. `frontmatter_core.py` owns frontmatter schema contracts
+and the frontmatter-exempt filename set. `file_types.py` owns scan/file-type
+and frontmatter-requirement classification. `plugin_manifest.py` owns cached
+Claude plugin manifest decoding. `frontmatter_yaml.py` owns YAML parsing/repair
+and SKILL.md document parsing. `scan_runtime.py` owns path discovery and
+plugin/marketplace root ancestry. `fixing.py` owns fail-closed fixer
+authorization and generic ordered execution.
 `plugin_validator.py` re-exports migrated names for compatibility while its
 remaining responsibilities are decomposed incrementally under #283.
 
@@ -28,8 +30,10 @@ CLI (plugin_validator.main)
   -> reporting.ConsoleReporter or CIReporter
 ```
 
-`scan_runtime.detect_scan_context` classifies a directory as `PLUGIN`, `PROVIDER`,
-or `BARE`. `_discover_validatable_paths` dispatches that classification to
+`file_types.ScanContext` and `FileType` are the dependency-light classification
+contracts. `scan_runtime.detect_scan_context` selects the `ScanContext` for a
+directory, while `FileType.detect_file_type` classifies individual capability
+paths. `_discover_validatable_paths` dispatches scan classification to
 `_discover_plugin_paths` and the other discovery implementations, whose
 downstream logic selects manifest, auto, or structure discovery modes. Omitting
 `--platform` preserves the default compatibility route.
@@ -114,8 +118,9 @@ select concrete validators or own mutation implementations.
 
 `frontmatter_yaml.py` supplies syntax-level parsing/repair and SKILL.md document
 parsing without importing validators or rules. `frontmatter_core.py` owns the
-schema-level frontmatter contracts used by both rules and validators.
-`FrontmatterValidator` still owns schema-aware mutation orchestration.
+schema-level frontmatter contracts, while `file_types.py` owns capability type
+and frontmatter-requirement classification. `FrontmatterValidator` still owns
+schema-aware mutation orchestration.
 
 Plugin-root ancestry lives in `scan_runtime.py`, so link, MCP, and plugin-agent
 rules can resolve structural context without reaching upward into the legacy
@@ -135,6 +140,8 @@ contracts, not adapter registration.
 | --- | --- | --- |
 | validation contracts | `models.py` | model/compatibility contract tests |
 | policy/config/suppression | `policy.py` | policy/config discovery and compatibility tests |
+| file/capability classification | `file_types.py` | file-type/frontmatter and compatibility tests |
+| plugin manifest loading | `plugin_manifest.py` | scan/boundary cache compatibility tests |
 | path selection and plugin-root ancestry | `scan_runtime.py` | scan runtime and compatibility tests |
 | platform metadata | `adapters/protocol.py`, `adapters/registry.py` | adapter protocol tests |
 | schema constraints | `schemas/`, schema validators | schema/frontmatter tests |

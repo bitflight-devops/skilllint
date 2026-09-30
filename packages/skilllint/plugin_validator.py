@@ -49,6 +49,13 @@ from ruamel.yaml import YAMLError
 import skilllint.rules  # ruff: ignore[unused-import] — ensures all 15 series modules register into RULE_REGISTRY
 from skilllint.adapters import ALL_RULE_SERIES, PlatformAdapter, load_adapters, matches_file
 from skilllint.cli_docs import docs_app
+from skilllint.file_types import (
+    NAME_BEARING_FILE_TYPES as _NAME_BEARING_FILE_TYPES,
+    FileType,
+    FrontmatterRequirement as _FrontmatterRequirement,
+    file_has_frontmatter as _file_has_frontmatter,
+    frontmatter_requirement as _frontmatter_requirement,
+)
 from skilllint.fixing import FIXER_TRIGGER_CODES, apply_authorized_fixes, get_fixer_trigger_codes  # noqa: F401
 from skilllint.frontmatter_yaml import (
     _dump_tool_list_fixes,
@@ -114,13 +121,11 @@ from skilllint.rules.sk_series import check_sk004, check_sk005
 from skilllint.rules.sl_series import check_sl001, iter_symlinks
 from skilllint.rules.tc_series import check_tc001
 from skilllint.scan_runtime import (
-    ScanContext,
     _build_gitignore_set,
     _find_anchor_dir,
     _glob_excluding,
     _is_ignored,
     _load_ignore_patterns,
-    _load_plugin_json,
     find_marketplace_dir,
     find_plugin_dir,
 )
@@ -128,7 +133,7 @@ from skilllint.token_counter import TOKEN_ERROR_THRESHOLD, TOKEN_WARNING_THRESHO
 from skilllint.version import __version__
 
 from .frontmatter_core import (
-    FRONTMATTER_EXEMPT_FILENAMES,
+    FRONTMATTER_EXEMPT_FILENAMES,  # noqa: F401 - compatibility re-export
     AgentFrontmatter,
     CommandFrontmatter,
     SkillFrontmatter,
@@ -541,119 +546,6 @@ def _should_skip_claude_validate() -> bool:
 # ============================================================================
 # DATA MODELS
 # ============================================================================
-
-
-class FileType(StrEnum):
-    """Type of capability file."""
-
-    SKILL = "skill"
-    AGENT = "agent"
-    COMMAND = "command"
-    PLUGIN = "plugin"
-    HOOK_CONFIG = "hook_config"
-    HOOK_SCRIPT = "hook_script"
-    CLAUDE_MD = "claude_md"
-    REFERENCE = "reference"
-    MARKDOWN = "markdown"
-    UNKNOWN = "unknown"
-
-    @staticmethod
-    def _is_plugin_scoped_unknown(path: Path, plugin_root: Path) -> bool:
-        """Return True if path is skill-internal and must be classified as UNKNOWN.
-
-        In PLUGIN context, only direct children of {plugin_root}/agents/ or
-        {plugin_root}/commands/ qualify. Skill-internal paths are UNKNOWN.
-
-        Args:
-            path: The file path to classify.
-            plugin_root: The plugin root directory.
-
-        Returns:
-            True if the path should be classified as UNKNOWN.
-        """
-        if "agents" in path.parts and path.parent != plugin_root / "agents":
-            return True
-        return bool("commands" in path.parts and path.parent != plugin_root / "commands")
-
-    @staticmethod
-    def _manifest_declared_type(path: Path) -> FileType | None:
-        for plugin_root in (path, *path.parents):
-            if not (plugin_root / ".claude-plugin" / "plugin.json").is_file():
-                continue
-            manifest = _load_plugin_json(plugin_root)
-            if manifest is None:
-                continue
-            for field_name, file_type in (("agents", FileType.AGENT), ("commands", FileType.COMMAND)):
-                declarations = manifest.get(field_name)
-                if not isinstance(declarations, list):
-                    continue
-                for declaration in declarations:
-                    if not isinstance(declaration, str):
-                        continue
-                    target = plugin_root / declaration
-                    if path == target or (target.is_dir() and path.parent == target):
-                        return file_type
-        return None
-
-    @staticmethod
-    def detect_file_type(
-        path: Path, scan_context: ScanContext | None = None, plugin_root: Path | None = None
-    ) -> FileType:
-        """Detect file type from path structure, optionally scoped by context.
-
-        When scan_context is PLUGIN and plugin_root is provided:
-        - Only classify as AGENT if path is directly under {plugin_root}/agents/
-        - Only classify as COMMAND if path is directly under {plugin_root}/commands/
-        - Files under skills/*/agents/ or skills/*/commands/ within the plugin
-          are classified as UNKNOWN (skill-internal, not plugin-level components)
-
-        When scan_context is None: current behavior (backward compatible).
-
-        Args:
-            path: The file path to classify.
-            scan_context: Optional scan context for scoped classification.
-            plugin_root: Optional plugin root for context-aware classification.
-
-        Returns:
-            FileType enum value.
-        """
-        if (
-            scan_context == ScanContext.PLUGIN
-            and plugin_root is not None
-            and FileType._is_plugin_scoped_unknown(path, plugin_root)
-        ):
-            return FileType.UNKNOWN
-
-        if path.name == "SKILL.md":
-            result = FileType.SKILL
-        elif (
-            path.name in {"plugin.json", "marketplace.json"}
-            or (path / ".claude-plugin/plugin.json").exists()
-            or (path / ".claude-plugin/marketplace.json").exists()
-        ):
-            # marketplace.json is a Claude-plugin artifact in its own right
-            # (skilllint#118): a marketplace-only repository must be
-            # classified as PLUGIN so PluginStructureValidator (PL006) runs.
-            result = FileType.PLUGIN
-        elif (manifest_type := FileType._manifest_declared_type(path)) is not None:
-            result = manifest_type
-        elif "agents" in path.parts:
-            result = FileType.AGENT
-        elif "commands" in path.parts:
-            result = FileType.COMMAND
-        elif path.name == "hooks.json":
-            result = FileType.HOOK_CONFIG
-        elif "hooks" in path.parts:
-            result = FileType.HOOK_SCRIPT
-        elif path.name == "CLAUDE.md":
-            result = FileType.CLAUDE_MD
-        elif "references" in path.parts and path.suffix == ".md":
-            result = FileType.REFERENCE
-        elif path.suffix == ".md":
-            result = FileType.MARKDOWN
-        else:
-            result = FileType.UNKNOWN
-        return result
 
 
 @dataclass(frozen=True)
@@ -3080,81 +2972,6 @@ def get_staged_files() -> list[Path]:
 # ============================================================================
 # FRONTMATTER REQUIREMENT LOGIC
 # ============================================================================
-
-
-class _FrontmatterRequirement(StrEnum):
-    """Whether a file requires YAML frontmatter."""
-
-    REQUIRED = "required"
-    OPTIONAL = "optional"
-    EXEMPT = "exempt"
-
-
-def _frontmatter_requirement(path: Path) -> _FrontmatterRequirement:
-    """Determine whether frontmatter is required for a given path.
-
-    Rules:
-    - Files in FRONTMATTER_EXEMPT_FILENAMES are always exempt.
-    - ``**/skills/*/SKILL.md`` (direct child of skill dir) -- required.
-    - ``**/agents/*.md`` (direct child of agents dir) -- required.
-    - ``**/commands/*.md`` (direct child of commands dir) -- required.
-    - Deeper nested files under agents/ or commands/ -- optional.
-      If the file already contains frontmatter it will be validated normally;
-      if it does not, frontmatter validation is skipped entirely.
-
-    Args:
-        path: Path to the markdown file.
-
-    Returns:
-        _FrontmatterRequirement indicating the frontmatter policy for this file.
-    """
-    # Exempt well-known filenames regardless of location
-    if path.name in FRONTMATTER_EXEMPT_FILENAMES:
-        return _FrontmatterRequirement.EXEMPT
-
-    # SKILL.md files are always required (the FileType detector already handles this)
-    if path.name == "SKILL.md":
-        return _FrontmatterRequirement.REQUIRED
-
-    # Check parent directory name to distinguish direct child vs nested
-    parent_name = path.parent.name
-
-    if FileType.detect_file_type(path) in {FileType.AGENT, FileType.COMMAND} or parent_name in {"agents", "commands"}:
-        return _FrontmatterRequirement.REQUIRED
-
-    # If "agents" or "commands" appears anywhere in the path parts but the
-    # immediate parent is NOT that directory, this is a nested subdirectory file.
-    parts = set(path.parts)
-    if "agents" in parts or "commands" in parts:
-        return _FrontmatterRequirement.OPTIONAL
-
-    # Default: required (preserves existing behavior for any other case)
-    return _FrontmatterRequirement.REQUIRED
-
-
-def _file_has_frontmatter(path: Path) -> bool:
-    """Quick check whether a file starts with a YAML frontmatter delimiter.
-
-    Args:
-        path: Path to file to check.
-
-    Returns:
-        True if the file content starts with ``---``.
-    """
-    try:
-        content = path.read_text(encoding="utf-8")
-    except OSError:
-        return False
-    return content.startswith("---")
-
-
-# ============================================================================
-# CLI LAYER
-# ============================================================================
-
-
-_NAME_BEARING_FILE_TYPES: frozenset[FileType] = frozenset({FileType.SKILL, FileType.AGENT, FileType.COMMAND})
-"""File types whose frontmatter may carry a ``name`` field (FM010 applies)."""
 
 
 def _get_validators_for_path(path: Path) -> list[Validator]:
