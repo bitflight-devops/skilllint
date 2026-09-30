@@ -25,11 +25,10 @@ def test_rule_modules_do_not_import_legacy_validator() -> None:
     for path in sorted((ROOT / "packages" / "skilllint" / "rules").glob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
-            if isinstance(node, ast.ImportFrom) and node.module == "skilllint.plugin_validator":
-                offenders.append(f"{path.name}:{node.lineno}")
-            elif isinstance(node, ast.Import) and any(
-                alias.name == "skilllint.plugin_validator" for alias in node.names
-            ):
+            imports_legacy = isinstance(node, ast.ImportFrom) and node.module == "skilllint.plugin_validator"
+            if isinstance(node, ast.Import):
+                imports_legacy = any(alias.name == "skilllint.plugin_validator" for alias in node.names)
+            if imports_legacy:
                 offenders.append(f"{path.name}:{node.lineno}")
     assert not offenders, f"rule modules import legacy plugin_validator: {offenders}"
 
