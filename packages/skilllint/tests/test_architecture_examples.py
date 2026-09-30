@@ -65,6 +65,25 @@ def test_legacy_validator_reexports_dependency_owned_utilities() -> None:
     assert scan_runtime._load_plugin_json is load_plugin_json
 
 
+def test_content_validators_reexport_from_legacy_facade() -> None:
+    """Legacy content-validator imports resolve to the focused owner."""
+    import skilllint.plugin_validator as legacy
+    from skilllint.validators.content import ComplexityValidator, DescriptionValidator, MarkdownTokenCounter
+
+    assert legacy.ComplexityValidator is ComplexityValidator
+    assert legacy.DescriptionValidator is DescriptionValidator
+    assert legacy.MarkdownTokenCounter is MarkdownTokenCounter
+
+
+def test_content_validator_owner_does_not_import_orchestration() -> None:
+    """Content validators stay below legacy validation, scanning, and fixing orchestration."""
+    path = ROOT / "packages" / "skilllint" / "validators" / "content.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    forbidden = {"skilllint.plugin_validator", "skilllint.scan_runtime", "skilllint.fixing"}
+    imported = {node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) and node.module is not None}
+    assert not imported & forbidden
+
+
 def test_rule_series_validators_reexport_from_legacy_facade() -> None:
     """Legacy validator class imports resolve to the focused adapter owner."""
     import skilllint.plugin_validator as legacy
