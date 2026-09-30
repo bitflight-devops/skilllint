@@ -128,9 +128,9 @@ from skilllint.token_counter import TOKEN_ERROR_THRESHOLD, TOKEN_WARNING_THRESHO
 from skilllint.version import __version__
 
 from .frontmatter_core import (
+    FRONTMATTER_EXEMPT_FILENAMES,
     AgentFrontmatter,
     CommandFrontmatter,
-    FRONTMATTER_EXEMPT_FILENAMES,
     SkillFrontmatter,
     extract_frontmatter,
     fix_skill_name_field,
