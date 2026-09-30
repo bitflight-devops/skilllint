@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1790764223778,
+  "lastUpdate": 1790770195733,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -3270,6 +3270,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 79.457,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "76568cc73bba85d2bc6c2d53c4bd92ff6739656b",
+          "message": "refactor(validators): extract filesystem mutation validators (#310)\n\n* refactor(validators): extract symlink mutation validator\n\n* refactor(validators): extract hook mutation validator\n\n* refactor(validators): export filesystem mutation validators\n\n* refactor(core): consume filesystem mutation validator owners\n\n* refactor(core): drop migrated filesystem dependencies\n\n* docs(rules): point filesystem validators at owners\n\n* docs(rules): point filesystem validators at owners\n\n* test(validators): protect filesystem mutation owners\n\n* docs(architecture): record filesystem mutation owners\n\n* docs(validators): preserve filesystem method contracts\n\n* docs(validators): preserve filesystem method contracts\n\n* fix(validators): preserve hook observation compatibility alias\n\n* style(test): match ruff filesystem guard\n\n* style(validators): match ruff hook formatting",
+          "timestamp": "2026-09-30T12:06:38Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/76568cc73bba85d2bc6c2d53c4bd92ff6739656b"
+        },
+        "date": 1790770194942,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 11850.873,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 12168.621,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 12803.29,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 82.261,
             "unit": "files/s"
           }
         ]
