@@ -51,14 +51,8 @@ import skilllint.rules  # ruff: ignore[unused-import] — ensures all 15 series 
 from skilllint.adapters import ALL_RULE_SERIES, PlatformAdapter, load_adapters, matches_file
 from skilllint.cli_docs import docs_app
 from skilllint.fixing import FIXER_TRIGGER_CODES, apply_authorized_fixes, get_fixer_trigger_codes  # noqa: F401
-from skilllint.frontmatter_yaml import (
-    _dump_tool_list_fixes,
-    _dump_yaml,
-    _is_losslessly_scalar_tool_list,
-    _replace_list_valued_tool_fields,
-    _safe_load_yaml,
-    safe_load_yaml_with_colon_fix,
-)
+from skilllint.frontmatter_fixing import plan_frontmatter_fixes
+from skilllint.frontmatter_yaml import _safe_load_yaml, safe_load_yaml_with_colon_fix
 from skilllint.models import AppliedFix, FileResults, ValidationIssue, ValidationResult, Validator, YamlValue
 from skilllint.policy import (  # noqa: F401 - compatibility re-exports
     DEFAULT_THRESHOLDS,
@@ -1859,166 +1853,21 @@ class FrontmatterValidator:
                 )
             )
 
-    def _parse_frontmatter_with_colon_fix(
-        self, frontmatter_text: str
-    ) -> tuple[str, dict[str, YamlValue] | None, list[str]]:
-        """Parse frontmatter, applying unquoted-colon fix if YAML parse fails.
-
-        Returns:
-            Tuple of (frontmatter_text, parsed_data, colon_fix_descriptions).
-            parsed_data is None if parse failed even after colon fix.
-        """
-        parsed, _yaml_err, colon_fields, used_text = safe_load_yaml_with_colon_fix(frontmatter_text)
-        if colon_fields:
-            self._queue_fm009_info(colon_fields)
-        # Build colon_fixes list (one description per fixed field) to match caller expectations
-        colon_fixes = ["Quoted description value containing unquoted colon"] * len(colon_fields)
-        return (used_text, cast("dict[str, YamlValue]", parsed), colon_fixes)
-
-    def _normalize_tool_fields_and_detect_changes(
-        self,
-        normalized_dict: dict[str, YamlValue],
-        original_data: dict[str, YamlValue],
-        frontmatter_text: str,
-        *,
-        colon_fixes: list[str],
-        file_type: FileType,
-        file_path: Path | None,
-    ) -> tuple[dict[str, YamlValue], list[str]]:
-        """Normalize tool/skills fields and detect other changes.
-
-        Returns:
-            Tuple of (dict to dump, combined list of fix descriptions).
-            The dict may be a new instance when fix_skill_name_field adds a name.
-        """
-        fixes = list(colon_fixes)
-        if file_type == FileType.SKILL and file_path is not None:
-            normalized_dict = fix_skill_name_field(normalized_dict, file_path, fixes)
-        # SkillFrontmatter has no declared `skills` field (passthrough only via
-        # extra="allow"); AgentFrontmatter exposes a runtime-friendly view via
-        # `normalized_skills`. Either way, --fix must preserve the originally
-        # authored value's parsed shape (scalar/sequence/null) untouched.
-        if "skills" in original_data:
-            normalized_dict["skills"] = original_data["skills"]
-        tool_fields = {"tools", "disallowedTools", "allowed-tools"}
-        for field_name in tool_fields:
-            original_value = original_data.get(field_name)
-            if isinstance(original_value, list) and _is_losslessly_scalar_tool_list(original_value):
-                normalized_dict[field_name] = ", ".join(str(x) for x in original_value if x is not None)
-                fixes.append(f"Converted {field_name} from YAML array to comma-separated string")
-        for key, value in normalized_dict.items():
-            if key in tool_fields:
-                continue
-            orig_val = original_data.get(key)
-            if orig_val is not None and orig_val != value:
-                if isinstance(orig_val, list) and isinstance(value, str):
-                    fixes.append(f"Converted {key} from YAML array to comma-separated string")
-                elif isinstance(orig_val, str) and "\n" in orig_val and "\n" not in str(value):
-                    fixes.append(f"Normalized {key} to single line")
-        if re.search(r":\s*[|>][-+]?", frontmatter_text):
-            fixes.append("Removed YAML multiline indicators")
-        return normalized_dict, fixes
-
-    def _compute_normalized_fixes(
-        self,
-        content: str,
-        original_data: dict[str, YamlValue],
-        frontmatter_text: str,
-        body: str,
-        *,
-        file_type: FileType,
-        file_path: Path | None,
-        colon_fixes: list[str],
-    ) -> tuple[str, list[str]] | None:
-        """Compute normalized frontmatter and list of fixes.
-
-        Returns:
-            Tuple of (fixed_content, fixes_list) or None if validation fails.
-        """
-        model_class = self._get_model_class(file_type)
-        if model_class is None:
-            return None
-        try:
-            validated = model_class.model_validate(original_data)
-            normalized_dict = validated.model_dump(by_alias=True, exclude_none=True, mode="python")
-        except ValidationError:
-            return (f"---\n{frontmatter_text}\n---\n{body}", colon_fixes) if colon_fixes else None
-
-        normalized_dict, fixes = self._normalize_tool_fields_and_detect_changes(
-            normalized_dict,
-            original_data,
-            frontmatter_text,
-            colon_fixes=colon_fixes,
-            file_type=file_type,
-            file_path=file_path,
-        )
-        for field_name in ("tools", "disallowedTools", "allowed-tools"):
-            original_value = original_data.get(field_name)
-            if isinstance(original_value, list) and not _is_losslessly_scalar_tool_list(original_value):
-                normalized_dict[field_name] = original_value
-        if not fixes:
-            return None
-        tool_list_fixes = {
-            f"Converted {field_name} from YAML array to comma-separated string"
-            for field_name in ("tools", "disallowedTools", "allowed-tools")
-            if isinstance(original_data.get(field_name), list)
-            and _is_losslessly_scalar_tool_list(original_data[field_name])
-        }
-        tool_values = {
-            field_name: value
-            for field_name, value in normalized_dict.items()
-            if field_name in {"tools", "disallowedTools", "allowed-tools"}
-            and isinstance(original_data.get(field_name), list)
-            and _is_losslessly_scalar_tool_list(original_data[field_name])
-            and isinstance(value, str)
-        }
-        if set(fixes) == tool_list_fixes:
-            rewritten_frontmatter = _replace_list_valued_tool_fields(frontmatter_text, original_data)
-            if rewritten_frontmatter is not None:
-                return content.replace(frontmatter_text, rewritten_frontmatter, 1), fixes
-        if len(tool_values) == len(fixes):
-            yaml = _dump_tool_list_fixes(frontmatter_text, tool_values)
-            if yaml is not None:
-                return f"---\n{yaml}---\n{body}", fixes
-        return f"---\n{_dump_yaml(normalized_dict)}---\n{body}", fixes
-
     def _apply_fixes(self, content: str, file_type: FileType, file_path: Path | None = None) -> tuple[str, list[str]]:
-        """Apply auto-fixes to content.
+        """Apply frontmatter fix planning while preserving the legacy method seam.
 
         Args:
-            content: File content with frontmatter
-            file_type: Type of capability file
-            file_path: Optional path to file, used to derive skill name from directory
+            content: File content with frontmatter.
+            file_type: Type of capability file.
+            file_path: Optional source path used for skill-name normalization.
 
         Returns:
-            Tuple of (fixed_content, list_of_fixes_applied)
-
+            Tuple of fixed content and human-readable fix descriptions.
         """
-        result_content = content
-        result_fixes: list[str] = []
-
-        frontmatter_text, _, _ = self._extract_frontmatter(content)
-        end_match = re.search(r"\n---\s*\n", content[3:]) if frontmatter_text is not None else None
-        if frontmatter_text is None or end_match is None:
-            return result_content, result_fixes
-
-        body = content[end_match.end() + 3 :]
-        frontmatter_text, original_data, colon_fixes = self._parse_frontmatter_with_colon_fix(frontmatter_text)
-
-        if isinstance(original_data, dict):
-            computed = self._compute_normalized_fixes(
-                content,
-                original_data,
-                frontmatter_text,
-                body,
-                file_type=file_type,
-                file_path=file_path,
-                colon_fixes=colon_fixes,
-            )
-            if computed is not None:
-                result_content, result_fixes = computed
-
-        return result_content, result_fixes
+        plan = plan_frontmatter_fixes(content, file_type.value, file_path)
+        if plan.colon_fields:
+            self._queue_fm009_info(list(plan.colon_fields))
+        return plan.fixed_content, list(plan.fixes)
 
 
 # ============================================================================
