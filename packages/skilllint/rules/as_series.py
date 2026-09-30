@@ -64,7 +64,7 @@ AS_RULES: dict[str, str] = {
 def _parse_skill_md(path: pathlib.Path) -> tuple[dict, list[str]]:
     """Parse a SKILL.md file into frontmatter dict and body lines.
 
-    Delegates to plugin_validator.parse_skill_md — the same real-YAML
+    Delegates to frontmatter_yaml.parse_skill_md — the same real-YAML
     extract+parse+body-slice sequence AsSeriesValidator.validate already
     uses for the production AS-series entry point — instead of
     reimplementing it a third time (the other existing copy is
@@ -80,7 +80,7 @@ def _parse_skill_md(path: pathlib.Path) -> tuple[dict, list[str]]:
     """
     # Keep the parser import deferred so loading the rule registry does not
     # eagerly initialize the ruamel YAML repair machinery.
-    from skilllint.plugin_validator import parse_skill_md  # noqa: PLC0415
+    from skilllint.frontmatter_yaml import parse_skill_md  # noqa: PLC0415
 
     frontmatter, body_lines, _yaml_err, _colon_fields = parse_skill_md(path)
     return frontmatter, body_lines
