@@ -128,8 +128,8 @@ from skilllint.version import __version__
 
 from .frontmatter_core import (
     AgentFrontmatter,
-    FRONTMATTER_EXEMPT_FILENAMES,
     CommandFrontmatter,
+    FRONTMATTER_EXEMPT_FILENAMES,
     SkillFrontmatter,
     extract_frontmatter,
     fix_skill_name_field,
