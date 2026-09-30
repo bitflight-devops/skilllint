@@ -25,7 +25,11 @@ class ProgressiveDisclosureValidator:
     """Adapt PD-series progressive-disclosure checks to Validator."""
 
     def validate(self, path: Path) -> ValidationResult:
-        """Validate progressive disclosure structure in a skill directory."""
+        """Validate progressive disclosure structure in a skill directory.
+
+        Returns:
+            Passing result with PD-series informational findings.
+        """
         info = check_pd001(path) + check_pd002(path) + check_pd003(path)
         return ValidationResult(passed=True, errors=[], warnings=[], info=info)
 
@@ -45,7 +49,11 @@ class InternalLinkValidator:
     """Adapt LK001 internal-link checks to Validator."""
 
     def validate(self, path: Path) -> ValidationResult:
-        """Validate internal markdown links in SKILL.md."""
+        """Validate internal markdown links in SKILL.md.
+
+        Returns:
+            Result containing LK001 errors or a passing result.
+        """
         errors: list[ValidationIssue] = []
         warnings: list[ValidationIssue] = []
         info: list[ValidationIssue] = []
@@ -85,7 +93,11 @@ class NamespaceReferenceValidator:
     """Adapt NR-series namespace-reference checks to Validator."""
 
     def validate(self, path: Path) -> ValidationResult:
-        """Validate namespace-qualified references in a plugin file."""
+        """Validate namespace-qualified references in a plugin file.
+
+        Returns:
+            Result containing NR-series errors or a passing result.
+        """
         try:
             content = path.read_text(encoding="utf-8")
         except OSError as exc:
@@ -120,7 +132,11 @@ class AsSeriesValidator:
     """Adapt AgentSkills AS-series checks to Validator."""
 
     def validate(self, path: Path, policy: ValidationPolicy | None = None) -> ValidationResult:
-        """Run AS-series checks on a skill file using resolved token policy."""
+        """Run AS-series checks on a skill file using resolved token policy.
+
+        Returns:
+            Result grouping AS-series findings by severity.
+        """
         frontmatter_data, body_lines, _yaml_err, _colon_fields = parse_skill_md(path)
         thresholds = policy.thresholds if policy is not None else DEFAULT_THRESHOLDS
         violations = run_as_series(
