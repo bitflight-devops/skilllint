@@ -103,9 +103,7 @@ from skilllint.rules.hk_series import (
     iter_hook_entries,
     load_hooks_object,
 )
-from skilllint.rules.lk_series import check_lk001, check_lk004
-from skilllint.rules.nr_series import check_nr001, check_nr002
-from skilllint.rules.pd_series import check_pd001, check_pd002, check_pd003
+from skilllint.rules.lk_series import check_lk004
 from skilllint.rules.pl_series import (
     _check_pl004_manifest_paths,
     check_pl001,
@@ -130,6 +128,12 @@ from skilllint.scan_runtime import (
     find_plugin_dir,
 )
 from skilllint.token_counter import TOKEN_ERROR_THRESHOLD, TOKEN_WARNING_THRESHOLD, count_tokens
+from skilllint.validators.rule_series import (  # noqa: F401 - compatibility re-exports
+    AsSeriesValidator,
+    InternalLinkValidator,
+    NamespaceReferenceValidator,
+    ProgressiveDisclosureValidator,
+)
 from skilllint.version import __version__
 
 from .frontmatter_core import (
@@ -775,140 +779,6 @@ def _check_skill_directory_name(path: Path, file_type: FileType, errors: list[Va
 
 
 # ============================================================================
-# PROGRESSIVE DISCLOSURE VALIDATOR
-# ============================================================================
-
-
-class ProgressiveDisclosureValidator:
-    """Validates presence of progressive disclosure directories.
-
-    Checks for references/, assets/, and scripts/ directories that help
-    organize additional content for on-demand exploration. Missing directories
-    are reported as INFO (not errors) since they're optional organizational aids.
-    """
-
-    def validate(self, path: Path) -> ValidationResult:
-        """Validate progressive disclosure structure in skill directory.
-
-        Args:
-            path: Path to skill directory (should contain SKILL.md)
-
-        Returns:
-            ValidationResult with info messages for missing directories
-        """
-        info = check_pd001(path) + check_pd002(path) + check_pd003(path)
-
-        # Always pass - info messages don't fail validation
-        return ValidationResult(passed=True, errors=[], warnings=[], info=info)
-
-    def can_fix(self) -> bool:
-        """Check if validator supports auto-fixing.
-
-        Returns:
-            False (creating directories requires content creation decisions)
-        """
-        return False
-
-    def fix(self, path: Path) -> list[str]:
-        """Auto-fix progressive disclosure issues (not supported).
-
-        Args:
-            path: Path to directory to fix
-
-        Returns:
-            Never returns (always raises)
-
-        Raises:
-            NotImplementedError: Progressive disclosure validation cannot be auto-fixed
-        """
-        raise NotImplementedError(
-            "Progressive disclosure validation cannot be auto-fixed. "
-            "Creating directories requires human decisions about content organization."
-        )
-
-
-# ============================================================================
-# INTERNAL LINK VALIDATOR
-# ============================================================================
-
-
-class InternalLinkValidator:
-    """Validates internal markdown links in SKILL.md files.
-
-    Checks that relative links point to existing files (LK001).
-
-    Detection lives in ``skilllint.rules.lk_series``; this class reads the file
-    and packages the rule results into a ``ValidationResult``.
-
-    Architecture lines 1188-1256, Task T8 lines 897-982
-    """
-
-    def validate(self, path: Path) -> ValidationResult:
-        """Validate internal markdown links in SKILL.md.
-
-        Args:
-            path: Path to SKILL.md file
-
-        Returns:
-            ValidationResult with errors for broken links.
-        """
-        errors: list[ValidationIssue] = []
-        warnings: list[ValidationIssue] = []
-        info: list[ValidationIssue] = []
-
-        # Only validate SKILL.md files
-        if path.name != "SKILL.md":
-            # Not a skill file - skip validation
-            return ValidationResult(passed=True, errors=errors, warnings=warnings, info=info)
-
-        # Read file
-        try:
-            content = path.read_text(encoding="utf-8")
-        except OSError as e:
-            errors.append(
-                ValidationIssue(
-                    field="(file)",
-                    severity="error",
-                    message=f"Could not read file: {e}",
-                    code=FM002,
-                    docs_url=generate_docs_url(FM002),
-                )
-            )
-            return ValidationResult(passed=False, errors=errors, warnings=warnings, info=info)
-
-        errors.extend(check_lk001(content, path))
-
-        # Pass if no errors (warnings don't fail validation)
-        passed = len(errors) == 0
-        return ValidationResult(passed=passed, errors=errors, warnings=warnings, info=info)
-
-    def can_fix(self) -> bool:
-        """Check if validator supports auto-fixing.
-
-        Returns:
-            False (broken links require file creation or manual correction)
-        """
-        return False
-
-    def fix(self, path: Path) -> list[str]:
-        """Auto-fix internal link issues (not supported).
-
-        Args:
-            path: Path to file to fix
-
-        Returns:
-            Never returns (always raises)
-
-        Raises:
-            NotImplementedError: Internal link validation cannot be auto-fixed
-        """
-        raise NotImplementedError(
-            "Internal link validation cannot be auto-fixed. "
-            "Broken links require creating missing files or correcting link paths manually."
-        )
-
-
-# ============================================================================
 # PLUGIN LINK ESCAPE VALIDATOR
 # ============================================================================
 
@@ -1019,86 +889,6 @@ class PluginLinkEscapeValidator:
 
 
 # ============================================================================
-# NAMESPACE REFERENCE VALIDATOR
-# ============================================================================
-
-
-class NamespaceReferenceValidator:
-    """Validates namespace-qualified references in plugin files.
-
-    Checks that ``Skill()``, ``Task()``, ``@agent``, and ``/command`` references
-    with namespace prefixes (``plugin:name``) resolve to actual files in the
-    referenced plugin directory.
-
-    Detects patterns such as:
-    - ``Skill(command: "plugin:skill-name")``
-    - ``Skill(skill="plugin:skill-name")``
-    - ``Task(agent="plugin:agent-name")``
-    - ``@plugin:agent-name`` (prose agent references)
-    - ``/plugin:skill-name`` (slash command references)
-
-    Detection lives in ``skilllint.rules.nr_series``; this class reads the file
-    and packages the rule results into a ``ValidationResult``.
-    """
-
-    def validate(self, path: Path) -> ValidationResult:
-        """Validate namespace-qualified references in a plugin file.
-
-        Extracts references from the file body (after frontmatter) and verifies
-        each namespace-qualified reference resolves to an existing file in the
-        referenced plugin directory.
-
-        Args:
-            path: Path to a SKILL.md, agent .md, or command .md file
-
-        Returns:
-            ValidationResult with errors for broken references
-        """
-        try:
-            content = path.read_text(encoding="utf-8")
-        except OSError as e:
-            errors = [
-                ValidationIssue(
-                    field="(file)",
-                    severity="error",
-                    message=f"Could not read file: {e}",
-                    code=NR001,
-                    docs_url=generate_docs_url(NR001),
-                )
-            ]
-            return ValidationResult(passed=False, errors=errors, warnings=[], info=[])
-
-        errors = check_nr001(content, path) + check_nr002(content, path)
-        return ValidationResult(passed=not errors, errors=errors, warnings=[], info=[])
-
-    def can_fix(self) -> bool:
-        """Check if validator supports auto-fixing.
-
-        Returns:
-            False (namespace references require manual correction)
-        """
-        return False
-
-    def fix(self, path: Path) -> list[str]:
-        """Auto-fix namespace reference issues (not supported).
-
-        Args:
-            path: Path to file to fix
-
-        Returns:
-            Never returns (always raises)
-
-        Raises:
-            NotImplementedError: Namespace reference validation cannot be auto-fixed
-        """
-        raise NotImplementedError(
-            "Namespace reference validation cannot be auto-fixed. "
-            "Broken references require creating missing files or correcting "
-            "the namespace prefix manually."
-        )
-
-
-# ============================================================================
 # SYMLINK TARGET VALIDATOR
 # ============================================================================
 
@@ -1184,82 +974,6 @@ class SymlinkTargetValidator:
                     Path(symlink_path).symlink_to(raw_target)
 
         return fixes
-
-
-class AsSeriesValidator:
-    """Runs AS001 and AS006-AS009 rules on SKILL.md files.
-
-    AS-series rules enforce the AgentSkills specification, which is a
-    cross-harness baseline for skills. It defines ``SKILL.md`` and does not
-    describe agent files at all, so this validator is wired only to
-    ``FileType.SKILL``. A check on agent frontmatter belongs to a series that
-    governs agent files, cited to the harness documentation defining them.
-
-    These are platform-independent, so this validator integrates into the
-    default ``validate_single_path`` code path and fires without ``--platform``.
-    """
-
-    def validate(self, path: Path, policy: ValidationPolicy | None = None) -> ValidationResult:
-        """Run AS-series checks on a skill file.
-
-        Args:
-            path: Path to a SKILL.md file. Default dispatch wires only
-                ``FileType.SKILL`` to this validator (see the class
-                docstring for why); this method itself does not check the
-                file type, so tests may call it directly with other paths.
-            policy: Optional resolved per-plugin policy.
-
-        Returns:
-            ValidationResult grouping AS-series issues by severity.
-        """
-        from skilllint.rules.as_series import run_as_series  # ruff: ignore[import-outside-top-level]
-
-        frontmatter_data, body_lines, _yaml_err, _colon_fields = parse_skill_md(path)
-        thresholds = policy.thresholds if policy is not None else DEFAULT_THRESHOLDS
-        violations = run_as_series(
-            path,
-            frontmatter_data,
-            body_lines,
-            warning_threshold=thresholds.get("SK006", TOKEN_WARNING_THRESHOLD),
-            error_threshold=thresholds.get("SK007", TOKEN_ERROR_THRESHOLD),
-        )
-
-        issues = [
-            ValidationIssue(
-                field=v.get("code", "unknown"),
-                severity=(
-                    v.get("severity", "error")
-                    if v.get("severity", "error") in {"error", "warning", "info"}
-                    else "error"
-                ),
-                message=v.get("message", ""),
-                code=v["code"],
-            )
-            for v in violations
-        ]
-        errors = [i for i in issues if i.severity == "error"]
-        warnings = [i for i in issues if i.severity == "warning"]
-        info = [i for i in issues if i.severity == "info"]
-        return ValidationResult(passed=len(errors) == 0, errors=errors, warnings=warnings, info=info)
-
-    def can_fix(self) -> bool:
-        """AS-series rules do not support auto-fixing.
-
-        Returns:
-            Always False.
-        """
-        return False
-
-    def fix(self, path: Path) -> list[str]:
-        """No-op — AS-series rules do not support auto-fixing.
-
-        Args:
-            path: Unused.
-
-        Returns:
-            Empty list.
-        """
-        return []
 
 
 # SkillFrontmatter, CommandFrontmatter, AgentFrontmatter imported from frontmatter_core
