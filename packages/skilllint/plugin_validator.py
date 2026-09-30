@@ -110,9 +110,10 @@ from skilllint.scan_runtime import (
 )
 from skilllint.token_counter import TOKEN_ERROR_THRESHOLD, TOKEN_WARNING_THRESHOLD
 from skilllint.validators.content import ComplexityValidator, DescriptionValidator, MarkdownTokenCounter
-from skilllint.validators.frontmatter import FrontmatterValidator, NameFormatValidator
 from skilllint.validators.frontmatter import (  # noqa: F401 - compatibility re-exports
     NAME_PATTERN,
+    FrontmatterValidator,
+    NameFormatValidator,
     _build_validation_result,
     _check_agent_tools_and_skills_fields,
     _check_list_valued_tool_fields,
@@ -145,8 +146,8 @@ from skilllint.validators.rule_series import (
 from skilllint.validators.symlinks import SymlinkTargetValidator
 from skilllint.version import __version__
 
-from .frontmatter_core import (
-    FRONTMATTER_EXEMPT_FILENAMES,  # noqa: F401 - compatibility re-export
+from .frontmatter_core import (  # noqa: F401 - compatibility re-exports
+    FRONTMATTER_EXEMPT_FILENAMES,
     AgentFrontmatter,
     CommandFrontmatter,
     SkillFrontmatter,
