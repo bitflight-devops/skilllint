@@ -65,6 +65,35 @@ def test_legacy_validator_reexports_dependency_owned_utilities() -> None:
     assert scan_runtime._load_plugin_json is load_plugin_json
 
 
+def test_validator_metadata_reexports_from_legacy_facade() -> None:
+    """Legacy routing metadata resolves to the dependency-light owner."""
+    import skilllint.plugin_validator as legacy
+    from skilllint.validators import metadata
+
+    assert legacy.ValidatorOwnership is metadata.ValidatorOwnership
+    assert legacy.VALIDATOR_OWNERSHIP is metadata.VALIDATOR_OWNERSHIP
+    assert legacy.VALIDATOR_CONSTRAINT_SCOPES is metadata.VALIDATOR_CONSTRAINT_SCOPES
+    assert legacy.get_validator_ownership is metadata.get_validator_ownership
+    assert legacy.get_validator_constraint_scopes is metadata.get_validator_constraint_scopes
+    assert legacy.filter_validators_by_constraint_scopes is metadata.filter_validators_by_constraint_scopes
+
+
+def test_validator_metadata_owner_has_no_concrete_or_orchestration_dependencies() -> None:
+    """Routing metadata depends only on shared contracts, not implementations."""
+    path = ROOT / "packages" / "skilllint" / "validators" / "metadata.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    forbidden = {
+        "skilllint.plugin_validator",
+        "skilllint.scan_runtime",
+        "skilllint.fixing",
+        "skilllint.rules",
+        "skilllint.validators.content",
+        "skilllint.validators.rule_series",
+    }
+    imported = {node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) and node.module is not None}
+    assert not imported & forbidden
+
+
 def test_content_validators_reexport_from_legacy_facade() -> None:
     """Legacy content-validator imports resolve to the focused owner."""
     import skilllint.plugin_validator as legacy
