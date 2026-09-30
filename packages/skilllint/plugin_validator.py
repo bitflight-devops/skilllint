@@ -89,6 +89,7 @@ from skilllint.rule_registry import RULE_REGISTRY, rule_authority, rule_referenc
 from skilllint.rules.ag_series import check_ag001, check_ag002, check_ag003
 from skilllint.rules.as_series import run_as_series
 from skilllint.rules.fm_series import check_fm001, check_fm004, check_fm007, check_fm010
+from skilllint.rules.hk_series import _git_file_has_execute_bit  # noqa: F401 - compatibility re-export
 from skilllint.rules.lk_series import check_lk004
 from skilllint.rules.pl_series import (
     _check_pl004_manifest_paths,
@@ -113,7 +114,6 @@ from skilllint.scan_runtime import (
 from skilllint.token_counter import TOKEN_ERROR_THRESHOLD, TOKEN_WARNING_THRESHOLD
 from skilllint.validators.content import ComplexityValidator, DescriptionValidator, MarkdownTokenCounter
 from skilllint.validators.hooks import HookValidator
-from skilllint.validators.symlinks import SymlinkTargetValidator
 from skilllint.validators.metadata import (  # noqa: F401 - compatibility re-exports
     VALIDATOR_CONSTRAINT_SCOPES,
     VALIDATOR_OWNERSHIP,
@@ -128,6 +128,7 @@ from skilllint.validators.rule_series import (
     NamespaceReferenceValidator,
     ProgressiveDisclosureValidator,
 )
+from skilllint.validators.symlinks import SymlinkTargetValidator
 from skilllint.version import __version__
 
 from .frontmatter_core import (
