@@ -55,11 +55,7 @@ from ruamel.yaml.tokens import CommentToken
 import skilllint.rules  # ruff: ignore[unused-import] — ensures all 15 series modules register into RULE_REGISTRY
 from skilllint.adapters import ALL_RULE_SERIES, PlatformAdapter, load_adapters, matches_file
 from skilllint.cli_docs import docs_app
-from skilllint.fixing import (  # noqa: F401 - compatibility re-exports
-    apply_authorized_fixes,
-    FIXER_TRIGGER_CODES,
-    get_fixer_trigger_codes,
-)
+from skilllint.fixing import FIXER_TRIGGER_CODES, apply_authorized_fixes, get_fixer_trigger_codes  # noqa: F401
 from skilllint.models import AppliedFix, FileResults, ValidationIssue, ValidationResult, Validator, YamlValue
 from skilllint.policy import (  # noqa: F401 - compatibility re-exports
     DEFAULT_THRESHOLDS,
