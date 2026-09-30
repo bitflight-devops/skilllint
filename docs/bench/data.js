@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1790724767229,
+  "lastUpdate": 1790731105855,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -2976,6 +2976,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 78.679,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "1d088695e39d8da777989c055dbb5e69ef9039cc",
+          "message": "refactor(fixing): extract authorization and execution orchestration (#303)\n\n* refactor(fixing): extract authorization and execution owner\n\n* refactor(fixing): delegate generic fix execution\n\n* test(fixing): protect compatibility owner seam\n\n* docs(architecture): record fixing ownership seam\n\n* style(fixing): apply repository formatting\n\n* style(fixing): align imports and call formatting\n\n* style(fixing): use canonical re-export import",
+          "timestamp": "2026-09-30T01:14:29Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/1d088695e39d8da777989c055dbb5e69ef9039cc"
+        },
+        "date": 1790731105101,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 6612.627,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 6858.716,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 7118.439,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 145.946,
             "unit": "files/s"
           }
         ]
