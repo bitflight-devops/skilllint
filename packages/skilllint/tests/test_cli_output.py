@@ -17,7 +17,7 @@ from typer.main import get_command
 
 from skilllint import cli_docs, plugin_validator
 from skilllint.cli_help import CompleteHelpCommand, CompleteHelpGroup
-from skilllint.models import ValidationIssue
+from skilllint.models import ValidationIssue, ValidationResult
 from skilllint.output import print_panel, print_table
 from skilllint.reporting import ConsoleReporter
 from skilllint.vendor_cache import CacheResult, CacheStatus, NoCacheError
@@ -182,3 +182,31 @@ def test_rule_help_uses_cli_argument_and_option_guidance(cli_runner):
     assert "Rule identifier (e.g., FM002, SK004)." in result.stdout
     assert "--record" in result.stdout
     assert "Args:" not in result.stdout
+
+
+def test_grouped_report_preserves_all_diagnostics_and_literal_data():
+    buf = io.StringIO()
+    reporter = ConsoleReporter(console=Console(file=buf, width=40, height=25, color_system=None))
+    issues = [
+        ValidationIssue(
+            code=f"FM{index:03d}",
+            severity="error",
+            field="[bold]field[/bold]",
+            message=f"diagnostic {index}: {_LONG_VALUE}",
+            suggestion="[link]literal suggestion[/link]",
+            docs_url=_LONG_VALUE,
+        )
+        for index in range(32)
+    ]
+    reporter.report({
+        Path("[bold]SKILL.md[/bold]"): [
+            ("[red]validator[/red]", ValidationResult(passed=False, errors=issues, warnings=[], info=[]))
+        ]
+    })
+    output = buf.getvalue()
+    assert "[bold]SKILL.md[/bold]" in output
+    assert "[red]validator[/red]" in output
+    assert output.count(_LONG_VALUE) == 64
+    assert output.count("[link]literal suggestion[/link]") == 32
+    for index in range(32):
+        assert f"[FM{index:03d}] [bold]field[/bold]: diagnostic {index}: {_LONG_VALUE}" in output

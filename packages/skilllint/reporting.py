@@ -61,48 +61,38 @@ class ConsoleReporter:
         """
         return rendered_width(renderable)
 
-    def _print_issue(self, issue: ValidationIssue) -> None:
-        """Print a single validation issue with Rich formatting."""
+    @staticmethod
+    def _issue_lines(issue: ValidationIssue) -> list[str]:
+        """Build complete styled diagnostic lines without rendering each separately.
+
+        Returns:
+            Issue, suggestion and documentation lines in display order.
+        """
         severity_icons = {"error": ":cross_mark:", "warning": ":warning:", "info": ":information:"}
         severity_colors = {"error": "red", "warning": "yellow", "info": "blue"}
-
         icon = severity_icons.get(issue.severity, "")
         color = severity_colors.get(issue.severity, "white")
         location = f":{issue.line}" if issue.line else ""
-
-        self.console.print(
-            f"    {icon} [{color}][{escape(issue.code)}][/{color}] {escape(issue.field)}{location}: {escape(issue.message)}",
-            crop=False,
-            overflow="ignore",
-            soft_wrap=True,
-        )
-
+        lines = [
+            f"    {icon} [{color}][{escape(issue.code)}][/{color}] {escape(issue.field)}{location}: {escape(issue.message)}"
+        ]
         if issue.suggestion:
-            self.console.print(
-                f"      [dim]→[/dim] {escape(issue.suggestion)}", crop=False, overflow="ignore", soft_wrap=True
-            )
-
+            lines.append(f"      [dim]→[/dim] {escape(issue.suggestion)}")
         if issue.docs_url:
-            self.console.print(
-                f"      [dim]→[/dim] [cyan]{escape(issue.docs_url)}[/cyan]",
-                crop=False,
-                overflow="ignore",
-                soft_wrap=True,
-            )
+            lines.append(f"      [dim]→[/dim] [cyan]{escape(issue.docs_url)}[/cyan]")
+        return lines
+
+    def _print_issue(self, issue: ValidationIssue) -> None:
+        """Print a single validation issue with Rich formatting."""
+        self.console.print(
+            "\n".join(self._issue_lines(issue)), crop=False, overflow="ignore", soft_wrap=True, highlight=False
+        )
 
     def report(self, file_results: FileResults, verbose: bool = False, *, show_progress: bool = False) -> None:
         """Display validation results with Rich formatting, grouped by file."""
         for file_path, validator_results in file_results.items():
             all_passed = all(r.passed for _, r in validator_results)
-            any_issues = False
-
-            for _vname, result in validator_results:
-                issues_to_show = [*result.errors, *result.warnings]
-                if verbose:
-                    issues_to_show.extend(result.info)
-                if issues_to_show:
-                    any_issues = True
-
+            any_issues = any(r.errors or r.warnings or (verbose and r.info) for _, r in validator_results)
             if all_passed and not any_issues:
                 if show_progress:
                     self.console.print(
@@ -110,38 +100,26 @@ class ConsoleReporter:
                         crop=False,
                         overflow="ignore",
                         soft_wrap=True,
+                        highlight=False,
                     )
                 continue
 
-            self.console.print(
-                f"\n[bold]{escape(str(file_path))}[/bold]", crop=False, overflow="ignore", soft_wrap=True
-            )
-
+            lines = [f"\n[bold]{escape(str(file_path))}[/bold]"]
             for validator_name, result in validator_results:
                 issues_to_show = [*result.errors, *result.warnings]
                 if verbose:
                     issues_to_show.extend(result.info)
-
                 if not issues_to_show:
                     if show_progress:
-                        self.console.print(
-                            f"  :white_check_mark: [dim]{escape(validator_name)}:[/dim] PASSED",
-                            crop=False,
-                            overflow="ignore",
-                            soft_wrap=True,
-                        )
+                        lines.append(f"  :white_check_mark: [dim]{escape(validator_name)}:[/dim] PASSED")
                     continue
-
                 status_icon = ":cross_mark:" if not result.passed else ":warning:"
-                self.console.print(
-                    f"  {status_icon} [dim]{escape(validator_name)}:[/dim]",
-                    crop=False,
-                    overflow="ignore",
-                    soft_wrap=True,
-                )
-
+                lines.append(f"  {status_icon} [dim]{escape(validator_name)}:[/dim]")
                 for issue in issues_to_show:
-                    self._print_issue(issue)
+                    lines.extend(self._issue_lines(issue))
+            # Render once per file. Large scans can contain tens of thousands
+            # of diagnostics; per-line Rich calls dominated their runtime.
+            self.console.print("\n".join(lines), crop=False, overflow="ignore", soft_wrap=True, highlight=False)
 
     def report_fixes(self, fixes: list[AppliedFix]) -> None:
         """Display a summary of files and rules that --fix modified.
