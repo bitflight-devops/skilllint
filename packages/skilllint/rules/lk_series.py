@@ -2,7 +2,7 @@
 
 LK001 and LK004 detection lives here. ``InternalLinkValidator`` (LK001) in
 ``validators/rule_series.py`` and ``PluginLinkEscapeValidator`` (LK004) in
-``plugin_validator.py`` adapt these checks into the validation pipeline.
+``validators/plugins.py`` adapt these checks into the validation pipeline.
 
 ``_iter_links`` strips fenced code blocks and inline code spans, applies the
 external/anchor/absolute skip list, and yields

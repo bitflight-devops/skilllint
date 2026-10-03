@@ -104,8 +104,9 @@ frontmatter parsing or token measurement on top of rule functions:
 filesystem mutations: HK005 execute-bit repair and verified SL001 symlink-target
 rewrite. `validators/frontmatter.py` owns frontmatter schema validation,
 normalization, FM010 name repair, and the frontmatter-specific result helpers.
-Detection and metadata remain in their rule modules. Plugin-tree/subprocess
-validation remains a separate responsibility.
+`validators/plugins.py` owns plugin-tree validation, registration cross-checks,
+LK004 copied-plugin traversal, and optional Claude CLI subprocess integration.
+Detection and metadata remain in their rule modules.
 
 `validators/metadata.py` records schema-vs-lint ownership and provider
 constraint-scope applicability by validator class name. The metadata owner
@@ -173,6 +174,7 @@ contracts, not adapter registration.
 | validator ownership/applicability | `validators/metadata.py` | ownership/routing and compatibility tests |
 | hook/symlink mutation validators | `validators/hooks.py`, `validators/symlinks.py` | hook/symlink/fixer-gating tests |
 | frontmatter validation/mutation | `validators/frontmatter.py` | frontmatter/name/fixer-gating and compatibility tests |
+| plugin-tree/subprocess validators | `validators/plugins.py` | plugin-link/registration/structure/external-tool tests |
 | fix authorization/execution | `fixing.py` | fixer-gating and compatibility tests |
 | fix selection/revalidation | `plugin_validator.py` | fixer ordering/revalidation tests |
 | output | `reporting.py` | reporter/CLI tests |

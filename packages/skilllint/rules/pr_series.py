@@ -1,6 +1,6 @@
 """PR-series plugin registration rules (PR001, PR002, and PR005).
 
-``PluginRegistrationValidator`` in ``plugin_validator.py`` packages these
+``PluginRegistrationValidator`` in ``validators/plugins.py`` packages these
 results into a ``ValidationResult``.
 
 Detection needs the plugin manifest and the filesystem, not frontmatter, so
@@ -148,7 +148,7 @@ def check_pr001(manifest: dict[str, YamlValue], plugin_dir: Path) -> list[Valida
     is auto-discovered wholesale and PR001 is suppressed.
 
     **Source:** ``PluginRegistrationValidator.validate`` in
-    ``plugin_validator.py`` — scans the filesystem for actual capability
+    ``validators/plugins.py`` — scans the filesystem for actual capability
     files and compares them with the registered paths from ``plugin.json``.
 
     **Fix:** Add the unregistered capability path to the appropriate array in
@@ -231,7 +231,7 @@ def check_pr002(manifest: dict[str, YamlValue], plugin_dir: Path) -> list[Valida
     filesystem.  Claude Code will fail to load the capability at runtime.
 
     **Source:** ``PluginRegistrationValidator.validate`` in
-    ``plugin_validator.py`` — checks whether each registered path resolves to
+    ``validators/plugins.py`` — checks whether each registered path resolves to
     an existing ``SKILL.md`` (for skills) or an existing path (for agents and
     commands) within the plugin directory.
 
@@ -329,7 +329,7 @@ def check_pr005(manifest: dict[str, YamlValue], plugin_dir: Path) -> list[Valida
     over commands.
 
     **Source:** ``PluginRegistrationValidator.validate`` in
-    ``plugin_validator.py`` — checks whether each registered command path is a
+    ``validators/plugins.py`` — checks whether each registered command path is a
     directory containing a ``SKILL.md`` file.
 
     **Fix (recommended, not required):** Move the path from the ``commands``
