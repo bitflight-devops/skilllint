@@ -16,7 +16,15 @@ from __future__ import annotations
 import logging
 import re
 import sys
+from dataclasses import dataclass
+from enum import StrEnum
 from io import TextIOWrapper
+from pathlib import Path, PurePath
+from typing import TYPE_CHECKING, Annotated, Literal, NoReturn
+
+import typer
+from git import Repo
+from git.exc import InvalidGitRepositoryError, NoSuchPathError
 
 
 # Module-level logger for debug output
@@ -28,15 +36,6 @@ if isinstance(sys.stdout, TextIOWrapper):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 if isinstance(sys.stderr, TextIOWrapper):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
-
-from dataclasses import dataclass
-from enum import StrEnum
-from pathlib import Path, PurePath
-from typing import TYPE_CHECKING, Annotated, Literal, NoReturn
-
-import typer
-from git import Repo
-from git.exc import InvalidGitRepositoryError, NoSuchPathError
 
 import skilllint.rules  # ruff: ignore[unused-import] — ensures all 15 series modules register into RULE_REGISTRY
 from skilllint.adapters import ALL_RULE_SERIES, PlatformAdapter, load_adapters, matches_file
