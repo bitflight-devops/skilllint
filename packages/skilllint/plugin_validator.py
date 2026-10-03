@@ -27,16 +27,6 @@ from git import Repo
 from git.exc import InvalidGitRepositoryError, NoSuchPathError
 
 
-# Module-level logger for debug output
-_logger = logging.getLogger(__name__)
-
-# Ensure UTF-8 output on Windows (cp1252 default cannot encode emoji/spinner chars).
-# reconfigure() is available on Python 3.7+ when stdout is a TextIOWrapper.
-if isinstance(sys.stdout, TextIOWrapper):
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-if isinstance(sys.stderr, TextIOWrapper):
-    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
-
 import skilllint.rules  # ruff: ignore[unused-import] — ensures all 15 series modules register into RULE_REGISTRY
 from skilllint.adapters import ALL_RULE_SERIES, PlatformAdapter, load_adapters, matches_file
 from skilllint.cli_docs import docs_app
@@ -160,6 +150,16 @@ from .scan_runtime import (
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
+
+# Module-level logger for debug output
+_logger = logging.getLogger(__name__)
+
+# Ensure UTF-8 output on Windows (cp1252 default cannot encode emoji/spinner chars).
+# reconfigure() is available on Python 3.7+ when stdout is a TextIOWrapper.
+if isinstance(sys.stdout, TextIOWrapper):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if isinstance(sys.stderr, TextIOWrapper):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 # Platform adapter registry — loaded once at module level.
 # Keys are adapter IDs (e.g. "claude_code", "cursor", "codex").
