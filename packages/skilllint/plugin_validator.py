@@ -26,7 +26,6 @@ import typer
 from git import Repo
 from git.exc import InvalidGitRepositoryError, NoSuchPathError
 
-
 import skilllint.rules  # ruff: ignore[unused-import] — ensures all 15 series modules register into RULE_REGISTRY
 from skilllint.adapters import ALL_RULE_SERIES, PlatformAdapter, load_adapters, matches_file
 from skilllint.cli_docs import docs_app
@@ -38,6 +37,15 @@ from skilllint.file_types import (
     frontmatter_requirement as _frontmatter_requirement,
 )
 from skilllint.fixing import FIXER_TRIGGER_CODES, apply_authorized_fixes, get_fixer_trigger_codes  # noqa: F401
+from skilllint.frontmatter_core import (  # noqa: F401 - compatibility re-exports
+    FRONTMATTER_EXEMPT_FILENAMES,
+    AgentFrontmatter,
+    CommandFrontmatter,
+    SkillFrontmatter,
+    extract_frontmatter,
+    fix_skill_name_field,
+    get_frontmatter_model,
+)
 from skilllint.frontmatter_yaml import (  # noqa: F401 - compatibility re-exports
     _dump_tool_list_fixes,
     _dump_yaml,
@@ -79,6 +87,12 @@ from skilllint.rule_registry import RULE_REGISTRY, rule_authority, rule_referenc
 from skilllint.rules.as_series import run_as_series
 from skilllint.rules.fm_series import check_fm001, check_fm010
 from skilllint.rules.hk_series import _git_file_has_execute_bit  # noqa: F401 - compatibility re-export
+from skilllint.scan_runtime import (
+    _resolve_filter_and_expand_paths,
+    find_marketplace_dir,  # noqa: F401 - compatibility re-export
+    find_plugin_dir,  # noqa: F401 - compatibility re-export
+    run_validation_loop,
+)
 from skilllint.token_counter import TOKEN_ERROR_THRESHOLD, TOKEN_WARNING_THRESHOLD
 from skilllint.validators.content import ComplexityValidator, DescriptionValidator, MarkdownTokenCounter
 from skilllint.validators.frontmatter import (  # noqa: F401 - compatibility re-exports
@@ -130,22 +144,6 @@ from skilllint.validators.rule_series import (
 )
 from skilllint.validators.symlinks import SymlinkTargetValidator
 from skilllint.version import __version__
-
-from .frontmatter_core import (  # noqa: F401 - compatibility re-exports
-    FRONTMATTER_EXEMPT_FILENAMES,
-    AgentFrontmatter,
-    CommandFrontmatter,
-    SkillFrontmatter,
-    extract_frontmatter,
-    fix_skill_name_field,
-    get_frontmatter_model,
-)
-from .scan_runtime import (
-    _resolve_filter_and_expand_paths,
-    find_marketplace_dir,  # noqa: F401 - compatibility re-export
-    find_plugin_dir,  # noqa: F401 - compatibility re-export
-    run_validation_loop,
-)
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
