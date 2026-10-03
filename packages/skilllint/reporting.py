@@ -10,8 +10,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, TypeAlias
 
 from rich.console import Console, ConsoleRenderable, RichCast
-from rich.measure import Measurement
+from rich.markup import escape
 from rich.panel import Panel
+
+from skilllint.output import print_panel, rendered_width
 
 if TYPE_CHECKING:
     from skilllint.models import AppliedFix, ValidationIssue, ValidationResult
@@ -47,7 +49,7 @@ class ConsoleReporter:
         if console is not None:
             self.console = console
         else:
-            self.console = Console(force_terminal=not no_color, no_color=no_color)
+            self.console = Console(force_terminal=not no_color, no_color=no_color, soft_wrap=True)
         self.no_color = no_color
 
     @staticmethod
@@ -57,9 +59,7 @@ class ConsoleReporter:
         Returns:
             The maximum rendered width in characters.
         """
-        temp_console = Console(width=999999)
-        measurement = Measurement.get(temp_console, temp_console.options, renderable)
-        return int(measurement.maximum)
+        return rendered_width(renderable)
 
     def _print_issue(self, issue: ValidationIssue) -> None:
         """Print a single validation issue with Rich formatting."""
@@ -71,16 +71,24 @@ class ConsoleReporter:
         location = f":{issue.line}" if issue.line else ""
 
         self.console.print(
-            f"    {icon} [{color}][{issue.code}][/{color}] {issue.field}{location}: {issue.message}",
+            f"    {icon} [{color}][{escape(issue.code)}][/{color}] {escape(issue.field)}{location}: {escape(issue.message)}",
             crop=False,
             overflow="ignore",
+            soft_wrap=True,
         )
 
         if issue.suggestion:
-            self.console.print(f"      [dim]→[/dim] {issue.suggestion}", crop=False, overflow="ignore")
+            self.console.print(
+                f"      [dim]→[/dim] {escape(issue.suggestion)}", crop=False, overflow="ignore", soft_wrap=True
+            )
 
         if issue.docs_url:
-            self.console.print(f"      [dim]→[/dim] [cyan]{issue.docs_url}[/cyan]", crop=False, overflow="ignore")
+            self.console.print(
+                f"      [dim]→[/dim] [cyan]{escape(issue.docs_url)}[/cyan]",
+                crop=False,
+                overflow="ignore",
+                soft_wrap=True,
+            )
 
     def report(self, file_results: FileResults, verbose: bool = False, *, show_progress: bool = False) -> None:
         """Display validation results with Rich formatting, grouped by file."""
@@ -98,11 +106,16 @@ class ConsoleReporter:
             if all_passed and not any_issues:
                 if show_progress:
                     self.console.print(
-                        f":white_check_mark: [green]{file_path}[/green] - PASSED", crop=False, overflow="ignore"
+                        f":white_check_mark: [green]{escape(str(file_path))}[/green] - PASSED",
+                        crop=False,
+                        overflow="ignore",
+                        soft_wrap=True,
                     )
                 continue
 
-            self.console.print(f"\n[bold]{file_path}[/bold]", crop=False, overflow="ignore")
+            self.console.print(
+                f"\n[bold]{escape(str(file_path))}[/bold]", crop=False, overflow="ignore", soft_wrap=True
+            )
 
             for validator_name, result in validator_results:
                 issues_to_show = [*result.errors, *result.warnings]
@@ -112,12 +125,20 @@ class ConsoleReporter:
                 if not issues_to_show:
                     if show_progress:
                         self.console.print(
-                            f"  :white_check_mark: [dim]{validator_name}:[/dim] PASSED", crop=False, overflow="ignore"
+                            f"  :white_check_mark: [dim]{escape(validator_name)}:[/dim] PASSED",
+                            crop=False,
+                            overflow="ignore",
+                            soft_wrap=True,
                         )
                     continue
 
                 status_icon = ":cross_mark:" if not result.passed else ":warning:"
-                self.console.print(f"  {status_icon} [dim]{validator_name}:[/dim]", crop=False, overflow="ignore")
+                self.console.print(
+                    f"  {status_icon} [dim]{escape(validator_name)}:[/dim]",
+                    crop=False,
+                    overflow="ignore",
+                    soft_wrap=True,
+                )
 
                 for issue in issues_to_show:
                     self._print_issue(issue)
@@ -130,19 +151,20 @@ class ConsoleReporter:
                 recorded. Grouped by file for display, preserving the order
                 each file's fixes were recorded in.
         """
-        self.console.print("\n[bold]Fixes applied[/bold]", crop=False, overflow="ignore")
+        self.console.print("\n[bold]Fixes applied[/bold]", crop=False, overflow="ignore", soft_wrap=True)
         fixes_by_path: dict[Path, list[AppliedFix]] = {}
         for applied_fix in fixes:
             fixes_by_path.setdefault(applied_fix.path, []).append(applied_fix)
         for file_path, path_fixes in fixes_by_path.items():
-            self.console.print(f"[bold]{file_path}[/bold]", crop=False, overflow="ignore")
+            self.console.print(f"[bold]{escape(str(file_path))}[/bold]", crop=False, overflow="ignore", soft_wrap=True)
             for applied_fix in path_fixes:
                 codes = ", ".join(applied_fix.codes)
                 self.console.print(
-                    f"  :wrench: [magenta][{codes}][/magenta] "
-                    f"[dim]{applied_fix.validator}:[/dim] {applied_fix.description}",
+                    f"  :wrench: [magenta][{escape(codes)}][/magenta] "
+                    f"[dim]{escape(applied_fix.validator)}:[/dim] {escape(applied_fix.description)}",
                     crop=False,
                     overflow="ignore",
+                    soft_wrap=True,
                 )
 
     def summarize(self, total_files: int, passed: int, failed: int, warnings: int) -> None:
@@ -169,9 +191,7 @@ class ConsoleReporter:
 
         summary = "\n".join(summary_lines)
         panel = Panel(summary, title="Validation Summary", border_style=status_color, expand=False)
-        panel_width = self._get_rendered_width(panel)
-        self.console.width = panel_width
-        self.console.print(panel, crop=False, overflow="ignore", no_wrap=True, soft_wrap=True)
+        print_panel(self.console, panel)
 
 
 class CIReporter:

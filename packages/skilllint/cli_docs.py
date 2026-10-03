@@ -12,8 +12,11 @@ from typing import Annotated
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 
+from skilllint.cli_help import CompleteHelpCommand, CompleteHelpGroup
+from skilllint.output import print_panel
 from skilllint.rule_registry import iter_authority_urls
 from skilllint.vendor_cache import (
     CacheStatus,
@@ -30,8 +33,8 @@ from skilllint.vendor_cache import (
 # Consoles
 # ---------------------------------------------------------------------------
 
-console = Console()  # stdout — file paths and data output
-err_console = Console(stderr=True)  # stderr — status, warnings, errors
+console = Console(soft_wrap=True)  # stdout — file paths and data output
+err_console = Console(stderr=True, soft_wrap=True)  # stderr — status, warnings, errors
 
 # ---------------------------------------------------------------------------
 # Typer sub-app
@@ -42,6 +45,7 @@ docs_app = typer.Typer(
     add_completion=False,
     no_args_is_help=True,
     rich_markup_mode=None,
+    cls=CompleteHelpGroup,
 )
 
 
@@ -67,7 +71,7 @@ def _format_status_label(status: CacheStatus) -> str:
 # ---------------------------------------------------------------------------
 
 
-@docs_app.command()
+@docs_app.command(cls=CompleteHelpCommand)
 def fetch(
     url: Annotated[str, typer.Argument(help="Documentation URL to fetch or serve from cache.")],
     ttl: Annotated[
@@ -82,19 +86,19 @@ def fetch(
     Prints the cached file path to stdout so agents can capture it.
     Status information is written to stderr.
 
-    \b
-    Raises:
-        typer.Exit: Exit code 1 when no cache exists and network is unavailable.
-    """  # noqa: D301
+    Exit status:
+        1 when no cache exists and network is unavailable.
+    """
     try:
         result = fetch_or_cached(url, ttl_hours=ttl, force=force)
     except NoCacheError as exc:
-        err_console.print(
+        print_panel(
+            err_console,
             Panel(
-                f"[bold]URL:[/bold] {exc.url}\n[bold]Reason:[/bold] {exc.reason}",
+                f"[bold]URL:[/bold] {escape(str(exc.url))}\n[bold]Reason:[/bold] {escape(str(exc.reason))}",
                 title=":cross_mark: No Cache Available",
                 border_style="red",
-            )
+            ),
         )
         raise typer.Exit(code=1) from exc
 
@@ -102,7 +106,7 @@ def fetch(
         err_console.print(":warning: [yellow]Serving stale cache — network unavailable[/yellow]")
     else:
         status_label = _format_status_label(result.status)
-        err_console.print(f":white_check_mark: [green]{status_label}[/green] {result.page_name}")
+        err_console.print(f":white_check_mark: [green]{status_label}[/green] {escape(str(result.page_name))}")
 
     typer.echo(str(result.path))
 
@@ -112,7 +116,7 @@ def fetch(
 # ---------------------------------------------------------------------------
 
 
-@docs_app.command("fetch-authorities")
+@docs_app.command("fetch-authorities", cls=CompleteHelpCommand)
 def fetch_authorities(
     ttl: Annotated[
         float, typer.Option("--ttl", help="Cache time-to-live in hours before a refresh is attempted.")
@@ -125,11 +129,10 @@ def fetch_authorities(
 
     Prints one cached file path per successfully fetched authority URL.
 
-    \b
-    Raises:
-        typer.Exit: Exit code 1 when one or more authority URLs cannot be fetched
+    Exit status:
+        1 when one or more authority URLs cannot be fetched
             and no stale cache can be served.
-    """  # noqa: D301
+    """
     authority_urls = list(iter_authority_urls(unique=True))
     if not authority_urls:
         err_console.print(":warning: [yellow]No authority URLs found in the rule registry[/yellow]")
@@ -141,20 +144,20 @@ def fetch_authorities(
             result = fetch_or_cached(url, ttl_hours=ttl, force=force)
         except NoCacheError as exc:
             had_failure = True
-            err_console.print(f":cross_mark: [red]FAILED[/red] {exc.url} ({exc.reason})")
+            err_console.print(f":cross_mark: [red]FAILED[/red] {escape(str(exc.url))} ({escape(str(exc.reason))})")
             continue
         except Exception as exc:  # noqa: BLE001 — collect-and-continue contract: all URLs must be attempted
             had_failure = True
-            err_console.print(f":cross_mark: [red]FAILED[/red] {url} ({exc!s})")
+            err_console.print(f":cross_mark: [red]FAILED[/red] {escape(str(url))} ({escape(str(exc))})")
             continue
 
         if result.status is CacheStatus.STALE:
-            err_console.print(f":warning: [yellow]STALE[/yellow] {url} — serving stale cache")
+            err_console.print(f":warning: [yellow]STALE[/yellow] {escape(str(url))} — serving stale cache")
         else:
             status_label = _format_status_label(result.status)
-            err_console.print(f":white_check_mark: [green]{status_label}[/green] {url}")
+            err_console.print(f":white_check_mark: [green]{status_label}[/green] {escape(str(url))}")
 
-        console.print(result.path)
+        typer.echo(str(result.path))
 
     if had_failure:
         raise typer.Exit(code=1)
@@ -165,7 +168,7 @@ def fetch_authorities(
 # ---------------------------------------------------------------------------
 
 
-@docs_app.command()
+@docs_app.command(cls=CompleteHelpCommand)
 def latest(
     page_name: Annotated[
         str, typer.Argument(help="Filesystem-safe page name to look up (e.g. 'claude-code--settings').")
@@ -175,13 +178,12 @@ def latest(
 
     Prints the file path to stdout when found.
 
-    \b
-    Raises:
-        typer.Exit: Exit code 1 when no cached file exists for the given page name.
-    """  # noqa: D301
+    Exit status:
+        1 when no cached file exists for the given page name.
+    """
     path = find_latest(page_name)
     if path is None:
-        err_console.print(f":cross_mark: [red]No cached file found for page name:[/red] {page_name}")
+        err_console.print(f":cross_mark: [red]No cached file found for page name:[/red] {escape(str(page_name))}")
         raise typer.Exit(code=1)
 
     typer.echo(str(path))
@@ -192,14 +194,14 @@ def latest(
 # ---------------------------------------------------------------------------
 
 
-@docs_app.command()
+@docs_app.command(cls=CompleteHelpCommand)
 def sections(file_path: Annotated[Path, typer.Argument(help="Path to the cached markdown file to index.")]) -> None:
     """Print a table of sections in a cached markdown file.
 
     Output is written to stdout.
     """
     table = format_section_index(file_path)
-    console.print(table)
+    typer.echo(table)
 
 
 # ---------------------------------------------------------------------------
@@ -207,7 +209,7 @@ def sections(file_path: Annotated[Path, typer.Argument(help="Path to the cached 
 # ---------------------------------------------------------------------------
 
 
-@docs_app.command()
+@docs_app.command(cls=CompleteHelpCommand)
 def section(
     file_path: Annotated[Path, typer.Argument(help="Path to the cached markdown file.")],
     heading: Annotated[str, typer.Argument(help="Heading text to locate (case-insensitive, leading # optional).")],
@@ -216,16 +218,17 @@ def section(
 
     Output is written to stdout.
 
-    \b
-    Raises:
-        typer.Exit: Exit code 1 when the heading is not found.
-    """  # noqa: D301
+    Exit status:
+        1 when the heading is not found.
+    """
     text = read_section(file_path, heading)
     if text is None:
-        err_console.print(f":cross_mark: [red]Section not found:[/red] {heading!r} in {file_path}")
+        err_console.print(
+            f":cross_mark: [red]Section not found:[/red] {escape(repr(heading))} in {escape(str(file_path))}"
+        )
         raise typer.Exit(code=1)
 
-    console.print(text, end="")
+    typer.echo(text, nl=False)
 
 
 # ---------------------------------------------------------------------------
@@ -233,7 +236,7 @@ def section(
 # ---------------------------------------------------------------------------
 
 
-@docs_app.command()
+@docs_app.command(cls=CompleteHelpCommand)
 def verify(
     file_path: Annotated[Path, typer.Argument(help="Path to the cached markdown file to verify against its sidecar.")],
 ) -> None:
@@ -241,40 +244,41 @@ def verify(
 
     Exits 0 when the file is intact, 1 otherwise.
 
-    \b
-    Raises:
-        typer.Exit: Exit code 1 when MODIFIED or UNVERIFIABLE.
-    """  # noqa: D301
+    Exit status:
+        1 when MODIFIED or UNVERIFIABLE.
+    """
     result = verify_integrity(file_path)
 
     match result.status:
         case IntegrityStatus.INTACT:
             console.print(
-                f":white_check_mark: [green]INTACT[/green] {file_path}\n"
-                f"  sha256: {result.computed_sha256}\n"
+                f":white_check_mark: [green]INTACT[/green] {escape(str(file_path))}\n"
+                f"  sha256: {escape(str(result.computed_sha256))}\n"
                 f"  bytes:  {result.computed_bytes}"
             )
 
         case IntegrityStatus.MODIFIED:
-            err_console.print(
+            print_panel(
+                err_console,
                 Panel(
-                    f"[bold]File:[/bold] {file_path}\n"
-                    f"[bold]Computed sha256:[/bold]  {result.computed_sha256}\n"
-                    f"[bold]Expected sha256:[/bold]  {result.expected_sha256}\n"
+                    f"[bold]File:[/bold] {escape(str(file_path))}\n"
+                    f"[bold]Computed sha256:[/bold]  {escape(str(result.computed_sha256))}\n"
+                    f"[bold]Expected sha256:[/bold]  {escape(str(result.expected_sha256))}\n"
                     f"[bold]Computed bytes:[/bold]   {result.computed_bytes}\n"
                     f"[bold]Expected bytes:[/bold]   {result.expected_bytes}",
                     title=":warning: MODIFIED — file differs from sidecar",
                     border_style="yellow",
-                )
+                ),
             )
             raise typer.Exit(code=1)
 
         case IntegrityStatus.UNVERIFIABLE:
-            err_console.print(
+            print_panel(
+                err_console,
                 Panel(
-                    f"[bold]File:[/bold] {file_path}\nNo .meta.json sidecar found — cannot verify this file.",
+                    f"[bold]File:[/bold] {escape(str(file_path))}\nNo .meta.json sidecar found — cannot verify this file.",
                     title=":warning: UNVERIFIABLE — no sidecar",
                     border_style="yellow",
-                )
+                ),
             )
             raise typer.Exit(code=1)

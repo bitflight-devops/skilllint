@@ -45,6 +45,7 @@ from git.exc import InvalidGitRepositoryError, NoSuchPathError
 import skilllint.rules  # ruff: ignore[unused-import] — ensures all 15 series modules register into RULE_REGISTRY
 from skilllint.adapters import ALL_RULE_SERIES, PlatformAdapter, load_adapters, matches_file
 from skilllint.cli_docs import docs_app
+from skilllint.cli_help import CompleteHelpCommand, CompleteHelpGroup
 from skilllint.file_types import (
     NAME_BEARING_FILE_TYPES as _NAME_BEARING_FILE_TYPES,
     FileType,
@@ -70,6 +71,7 @@ from skilllint.models import (
     Validator,
     YamlValue,  # noqa: F401 - compatibility re-export
 )
+from skilllint.output import print_panel, print_table
 from skilllint.policy import (  # noqa: F401 - compatibility re-exports
     DEFAULT_THRESHOLDS,
     IgnoreConfig,
@@ -1825,12 +1827,7 @@ def main(
 app = typer.Typer(
     help="Validate Claude Code plugins and skills",
     add_completion=False,
-    # Help is read by agents, so it must not wrap or truncate to the caller's
-    # terminal. Click uses terminal_width as the exact help width; without it the
-    # width is max(min(terminal columns, 80) - 2, 50) (typer/_click/formatting.py).
-    # 800 is the width the Typer scripts in the claude_skills repository use for
-    # the same reason; a help line longer than 800 columns would still wrap.
-    context_settings={"terminal_width": 800},
+    cls=CompleteHelpGroup,
     rich_markup_mode=None,
     pretty_exceptions_enable=False,
 )
@@ -1876,9 +1873,11 @@ def _show_rules_list(
         sev_color = severity_colors.get(rule.severity, "white")
         summary = rule.docstring.split("\n")[0].lstrip("#").strip() if rule.docstring else ""
         fixable = "[green]Yes[/green]" if rule.fixable else "No"
-        table.add_row(rule.id, f"[{sev_color}]{rule.severity}[/{sev_color}]", rule.category, fixable, summary)
+        table.add_row(
+            _Text(rule.id), f"[{sev_color}]{rule.severity}[/{sev_color}]", _Text(rule.category), fixable, _Text(summary)
+        )
 
-    console.print(table)
+    print_table(console, table)
 
 
 def _render_examples_block(rule_id: str) -> str:
@@ -1954,7 +1953,10 @@ def _show_rule_doc(rule_id: str, *, console: _Console) -> None:
     console.print(f"[dim]Category: {entry.category} | Platforms: {', '.join(entry.platforms)}[/dim]")
     console.print()
     resolved_doc = _resolve_example_markers(entry.docstring)
-    console.print(_Panel(_Markdown(resolved_doc), title=entry.id, border_style="dim"))
+    # Markdown's nested list/table renderers can wrap or hide link targets even
+    # when the outer console disables cropping. Highlight the complete source
+    # instead, retaining every authored line and URL.
+    print_panel(console, _Panel(_Syntax(resolved_doc, "markdown", word_wrap=False), title=entry.id, border_style="dim"))
 
 
 # =============================================================================
@@ -1962,7 +1964,7 @@ def _show_rule_doc(rule_id: str, *, console: _Console) -> None:
 # =============================================================================
 
 
-@app.command("check")
+@app.command("check", cls=CompleteHelpCommand)
 def check_cmd(
     ctx: typer.Context,
     paths: Annotated[list[Path] | None, typer.Argument(help="Paths to validate")] = None,
@@ -2012,9 +2014,10 @@ def check_cmd(
 # =============================================================================
 
 from rich.console import Console as _Console
-from rich.markdown import Markdown as _Markdown
 from rich.panel import Panel as _Panel
+from rich.syntax import Syntax as _Syntax
 from rich.table import Table as _Table
+from rich.text import Text as _Text
 
 from skilllint.fixture_loader import FIXTURES_ROOT as _FIXTURES_ROOT, discover_fixtures as _discover_fixtures
 from skilllint.rule_registry import RuleCategory, RulePlatform, get_rule as _get_rule, list_rules as _list_rules
@@ -2034,7 +2037,7 @@ def _make_rule_console(*, record: bool = False) -> _Console:
     """
     if record:
         return _make_recording_console()
-    return _Console()
+    return _Console(soft_wrap=True)
 
 
 def _maybe_export_recording(console: _Console | None, record: Path | None) -> None:
@@ -2045,25 +2048,19 @@ def _maybe_export_recording(console: _Console | None, record: Path | None) -> No
 _EXAMPLES_MARKER = re.compile(r"<!--\s*examples:\s*(\w+)\s*-->", re.IGNORECASE)
 
 
-@app.command("rule")
+@app.command("rule", cls=CompleteHelpCommand)
 def rule_cmd(
-    rule_id: str,
+    rule_id: Annotated[str, typer.Argument(help="Rule identifier (e.g., FM002, SK004).")],
     *,
     record: Annotated[Path | None, typer.Option("--record", help="Record terminal output to SVG or HTML file")] = None,
 ) -> None:
-    """Show documentation for a validation rule.
-
-    \b
-    Args:
-        rule_id: Rule identifier (e.g., "FM002", "SK004")
-        record: Optional path to write terminal output as SVG or HTML.
-    """  # noqa: D301
+    """Show documentation for a validation rule."""
     console = _make_rule_console(record=record is not None)
     _show_rule_doc(rule_id, console=console)
     _maybe_export_recording(console, record)
 
 
-@app.command("rules")
+@app.command("rules", cls=CompleteHelpCommand)
 def rules_cmd(
     platform: Annotated[RulePlatform | None, typer.Option("--platform", "-p", help="Filter rules by platform")] = None,
     category: Annotated[RuleCategory | None, typer.Option("--category", "-c", help="Filter rules by category")] = None,

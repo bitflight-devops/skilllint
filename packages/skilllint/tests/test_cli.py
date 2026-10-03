@@ -833,6 +833,11 @@ _HELP_INVOCATIONS = [
     ["rules", "--help"],
     ["docs", "--help"],
     ["docs", "fetch", "--help"],
+    ["docs", "fetch-authorities", "--help"],
+    ["docs", "latest", "--help"],
+    ["docs", "sections", "--help"],
+    ["docs", "section", "--help"],
+    ["docs", "verify", "--help"],
 ]
 
 
@@ -841,9 +846,8 @@ def _help_text(
 ) -> str:
     """Render a help screen with the real formatter at a given terminal width.
 
-    Typer's CliRunner forces the help width to 80 columns while it runs, so it cannot
-    see the root app's ``terminal_width``. Call the app directly instead and let
-    ``shutil.get_terminal_size`` read ``COLUMNS``.
+    Call the app directly so the test exercises the real CLI contexts without
+    CliRunner replacing the formatter's terminal width.
 
     Returns:
         The help text written to stdout.
@@ -862,10 +866,10 @@ class TestHelpRendering:
     ) -> None:
         """Help renders identically in a 40- and a 200-column terminal.
 
-        Tests: root app terminal_width and rich_markup_mode, inherited by every sub-app
+        Tests: complete-content help formatting on every command and sub-app
         How: Render each help screen with COLUMNS=40 and COLUMNS=200 and compare
-        Why: Agents read help; a narrow terminal must not wrap or truncate it. Dropping
-             terminal_width changes the width; re-enabling Rich changes the layout.
+        Why: Agents read help; a narrow terminal must not wrap or truncate it,
+             and the caller's width must not affect help layout.
         """
         narrow = _help_text(args, 40, monkeypatch, capsys)
         wide = _help_text(args, 200, monkeypatch, capsys)
@@ -875,26 +879,28 @@ class TestHelpRendering:
     @pytest.mark.parametrize(
         ("args", "header", "first_entry"),
         [
-            (["rule", "--help"], "Args:", "rule_id:"),
-            (["docs", "fetch", "--help"], "Raises:", "typer.Exit:"),
-            (["docs", "fetch-authorities", "--help"], "Raises:", "typer.Exit:"),
-            (["docs", "latest", "--help"], "Raises:", "typer.Exit:"),
-            (["docs", "section", "--help"], "Raises:", "typer.Exit:"),
-            (["docs", "verify", "--help"], "Raises:", "typer.Exit:"),
+            (["docs", "fetch", "--help"], "Exit status:", "1 when no cache"),
+            (["docs", "fetch-authorities", "--help"], "Exit status:", "1 when one or more"),
+            (["docs", "latest", "--help"], "Exit status:", "1 when no cached"),
+            (["docs", "section", "--help"], "Exit status:", "1 when the heading"),
+            (["docs", "verify", "--help"], "Exit status:", "1 when MODIFIED"),
         ],
         ids=lambda value: " ".join(value) if isinstance(value, list) else value,
     )
     def test_docstring_sections_keep_their_line_breaks(
         self, cli_runner: CliRunner, args: list[str], header: str, first_entry: str
     ) -> None:
-        """A docstring ``Args:``/``Raises:`` section is not re-wrapped into one paragraph.
+        """Public exit-status guidance retains its intentional line breaks.
 
-        Tests: Click's ``\\b`` no-rewrap marker on command docstrings
+        Tests: help formatter preserves source paragraphs without special markers
         How: Render help and look for the section header on its own line, then its first entry
         Why: Click re-wraps help paragraphs; unmarked sections run together on one line
         """
         result = cli_runner.invoke(plugin_validator.app, args)
 
+        assert result.exit_code == 0
+        assert "typer.Exit" not in result.output
+        assert "Raises:" not in result.output
         lines = [line.strip() for line in result.output.splitlines()]
         assert header in lines, f"{header!r} is not on its own line:\n{result.output}"
         assert lines[lines.index(header) + 1].startswith(first_entry)
@@ -912,7 +918,7 @@ class TestPlatformFlag:
         How: Render ``check --help`` and look for each ADAPTERS key in CLI form
         Why: Agents are told to read accepted platform names from this help
         """
-        # A narrow terminal must not wrap or truncate help: the app fixes terminal_width.
+        # The formatter preserves the complete field even in a narrow terminal.
         help_text = _help_text(["check", "--help"], 40, monkeypatch, capsys)
 
         assert plugin_validator.ADAPTERS
