@@ -1,7 +1,7 @@
 """PL-series plugin structure rules (PL001-PL006).
 
-PL001-PL006 detection lives here.  ``PluginStructureValidator`` in
-``plugin_validator.py`` is a thin wrapper: it locates the plugin directory,
+PL001-PL006 detection lives here. ``PluginStructureValidator`` in
+``validators/plugins.py`` is a thin wrapper: it locates the plugin directory,
 runs the ``claude plugin validate`` subprocess, calls these rule functions,
 and packages the result into a ``ValidationResult``.  PL006 has no auto-fix:
 an earlier relocation fix (``_fix_marketplace_json_metadata_keys``) moved
@@ -118,7 +118,7 @@ MARKETPLACE_METADATA_RELOCATABLE_KEYS: frozenset[str] = frozenset({
 })
 
 # Patterns matched against combined stdout/stderr of `claude plugin validate`.
-# Source: PluginStructureValidator._parse_claude_errors, plugin_validator.py.
+# Source: PluginStructureValidator._parse_claude_errors, validators/plugins.py.
 _CLAUDE_ERROR_PATTERNS: dict[str, str] = {
     "PL001": r"missing.*plugin\.json|plugin\.json.*not found",
     "PL002": r"invalid.*json|json.*syntax|parse.*error",
