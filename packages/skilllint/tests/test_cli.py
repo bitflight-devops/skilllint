@@ -826,25 +826,105 @@ class TestFileGroupedReporting:
 _FIXTURES = Path(__file__).parent / "fixtures"
 
 
+_HELP_INVOCATIONS = [
+    ["--help"],
+    ["check", "--help"],
+    ["rule", "--help"],
+    ["rules", "--help"],
+    ["docs", "--help"],
+    ["docs", "fetch", "--help"],
+    ["docs", "fetch-authorities", "--help"],
+    ["docs", "latest", "--help"],
+    ["docs", "sections", "--help"],
+    ["docs", "section", "--help"],
+    ["docs", "verify", "--help"],
+]
+
+
+def _help_text(
+    args: list[str], columns: int, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> str:
+    """Render a help screen with the real formatter at a given terminal width.
+
+    Call the app directly so the test exercises the real CLI contexts without
+    CliRunner replacing the formatter's terminal width.
+
+    Returns:
+        The help text written to stdout.
+    """
+    monkeypatch.setenv("COLUMNS", str(columns))
+    assert plugin_validator.app(args, standalone_mode=False) == 0
+    return capsys.readouterr().out
+
+
+class TestHelpRendering:
+    """Help text is plain and does not depend on the caller's terminal."""
+
+    @pytest.mark.parametrize("args", _HELP_INVOCATIONS, ids=" ".join)
+    def test_help_is_independent_of_terminal_width(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], args: list[str]
+    ) -> None:
+        """Help renders identically in a 40- and a 200-column terminal.
+
+        Tests: complete-content help formatting on every command and sub-app
+        How: Render each help screen with COLUMNS=40 and COLUMNS=200 and compare
+        Why: Agents read help; a narrow terminal must not wrap or truncate it,
+             and the caller's width must not affect help layout.
+        """
+        narrow = _help_text(args, 40, monkeypatch, capsys)
+        wide = _help_text(args, 200, monkeypatch, capsys)
+
+        assert narrow == wide
+
+    @pytest.mark.parametrize(
+        ("args", "header", "first_entry"),
+        [
+            (["docs", "fetch", "--help"], "Exit status:", "1 when no cache"),
+            (["docs", "fetch-authorities", "--help"], "Exit status:", "1 when one or more"),
+            (["docs", "latest", "--help"], "Exit status:", "1 when no cached"),
+            (["docs", "section", "--help"], "Exit status:", "1 when the heading"),
+            (["docs", "verify", "--help"], "Exit status:", "1 when MODIFIED"),
+        ],
+        ids=lambda value: " ".join(value) if isinstance(value, list) else value,
+    )
+    def test_docstring_sections_keep_their_line_breaks(
+        self, cli_runner: CliRunner, args: list[str], header: str, first_entry: str
+    ) -> None:
+        """Public exit-status guidance retains its intentional line breaks.
+
+        Tests: help formatter preserves source paragraphs without special markers
+        How: Render help and look for the section header on its own line, then its first entry
+        Why: Click re-wraps help paragraphs; unmarked sections run together on one line
+        """
+        result = cli_runner.invoke(plugin_validator.app, args)
+
+        assert result.exit_code == 0
+        assert "typer.Exit" not in result.output
+        assert "Raises:" not in result.output
+        lines = [line.strip() for line in result.output.splitlines()]
+        assert header in lines, f"{header!r} is not on its own line:\n{result.output}"
+        assert lines[lines.index(header) + 1].startswith(first_entry)
+
+
 class TestPlatformFlag:
     """Test --platform flag dispatches to the correct adapter."""
 
-    def test_check_help_lists_every_registered_platform(self, cli_runner: CliRunner) -> None:
+    def test_check_help_lists_every_registered_platform(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """``check --help`` names each registered adapter's --platform spelling.
 
         Tests: check_cmd --platform help text
         How: Render ``check --help`` and look for each ADAPTERS key in CLI form
         Why: Agents are told to read accepted platform names from this help
         """
-        result = cli_runner.invoke(plugin_validator.app, ["check", "--help"])
+        # The formatter preserves the complete field even in a narrow terminal.
+        help_text = _help_text(["check", "--help"], 40, monkeypatch, capsys)
 
-        assert result.exit_code == 0
         assert plugin_validator.ADAPTERS
         expected = ", ".join(sorted(plugin_validator.PLATFORM_CLI_IDS))
         assert expected == plugin_validator.PLATFORM_CHOICES
-        assert "Platform adapter. Choices:" in result.output
-        for choice in expected.split(", "):
-            assert choice in result.output
+        assert f"Platform adapter. Choices: {expected}" in help_text
 
     def test_hyphenated_third_party_platform_id_resolves_exactly(self, monkeypatch) -> None:
         """Registered adapter IDs containing hyphens remain directly selectable."""
