@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from io import TextIOWrapper
 from pathlib import Path, PurePath
-from typing import TYPE_CHECKING, Annotated, Literal, NoReturn
+from typing import Annotated, Literal, NoReturn, TYPE_CHECKING
 
 import typer
 from git import Repo
