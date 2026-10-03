@@ -46,11 +46,6 @@ from skilllint.scan_runtime import (
 FM002 = "FM002"
 PL001 = "PL001"
 PL002 = "PL002"
-PL003 = "PL003"
-PL004 = "PL004"
-PL005 = "PL005"
-PL006 = "PL006"
-
 def _run_claude_plugin_validate(claude_path: str, plugin_dir: Path) -> subprocess.CompletedProcess[str]:
     subprocess_env = {key: value for key, value in os.environ.items() if key != "CLAUDECODE"}
     return subprocess.run(
