@@ -836,23 +836,41 @@ _HELP_INVOCATIONS = [
 ]
 
 
+def _help_text(
+    args: list[str], columns: int, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> str:
+    """Render a help screen with the real formatter at a given terminal width.
+
+    Typer's CliRunner forces the help width to 80 columns while it runs, so it cannot
+    see the root app's ``terminal_width``. Call the app directly instead and let
+    ``shutil.get_terminal_size`` read ``COLUMNS``.
+
+    Returns:
+        The help text written to stdout.
+    """
+    monkeypatch.setenv("COLUMNS", str(columns))
+    assert plugin_validator.app(args, standalone_mode=False) == 0
+    return capsys.readouterr().out
+
+
 class TestHelpRendering:
     """Help text is plain and does not depend on the caller's terminal."""
 
     @pytest.mark.parametrize("args", _HELP_INVOCATIONS, ids=" ".join)
-    def test_help_is_independent_of_terminal_width(self, cli_runner: CliRunner, args: list[str]) -> None:
+    def test_help_is_independent_of_terminal_width(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], args: list[str]
+    ) -> None:
         """Help renders identically in a 40- and a 200-column terminal.
 
-        Tests: root app terminal_width / rich_markup_mode, inherited by every sub-app
-        How: Invoke each help screen under COLUMNS=40 and COLUMNS=200 and compare
-        Why: Agents read help; a narrow terminal must not wrap or truncate it
+        Tests: root app terminal_width and rich_markup_mode, inherited by every sub-app
+        How: Render each help screen with COLUMNS=40 and COLUMNS=200 and compare
+        Why: Agents read help; a narrow terminal must not wrap or truncate it. Dropping
+             terminal_width changes the width; re-enabling Rich changes the layout.
         """
-        narrow = cli_runner.invoke(plugin_validator.app, args, env={"COLUMNS": "40"})
-        wide = cli_runner.invoke(plugin_validator.app, args, env={"COLUMNS": "200"})
+        narrow = _help_text(args, 40, monkeypatch, capsys)
+        wide = _help_text(args, 200, monkeypatch, capsys)
 
-        assert narrow.exit_code == 0
-        assert wide.exit_code == 0
-        assert narrow.output == wide.output
+        assert narrow == wide
 
     @pytest.mark.parametrize(
         ("args", "header", "first_entry"),
@@ -885,7 +903,9 @@ class TestHelpRendering:
 class TestPlatformFlag:
     """Test --platform flag dispatches to the correct adapter."""
 
-    def test_check_help_lists_every_registered_platform(self, cli_runner: CliRunner) -> None:
+    def test_check_help_lists_every_registered_platform(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """``check --help`` names each registered adapter's --platform spelling.
 
         Tests: check_cmd --platform help text
@@ -893,13 +913,12 @@ class TestPlatformFlag:
         Why: Agents are told to read accepted platform names from this help
         """
         # A narrow terminal must not wrap or truncate help: the app fixes terminal_width.
-        result = cli_runner.invoke(plugin_validator.app, ["check", "--help"], env={"COLUMNS": "40"})
+        help_text = _help_text(["check", "--help"], 40, monkeypatch, capsys)
 
-        assert result.exit_code == 0
         assert plugin_validator.ADAPTERS
         expected = ", ".join(sorted(plugin_validator.PLATFORM_CLI_IDS))
         assert expected == plugin_validator.PLATFORM_CHOICES
-        assert f"Platform adapter. Choices: {expected}" in result.output
+        assert f"Platform adapter. Choices: {expected}" in help_text
 
     def test_hyphenated_third_party_platform_id_resolves_exactly(self, monkeypatch) -> None:
         """Registered adapter IDs containing hyphens remain directly selectable."""

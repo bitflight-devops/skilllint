@@ -38,7 +38,10 @@ err_console = Console(stderr=True)  # stderr — status, warnings, errors
 # ---------------------------------------------------------------------------
 
 docs_app = typer.Typer(
-    help="Fetch, query, and verify cached vendor documentation.", add_completion=False, no_args_is_help=True
+    help="Fetch, query, and verify cached vendor documentation.",
+    add_completion=False,
+    no_args_is_help=True,
+    rich_markup_mode=None,
 )
 
 
