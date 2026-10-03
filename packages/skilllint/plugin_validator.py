@@ -20,11 +20,11 @@ from dataclasses import dataclass
 from enum import StrEnum
 from io import TextIOWrapper
 from pathlib import Path, PurePath
-from typing import Annotated, Literal, NoReturn, TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated, Literal, NoReturn
 
+import typer
 from git import Repo
 from git.exc import InvalidGitRepositoryError, NoSuchPathError
-import typer
 
 
 import skilllint.rules  # ruff: ignore[unused-import] — ensures all 15 series modules register into RULE_REGISTRY
