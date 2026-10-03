@@ -616,6 +616,7 @@ def validate_with_claude(plugin_dir: Path) -> tuple[bool, str]:
         output = result.stdout if success else result.stderr + "\n" + result.stdout
         return success, output
 
+
 __all__ = [
     "CLAUDE_PLUGIN_MANIFEST",
     "CODEX_PLUGIN_MANIFEST",
