@@ -68,6 +68,7 @@ from skilllint.models import (
 )
 from skilllint.policy import (  # noqa: F401 - compatibility re-exports
     DEFAULT_THRESHOLDS,
+    IgnoreConfig,
     ValidationPolicy,
     _filter_result_by_ignore,
     _is_suppressed,
@@ -110,6 +111,14 @@ from skilllint.validators.frontmatter import (  # noqa: F401 - compatibility re-
     _validation_result_with_error,
 )
 from skilllint.validators.hooks import HookValidator
+from skilllint.validators.metadata import (  # noqa: F401 - compatibility re-exports
+    VALIDATOR_CONSTRAINT_SCOPES,
+    VALIDATOR_OWNERSHIP,
+    ValidatorOwnership,
+    filter_validators_by_constraint_scopes,
+    get_validator_constraint_scopes,
+    get_validator_ownership,
+)
 from skilllint.validators.plugins import (  # noqa: F401 - compatibility re-exports
     CLAUDE_PLUGIN_MANIFEST,
     CODEX_PLUGIN_MANIFEST,
@@ -123,14 +132,6 @@ from skilllint.validators.plugins import (  # noqa: F401 - compatibility re-expo
     find_link_scope_plugin_dir,
     is_claude_available,
     validate_with_claude,
-)
-from skilllint.validators.metadata import (  # noqa: F401 - compatibility re-exports
-    VALIDATOR_CONSTRAINT_SCOPES,
-    VALIDATOR_OWNERSHIP,
-    ValidatorOwnership,
-    filter_validators_by_constraint_scopes,
-    get_validator_constraint_scopes,
-    get_validator_ownership,
 )
 from skilllint.validators.rule_series import (
     AsSeriesValidator,
@@ -150,7 +151,12 @@ from .frontmatter_core import (  # noqa: F401 - compatibility re-exports
     fix_skill_name_field,
     get_frontmatter_model,
 )
-from .scan_runtime import _resolve_filter_and_expand_paths, run_validation_loop
+from .scan_runtime import (
+    _resolve_filter_and_expand_paths,
+    find_marketplace_dir,  # noqa: F401 - compatibility re-export
+    find_plugin_dir,  # noqa: F401 - compatibility re-export
+    run_validation_loop,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
