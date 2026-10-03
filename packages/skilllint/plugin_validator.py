@@ -1826,10 +1826,10 @@ app = typer.Typer(
     help="Validate Claude Code plugins and skills",
     add_completion=False,
     # Help is read by agents, so it must not wrap or truncate to the caller's
-    # terminal. Click uses terminal_width as the exact help width (otherwise
-    # min(terminal columns, 80) - 2; typer/_click/formatting.py). 800 matches the
-    # Typer apps in claude_skills (daily-releases, receiving-pr-reviews,
-    # create-merge-request-changelog); lines longer than 800 columns still wrap.
+    # terminal. Click uses terminal_width as the exact help width; without it the
+    # width is max(min(terminal columns, 80) - 2, 50) (typer/_click/formatting.py).
+    # 800 is the width the Typer scripts in the claude_skills repository use for
+    # the same reason; a help line longer than 800 columns would still wrap.
     context_settings={"terminal_width": 800},
     rich_markup_mode=None,
     pretty_exceptions_enable=False,
@@ -2053,10 +2053,11 @@ def rule_cmd(
 ) -> None:
     """Show documentation for a validation rule.
 
+    \b
     Args:
         rule_id: Rule identifier (e.g., "FM002", "SK004")
         record: Optional path to write terminal output as SVG or HTML.
-    """
+    """  # noqa: D301
     console = _make_rule_console(record=record is not None)
     _show_rule_doc(rule_id, console=console)
     _maybe_export_recording(console, record)

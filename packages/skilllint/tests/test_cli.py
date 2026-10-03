@@ -826,6 +826,62 @@ class TestFileGroupedReporting:
 _FIXTURES = Path(__file__).parent / "fixtures"
 
 
+_HELP_INVOCATIONS = [
+    ["--help"],
+    ["check", "--help"],
+    ["rule", "--help"],
+    ["rules", "--help"],
+    ["docs", "--help"],
+    ["docs", "fetch", "--help"],
+]
+
+
+class TestHelpRendering:
+    """Help text is plain and does not depend on the caller's terminal."""
+
+    @pytest.mark.parametrize("args", _HELP_INVOCATIONS, ids=" ".join)
+    def test_help_is_independent_of_terminal_width(self, cli_runner: CliRunner, args: list[str]) -> None:
+        """Help renders identically in a 40- and a 200-column terminal.
+
+        Tests: root app terminal_width / rich_markup_mode, inherited by every sub-app
+        How: Invoke each help screen under COLUMNS=40 and COLUMNS=200 and compare
+        Why: Agents read help; a narrow terminal must not wrap or truncate it
+        """
+        narrow = cli_runner.invoke(plugin_validator.app, args, env={"COLUMNS": "40"})
+        wide = cli_runner.invoke(plugin_validator.app, args, env={"COLUMNS": "200"})
+
+        assert narrow.exit_code == 0
+        assert wide.exit_code == 0
+        assert narrow.output == wide.output
+
+    @pytest.mark.parametrize(
+        ("args", "header", "first_entry"),
+        [
+            (["rule", "--help"], "Args:", "rule_id:"),
+            (["docs", "fetch", "--help"], "Raises:", "typer.Exit:"),
+            (["docs", "fetch-authorities", "--help"], "Raises:", "typer.Exit:"),
+            (["docs", "latest", "--help"], "Raises:", "typer.Exit:"),
+            (["docs", "section", "--help"], "Raises:", "typer.Exit:"),
+            (["docs", "verify", "--help"], "Raises:", "typer.Exit:"),
+        ],
+        ids=lambda value: " ".join(value) if isinstance(value, list) else value,
+    )
+    def test_docstring_sections_keep_their_line_breaks(
+        self, cli_runner: CliRunner, args: list[str], header: str, first_entry: str
+    ) -> None:
+        """A docstring ``Args:``/``Raises:`` section is not re-wrapped into one paragraph.
+
+        Tests: Click's ``\\b`` no-rewrap marker on command docstrings
+        How: Render help and look for the section header on its own line, then its first entry
+        Why: Click re-wraps help paragraphs; unmarked sections run together on one line
+        """
+        result = cli_runner.invoke(plugin_validator.app, args)
+
+        lines = [line.strip() for line in result.output.splitlines()]
+        assert header in lines, f"{header!r} is not on its own line:\n{result.output}"
+        assert lines[lines.index(header) + 1].startswith(first_entry)
+
+
 class TestPlatformFlag:
     """Test --platform flag dispatches to the correct adapter."""
 

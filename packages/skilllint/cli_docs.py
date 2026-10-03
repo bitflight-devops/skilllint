@@ -38,10 +38,7 @@ err_console = Console(stderr=True)  # stderr — status, warnings, errors
 # ---------------------------------------------------------------------------
 
 docs_app = typer.Typer(
-    help="Fetch, query, and verify cached vendor documentation.",
-    add_completion=False,
-    no_args_is_help=True,
-    rich_markup_mode="rich",
+    help="Fetch, query, and verify cached vendor documentation.", add_completion=False, no_args_is_help=True
 )
 
 
@@ -71,18 +68,10 @@ def _format_status_label(status: CacheStatus) -> str:
 def fetch(
     url: Annotated[str, typer.Argument(help="Documentation URL to fetch or serve from cache.")],
     ttl: Annotated[
-        float,
-        typer.Option(
-            "--ttl", help="Cache time-to-live in hours before a refresh is attempted.", rich_help_panel="Cache Options"
-        ),
+        float, typer.Option("--ttl", help="Cache time-to-live in hours before a refresh is attempted.")
     ] = 4.0,
     force: Annotated[
-        bool,
-        typer.Option(
-            "--force",
-            help="Skip the freshness check and always attempt a network fetch.",
-            rich_help_panel="Cache Options",
-        ),
+        bool, typer.Option("--force", help="Skip the freshness check and always attempt a network fetch.")
     ] = False,
 ) -> None:
     """Fetch a documentation page or return a cached copy.
@@ -90,9 +79,10 @@ def fetch(
     Prints the cached file path to stdout so agents can capture it.
     Status information is written to stderr.
 
+    \b
     Raises:
         typer.Exit: Exit code 1 when no cache exists and network is unavailable.
-    """
+    """  # noqa: D301
     try:
         result = fetch_or_cached(url, ttl_hours=ttl, force=force)
     except NoCacheError as exc:
@@ -122,28 +112,21 @@ def fetch(
 @docs_app.command("fetch-authorities")
 def fetch_authorities(
     ttl: Annotated[
-        float,
-        typer.Option(
-            "--ttl", help="Cache time-to-live in hours before a refresh is attempted.", rich_help_panel="Cache Options"
-        ),
+        float, typer.Option("--ttl", help="Cache time-to-live in hours before a refresh is attempted.")
     ] = 4.0,
     force: Annotated[
-        bool,
-        typer.Option(
-            "--force",
-            help="Skip the freshness check and always attempt a network fetch.",
-            rich_help_panel="Cache Options",
-        ),
+        bool, typer.Option("--force", help="Skip the freshness check and always attempt a network fetch.")
     ] = False,
 ) -> None:
     """Fetch cached documentation for all normalized rule authority URLs.
 
     Prints one cached file path per successfully fetched authority URL.
 
+    \b
     Raises:
         typer.Exit: Exit code 1 when one or more authority URLs cannot be fetched
             and no stale cache can be served.
-    """
+    """  # noqa: D301
     authority_urls = list(iter_authority_urls(unique=True))
     if not authority_urls:
         err_console.print(":warning: [yellow]No authority URLs found in the rule registry[/yellow]")
@@ -189,9 +172,10 @@ def latest(
 
     Prints the file path to stdout when found.
 
+    \b
     Raises:
         typer.Exit: Exit code 1 when no cached file exists for the given page name.
-    """
+    """  # noqa: D301
     path = find_latest(page_name)
     if path is None:
         err_console.print(f":cross_mark: [red]No cached file found for page name:[/red] {page_name}")
@@ -229,9 +213,10 @@ def section(
 
     Output is written to stdout.
 
+    \b
     Raises:
         typer.Exit: Exit code 1 when the heading is not found.
-    """
+    """  # noqa: D301
     text = read_section(file_path, heading)
     if text is None:
         err_console.print(f":cross_mark: [red]Section not found:[/red] {heading!r} in {file_path}")
@@ -253,9 +238,10 @@ def verify(
 
     Exits 0 when the file is intact, 1 otherwise.
 
+    \b
     Raises:
         typer.Exit: Exit code 1 when MODIFIED or UNVERIFIABLE.
-    """
+    """  # noqa: D301
     result = verify_integrity(file_path)
 
     match result.status:
