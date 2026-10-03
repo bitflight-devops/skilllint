@@ -242,7 +242,7 @@ class TestClaudeOutputParsing:
         """
         mocker.patch("shutil.which", return_value="/usr/local/bin/claude")
         # Prevent skip in Claude Code session environments (CLAUDECODE / CLAUDE_CODE_REMOTE env vars)
-        mocker.patch("skilllint.plugin_validator._should_skip_claude_validate", return_value=False)
+        mocker.patch("skilllint.validators.plugins._should_skip_claude_validate", return_value=False)
 
         mock_run = mocker.patch("subprocess.run")
         mock_run.return_value = mocker.Mock(returncode=1, stdout="", stderr="Error: Invalid plugin.json")
@@ -268,7 +268,7 @@ class TestClaudeOutputParsing:
         Why: Validator must only fail on plugin validation errors, not when claude cannot run
         """
         mocker.patch("shutil.which", return_value="/usr/local/bin/claude")
-        mocker.patch("skilllint.plugin_validator._should_skip_claude_validate", return_value=False)
+        mocker.patch("skilllint.validators.plugins._should_skip_claude_validate", return_value=False)
 
         mock_run = mocker.patch("subprocess.run")
         mock_run.return_value = mocker.Mock(
@@ -296,9 +296,9 @@ class TestTimeoutHandling:
 
     def test_controlled_timeout_emits_exactly_one_pl002(self, mocker: MockerFixture, tmp_path: Path) -> None:
         mocker.patch("shutil.which", return_value="/usr/local/bin/claude")
-        mocker.patch("skilllint.plugin_validator._should_skip_claude_validate", return_value=False)
+        mocker.patch("skilllint.validators.plugins._should_skip_claude_validate", return_value=False)
         mocker.patch(
-            "skilllint.plugin_validator._run_claude_plugin_validate",
+            "skilllint.validators.plugins._run_claude_plugin_validate",
             side_effect=subprocess.TimeoutExpired(cmd=["claude", "plugin", "validate"], timeout=30),
         )
 
@@ -318,9 +318,9 @@ class TestTimeoutHandling:
 
     def test_controlled_success_emits_no_pl002(self, mocker: MockerFixture, tmp_path: Path) -> None:
         mocker.patch("shutil.which", return_value="/usr/local/bin/claude")
-        mocker.patch("skilllint.plugin_validator._should_skip_claude_validate", return_value=False)
+        mocker.patch("skilllint.validators.plugins._should_skip_claude_validate", return_value=False)
         mocker.patch(
-            "skilllint.plugin_validator._run_claude_plugin_validate",
+            "skilllint.validators.plugins._run_claude_plugin_validate",
             return_value=subprocess.CompletedProcess(
                 args=["claude", "plugin", "validate"], returncode=0, stdout="validation passed", stderr=""
             ),
@@ -381,9 +381,9 @@ class TestTimeoutHandling:
 
     def test_controlled_non_timeout_failure_retains_pl002(self, mocker: MockerFixture, tmp_path: Path) -> None:
         mocker.patch("shutil.which", return_value="/usr/local/bin/claude")
-        mocker.patch("skilllint.plugin_validator._should_skip_claude_validate", return_value=False)
+        mocker.patch("skilllint.validators.plugins._should_skip_claude_validate", return_value=False)
         mocker.patch(
-            "skilllint.plugin_validator._run_claude_plugin_validate",
+            "skilllint.validators.plugins._run_claude_plugin_validate",
             return_value=subprocess.CompletedProcess(
                 args=["claude", "plugin", "validate"],
                 returncode=1,
@@ -556,7 +556,7 @@ class TestMarketplaceJsonLayout:
     def test_pl006_misplaced_keys_skips_claude_subprocess(self, mocker: MockerFixture, tmp_path: Path) -> None:
         """Disallowed marketplace root keys fail fast with PL006; do not invoke claude."""
         mocker.patch("shutil.which", return_value="/usr/local/bin/claude")
-        mocker.patch("skilllint.plugin_validator._should_skip_claude_validate", return_value=False)
+        mocker.patch("skilllint.validators.plugins._should_skip_claude_validate", return_value=False)
 
         mock_run = mocker.patch("subprocess.run")
 
@@ -710,7 +710,7 @@ class TestMarketplaceJsonLayout:
     ) -> None:
         """Fallback parser maps marketplace unrecognized-keys CLI output to PL006."""
         mocker.patch("shutil.which", return_value="/usr/local/bin/claude")
-        mocker.patch("skilllint.plugin_validator._should_skip_claude_validate", return_value=False)
+        mocker.patch("skilllint.validators.plugins._should_skip_claude_validate", return_value=False)
 
         stderr = (
             "Validating marketplace manifest: /tmp/.claude-plugin/marketplace.json\n"
