@@ -1,0 +1,37 @@
+{
+  "additionalProperties": false,
+  "description": "``skilllint docs section --json`` without a match (exit 1); ``query`` is the user's own string.",
+  "properties": {
+    "command": {
+      "const": "docs section",
+      "default": "docs section",
+      "title": "Command",
+      "type": "string"
+    },
+    "file": {
+      "title": "File",
+      "type": "string"
+    },
+    "file_exists": {
+      "title": "File Exists",
+      "type": "boolean"
+    },
+    "query": {
+      "title": "Query",
+      "type": "string"
+    },
+    "status": {
+      "const": "not_found",
+      "default": "not_found",
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "file",
+    "file_exists",
+    "query"
+  ],
+  "title": "SectionNotFoundResponse",
+  "type": "object"
+}

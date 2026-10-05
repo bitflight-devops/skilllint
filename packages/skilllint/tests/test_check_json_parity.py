@@ -20,11 +20,9 @@ Oracles
 ``Console`` that has no colour and is as wide as ``sys.maxsize``, so nothing wraps.
 Both go through :func:`parse_text`.
 
-The builder does not exist yet. The tests are ``xfail(strict=True)`` with
-``ModuleNotFoundError`` as the only accepted failure, and flip when migration step
-2 adds ``skilllint.responses``. The one place that knows the builder's name and
-call shape is :func:`build_files_view`; if the implementation's signature
-differs, adjust that function and nothing else.
+The one place that knows the builder's name and call shape is
+:func:`load_check_response_builder`; if the implementation's signature differs,
+adjust that function and nothing else.
 
 Status in the text is only carried where the reporter prints an icon for the
 validator (issues shown). A validator printed as ``PASSED`` has no status of its
@@ -41,7 +39,7 @@ from contextlib import redirect_stdout
 from dataclasses import dataclass
 from io import StringIO
 from pathlib import Path
-from typing import TYPE_CHECKING, Final, Literal, Protocol, no_type_check
+from typing import TYPE_CHECKING, Final, Literal, Protocol
 
 import pytest
 from hypothesis import given, strategies as st
@@ -58,14 +56,6 @@ if TYPE_CHECKING:
 
     from skilllint.models import FileResults
 
-STEP_RESPONSES: Final = "migration step 2 (responses.py with the pure builders)"
-
-builder_pending = pytest.mark.xfail(
-    strict=True,
-    raises=ModuleNotFoundError,
-    reason=f"RED until {STEP_RESPONSES}: skilllint.responses does not exist yet",
-)
-
 # --- the builder under test --------------------------------------------------------
 
 
@@ -77,16 +67,15 @@ class CheckResponseBuilder(Protocol):
         ...
 
 
-@no_type_check  # skilllint.responses does not exist until migration step 2, so ty cannot resolve it.
 def load_check_response_builder() -> CheckResponseBuilder:
     """Import the JSON builder.
 
     Returns:
         ``skilllint.responses.build_check_response``.
     """
-    import importlib
+    from skilllint.responses import build_check_response
 
-    return importlib.import_module("skilllint.responses").build_check_response
+    return build_check_response
 
 
 # --- reading text and JSON into one comparable view -----------------------------------
@@ -301,7 +290,6 @@ def assert_parity(file_results: FileResults, text: str, *, verbose: bool, show_p
 
 
 @pytest.mark.parametrize(("verbose", "show_progress"), FLAGS)
-@builder_pending
 def test_json_lists_what_ci_reporter_prints(verbose: bool, show_progress: bool) -> None:
     """Files, validators, statuses and issues agree with ``CIReporter`` for every flag combination."""
     text = ci_text(MATRIX, verbose=verbose, show_progress=show_progress)
@@ -310,7 +298,6 @@ def test_json_lists_what_ci_reporter_prints(verbose: bool, show_progress: bool) 
 
 
 @pytest.mark.parametrize(("verbose", "show_progress"), FLAGS)
-@builder_pending
 def test_json_lists_what_console_reporter_prints(verbose: bool, show_progress: bool) -> None:
     """Files, validators, statuses and issues agree with ``ConsoleReporter`` for every flag combination."""
     text = console_text(MATRIX, verbose=verbose, show_progress=show_progress)
@@ -392,7 +379,6 @@ file_results_strategy: Final[SearchStrategy[FileResults]] = st.dictionaries(
 """Up to four files of up to four validators; ``passed`` is independent of the issues on purpose."""
 
 
-@builder_pending
 @given(file_results=file_results_strategy, verbose=st.booleans(), show_progress=st.booleans())
 def test_json_and_ci_reporter_agree_on_generated_results(
     file_results: FileResults, verbose: bool, show_progress: bool

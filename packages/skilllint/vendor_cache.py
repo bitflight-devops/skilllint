@@ -159,6 +159,19 @@ class MarkdownSection:
     line_end: int
 
 
+@dataclass(frozen=True)
+class FoundSection:
+    """A section located by :func:`find_section`, with its text.
+
+    Attributes:
+        section: The matched section and its line range.
+        text: The section's text, sliced from the file by that line range.
+    """
+
+    section: MarkdownSection
+    text: str
+
+
 # ---------------------------------------------------------------------------
 # Exceptions
 # ---------------------------------------------------------------------------
@@ -543,8 +556,8 @@ def list_sections(file_path: Path) -> list[MarkdownSection]:
     return _build_sections(positioned, len(raw_lines))
 
 
-def read_section(file_path: Path, heading: str) -> str | None:
-    """Return the full text of the section matching *heading*.
+def find_section(file_path: Path, heading: str) -> FoundSection | None:
+    """Return the section matching *heading*, with its text.
 
     Matching supports two formats:
 
@@ -560,8 +573,8 @@ def read_section(file_path: Path, heading: str) -> str | None:
         heading: Heading text or markdown anchor slug to find.
 
     Returns:
-        The full text of the matching section (including its heading line),
-        or None if no match is found.
+        The first matching section and its full text (including its heading
+        line), or None if no match is found.
     """
     normalised_query = heading.lstrip("#").strip().lower()
     slug_query = _heading_to_slug(normalised_query)
@@ -575,9 +588,26 @@ def read_section(file_path: Path, heading: str) -> str | None:
             # line_start and line_end are 1-indexed.
             start = section.line_start - 1
             end = section.line_end  # exclusive upper bound for slicing
-            return "".join(lines[start:end])
+            return FoundSection(section=section, text="".join(lines[start:end]))
 
     return None
+
+
+def read_section(file_path: Path, heading: str) -> str | None:
+    """Return the full text of the section matching *heading*.
+
+    Matching is that of :func:`find_section`.
+
+    Args:
+        file_path: Path to the markdown file.
+        heading: Heading text or markdown anchor slug to find.
+
+    Returns:
+        The full text of the matching section (including its heading line),
+        or None if no match is found.
+    """
+    found = find_section(file_path, heading)
+    return None if found is None else found.text
 
 
 def format_section_index(file_path: Path) -> str:

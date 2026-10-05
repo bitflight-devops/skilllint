@@ -1,0 +1,83 @@
+{
+  "$defs": {
+    "RuleRow": {
+      "additionalProperties": false,
+      "description": "One row of the rules table, with the table's own shortening of ``summary``.",
+      "properties": {
+        "category": {
+          "title": "Category",
+          "type": "string"
+        },
+        "fixable": {
+          "title": "Fixable",
+          "type": "boolean"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "severity": {
+          "enum": [
+            "error",
+            "warning",
+            "info"
+          ],
+          "title": "Severity",
+          "type": "string"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "severity",
+        "category",
+        "fixable",
+        "summary"
+      ],
+      "title": "RuleRow",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "``skilllint rules --json``; no match is an empty ``rules`` list.",
+  "properties": {
+    "command": {
+      "const": "rules",
+      "default": "rules",
+      "title": "Command",
+      "type": "string"
+    },
+    "record_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Record Path"
+    },
+    "rules": {
+      "items": {
+        "$ref": "#/$defs/RuleRow"
+      },
+      "title": "Rules",
+      "type": "array"
+    },
+    "summary_note": {
+      "default": "summary is the first line of the rule documentation; run `skilllint rule <id>` for the full text",
+      "title": "Summary Note",
+      "type": "string"
+    }
+  },
+  "required": [
+    "rules"
+  ],
+  "title": "RulesResponse",
+  "type": "object"
+}

@@ -1,0 +1,38 @@
+{
+  "additionalProperties": false,
+  "description": "``skilllint rule <unknown id> --json``; no file is ever recorded, so ``record_path`` is null.",
+  "properties": {
+    "command": {
+      "const": "rule",
+      "default": "rule",
+      "title": "Command",
+      "type": "string"
+    },
+    "list_command": {
+      "const": "skilllint rules",
+      "default": "skilllint rules",
+      "title": "List Command",
+      "type": "string"
+    },
+    "record_path": {
+      "default": null,
+      "title": "Record Path",
+      "type": "null"
+    },
+    "rule_id": {
+      "title": "Rule Id",
+      "type": "string"
+    },
+    "status": {
+      "const": "unknown",
+      "default": "unknown",
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "rule_id"
+  ],
+  "title": "RuleUnknownResponse",
+  "type": "object"
+}
