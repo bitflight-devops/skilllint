@@ -76,7 +76,9 @@ plain message on stderr and an empty stdout. Diagnostics, such as the policy
 warnings described above, stay on stderr. `check --json` lists files by the same
 rule `--verbose` and `--show-progress` set for the text output, and reports what
 it left out in `omitted`; `--no-color` and `--show-summary` have no effect on it.
-With `--record`, the file is written first and the JSON then carries its
+`docs sections`, `docs section` and `docs verify` also report `file_exists`, the
+only way to tell a missing file from an empty one: the text output treats both
+the same. With `--record`, the file is written first and the JSON then carries its
 absolute, resolved path as `record_path`. At the root, `--json` is valid only
 with `--version`; give it after the command name otherwise.
 
