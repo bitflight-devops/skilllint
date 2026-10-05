@@ -112,6 +112,15 @@ def pending(step: str) -> pytest.MarkDecorator:
     )
 
 
+LANDED_STEPS: Final = frozenset({STEP_DOCS})
+"""Steps whose probes already pass. A step is added here in the commit that lands it."""
+
+
+def pending_marks(step: str) -> list[pytest.MarkDecorator]:
+    """Return the strict xfail for *step*, or nothing once the step has landed."""
+    return [] if step in LANDED_STEPS else [pending(step)]
+
+
 def case(
     args: tuple[str, ...],
     setup: Callable[[Sandbox, Endpoints], None] = workspace,
@@ -234,7 +243,7 @@ PROBES: Final = (
     ),
 )
 
-_PROBE_PARAMS: Final = [pytest.param(probe, marks=pending(probe.step), id=probe.id) for probe in PROBES]
+_PROBE_PARAMS: Final = [pytest.param(probe, marks=pending_marks(probe.step), id=probe.id) for probe in PROBES]
 
 
 @pytest.mark.parametrize("probe", _PROBE_PARAMS)
@@ -262,7 +271,7 @@ _ENVIRONMENT_PROBES: Final = [
     pytest.param(case(("rules", "--json")), marks=pending(STEP_RULES), id="rules"),
     pytest.param(case(("rule", "FM010", "--json")), marks=pending(STEP_RULES), id="rule"),
     pytest.param(case(("check", "plug", "--json")), marks=pending(STEP_CHECK), id="check"),
-    pytest.param(_docs_case("verify", PAGE_PATH), marks=pending(STEP_DOCS), id="docs-verify"),
+    pytest.param(_docs_case("verify", PAGE_PATH), id="docs-verify"),
 ]
 
 
@@ -331,7 +340,7 @@ _USAGE_PROBES: Final = (
 
 
 @pytest.mark.parametrize(
-    "probe", [pytest.param(probe, marks=pending(probe.step), id=probe.id) for probe in _USAGE_PROBES]
+    "probe", [pytest.param(probe, marks=pending_marks(probe.step), id=probe.id) for probe in _USAGE_PROBES]
 )
 def test_usage_errors_exit_2_with_plain_stderr_and_empty_stdout(probe: UsageProbe, tmp_path: Path) -> None:
     """The stdout help dump of the default path is dropped; the stderr message stays as it is."""
@@ -376,7 +385,7 @@ _RECORD_SUFFIX_START: Final = {".svg": "<svg", ".html": "<!DOCTYPE html>"}
 
 
 _RECORD_PARAMS: Final = [
-    pytest.param(probe, suffix, marks=pending(probe.step), id=f"{probe.id}{suffix}")
+    pytest.param(probe, suffix, marks=pending_marks(probe.step), id=f"{probe.id}{suffix}")
     for probe in _RECORD_COMMANDS
     for suffix in _RECORD_SUFFIX_START
 ]
@@ -401,7 +410,7 @@ def test_record_path_is_absolute_and_resolved_and_the_file_exists(
 
 
 @pytest.mark.parametrize(
-    "probe", [pytest.param(probe, marks=pending(probe.step), id=probe.id) for probe in _RECORD_COMMANDS]
+    "probe", [pytest.param(probe, marks=pending_marks(probe.step), id=probe.id) for probe in _RECORD_COMMANDS]
 )
 def test_html_record_is_byte_identical_to_the_default_path(probe: RecordProbe, tmp_path: Path) -> None:
     """HTML carries no title, so ``--json`` must not change the recorded bytes at all."""
@@ -415,7 +424,7 @@ def test_html_record_is_byte_identical_to_the_default_path(probe: RecordProbe, t
 
 
 @pytest.mark.parametrize(
-    "probe", [pytest.param(probe, marks=pending(probe.step), id=probe.id) for probe in _RECORD_COMMANDS]
+    "probe", [pytest.param(probe, marks=pending_marks(probe.step), id=probe.id) for probe in _RECORD_COMMANDS]
 )
 def test_svg_record_differs_from_the_default_path_only_in_title_and_id(probe: RecordProbe, tmp_path: Path) -> None:
     """The SVG title is the argv, so it gains ``--json``; the Rich id hash follows the title. Nothing else changes."""
@@ -743,9 +752,7 @@ _FETCH_OUTCOMES: Final = (
 )
 
 
-@pytest.mark.parametrize(
-    "outcome", [pytest.param(outcome, marks=pending(STEP_DOCS), id=outcome.id) for outcome in _FETCH_OUTCOMES]
-)
+@pytest.mark.parametrize("outcome", [pytest.param(outcome, id=outcome.id) for outcome in _FETCH_OUTCOMES])
 def test_docs_fetch_reports_every_cache_status_as_a_field_not_a_stderr_line(
     outcome: FetchOutcome, tmp_path: Path
 ) -> None:
@@ -765,7 +772,6 @@ def test_docs_fetch_reports_every_cache_status_as_a_field_not_a_stderr_line(
     assert outcome.status.upper().encode() not in run.stderr
 
 
-@pending(STEP_DOCS)
 def test_docs_fetch_path_equals_what_the_default_path_prints(tmp_path: Path) -> None:
     """For a fresh cache the file is fixed, so the default stdout line and the JSON ``path`` must agree."""
     url = f"{CLOSED_TOKEN}/cached.md"
@@ -777,7 +783,6 @@ def test_docs_fetch_path_equals_what_the_default_path_prints(tmp_path: Path) -> 
     assert response.path == default.stdout.decode().strip()
 
 
-@pending(STEP_DOCS)
 def test_fetch_authorities_attempts_every_url_and_reports_each(tmp_path: Path) -> None:
     """One result per registry URL, in order, and exit 1 when any failed."""
     probe = case(
@@ -799,7 +804,6 @@ def test_fetch_authorities_attempts_every_url_and_reports_each(tmp_path: Path) -
     assert failed.reason
 
 
-@pending(STEP_DOCS)
 def test_docs_latest_path_equals_what_the_default_path_prints(tmp_path: Path) -> None:
     """``docs latest`` reports the same file the default path prints."""
     _, run = docs_json(tmp_path, "latest", "page")
@@ -809,7 +813,6 @@ def test_docs_latest_path_equals_what_the_default_path_prints(tmp_path: Path) ->
     assert response.path == default.stdout.decode().strip() == PAGE_PATH
 
 
-@pending(STEP_DOCS)
 def test_docs_sections_lists_the_sections_with_their_line_ranges(tmp_path: Path) -> None:
     """The rows of the default table, as fields."""
     _, run = docs_json(tmp_path, "sections", PAGE_PATH)
@@ -828,7 +831,6 @@ def test_docs_sections_lists_the_sections_with_their_line_ranges(tmp_path: Path)
     ("query", "heading"),
     [pytest.param("Usage", "Usage", id="heading"), pytest.param("#reference", "Reference", id="slug")],
 )
-@pending(STEP_DOCS)
 def test_docs_section_returns_the_section_text_unaltered_with_markup_literal(
     query: str, heading: str, tmp_path: Path
 ) -> None:
@@ -846,7 +848,6 @@ def test_docs_section_returns_the_section_text_unaltered_with_markup_literal(
         assert "[bold]x[/bold] [link=http://a]t[/link] :warning:" in response.text
 
 
-@pending(STEP_DOCS)
 def test_docs_section_not_found_echoes_the_query(tmp_path: Path) -> None:
     """Exit 1 still prints a document, carrying the user's own query string."""
     _, run = docs_json(tmp_path, "section", PAGE_PATH, "Absent")
@@ -874,9 +875,7 @@ _VERIFY_OUTCOMES: Final = (
 )
 
 
-@pytest.mark.parametrize(
-    "outcome", [pytest.param(outcome, marks=pending(STEP_DOCS), id=outcome.id) for outcome in _VERIFY_OUTCOMES]
-)
+@pytest.mark.parametrize("outcome", [pytest.param(outcome, id=outcome.id) for outcome in _VERIFY_OUTCOMES])
 def test_docs_verify_reports_digests_and_exits_0_only_when_intact(outcome: VerifyOutcome, tmp_path: Path) -> None:
     """The panel fields become keys: computed digest and size, and the sidecar's expectations when there is a sidecar."""
     _, run = docs_json(tmp_path, "verify", PAGE_PATH, setup=outcome.setup)
@@ -903,7 +902,6 @@ def test_docs_verify_reports_digests_and_exits_0_only_when_intact(outcome: Verif
         pytest.param(("verify", "absent.md"), VerifyResponse, 1, id="verify"),
     ],
 )
-@pending(STEP_DOCS)
 def test_a_missing_file_is_distinguishable_from_an_empty_one_by_file_exists(
     args: tuple[str, ...], model: type[FileResponse], exit_code: int, tmp_path: Path
 ) -> None:
@@ -920,7 +918,6 @@ def test_a_missing_file_is_distinguishable_from_an_empty_one_by_file_exists(
 @pytest.mark.parametrize(
     "subcommand", [("sections", "sources"), ("section", "sources", "Usage"), ("verify", "sources")]
 )
-@pending(STEP_DOCS)
 def test_a_directory_argument_keeps_failing_as_it_does_today(subcommand: tuple[str, ...], tmp_path: Path) -> None:
     """Pre-existing behaviour, unchanged: ``IsADirectoryError``, exit 1, and no JSON on stdout."""
     _, run = docs_json(tmp_path, *subcommand)

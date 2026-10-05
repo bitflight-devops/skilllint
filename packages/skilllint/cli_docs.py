@@ -16,7 +16,20 @@ from rich.markup import escape
 from rich.panel import Panel
 
 from skilllint.cli_help import CompleteHelpCommand, CompleteHelpGroup
+from skilllint.cli_json import JsonOption, emit_and_exit
 from skilllint.output import print_panel
+from skilllint.responses import (
+    AuthorityResult,
+    authority_failed,
+    authority_fetched,
+    build_authorities_response,
+    build_fetch_no_cache_response,
+    build_fetch_response,
+    build_latest_response,
+    build_section_response,
+    build_sections_response,
+    build_verify_response,
+)
 from skilllint.rule_registry import iter_authority_urls
 from skilllint.vendor_cache import (
     CacheStatus,
@@ -24,7 +37,9 @@ from skilllint.vendor_cache import (
     NoCacheError,
     fetch_or_cached,
     find_latest,
+    find_section,
     format_section_index,
+    list_sections,
     read_section,
     verify_integrity,
 )
@@ -80,6 +95,7 @@ def fetch(
     force: Annotated[
         bool, typer.Option("--force", help="Skip the freshness check and always attempt a network fetch.")
     ] = False,
+    json_output: JsonOption = False,
 ) -> None:
     """Fetch a documentation page or return a cached copy.
 
@@ -92,6 +108,8 @@ def fetch(
     try:
         result = fetch_or_cached(url, ttl_hours=ttl, force=force)
     except NoCacheError as exc:
+        if json_output:
+            emit_and_exit(build_fetch_no_cache_response(exc), code=1)
         print_panel(
             err_console,
             Panel(
@@ -101,6 +119,9 @@ def fetch(
             ),
         )
         raise typer.Exit(code=1) from exc
+
+    if json_output:
+        emit_and_exit(build_fetch_response(result))
 
     if result.status is CacheStatus.STALE:
         err_console.print(":warning: [yellow]Serving stale cache — network unavailable[/yellow]")
@@ -116,6 +137,31 @@ def fetch(
 # ---------------------------------------------------------------------------
 
 
+def _fetch_authority_results(urls: list[str], *, ttl: float, force: bool) -> list[AuthorityResult]:
+    """Attempt every URL and describe each outcome, for ``--json``.
+
+    Follows the same collect-and-continue contract as the text path: a URL that fails never stops the
+    ones after it.
+
+    Args:
+        urls: The registry URLs, in registry order.
+        ttl: Cache time-to-live in hours.
+        force: Skip the freshness check and always attempt a network fetch.
+
+    Returns:
+        One outcome per URL, in the same order.
+    """
+    results: list[AuthorityResult] = []
+    for url in urls:
+        try:
+            results.append(authority_fetched(url, fetch_or_cached(url, ttl_hours=ttl, force=force)))
+        except NoCacheError as exc:
+            results.append(authority_failed(str(exc.url), str(exc.reason)))
+        except Exception as exc:  # noqa: BLE001 — collect-and-continue contract: all URLs must be attempted
+            results.append(authority_failed(str(url), str(exc)))
+    return results
+
+
 @docs_app.command("fetch-authorities", cls=CompleteHelpCommand)
 def fetch_authorities(
     ttl: Annotated[
@@ -124,6 +170,7 @@ def fetch_authorities(
     force: Annotated[
         bool, typer.Option("--force", help="Skip the freshness check and always attempt a network fetch.")
     ] = False,
+    json_output: JsonOption = False,
 ) -> None:
     """Fetch cached documentation for all normalized rule authority URLs.
 
@@ -134,6 +181,10 @@ def fetch_authorities(
             and no stale cache can be served.
     """
     authority_urls = list(iter_authority_urls(unique=True))
+    if json_output:
+        results = _fetch_authority_results(authority_urls, ttl=ttl, force=force)
+        response = build_authorities_response(results)
+        emit_and_exit(response, code=1 if response.status == "failed" else 0)
     if not authority_urls:
         err_console.print(":warning: [yellow]No authority URLs found in the rule registry[/yellow]")
         return
@@ -173,6 +224,7 @@ def latest(
     page_name: Annotated[
         str, typer.Argument(help="Filesystem-safe page name to look up (e.g. 'claude-code--settings').")
     ],
+    json_output: JsonOption = False,
 ) -> None:
     """Find the most recent cached file for a page name.
 
@@ -182,6 +234,8 @@ def latest(
         1 when no cached file exists for the given page name.
     """
     path = find_latest(page_name)
+    if json_output:
+        emit_and_exit(build_latest_response(page_name, path), code=0 if path is not None else 1)
     if path is None:
         err_console.print(f":cross_mark: [red]No cached file found for page name:[/red] {escape(str(page_name))}")
         raise typer.Exit(code=1)
@@ -195,11 +249,17 @@ def latest(
 
 
 @docs_app.command(cls=CompleteHelpCommand)
-def sections(file_path: Annotated[Path, typer.Argument(help="Path to the cached markdown file to index.")]) -> None:
+def sections(
+    file_path: Annotated[Path, typer.Argument(help="Path to the cached markdown file to index.")],
+    json_output: JsonOption = False,
+) -> None:
     """Print a table of sections in a cached markdown file.
 
     Output is written to stdout.
     """
+    if json_output:
+        file_exists = file_path.exists()
+        emit_and_exit(build_sections_response(file_path, list_sections(file_path), file_exists=file_exists))
     table = format_section_index(file_path)
     typer.echo(table)
 
@@ -213,6 +273,7 @@ def sections(file_path: Annotated[Path, typer.Argument(help="Path to the cached 
 def section(
     file_path: Annotated[Path, typer.Argument(help="Path to the cached markdown file.")],
     heading: Annotated[str, typer.Argument(help="Heading text to locate (case-insensitive, leading # optional).")],
+    json_output: JsonOption = False,
 ) -> None:
     """Print the text of a named section from a cached markdown file.
 
@@ -221,6 +282,13 @@ def section(
     Exit status:
         1 when the heading is not found.
     """
+    if json_output:
+        file_exists = file_path.exists()
+        found = find_section(file_path, heading)
+        emit_and_exit(
+            build_section_response(file_path, heading, found, file_exists=file_exists),
+            code=0 if found is not None else 1,
+        )
     text = read_section(file_path, heading)
     if text is None:
         err_console.print(
@@ -239,6 +307,7 @@ def section(
 @docs_app.command(cls=CompleteHelpCommand)
 def verify(
     file_path: Annotated[Path, typer.Argument(help="Path to the cached markdown file to verify against its sidecar.")],
+    json_output: JsonOption = False,
 ) -> None:
     """Verify a cached file against its .meta.json sidecar.
 
@@ -247,6 +316,13 @@ def verify(
     Exit status:
         1 when MODIFIED or UNVERIFIABLE.
     """
+    if json_output:
+        file_exists = file_path.exists()
+        outcome = verify_integrity(file_path)
+        emit_and_exit(
+            build_verify_response(outcome, file_exists=file_exists),
+            code=0 if outcome.status is IntegrityStatus.INTACT else 1,
+        )
     result = verify_integrity(file_path)
 
     match result.status:
