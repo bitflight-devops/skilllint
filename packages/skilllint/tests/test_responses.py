@@ -117,7 +117,7 @@ def test_every_public_response_model_is_snapshotted() -> None:
         for name, obj in vars(responses).items()
         if name.endswith("Response") and isinstance(obj, type) and issubclass(obj, Response)
     }
-    assert top_level - {Response} == set(RESPONSE_MODELS) | {responses.RecordedResponse}
+    assert top_level - {Response} == set(RESPONSE_MODELS)
 
 
 # --- round trips ------------------------------------------------------------------------------

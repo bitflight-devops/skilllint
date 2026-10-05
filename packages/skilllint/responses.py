@@ -15,6 +15,8 @@ Contract:
 
 - Every model is frozen and rejects unknown keys. ``command`` is a ``Literal`` and names the
   response.
+- ``check``, ``check --tokens-only``, ``rules`` and a found ``rule`` carry ``record_path``, always
+  present as the last key: the absolute, resolved path of the ``--record`` file, or ``null``.
 - Nothing is truncated. Where ``check`` leaves items out of ``files`` it says what and which
   flag restores it (:class:`Omitted`).
 - The builders do no I/O and take paths already in the form to be printed.
@@ -104,16 +106,6 @@ class Response(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
 
-class RecordedResponse(Response):
-    """Base of the responses of commands that accept ``--record``.
-
-    ``record_path`` is always present in the output: the absolute, resolved path of the written
-    file, or ``null`` when no file was written.
-    """
-
-    record_path: str | None = None
-
-
 # --- check ------------------------------------------------------------------------------------
 
 
@@ -159,7 +151,7 @@ class Omitted(Response):
     retrieve_with: list[Literal["--show-progress", "--verbose"]]
 
 
-class CheckResponse(RecordedResponse):
+class CheckResponse(Response):
     """``skilllint check --json``."""
 
     command: Literal["check"] = "check"
@@ -168,6 +160,7 @@ class CheckResponse(RecordedResponse):
     files: list[CheckedFile]
     fixes: list[AppliedFix]
     omitted: Omitted
+    record_path: str | None = None
 
 
 class TokenCount(Response):
@@ -177,11 +170,12 @@ class TokenCount(Response):
     tokens: int
 
 
-class TokensResponse(RecordedResponse):
+class TokensResponse(Response):
     """``skilllint check --tokens-only --json``: one entry per resolved path, always a list."""
 
     command: Literal["check --tokens-only"] = "check --tokens-only"
     tokens: list[TokenCount]
+    record_path: str | None = None
 
 
 def _visible_issues(result: ValidationResult, *, verbose: bool) -> list[ValidationIssue]:
@@ -330,15 +324,16 @@ class RuleRow(Response):
     summary: str
 
 
-class RulesResponse(RecordedResponse):
+class RulesResponse(Response):
     """``skilllint rules --json``; no match is an empty ``rules`` list."""
 
     command: Literal["rules"] = "rules"
     rules: list[RuleRow]
     summary_note: str = RULES_SUMMARY_NOTE
+    record_path: str | None = None
 
 
-class RuleFoundResponse(RecordedResponse):
+class RuleFoundResponse(Response):
     """``skilllint rule <known id> --json``; ``documentation`` is raw, unwrapped Markdown."""
 
     command: Literal["rule"] = "rule"
@@ -348,6 +343,7 @@ class RuleFoundResponse(RecordedResponse):
     category: str
     platforms: list[str]
     documentation: str
+    record_path: str | None = None
 
 
 class RuleUnknownResponse(Response):
