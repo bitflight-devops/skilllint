@@ -1074,6 +1074,7 @@ dependencies = [
     { name = "marko" },
     { name = "msgspec" },
     { name = "pydantic" },
+    { name = "rich" },
     { name = "ruamel-yaml" },
     { name = "tiktoken" },
     { name = "typer" },
@@ -1091,7 +1092,6 @@ dev = [
     { name = "pytest-mock" },
     { name = "pytest-xdist" },
     { name = "readme-renderer", extra = ["md"] },
-    { name = "rich" },
     { name = "ruff" },
     { name = "ty" },
 ]
@@ -1103,6 +1103,7 @@ requires-dist = [
     { name = "marko", specifier = ">=2.2.4" },
     { name = "msgspec", specifier = ">=0.21.1" },
     { name = "pydantic", specifier = ">=2.13.5" },
+    { name = "rich", specifier = ">=15.0.0" },
     { name = "ruamel-yaml", specifier = ">=0.19.1" },
     { name = "tiktoken", specifier = ">=0.14.0" },
     { name = "typer", specifier = ">=0.27.2" },
@@ -1120,7 +1121,6 @@ dev = [
     { name = "pytest-mock", specifier = ">=3.15.1" },
     { name = "pytest-xdist", specifier = ">=3.8.0" },
     { name = "readme-renderer", extras = ["md"], specifier = ">=46.0" },
-    { name = "rich", specifier = ">=15.0.0" },
     { name = "ruff", specifier = ">=0.16.6" },
     { name = "ty", specifier = ">=0.0.78" },
 ]
