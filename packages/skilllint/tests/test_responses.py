@@ -379,6 +379,17 @@ def test_emit_response_writes_one_compact_line_with_non_ascii_as_utf8() -> None:
     assert buffer.getvalue() == '{"command":"version","name":"skilllint","version":"1.0.0-é"}\n'
 
 
+def test_emit_response_is_byte_equal_to_model_dump_json_for_ordinary_content() -> None:
+    """Building the line with ``json`` changes nothing for text that is valid UTF-8, controls and quotes included."""
+    response = build_rules_response([_rule('# T "q" \\ \t tab \u2028 é 𝄞\x01\n' + "x" * 50)])
+    buffer = io.StringIO()
+
+    with redirect_stdout(buffer):
+        emit_response(response)
+
+    assert buffer.getvalue() == response.model_dump_json() + "\n"
+
+
 if __name__ == "__main__":
     SNAPSHOTS.mkdir(exist_ok=True)
     for stale in SNAPSHOTS.glob("*.json"):
