@@ -112,7 +112,7 @@ def pending(step: str) -> pytest.MarkDecorator:
     )
 
 
-LANDED_STEPS: Final = frozenset({STEP_DOCS})
+LANDED_STEPS: Final = frozenset({STEP_DOCS, STEP_RULES})
 """Steps whose probes already pass. A step is added here in the commit that lands it."""
 
 
@@ -268,8 +268,8 @@ def test_each_command_renders_nothing_with_rich_under_json(probe: Probe, tmp_pat
 # --- environment independence ------------------------------------------------------
 
 _ENVIRONMENT_PROBES: Final = [
-    pytest.param(case(("rules", "--json")), marks=pending(STEP_RULES), id="rules"),
-    pytest.param(case(("rule", "FM010", "--json")), marks=pending(STEP_RULES), id="rule"),
+    pytest.param(case(("rules", "--json")), id="rules"),
+    pytest.param(case(("rule", "FM010", "--json")), id="rule"),
     pytest.param(case(("check", "plug", "--json")), marks=pending(STEP_CHECK), id="check"),
     pytest.param(_docs_case("verify", PAGE_PATH), id="docs-verify"),
 ]
@@ -453,7 +453,6 @@ def test_svg_normaliser_equates_default_exports_that_differ_only_in_argv(target:
         assert one != other, "the raw SVGs should differ, or the normaliser is hiding nothing"
 
 
-@pending(STEP_RULES)
 def test_unknown_rule_writes_no_record_file_and_reports_a_null_record_path(tmp_path: Path) -> None:
     """Today an unknown rule writes no file; ``record_path`` is therefore null and the exit status is 1."""
     sandbox, run = run_probe(tmp_path, case(("rule", "ZZ999", "--record", "out.svg", "--json")))

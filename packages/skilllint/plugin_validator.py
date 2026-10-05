@@ -19,7 +19,7 @@ import re
 import shutil
 import subprocess
 import sys
-from io import TextIOWrapper
+from io import StringIO, TextIOWrapper
 
 import msgspec.json
 
@@ -46,6 +46,7 @@ import skilllint.rules  # ruff: ignore[unused-import] — ensures all 15 series 
 from skilllint.adapters import ALL_RULE_SERIES, PlatformAdapter, load_adapters, matches_file
 from skilllint.cli_docs import docs_app
 from skilllint.cli_help import CompleteHelpCommand, CompleteHelpGroup
+from skilllint.cli_json import JsonOption, emit_and_exit
 from skilllint.file_types import (
     NAME_BEARING_FILE_TYPES as _NAME_BEARING_FILE_TYPES,
     FileType,
@@ -1959,6 +1960,49 @@ def _show_rule_doc(rule_id: str, *, console: _Console) -> None:
     print_panel(console, _Panel(_Syntax(resolved_doc, "markdown", word_wrap=False), title=entry.id, border_style="dim"))
 
 
+def _show_rules_report(
+    platform: str | None = None, category: str | None = None, severity: str | None = None, *, console: _Console
+) -> None:
+    """Show the rules table and the footer that points at ``skilllint rule`` (rules_cmd and its ``--json`` record)."""
+    _show_rules_list(platform=platform, category=category, severity=severity, console=console)
+    console.print("\n[dim]Run [bold]skilllint rule [yellow]RULE_ID[/yellow][/bold] for details.[/dim]")
+
+
+def _rules_json(*, platform: str | None, category: str | None, severity: str | None, record: Path | None) -> NoReturn:
+    """Finish ``rules --json``: record the usual rendering into a buffer when asked, then print the response.
+
+    Raises:
+        typer.Exit: Always, with code 0, or 2 when the ``--record`` file cannot be written.
+    """
+    record_path = None
+    if record is not None:
+        console = _make_recording_console(file=StringIO())
+        _show_rules_report(platform=platform, category=category, severity=severity, console=console)
+        record_path = _export_recording_for_json(console, record)
+    rules = _list_rules(platform=platform, category=category, severity=severity)
+    emit_and_exit(build_rules_response(rules, record_path=record_path))
+
+
+def _rule_json(rule_id: str, record: Path | None) -> NoReturn:
+    """Finish ``rule --json``: record the usual rendering into a buffer when asked, then print the response.
+
+    An unknown rule writes no file, as on the text path, so its response has no ``record_path``.
+
+    Raises:
+        typer.Exit: Always, with code 0, 1 for an unknown rule, or 2 when the ``--record`` file cannot be written.
+    """
+    entry = _get_rule(rule_id)
+    if entry is None:
+        emit_and_exit(build_unknown_rule_response(rule_id), code=1)
+    record_path = None
+    if record is not None:
+        console = _make_recording_console(file=StringIO())
+        _show_rule_doc(rule_id, console=console)
+        record_path = _export_recording_for_json(console, record)
+    documentation = _resolve_example_markers(entry.docstring)
+    emit_and_exit(build_rule_response(entry, documentation=documentation, record_path=record_path))
+
+
 # =============================================================================
 # CHECK COMMAND
 # =============================================================================
@@ -2020,6 +2064,7 @@ from rich.table import Table as _Table
 from rich.text import Text as _Text
 
 from skilllint.fixture_loader import FIXTURES_ROOT as _FIXTURES_ROOT, discover_fixtures as _discover_fixtures
+from skilllint.responses import build_rule_response, build_rules_response, build_unknown_rule_response
 from skilllint.rule_registry import RuleCategory, RulePlatform, get_rule as _get_rule, list_rules as _list_rules
 from skilllint.rules.pa_series import PluginAgentFrontmatterValidator
 
@@ -2045,6 +2090,30 @@ def _maybe_export_recording(console: _Console | None, record: Path | None) -> No
         _export_recording(console, record, title=_build_svg_title(sys.argv[1:]))
 
 
+def _export_recording_for_json(console: _Console, record: Path) -> str:
+    """Write the ``--record`` file for a ``--json`` run and name it.
+
+    The file is written before any JSON is printed, so a response that names ``record_path`` never
+    names a file that is missing.
+
+    Args:
+        console: The recording console the command rendered into.
+        record: The destination the user gave.
+
+    Returns:
+        The absolute, resolved path of the written file.
+
+    Raises:
+        typer.Exit: With code 2 and one plain line on stderr when the file cannot be written.
+    """
+    try:
+        _export_recording(console, record, title=_build_svg_title(sys.argv[1:]))
+    except (ValueError, OSError) as exc:
+        typer.echo(f"Error: Cannot write the recording to {record}: {exc}", err=True)
+        raise typer.Exit(2) from None
+    return str(record.resolve())
+
+
 _EXAMPLES_MARKER = re.compile(r"<!--\s*examples:\s*(\w+)\s*-->", re.IGNORECASE)
 
 
@@ -2053,8 +2122,11 @@ def rule_cmd(
     rule_id: Annotated[str, typer.Argument(help="Rule identifier (e.g., FM002, SK004).")],
     *,
     record: Annotated[Path | None, typer.Option("--record", help="Record terminal output to SVG or HTML file")] = None,
+    json_output: JsonOption = False,
 ) -> None:
     """Show documentation for a validation rule."""
+    if json_output:
+        _rule_json(rule_id, record)
     console = _make_rule_console(record=record is not None)
     _show_rule_doc(rule_id, console=console)
     _maybe_export_recording(console, record)
@@ -2069,11 +2141,13 @@ def rules_cmd(
     ] = None,
     *,
     record: Annotated[Path | None, typer.Option("--record", help="Record terminal output to SVG or HTML file")] = None,
+    json_output: JsonOption = False,
 ) -> None:
     """List all available validation rules."""
+    if json_output:
+        _rules_json(platform=platform, category=category, severity=severity, record=record)
     console = _make_rule_console(record=record is not None)
-    _show_rules_list(platform=platform, category=category, severity=severity, console=console)
-    console.print("\n[dim]Run [bold]skilllint rule [yellow]RULE_ID[/yellow][/bold] for details.[/dim]")
+    _show_rules_report(platform=platform, category=category, severity=severity, console=console)
     _maybe_export_recording(console, record)
 
 
