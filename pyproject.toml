@@ -306,9 +306,6 @@ max-complexity = 12
     "SLF",  # Private name imports acceptable for testing internals
     "T",    # print() statements are intentional for CI output visibility
 ]
-"packages/skilllint/cli_json.py" = [
-    "PLC2701", # Typer vendors Click and exports no public name for MissingParameter; see fail_missing_argument.
-]
 "packages/skilllint/tests/fixtures/providers/*/failing-examples/**" = [
     "ALL", # Intentionally broken fixture files — must never be linted or fixed
 ]
