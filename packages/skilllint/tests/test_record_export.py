@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 import html
+from io import StringIO
 from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import patch
 
 import pytest
 from rich.console import Console
 
 from skilllint.record_export import build_svg_title, export_recording, make_recording_console
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class TestMakeRecordingConsole:
@@ -172,3 +177,65 @@ class TestExportRecording:
         with pytest.raises(ValueError, match="Unsupported file extension"):
             export_recording(console, dest, title="test")
         assert not dest.exists(), "No file should be created when extension is invalid"
+
+
+def _render_check(console: Console) -> None:
+    from skilllint.models import ValidationIssue, ValidationResult
+    from skilllint.reporting import ConsoleReporter
+
+    issue = ValidationIssue(field="name", severity="error", message="broken", code="AB001", suggestion="fix it")
+    results = {Path("a.md"): [("V", ValidationResult(passed=False, errors=[issue], warnings=[], info=[]))]}
+    reporter = ConsoleReporter(console)
+    reporter.report(results, verbose=False, show_progress=True)
+    reporter.summarize(1, 0, 1, 0)
+
+
+def _render_rules(console: Console) -> None:
+    from skilllint.plugin_validator import _show_rules_list
+
+    _show_rules_list(console=console)
+    console.print("\n[dim]Run [bold]skilllint rule [yellow]RULE_ID[/yellow][/bold] for details.[/dim]")
+
+
+def _render_rule(console: Console) -> None:
+    from skilllint.plugin_validator import _show_rule_doc
+
+    _show_rule_doc("FM010", console=console)
+
+
+class TestRecordingFile:
+    """The ``file`` argument changes where output goes, never what is recorded."""
+
+    @pytest.mark.parametrize("render", [_render_check, _render_rules, _render_rule], ids=lambda f: f.__name__)
+    @pytest.mark.parametrize("suffix", [".svg", ".html"])
+    def test_export_is_byte_equal_for_stdout_and_a_buffer(
+        self, render: Callable[[Console], None], suffix: str, tmp_path: Path
+    ) -> None:
+        """Rendering into a buffer exports the same bytes as rendering to stdout."""
+        to_stdout = tmp_path / f"stdout{suffix}"
+        to_buffer = tmp_path / f"buffer{suffix}"
+        stdout_console = make_recording_console()
+        buffer_console = make_recording_console(file=StringIO())
+
+        render(stdout_console)
+        render(buffer_console)
+        export_recording(stdout_console, to_stdout, title="t")
+        export_recording(buffer_console, to_buffer, title="t")
+
+        assert to_buffer.read_bytes() == to_stdout.read_bytes()
+
+    def test_nothing_reaches_stdout_when_a_buffer_is_given(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """The buffer receives the render; stdout stays empty."""
+        buffer = StringIO()
+        console = make_recording_console(file=buffer)
+
+        _render_check(console)
+
+        assert capsys.readouterr().out == ""
+        assert "broken" in buffer.getvalue()
+
+    def test_default_file_is_stdout(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """Without ``file`` the console prints to stdout, as before."""
+        _render_check(make_recording_console())
+
+        assert "broken" in capsys.readouterr().out

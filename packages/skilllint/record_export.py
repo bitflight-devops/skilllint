@@ -11,14 +11,18 @@ import os
 import tempfile
 from copy import copy
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from rich.cells import cell_len
 from rich.console import Console
 
+if TYPE_CHECKING:
+    from typing import TextIO
+
 __all__ = ["build_svg_title", "export_recording", "make_recording_console"]
 
 
-def make_recording_console(*, no_color: bool = False) -> Console:
+def make_recording_console(*, no_color: bool = False, file: TextIO | None = None) -> Console:
     """Return a Rich Console configured for recording.
 
     The console uses ``record=True`` so that output written to it can later be
@@ -29,11 +33,15 @@ def make_recording_console(*, no_color: bool = False) -> Console:
     Args:
         no_color: When *True*, disable colour output (passes ``no_color=True``
             to Rich, which suppresses ANSI colour codes).
+        file: Where the console writes what it renders. ``None`` (the default)
+            is stdout. The recording is the same whichever file is given, so a
+            caller that only wants the exported file passes an in-memory buffer
+            and nothing reaches the terminal.
 
     Returns:
         A :class:`rich.console.Console` instance ready for recording.
     """
-    return Console(record=True, force_terminal=True, no_color=no_color, soft_wrap=True)
+    return Console(record=True, force_terminal=True, no_color=no_color, soft_wrap=True, file=file)
 
 
 def _strip_trailing_whitespace(content: str) -> str:
