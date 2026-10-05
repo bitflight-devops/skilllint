@@ -80,6 +80,10 @@ With `--record`, the file is written first and the JSON then carries its
 absolute, resolved path as `record_path`. At the root, `--json` is valid only
 with `--version`; give it after the command name otherwise.
 
+One visible change reaches the default output: for a mistyped option, Click's
+close-match hint can now name it, as in `No such option: --jsn (Possible
+options: --json)`. The exit status is still `2`.
+
 ```console
 uv run skilllint check --json plugins/my-plugin
 uv run skilllint rule FM007 --json

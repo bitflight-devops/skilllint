@@ -864,3 +864,25 @@ def test_json_placed_before_the_subcommand_is_a_usage_error_never_a_silent_no_op
     run = run_cli(args, sandbox)
 
     assert_plain_usage_error(run)
+
+
+# --- the one accepted change to the default stderr ---------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "args",
+    [pytest.param(("check", "valid_skill.md", "--jsn"), id="check"), pytest.param(("rules", "--jsn"), id="rules")],
+)
+def test_a_mistyped_option_now_suggests_json_on_the_default_path(args: tuple[str, ...], tmp_path: Path) -> None:
+    """Pin the one stderr change to the default path that adding ``--json`` causes.
+
+    Accepted by the user (recorded decision: "if you can't get around it then keep it"): Click's
+    close-match suggestion for a mistyped option can now name ``--json``. No golden covers it,
+    because the baselines never mistype an option. Exit status and stdout are unchanged, and the
+    suggestion is the only text that differs from what the same mistake printed before.
+    """
+    _, run = run_probe(tmp_path, case(args))
+
+    assert run.returncode == 2
+    assert run.stdout == b""
+    assert run.stderr.decode().rstrip().splitlines()[-1] == "Error: No such option: --jsn (Possible options: --json)"
