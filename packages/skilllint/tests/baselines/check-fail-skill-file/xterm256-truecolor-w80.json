@@ -1,0 +1,8 @@
+{
+  "returncode": 1,
+  "stdout": "\n\u001b[1minvalid-skill/SKILL.md\u001b[0m\n  ❌ \u001b[2mFrontmatterValidator:\u001b[0m\n    ❌ \u001b[31m[FM010]\u001b[0m name: Must use lowercase letters, numbers, and hyphens only\n      \u001b[2m→\u001b[0m Use format: lowercase-with-hyphens\n      \u001b[2m→\u001b[0m \u001b[36mskilllint rule FM010\u001b[0m\n  ⚠ \u001b[2mDescriptionValidator:\u001b[0m\n    ⚠ \u001b[33m[SK005]\u001b[0m description: Description missing trigger phrases\n      \u001b[2m→\u001b[0m Required trigger phrases: use when, use this, use on, used when, used by, when , trigger, activate, load this, load when, invoke. Run /plugin-creator:write-frontmatter-description to generate a compliant description\n      \u001b[2m→\u001b[0m \u001b[36mskilllint rule SK005\u001b[0m\n",
+  "stderr": "",
+  "merged_returncode": 1,
+  "merged": "\n\u001b[1minvalid-skill/SKILL.md\u001b[0m\n  ❌ \u001b[2mFrontmatterValidator:\u001b[0m\n    ❌ \u001b[31m[FM010]\u001b[0m name: Must use lowercase letters, numbers, and hyphens only\n      \u001b[2m→\u001b[0m Use format: lowercase-with-hyphens\n      \u001b[2m→\u001b[0m \u001b[36mskilllint rule FM010\u001b[0m\n  ⚠ \u001b[2mDescriptionValidator:\u001b[0m\n    ⚠ \u001b[33m[SK005]\u001b[0m description: Description missing trigger phrases\n      \u001b[2m→\u001b[0m Required trigger phrases: use when, use this, use on, used when, used by, when , trigger, activate, load this, load when, invoke. Run /plugin-creator:write-frontmatter-description to generate a compliant description\n      \u001b[2m→\u001b[0m \u001b[36mskilllint rule SK005\u001b[0m\n",
+  "files": {}
+}

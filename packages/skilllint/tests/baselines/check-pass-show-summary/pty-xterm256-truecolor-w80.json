@@ -1,0 +1,8 @@
+{
+  "returncode": 0,
+  "stdout": "\u001b[32m╭─\u001b[0m\u001b[32m Validation Summary \u001b[0m\u001b[32m─╮\u001b[0m\n\u001b[32m│\u001b[0m ✅ \u001b[1;32mPASSED\u001b[0m            \u001b[32m│\u001b[0m\n\u001b[32m│\u001b[0m                      \u001b[32m│\u001b[0m\n\u001b[32m│\u001b[0m Total files: 1       \u001b[32m│\u001b[0m\n\u001b[32m│\u001b[0m \u001b[32mPassed: 1\u001b[0m            \u001b[32m│\u001b[0m\n\u001b[32m│\u001b[0m \u001b[31mFailed: 0\u001b[0m            \u001b[32m│\u001b[0m\n\u001b[32m╰──────────────────────╯\u001b[0m\n",
+  "stderr": "",
+  "merged_returncode": null,
+  "merged": null,
+  "files": {}
+}

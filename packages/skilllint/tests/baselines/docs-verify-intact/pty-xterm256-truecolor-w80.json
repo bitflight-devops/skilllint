@@ -1,0 +1,8 @@
+{
+  "returncode": 0,
+  "stdout": "✅ \u001b[32mINTACT\u001b[0m sources/page-\u001b[1;36m2026\u001b[0m-\u001b[1;36m01\u001b[0m-\u001b[1;36m01\u001b[0m-\u001b[1;36m0000.\u001b[0mmd\n  sha256: 171fe6d40c9f23632223840dccd094f0252889e3e70f25b482af442c87b91381\n  bytes:  \u001b[1;36m193\u001b[0m\n",
+  "stderr": "",
+  "merged_returncode": null,
+  "merged": null,
+  "files": {}
+}

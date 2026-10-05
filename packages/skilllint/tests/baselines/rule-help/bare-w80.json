@@ -1,0 +1,8 @@
+{
+  "returncode": 0,
+  "stdout": "Usage: skilllint rule [OPTIONS] {rule_id}\n\n  Show documentation for a validation rule.\n\nArguments:\n  rule_id  Rule identifier (e.g., FM002, SK004).  [required]\n\nOptions:\n  --record <path>  Record terminal output to SVG or HTML file\n  --help           Show this message and exit.\n",
+  "stderr": "",
+  "merged_returncode": 0,
+  "merged": "Usage: skilllint rule [OPTIONS] {rule_id}\n\n  Show documentation for a validation rule.\n\nArguments:\n  rule_id  Rule identifier (e.g., FM002, SK004).  [required]\n\nOptions:\n  --record <path>  Record terminal output to SVG or HTML file\n  --help           Show this message and exit.\n",
+  "files": {}
+}

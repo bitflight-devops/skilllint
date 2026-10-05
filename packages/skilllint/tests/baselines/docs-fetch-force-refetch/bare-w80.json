@@ -1,0 +1,8 @@
+{
+  "returncode": 0,
+  "stdout": "sources/cached-0000-00-00-0000.md\n",
+  "stderr": "✅ REFRESHED cached\n",
+  "merged_returncode": 0,
+  "merged": "✅ REFRESHED cached\nsources/cached-0000-00-00-0000.md\n",
+  "files": {}
+}

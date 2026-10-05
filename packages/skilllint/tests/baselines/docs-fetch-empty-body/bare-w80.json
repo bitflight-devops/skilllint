@@ -1,0 +1,8 @@
+{
+  "returncode": 1,
+  "stdout": "",
+  "stderr": "╭────────────────────── ❌ No Cache Available ───────────────────────╮\n│ URL: http://127.0.0.1:00000/empty.md                               │\n│ Reason: Empty response body from 'http://127.0.0.1:00000/empty.md' │\n╰────────────────────────────────────────────────────────────────────╯\n",
+  "merged_returncode": 1,
+  "merged": "╭────────────────────── ❌ No Cache Available ───────────────────────╮\n│ URL: http://127.0.0.1:00000/empty.md                               │\n│ Reason: Empty response body from 'http://127.0.0.1:00000/empty.md' │\n╰────────────────────────────────────────────────────────────────────╯\n",
+  "files": {}
+}

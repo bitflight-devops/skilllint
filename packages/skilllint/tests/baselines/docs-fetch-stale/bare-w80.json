@@ -1,0 +1,8 @@
+{
+  "returncode": 0,
+  "stdout": "sources/cached-2026-01-01-0000.md\n",
+  "stderr": "⚠ Serving stale cache — network unavailable\n",
+  "merged_returncode": 0,
+  "merged": "⚠ Serving stale cache — network unavailable\nsources/cached-2026-01-01-0000.md\n",
+  "files": {}
+}

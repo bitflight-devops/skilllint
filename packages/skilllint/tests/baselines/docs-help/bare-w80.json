@@ -1,0 +1,8 @@
+{
+  "returncode": 0,
+  "stdout": "Usage: skilllint docs [OPTIONS] COMMAND [ARGS]...\n\n  Fetch, query, and verify cached vendor documentation.\n\nOptions:\n  --help  Show this message and exit.\n\nCommands:\n  fetch              Fetch a documentation page or return a cached copy.\n  fetch-authorities  Fetch cached documentation for all normalized rule authority URLs.\n  latest             Find the most recent cached file for a page name.\n  sections           Print a table of sections in a cached markdown file.\n  section            Print the text of a named section from a cached markdown file.\n  verify             Verify a cached file against its .meta.json sidecar.\n",
+  "stderr": "",
+  "merged_returncode": 0,
+  "merged": "Usage: skilllint docs [OPTIONS] COMMAND [ARGS]...\n\n  Fetch, query, and verify cached vendor documentation.\n\nOptions:\n  --help  Show this message and exit.\n\nCommands:\n  fetch              Fetch a documentation page or return a cached copy.\n  fetch-authorities  Fetch cached documentation for all normalized rule authority URLs.\n  latest             Find the most recent cached file for a page name.\n  sections           Print a table of sections in a cached markdown file.\n  section            Print the text of a named section from a cached markdown file.\n  verify             Verify a cached file against its .meta.json sidecar.\n",
+  "files": {}
+}

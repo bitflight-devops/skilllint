@@ -1,0 +1,8 @@
+{
+  "returncode": 1,
+  "stdout": "",
+  "stderr": "╭────────────────────── ⚠ MODIFIED — file differs from sidecar ──────────────────────╮\n│ File: sources/page-2026-01-01-0000.md                                              │\n│ Computed sha256:  c77fa89c0a754918ed0fc273726d4343f9fa9d0cdc6fc1cfe544359ae67e8c5e │\n│ Expected sha256:  171fe6d40c9f23632223840dccd094f0252889e3e70f25b482af442c87b91381 │\n│ Computed bytes:   203                                                              │\n│ Expected bytes:   193                                                              │\n╰────────────────────────────────────────────────────────────────────────────────────╯\n",
+  "merged_returncode": 1,
+  "merged": "╭────────────────────── ⚠ MODIFIED — file differs from sidecar ──────────────────────╮\n│ File: sources/page-2026-01-01-0000.md                                              │\n│ Computed sha256:  c77fa89c0a754918ed0fc273726d4343f9fa9d0cdc6fc1cfe544359ae67e8c5e │\n│ Expected sha256:  171fe6d40c9f23632223840dccd094f0252889e3e70f25b482af442c87b91381 │\n│ Computed bytes:   203                                                              │\n│ Expected bytes:   193                                                              │\n╰────────────────────────────────────────────────────────────────────────────────────╯\n",
+  "files": {}
+}

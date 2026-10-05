@@ -1,0 +1,8 @@
+{
+  "returncode": 0,
+  "stdout": "Usage: skilllint docs sections [OPTIONS] {file_path}\n\n  Print a table of sections in a cached markdown file.\n  \n  Output is written to stdout.\n\nArguments:\n  file_path  Path to the cached markdown file to index.  [required]\n\nOptions:\n  --help  Show this message and exit.\n",
+  "stderr": "",
+  "merged_returncode": 0,
+  "merged": "Usage: skilllint docs sections [OPTIONS] {file_path}\n\n  Print a table of sections in a cached markdown file.\n  \n  Output is written to stdout.\n\nArguments:\n  file_path  Path to the cached markdown file to index.  [required]\n\nOptions:\n  --help  Show this message and exit.\n",
+  "files": {}
+}

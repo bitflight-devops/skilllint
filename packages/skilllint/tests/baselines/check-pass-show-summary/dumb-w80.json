@@ -1,0 +1,8 @@
+{
+  "returncode": 0,
+  "stdout": "╭─ Validation Summary ─╮\n│ ✅ PASSED            │\n│                      │\n│ Total files: 1       │\n│ Passed: 1            │\n│ Failed: 0            │\n╰──────────────────────╯\n",
+  "stderr": "",
+  "merged_returncode": 0,
+  "merged": "╭─ Validation Summary ─╮\n│ ✅ PASSED            │\n│                      │\n│ Total files: 1       │\n│ Passed: 1            │\n│ Failed: 0            │\n╰──────────────────────╯\n",
+  "files": {}
+}

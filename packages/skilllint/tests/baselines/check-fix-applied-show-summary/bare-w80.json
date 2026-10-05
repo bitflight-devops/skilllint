@@ -1,0 +1,10 @@
+{
+  "returncode": 0,
+  "stdout": "\n\u001b[1mFixes applied\u001b[0m\n\u001b[1mfixme/SKILL.md\u001b[0m\n  🔧 \u001b[1;35m[\u001b[0m\u001b[35mFM004, FM007\u001b[0m\u001b[1;35m]\u001b[0m \u001b[2mFrontmatterValidator:\u001b[0m Converted tools from YAML array to comma-separated string\n  🔧 \u001b[1;35m[\u001b[0m\u001b[35mFM004, FM007\u001b[0m\u001b[1;35m]\u001b[0m \u001b[2mFrontmatterValidator:\u001b[0m Removed YAML multiline indicators\n\u001b[32m╭─\u001b[0m\u001b[32m Validation Summary \u001b[0m\u001b[32m─╮\u001b[0m\n\u001b[32m│\u001b[0m ✅ \u001b[1;32mPASSED\u001b[0m            \u001b[32m│\u001b[0m\n\u001b[32m│\u001b[0m                      \u001b[32m│\u001b[0m\n\u001b[32m│\u001b[0m Total files: 1       \u001b[32m│\u001b[0m\n\u001b[32m│\u001b[0m \u001b[32mPassed: 1\u001b[0m            \u001b[32m│\u001b[0m\n\u001b[32m│\u001b[0m \u001b[31mFailed: 0\u001b[0m            \u001b[32m│\u001b[0m\n\u001b[32m╰──────────────────────╯\u001b[0m\n",
+  "stderr": "",
+  "merged_returncode": 0,
+  "merged": "\n\u001b[1mFixes applied\u001b[0m\n\u001b[1mfixme/SKILL.md\u001b[0m\n  🔧 \u001b[1;35m[\u001b[0m\u001b[35mFM004, FM007\u001b[0m\u001b[1;35m]\u001b[0m \u001b[2mFrontmatterValidator:\u001b[0m Converted tools from YAML array to comma-separated string\n  🔧 \u001b[1;35m[\u001b[0m\u001b[35mFM004, FM007\u001b[0m\u001b[1;35m]\u001b[0m \u001b[2mFrontmatterValidator:\u001b[0m Removed YAML multiline indicators\n\u001b[32m╭─\u001b[0m\u001b[32m Validation Summary \u001b[0m\u001b[32m─╮\u001b[0m\n\u001b[32m│\u001b[0m ✅ \u001b[1;32mPASSED\u001b[0m            \u001b[32m│\u001b[0m\n\u001b[32m│\u001b[0m                      \u001b[32m│\u001b[0m\n\u001b[32m│\u001b[0m Total files: 1       \u001b[32m│\u001b[0m\n\u001b[32m│\u001b[0m \u001b[32mPassed: 1\u001b[0m            \u001b[32m│\u001b[0m\n\u001b[32m│\u001b[0m \u001b[31mFailed: 0\u001b[0m            \u001b[32m│\u001b[0m\n\u001b[32m╰──────────────────────╯\u001b[0m\n",
+  "files": {
+    "fixme/SKILL.md": "---\nname: fixme\ndescription: Use when testing. A multiline description for the fixture.\ntools: Read, Grep\n---\n# Fixme\n\nBody text.\n"
+  }
+}

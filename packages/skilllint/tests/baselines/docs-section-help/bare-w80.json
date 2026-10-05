@@ -1,0 +1,8 @@
+{
+  "returncode": 0,
+  "stdout": "Usage: skilllint docs section [OPTIONS] {file_path} {heading}\n\n  Print the text of a named section from a cached markdown file.\n  \n  Output is written to stdout.\n  \n  Exit status:\n      1 when the heading is not found.\n\nArguments:\n  file_path  Path to the cached markdown file.  [required]\n  heading    Heading text to locate (case-insensitive, leading # optional).  [required]\n\nOptions:\n  --help  Show this message and exit.\n",
+  "stderr": "",
+  "merged_returncode": 0,
+  "merged": "Usage: skilllint docs section [OPTIONS] {file_path} {heading}\n\n  Print the text of a named section from a cached markdown file.\n  \n  Output is written to stdout.\n  \n  Exit status:\n      1 when the heading is not found.\n\nArguments:\n  file_path  Path to the cached markdown file.  [required]\n  heading    Heading text to locate (case-insensitive, leading # optional).  [required]\n\nOptions:\n  --help  Show this message and exit.\n",
+  "files": {}
+}

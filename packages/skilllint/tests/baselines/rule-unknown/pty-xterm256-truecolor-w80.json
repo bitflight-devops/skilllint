@@ -1,0 +1,8 @@
+{
+  "returncode": 1,
+  "stdout": "\u001b[31mUnknown rule: ZZ999\u001b[0m\n\n\u001b[2mRun \u001b[0m\u001b[1;2mskilllint rules\u001b[0m\u001b[2m to see all available rules.\u001b[0m\n",
+  "stderr": "",
+  "merged_returncode": null,
+  "merged": null,
+  "files": {}
+}

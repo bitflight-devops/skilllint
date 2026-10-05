@@ -1,0 +1,8 @@
+{
+  "returncode": 0,
+  "stdout": "skilllint <VERSION>\n",
+  "stderr": "",
+  "merged_returncode": 0,
+  "merged": "skilllint <VERSION>\n",
+  "files": {}
+}

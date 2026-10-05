@@ -1,0 +1,8 @@
+{
+  "returncode": 2,
+  "stdout": "",
+  "stderr": "Error: Cannot use both --check and --fix flags\n",
+  "merged_returncode": 2,
+  "merged": "Error: Cannot use both --check and --fix flags\n",
+  "files": {}
+}

@@ -1,0 +1,8 @@
+{
+  "returncode": 0,
+  "stdout": "sources/cached-2026-01-01-0000.md\n",
+  "stderr": "✅ \u001b[32mFRESH\u001b[0m cached\n",
+  "merged_returncode": 0,
+  "merged": "✅ \u001b[32mFRESH\u001b[0m cached\nsources/cached-2026-01-01-0000.md\n",
+  "files": {}
+}

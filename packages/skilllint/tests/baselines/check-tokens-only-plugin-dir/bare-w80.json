@@ -1,0 +1,8 @@
+{
+  "returncode": 2,
+  "stdout": "",
+  "stderr": "Error: Could not count tokens for: plug\n",
+  "merged_returncode": 2,
+  "merged": "Error: Could not count tokens for: plug\n",
+  "files": {}
+}

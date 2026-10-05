@@ -1,0 +1,8 @@
+{
+  "returncode": 1,
+  "stdout": "sources/new-0000-00-00-0000.md\n",
+  "stderr": "✅ \u001b[32mNEW\u001b[0m \u001b[4;94mhttp://127.0.0.1:00000/new.md\u001b[0m\n❌ \u001b[31mFAILED\u001b[0m \u001b[4;94mhttp://127.0.0.1:00000/down.md\u001b[0m \u001b[1m(\u001b[0m\u001b[1m[\u001b[0mErrno \u001b[1;36m111\u001b[0m\u001b[1m]\u001b[0m Connection refused\u001b[1m)\u001b[0m\n❌ \u001b[31mFAILED\u001b[0m \u001b[4;94mhttp://\u001b[0m\u001b[1m[\u001b[0mbad/x.md \u001b[1m(\u001b[0mInvalid IPv6 URL\u001b[1m)\u001b[0m\n❌ \u001b[31mFAILED\u001b[0m \u001b[4;94mhttp://127.0.0.1:00000/missing.md\u001b[0m \u001b[1m(\u001b[0mClient error \u001b[32m'404 Not Found'\u001b[0m for url \u001b[32m'http://127.0.0.1:00000/missing.md'\u001b[0m\nFor more information check: \u001b[4;94mhttps://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404\u001b[0m\u001b[4;94m)\u001b[0m\n",
+  "merged_returncode": 1,
+  "merged": "✅ \u001b[32mNEW\u001b[0m \u001b[4;94mhttp://127.0.0.1:00000/new.md\u001b[0m\nsources/new-0000-00-00-0000.md\n❌ \u001b[31mFAILED\u001b[0m \u001b[4;94mhttp://127.0.0.1:00000/down.md\u001b[0m \u001b[1m(\u001b[0m\u001b[1m[\u001b[0mErrno \u001b[1;36m111\u001b[0m\u001b[1m]\u001b[0m Connection refused\u001b[1m)\u001b[0m\n❌ \u001b[31mFAILED\u001b[0m \u001b[4;94mhttp://\u001b[0m\u001b[1m[\u001b[0mbad/x.md \u001b[1m(\u001b[0mInvalid IPv6 URL\u001b[1m)\u001b[0m\n❌ \u001b[31mFAILED\u001b[0m \u001b[4;94mhttp://127.0.0.1:00000/missing.md\u001b[0m \u001b[1m(\u001b[0mClient error \u001b[32m'404 Not Found'\u001b[0m for url \u001b[32m'http://127.0.0.1:00000/missing.md'\u001b[0m\nFor more information check: \u001b[4;94mhttps://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404\u001b[0m\u001b[4;94m)\u001b[0m\n",
+  "files": {}
+}

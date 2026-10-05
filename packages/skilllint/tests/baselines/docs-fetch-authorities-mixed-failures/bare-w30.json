@@ -1,0 +1,8 @@
+{
+  "returncode": 1,
+  "stdout": "sources/new-0000-00-00-0000.md\n",
+  "stderr": "✅ NEW http://127.0.0.1:00000/new.md\n❌ FAILED http://127.0.0.1:00000/down.md ([Errno 111] Connection refused)\n❌ FAILED http://[bad/x.md (Invalid IPv6 URL)\n❌ FAILED http://127.0.0.1:00000/missing.md (Client error '404 Not Found' for url 'http://127.0.0.1:00000/missing.md'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404)\n",
+  "merged_returncode": 1,
+  "merged": "✅ NEW http://127.0.0.1:00000/new.md\nsources/new-0000-00-00-0000.md\n❌ FAILED http://127.0.0.1:00000/down.md ([Errno 111] Connection refused)\n❌ FAILED http://[bad/x.md (Invalid IPv6 URL)\n❌ FAILED http://127.0.0.1:00000/missing.md (Client error '404 Not Found' for url 'http://127.0.0.1:00000/missing.md'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404)\n",
+  "files": {}
+}

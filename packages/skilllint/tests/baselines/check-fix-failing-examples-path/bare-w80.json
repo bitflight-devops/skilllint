@@ -1,0 +1,10 @@
+{
+  "returncode": 0,
+  "stdout": "\n\u001b[1mfailing-examples/fixme/SKILL.md\u001b[0m\n  ⚠ \u001b[2mFrontmatterValidator:\u001b[0m\n    ⚠ \u001b[33m[FM004]\u001b[0m description: Uses multiline YAML syntax (|, >, |-, >-) — style preference, not a schema requirement\n      \u001b[2m→\u001b[0m Use single-line string for better readability\n      \u001b[2m→\u001b[0m \u001b[36mskilllint rule FM004\u001b[0m\n    ⚠ \u001b[33m[FM007]\u001b[0m tools: Tools field is YAML array — runtime accepts this, but CSV string is preferred style\n      \u001b[2m→\u001b[0m Use format: 'tool1, tool2, tool3'\n      \u001b[2m→\u001b[0m \u001b[36mskilllint rule FM007\u001b[0m\n",
+  "stderr": "",
+  "merged_returncode": 0,
+  "merged": "\n\u001b[1mfailing-examples/fixme/SKILL.md\u001b[0m\n  ⚠ \u001b[2mFrontmatterValidator:\u001b[0m\n    ⚠ \u001b[33m[FM004]\u001b[0m description: Uses multiline YAML syntax (|, >, |-, >-) — style preference, not a schema requirement\n      \u001b[2m→\u001b[0m Use single-line string for better readability\n      \u001b[2m→\u001b[0m \u001b[36mskilllint rule FM004\u001b[0m\n    ⚠ \u001b[33m[FM007]\u001b[0m tools: Tools field is YAML array — runtime accepts this, but CSV string is preferred style\n      \u001b[2m→\u001b[0m Use format: 'tool1, tool2, tool3'\n      \u001b[2m→\u001b[0m \u001b[36mskilllint rule FM007\u001b[0m\n",
+  "files": {
+    "failing-examples/fixme/SKILL.md": "---\nname: fixme\ndescription: >-\n  Use when testing. A multiline description for the fixture.\ntools:\n  - Read\n  - Grep\n---\n\n# Fixme\n\nBody text.\n"
+  }
+}

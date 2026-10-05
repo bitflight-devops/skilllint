@@ -1,0 +1,8 @@
+{
+  "returncode": 2,
+  "stdout": "",
+  "stderr": "Usage: skilllint rule [OPTIONS] {rule_id}\nTry 'skilllint rule --help' for help.\n\nError: Missing argument 'rule_id'.\n",
+  "merged_returncode": 2,
+  "merged": "Usage: skilllint rule [OPTIONS] {rule_id}\nTry 'skilllint rule --help' for help.\n\nError: Missing argument 'rule_id'.\n",
+  "files": {}
+}

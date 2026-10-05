@@ -1,0 +1,10 @@
+{
+  "returncode": 2,
+  "stdout": "",
+  "stderr": "Unknown platform: 'bogus'. Valid choices: claude-code, codex, cursor\n",
+  "merged_returncode": 2,
+  "merged": "Unknown platform: 'bogus'. Valid choices: claude-code, codex, cursor\n",
+  "files": {
+    "out.svg": null
+  }
+}

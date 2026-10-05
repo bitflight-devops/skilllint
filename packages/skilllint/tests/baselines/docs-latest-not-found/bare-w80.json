@@ -1,0 +1,8 @@
+{
+  "returncode": 1,
+  "stdout": "",
+  "stderr": "❌ No cached file found for page name: absent\n",
+  "merged_returncode": 1,
+  "merged": "❌ No cached file found for page name: absent\n",
+  "files": {}
+}

@@ -1,0 +1,8 @@
+{
+  "returncode": 1,
+  "stdout": "",
+  "stderr": "\u001b[31m╭─\u001b[0m\u001b[31m───────\u001b[0m\u001b[31m ❌ No Cache Available \u001b[0m\u001b[31m────────\u001b[0m\u001b[31m─╮\u001b[0m\n\u001b[31m│\u001b[0m \u001b[1mURL:\u001b[0m http://127.0.0.1:00000/new.md     \u001b[31m│\u001b[0m\n\u001b[31m│\u001b[0m \u001b[1mReason:\u001b[0m [Errno 111] Connection refused \u001b[31m│\u001b[0m\n\u001b[31m╰────────────────────────────────────────╯\u001b[0m\n",
+  "merged_returncode": 1,
+  "merged": "\u001b[31m╭─\u001b[0m\u001b[31m───────\u001b[0m\u001b[31m ❌ No Cache Available \u001b[0m\u001b[31m────────\u001b[0m\u001b[31m─╮\u001b[0m\n\u001b[31m│\u001b[0m \u001b[1mURL:\u001b[0m http://127.0.0.1:00000/new.md     \u001b[31m│\u001b[0m\n\u001b[31m│\u001b[0m \u001b[1mReason:\u001b[0m [Errno 111] Connection refused \u001b[31m│\u001b[0m\n\u001b[31m╰────────────────────────────────────────╯\u001b[0m\n",
+  "files": {}
+}

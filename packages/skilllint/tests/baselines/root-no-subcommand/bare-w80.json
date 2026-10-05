@@ -1,0 +1,8 @@
+{
+  "returncode": 1,
+  "stdout": "Use 'skilllint --help' for usage.\n",
+  "stderr": "",
+  "merged_returncode": 1,
+  "merged": "Use 'skilllint --help' for usage.\n",
+  "files": {}
+}

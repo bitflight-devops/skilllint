@@ -1,0 +1,8 @@
+{
+  "returncode": 2,
+  "stdout": "",
+  "stderr": "Error: --filter-type must be one of: skills, agents, commands\n",
+  "merged_returncode": 2,
+  "merged": "Error: --filter-type must be one of: skills, agents, commands\n",
+  "files": {}
+}

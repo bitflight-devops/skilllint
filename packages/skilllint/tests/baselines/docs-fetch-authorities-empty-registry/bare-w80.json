@@ -1,0 +1,8 @@
+{
+  "returncode": 0,
+  "stdout": "",
+  "stderr": "⚠ No authority URLs found in the rule registry\n",
+  "merged_returncode": 0,
+  "merged": "⚠ No authority URLs found in the rule registry\n",
+  "files": {}
+}

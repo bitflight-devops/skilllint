@@ -1,0 +1,8 @@
+{
+  "returncode": 2,
+  "stdout": "",
+  "stderr": "Usage: skilllint rules [OPTIONS]\nTry 'skilllint rules --help' for help.\n\nError: Invalid value for '--severity' / '-s': 'bogus' is not one of 'error', 'warning', 'info'.\n",
+  "merged_returncode": 2,
+  "merged": "Usage: skilllint rules [OPTIONS]\nTry 'skilllint rules --help' for help.\n\nError: Invalid value for '--severity' / '-s': 'bogus' is not one of 'error', 'warning', 'info'.\n",
+  "files": {}
+}

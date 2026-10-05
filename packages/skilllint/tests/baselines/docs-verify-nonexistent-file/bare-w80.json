@@ -1,0 +1,8 @@
+{
+  "returncode": 1,
+  "stdout": "",
+  "stderr": "╭───────────── ⚠ UNVERIFIABLE — no sidecar ──────────────╮\n│ File: absent.md                                        │\n│ No .meta.json sidecar found — cannot verify this file. │\n╰────────────────────────────────────────────────────────╯\n",
+  "merged_returncode": 1,
+  "merged": "╭───────────── ⚠ UNVERIFIABLE — no sidecar ──────────────╮\n│ File: absent.md                                        │\n│ No .meta.json sidecar found — cannot verify this file. │\n╰────────────────────────────────────────────────────────╯\n",
+  "files": {}
+}

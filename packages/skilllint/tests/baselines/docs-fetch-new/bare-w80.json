@@ -1,0 +1,8 @@
+{
+  "returncode": 0,
+  "stdout": "sources/new-0000-00-00-0000.md\n",
+  "stderr": "✅ NEW new\n",
+  "merged_returncode": 0,
+  "merged": "✅ NEW new\nsources/new-0000-00-00-0000.md\n",
+  "files": {}
+}

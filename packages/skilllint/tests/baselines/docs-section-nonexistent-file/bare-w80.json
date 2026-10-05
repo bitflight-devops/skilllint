@@ -1,0 +1,8 @@
+{
+  "returncode": 1,
+  "stdout": "",
+  "stderr": "❌ Section not found: 'Usage' in absent.md\n",
+  "merged_returncode": 1,
+  "merged": "❌ Section not found: 'Usage' in absent.md\n",
+  "files": {}
+}

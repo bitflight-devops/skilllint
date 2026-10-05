@@ -1,0 +1,8 @@
+{
+  "returncode": 0,
+  "stdout": "✅ INTACT sources/page-2026-01-01-0000.md\n  sha256: 171fe6d40c9f23632223840dccd094f0252889e3e70f25b482af442c87b91381\n  bytes:  193\n",
+  "stderr": "",
+  "merged_returncode": 0,
+  "merged": "✅ INTACT sources/page-2026-01-01-0000.md\n  sha256: 171fe6d40c9f23632223840dccd094f0252889e3e70f25b482af442c87b91381\n  bytes:  193\n",
+  "files": {}
+}

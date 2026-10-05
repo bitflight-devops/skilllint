@@ -1,0 +1,8 @@
+{
+  "returncode": 0,
+  "stdout": "sources/new-0000-00-00-0000.md\nsources/cached-0000-00-00-0000.md\n",
+  "stderr": "✅ NEW http://127.0.0.1:00000/new.md\n✅ NEW http://127.0.0.1:00000/cached.md\n",
+  "merged_returncode": 0,
+  "merged": "✅ NEW http://127.0.0.1:00000/new.md\nsources/new-0000-00-00-0000.md\n✅ NEW http://127.0.0.1:00000/cached.md\nsources/cached-0000-00-00-0000.md\n",
+  "files": {}
+}

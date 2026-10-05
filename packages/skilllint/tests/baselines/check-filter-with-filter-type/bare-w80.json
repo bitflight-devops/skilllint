@@ -1,0 +1,8 @@
+{
+  "returncode": 2,
+  "stdout": "",
+  "stderr": "Error: --filter and --filter-type are mutually exclusive\n",
+  "merged_returncode": 2,
+  "merged": "Error: --filter and --filter-type are mutually exclusive\n",
+  "files": {}
+}

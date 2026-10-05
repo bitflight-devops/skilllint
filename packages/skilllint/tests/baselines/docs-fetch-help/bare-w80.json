@@ -1,0 +1,8 @@
+{
+  "returncode": 0,
+  "stdout": "Usage: skilllint docs fetch [OPTIONS] {url}\n\n  Fetch a documentation page or return a cached copy.\n  \n  Prints the cached file path to stdout so agents can capture it.\n  Status information is written to stderr.\n  \n  Exit status:\n      1 when no cache exists and network is unavailable.\n\nArguments:\n  url  Documentation URL to fetch or serve from cache.  [required]\n\nOptions:\n  --ttl <float>  Cache time-to-live in hours before a refresh is attempted.  [default: 4.0]\n  --force        Skip the freshness check and always attempt a network fetch.\n  --help         Show this message and exit.\n",
+  "stderr": "",
+  "merged_returncode": 0,
+  "merged": "Usage: skilllint docs fetch [OPTIONS] {url}\n\n  Fetch a documentation page or return a cached copy.\n  \n  Prints the cached file path to stdout so agents can capture it.\n  Status information is written to stderr.\n  \n  Exit status:\n      1 when no cache exists and network is unavailable.\n\nArguments:\n  url  Documentation URL to fetch or serve from cache.  [required]\n\nOptions:\n  --ttl <float>  Cache time-to-live in hours before a refresh is attempted.  [default: 4.0]\n  --force        Skip the freshness check and always attempt a network fetch.\n  --help         Show this message and exit.\n",
+  "files": {}
+}

@@ -1,0 +1,8 @@
+{
+  "returncode": 1,
+  "stdout": "",
+  "stderr": "╭──────── ❌ No Cache Available ─────────╮\n│ URL: http://127.0.0.1:00000/new.md     │\n│ Reason: [Errno 111] Connection refused │\n╰────────────────────────────────────────╯\n",
+  "merged_returncode": 1,
+  "merged": "╭──────── ❌ No Cache Available ─────────╮\n│ URL: http://127.0.0.1:00000/new.md     │\n│ Reason: [Errno 111] Connection refused │\n╰────────────────────────────────────────╯\n",
+  "files": {}
+}

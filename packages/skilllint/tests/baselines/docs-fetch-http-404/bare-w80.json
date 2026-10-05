@@ -1,0 +1,8 @@
+{
+  "returncode": 1,
+  "stdout": "",
+  "stderr": "╭───────────────────────────────── ❌ No Cache Available ──────────────────────────────────╮\n│ URL: http://127.0.0.1:00000/missing.md                                                   │\n│ Reason: Client error '404 Not Found' for url 'http://127.0.0.1:00000/missing.md'         │\n│ For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404 │\n╰──────────────────────────────────────────────────────────────────────────────────────────╯\n",
+  "merged_returncode": 1,
+  "merged": "╭───────────────────────────────── ❌ No Cache Available ──────────────────────────────────╮\n│ URL: http://127.0.0.1:00000/missing.md                                                   │\n│ Reason: Client error '404 Not Found' for url 'http://127.0.0.1:00000/missing.md'         │\n│ For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404 │\n╰──────────────────────────────────────────────────────────────────────────────────────────╯\n",
+  "files": {}
+}

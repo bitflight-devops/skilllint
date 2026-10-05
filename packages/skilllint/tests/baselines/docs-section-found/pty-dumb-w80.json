@@ -1,0 +1,8 @@
+{
+  "returncode": 0,
+  "stdout": "## Usage\n\nRun the tool. Literal markup stays literal: [bold]x[/bold] [link=http://a]t[/link] :warning:\n\n```bash\n# Fenced Fake\n```\n\n",
+  "stderr": "",
+  "merged_returncode": null,
+  "merged": null,
+  "files": {}
+}

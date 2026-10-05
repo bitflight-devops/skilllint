@@ -1,0 +1,8 @@
+{
+  "returncode": 1,
+  "stdout": "",
+  "stderr": "Traceback (most recent call last):\n  <frames elided>\nFileNotFoundError: [Errno 2] No such file or directory: 'violations--1/SKILL.md'\n",
+  "merged_returncode": 1,
+  "merged": "Traceback (most recent call last):\n  <frames elided>\nFileNotFoundError: [Errno 2] No such file or directory: 'violations--1/SKILL.md'\n",
+  "files": {}
+}

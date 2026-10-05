@@ -1,0 +1,8 @@
+{
+  "returncode": 1,
+  "stdout": "Unknown rule: ZZ999\n\nRun skilllint rules to see all available rules.\n",
+  "stderr": "",
+  "merged_returncode": null,
+  "merged": null,
+  "files": {}
+}

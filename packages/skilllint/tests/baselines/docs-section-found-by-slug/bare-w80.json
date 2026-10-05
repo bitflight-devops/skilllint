@@ -1,0 +1,8 @@
+{
+  "returncode": 0,
+  "stdout": "## Reference\n\nReference body.\n",
+  "stderr": "",
+  "merged_returncode": 0,
+  "merged": "## Reference\n\nReference body.\n",
+  "files": {}
+}

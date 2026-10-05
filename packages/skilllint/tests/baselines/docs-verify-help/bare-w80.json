@@ -1,0 +1,8 @@
+{
+  "returncode": 0,
+  "stdout": "Usage: skilllint docs verify [OPTIONS] {file_path}\n\n  Verify a cached file against its .meta.json sidecar.\n  \n  Exits 0 when the file is intact, 1 otherwise.\n  \n  Exit status:\n      1 when MODIFIED or UNVERIFIABLE.\n\nArguments:\n  file_path  Path to the cached markdown file to verify against its sidecar.  [required]\n\nOptions:\n  --help  Show this message and exit.\n",
+  "stderr": "",
+  "merged_returncode": 0,
+  "merged": "Usage: skilllint docs verify [OPTIONS] {file_path}\n\n  Verify a cached file against its .meta.json sidecar.\n  \n  Exits 0 when the file is intact, 1 otherwise.\n  \n  Exit status:\n      1 when MODIFIED or UNVERIFIABLE.\n\nArguments:\n  file_path  Path to the cached markdown file to verify against its sidecar.  [required]\n\nOptions:\n  --help  Show this message and exit.\n",
+  "files": {}
+}

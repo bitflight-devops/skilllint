@@ -1,0 +1,8 @@
+{
+  "returncode": 0,
+  "stdout": "Usage: skilllint [OPTIONS] COMMAND [ARGS]...\n\n  Validate Claude Code plugins and skills\n\nOptions:\n  -V, --version  Show version and exit\n  --help         Show this message and exit.\n\nCommands:\n  check  Validate Claude Code plugins, skills, agents, and commands.\n  rule   Show documentation for a validation rule.\n  rules  List all available validation rules.\n  docs   Fetch, query, and verify cached vendor documentation.\n",
+  "stderr": "",
+  "merged_returncode": 0,
+  "merged": "Usage: skilllint [OPTIONS] COMMAND [ARGS]...\n\n  Validate Claude Code plugins and skills\n\nOptions:\n  -V, --version  Show version and exit\n  --help         Show this message and exit.\n\nCommands:\n  check  Validate Claude Code plugins, skills, agents, and commands.\n  rule   Show documentation for a validation rule.\n  rules  List all available validation rules.\n  docs   Fetch, query, and verify cached vendor documentation.\n",
+  "files": {}
+}

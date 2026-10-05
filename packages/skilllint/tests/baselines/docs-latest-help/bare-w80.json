@@ -1,0 +1,8 @@
+{
+  "returncode": 0,
+  "stdout": "Usage: skilllint docs latest [OPTIONS] {page_name}\n\n  Find the most recent cached file for a page name.\n  \n  Prints the file path to stdout when found.\n  \n  Exit status:\n      1 when no cached file exists for the given page name.\n\nArguments:\n  page_name  Filesystem-safe page name to look up (e.g. 'claude-code--settings').  [required]\n\nOptions:\n  --help  Show this message and exit.\n",
+  "stderr": "",
+  "merged_returncode": 0,
+  "merged": "Usage: skilllint docs latest [OPTIONS] {page_name}\n\n  Find the most recent cached file for a page name.\n  \n  Prints the file path to stdout when found.\n  \n  Exit status:\n      1 when no cached file exists for the given page name.\n\nArguments:\n  page_name  Filesystem-safe page name to look up (e.g. 'claude-code--settings').  [required]\n\nOptions:\n  --help  Show this message and exit.\n",
+  "files": {}
+}

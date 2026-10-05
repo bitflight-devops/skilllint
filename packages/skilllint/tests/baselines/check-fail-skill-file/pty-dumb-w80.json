@@ -1,0 +1,8 @@
+{
+  "returncode": 1,
+  "stdout": "\ninvalid-skill/SKILL.md\n  ❌ FrontmatterValidator:\n    ❌ [FM010] name: Must use lowercase letters, numbers, and hyphens only\n      → Use format: lowercase-with-hyphens\n      → skilllint rule FM010\n  ⚠ DescriptionValidator:\n    ⚠ [SK005] description: Description missing trigger phrases\n      → Required trigger phrases: use when, use this, use on, used when, used by, when , trigger, activate, load this, load when, invoke. Run /plugin-creator:write-frontmatter-description to generate a compliant description\n      → skilllint rule SK005\n",
+  "stderr": "",
+  "merged_returncode": null,
+  "merged": null,
+  "files": {}
+}

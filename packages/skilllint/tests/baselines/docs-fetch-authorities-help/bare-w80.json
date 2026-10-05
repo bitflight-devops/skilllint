@@ -1,0 +1,8 @@
+{
+  "returncode": 0,
+  "stdout": "Usage: skilllint docs fetch-authorities [OPTIONS]\n\n  Fetch cached documentation for all normalized rule authority URLs.\n  \n  Prints one cached file path per successfully fetched authority URL.\n  \n  Exit status:\n      1 when one or more authority URLs cannot be fetched\n          and no stale cache can be served.\n\nOptions:\n  --ttl <float>  Cache time-to-live in hours before a refresh is attempted.  [default: 4.0]\n  --force        Skip the freshness check and always attempt a network fetch.\n  --help         Show this message and exit.\n",
+  "stderr": "",
+  "merged_returncode": 0,
+  "merged": "Usage: skilllint docs fetch-authorities [OPTIONS]\n\n  Fetch cached documentation for all normalized rule authority URLs.\n  \n  Prints one cached file path per successfully fetched authority URL.\n  \n  Exit status:\n      1 when one or more authority URLs cannot be fetched\n          and no stale cache can be served.\n\nOptions:\n  --ttl <float>  Cache time-to-live in hours before a refresh is attempted.  [default: 4.0]\n  --force        Skip the freshness check and always attempt a network fetch.\n  --help         Show this message and exit.\n",
+  "files": {}
+}

@@ -1,0 +1,8 @@
+{
+  "returncode": 1,
+  "stdout": "",
+  "stderr": "Traceback (most recent call last):\n  <frames elided>\nIsADirectoryError: [Errno 21] Is a directory: 'sources'\n",
+  "merged_returncode": 1,
+  "merged": "Traceback (most recent call last):\n  <frames elided>\nIsADirectoryError: [Errno 21] Is a directory: 'sources'\n",
+  "files": {}
+}

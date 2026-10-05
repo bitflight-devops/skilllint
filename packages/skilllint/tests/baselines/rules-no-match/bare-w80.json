@@ -1,0 +1,8 @@
+{
+  "returncode": 0,
+  "stdout": "No rules found matching the specified filters.\n\nRun skilllint rule RULE_ID for details.\n",
+  "stderr": "",
+  "merged_returncode": 0,
+  "merged": "No rules found matching the specified filters.\n\nRun skilllint rule RULE_ID for details.\n",
+  "files": {}
+}

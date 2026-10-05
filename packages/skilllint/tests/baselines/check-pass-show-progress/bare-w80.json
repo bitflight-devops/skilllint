@@ -1,0 +1,8 @@
+{
+  "returncode": 0,
+  "stdout": "✅ \u001b[32mvalid_skill.md\u001b[0m - PASSED\n",
+  "stderr": "",
+  "merged_returncode": 0,
+  "merged": "✅ \u001b[32mvalid_skill.md\u001b[0m - PASSED\n",
+  "files": {}
+}

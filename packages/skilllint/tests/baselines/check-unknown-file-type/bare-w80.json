@@ -1,0 +1,8 @@
+{
+  "returncode": 2,
+  "stdout": "",
+  "stderr": "Error: Cannot determine file type for: weird.xyz\nExpected: SKILL.md, agent .md, command .md, hooks.json, plugin directory, or markdown file\n",
+  "merged_returncode": 2,
+  "merged": "Error: Cannot determine file type for: weird.xyz\nExpected: SKILL.md, agent .md, command .md, hooks.json, plugin directory, or markdown file\n",
+  "files": {}
+}
