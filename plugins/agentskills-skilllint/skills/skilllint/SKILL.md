@@ -72,6 +72,13 @@ skilllint check --show-summary --show-progress <path>
 Collect the rule IDs emitted by the actual scan. Do not infer a rule from a
 similar-looking problem when the tool can identify it directly.
 
+Add `--json` to `check`, `rules`, `rule`, or a `docs` command to get one compact
+JSON line on stdout instead of text. Exit `0` and `1` are results and always
+print JSON; invalid usage exits `2` with a plain message on stderr and an empty
+stdout. `check --json` honours `--verbose` and `--show-progress` when it lists
+files, and its `omitted` field counts what it left out and names the flags that
+bring it back.
+
 For each finding that needs explanation, run:
 
 ```bash
