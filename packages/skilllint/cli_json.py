@@ -12,13 +12,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Annotated, NoReturn
 
 import typer
+from typer._click.exceptions import MissingParameter
 
 from skilllint.responses import emit_response
 
 if TYPE_CHECKING:
     from pydantic import BaseModel
 
-__all__ = ["JsonOption", "emit_and_exit"]
+__all__ = ["JsonOption", "emit_and_exit", "fail_missing_argument"]
 
 JsonOption = Annotated[
     bool, typer.Option("--json", help="Print one compact JSON line on stdout instead of the text output.")
@@ -38,3 +39,21 @@ def emit_and_exit(response: BaseModel, *, code: int = 0) -> NoReturn:
     """
     emit_response(response)
     raise typer.Exit(code) from None
+
+
+def fail_missing_argument(ctx: typer.Context, name: str) -> NoReturn:
+    """Fail with the usage error Click itself raises for a missing argument.
+
+    Under ``--json`` a command that is given no paths must not print its help on stdout, so it
+    reports the same error Click reports for a required argument: a plain message on stderr,
+    exit status 2, and an empty stdout.
+
+    Args:
+        ctx: The context of the running command.
+        name: The Python name of the missing argument, as declared on the command.
+
+    Raises:
+        MissingParameter: Always; Typer turns it into the usage error and exit status 2.
+    """
+    param = next(candidate for candidate in ctx.command.params if candidate.name == name)
+    raise MissingParameter(ctx=ctx, param=param)

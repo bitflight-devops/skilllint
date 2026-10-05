@@ -112,7 +112,7 @@ def pending(step: str) -> pytest.MarkDecorator:
     )
 
 
-LANDED_STEPS: Final = frozenset({STEP_DOCS, STEP_RULES})
+LANDED_STEPS: Final = frozenset({STEP_DOCS, STEP_RULES, STEP_CHECK})
 """Steps whose probes already pass. A step is added here in the commit that lands it."""
 
 
@@ -270,7 +270,7 @@ def test_each_command_renders_nothing_with_rich_under_json(probe: Probe, tmp_pat
 _ENVIRONMENT_PROBES: Final = [
     pytest.param(case(("rules", "--json")), id="rules"),
     pytest.param(case(("rule", "FM010", "--json")), id="rule"),
-    pytest.param(case(("check", "plug", "--json")), marks=pending(STEP_CHECK), id="check"),
+    pytest.param(case(("check", "plug", "--json")), id="check"),
     pytest.param(_docs_case("verify", PAGE_PATH), id="docs-verify"),
 ]
 
@@ -501,9 +501,7 @@ _RECORD_FAILURES: Final = (
 )
 
 
-@pytest.mark.parametrize(
-    "failure", [pytest.param(failure, marks=pending(STEP_CHECK), id=failure.id) for failure in _RECORD_FAILURES]
-)
+@pytest.mark.parametrize("failure", [pytest.param(failure, id=failure.id) for failure in _RECORD_FAILURES])
 def test_record_failures_exit_2_with_plain_stderr_and_keep_the_default_files(
     failure: RecordFailure, tmp_path: Path
 ) -> None:
@@ -529,7 +527,6 @@ def check_json(tmp_path: Path, *flags: str, target: str = "plug", root: str = "r
     return parse(CheckResponse, run)
 
 
-@pending(STEP_CHECK)
 def test_default_listing_names_the_failed_files_and_counts_the_rest(tmp_path: Path) -> None:
     """Default flags list only files with errors or warnings; the others are counted in ``omitted``."""
     response = check_json(tmp_path)
@@ -542,7 +539,6 @@ def test_default_listing_names_the_failed_files_and_counts_the_rest(tmp_path: Pa
     assert response.record_path is None
 
 
-@pending(STEP_CHECK)
 def test_summary_equals_the_default_text_summary(tmp_path: Path) -> None:
     """``summary`` carries the numbers the default ``--show-summary`` panel prints."""
     response = check_json(tmp_path)
@@ -555,7 +551,6 @@ def test_summary_equals_the_default_text_summary(tmp_path: Path) -> None:
     assert response.summary.passed_with_warnings == counts.get("Warnings", 0)
 
 
-@pending(STEP_CHECK)
 def test_validator_status_follows_passed_not_the_error_count(tmp_path: Path) -> None:
     """A validator with only warnings is ``passed``; the issue fields carry the text path's values in full."""
     response = check_json(tmp_path, target="invalid-skill/SKILL.md")
@@ -574,7 +569,6 @@ def test_validator_status_follows_passed_not_the_error_count(tmp_path: Path) -> 
     assert issues["SK005"].severity == "warning"
 
 
-@pending(STEP_CHECK)
 def test_show_progress_lists_a_passed_file_without_validators(tmp_path: Path) -> None:
     """The text path prints one ``PASSED`` line for such a file and no validators; so does the JSON."""
     response = check_json(tmp_path, "--show-progress", target="valid_skill.md")
@@ -585,7 +579,6 @@ def test_show_progress_lists_a_passed_file_without_validators(tmp_path: Path) ->
     assert response.omitted.passed_validators > 0, "the validators of a passed-and-listed file count as omitted"
 
 
-@pending(STEP_CHECK)
 def test_a_clean_tree_lists_nothing_and_says_how_to_see_more(tmp_path: Path) -> None:
     """With no flags a passing file is only counted, and ``retrieve_with`` names the flag that lists it."""
     response = check_json(tmp_path, target="valid_skill.md")
@@ -615,7 +608,6 @@ def _info_issue_count(response: CheckResponse) -> int:
 
 
 @pytest.mark.parametrize("flags", _FLAG_COMBINATIONS)
-@pending(STEP_CHECK)
 def test_omitted_counts_equal_what_the_fullest_listing_adds(flags: tuple[str, ...], tmp_path: Path) -> None:
     """Every hidden file and info issue is counted, and ``retrieve_with`` names exactly the flags that restore them."""
     response = check_json(tmp_path, *flags, root="run")
@@ -631,7 +623,6 @@ def test_omitted_counts_equal_what_the_fullest_listing_adds(flags: tuple[str, ..
         assert "--show-progress" in retrieve
 
 
-@pending(STEP_CHECK)
 def test_hidden_validators_of_listed_files_are_counted(tmp_path: Path) -> None:
     """Validators that passed silently inside a listed file are counted, not dropped."""
     response = check_json(tmp_path)
@@ -643,7 +634,6 @@ def test_hidden_validators_of_listed_files_are_counted(tmp_path: Path) -> None:
     assert response.omitted.passed_validators == hidden
 
 
-@pending(STEP_CHECK)
 def test_fixes_lists_what_fix_applied_and_the_file_matches_the_default_path(tmp_path: Path) -> None:
     """``fixes`` mirrors the ``Fixes applied`` block; the edited file is the one the default path writes."""
     sandbox, run = run_probe(tmp_path, case(("check", "fixme/SKILL.md", "--fix", "--json")))
@@ -662,7 +652,6 @@ def test_fixes_lists_what_fix_applied_and_the_file_matches_the_default_path(tmp_
     assert (sandbox.case / "fixme/SKILL.md").read_bytes() == (default_sandbox.case / "fixme/SKILL.md").read_bytes()
 
 
-@pending(STEP_CHECK)
 def test_no_color_and_show_summary_are_accepted_and_change_nothing(tmp_path: Path) -> None:
     """``--no-color`` and ``--show-summary`` keep their place on the command and have no effect on the JSON."""
     _, plain = run_probe(tmp_path, case(("check", "plug", "--json")), root="plain")
@@ -673,7 +662,6 @@ def test_no_color_and_show_summary_are_accepted_and_change_nothing(tmp_path: Pat
     assert flagged.stdout == plain.stdout
 
 
-@pending(STEP_CHECK)
 def test_policy_diagnostics_stay_on_stderr_beside_the_json(tmp_path: Path) -> None:
     """A malformed ``.skilllint.json`` is reported as a ``Warning:`` line on stderr, not folded into the response."""
     _, run = run_probe(tmp_path, case(("check", "pol/x/SKILL.md", "--json"), policy_workspace("{")))
@@ -687,8 +675,9 @@ def test_policy_diagnostics_stay_on_stderr_beside_the_json(tmp_path: Path) -> No
 def _default_token_lines(tmp_path: Path, args: tuple[str, ...]) -> list[tuple[str, int]]:
     _, run = run_probe(tmp_path, case(("check", *args, "--tokens-only")), root="default")
     lines = run.stdout.decode().splitlines()
-    if len(lines) == 1 and "\t" not in lines[0]:
-        return [(args[0], int(lines[0]))]
+    if all("\t" not in line for line in lines):
+        # Explicit file arguments print one bare integer each, in argument order, without the path.
+        return [(path, int(line)) for path, line in zip(args, lines, strict=True)]
     return [(path, int(count)) for count, path in (line.split("\t", 1) for line in lines)]
 
 
@@ -700,7 +689,6 @@ def _default_token_lines(tmp_path: Path, args: tuple[str, ...]) -> list[tuple[st
         pytest.param(("valid_skill.md", "invalid-skill/SKILL.md"), id="batch"),
     ],
 )
-@pending(STEP_CHECK)
 def test_tokens_only_is_always_a_list_with_the_counts_the_default_path_prints(
     args: tuple[str, ...], tmp_path: Path
 ) -> None:

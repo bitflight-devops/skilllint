@@ -46,7 +46,7 @@ import skilllint.rules  # ruff: ignore[unused-import] — ensures all 15 series 
 from skilllint.adapters import ALL_RULE_SERIES, PlatformAdapter, load_adapters, matches_file
 from skilllint.cli_docs import docs_app
 from skilllint.cli_help import CompleteHelpCommand, CompleteHelpGroup
-from skilllint.cli_json import JsonOption, emit_and_exit
+from skilllint.cli_json import JsonOption, emit_and_exit, fail_missing_argument
 from skilllint.file_types import (
     NAME_BEARING_FILE_TYPES as _NAME_BEARING_FILE_TYPES,
     FileType,
@@ -92,6 +92,13 @@ from skilllint.record_export import (
     build_svg_title as _build_svg_title,
     export_recording as _export_recording,
     make_recording_console as _make_recording_console,
+)
+from skilllint.responses import (
+    build_check_response,
+    build_rule_response,
+    build_rules_response,
+    build_tokens_response,
+    build_unknown_rule_response,
 )
 from skilllint.rule_registry import RULE_REGISTRY, rule_authority, rule_reference
 from skilllint.rules.as_series import run_as_series
@@ -165,7 +172,13 @@ from .frontmatter_core import (  # noqa: F401 - compatibility re-exports
     fix_skill_name_field,
     get_frontmatter_model,
 )
-from .scan_runtime import _resolve_filter_and_expand_paths, run_validation_loop
+from .scan_runtime import (
+    CheckRun,
+    _resolve_filter_and_expand_paths,
+    collect_validation_results,
+    report_results,
+    run_validation_loop,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -1349,6 +1362,38 @@ def validate_single_path(
     return {path: validator_results}
 
 
+def _count_body_tokens(paths: list[Path]) -> list[tuple[int, Path]]:
+    """Count body tokens for each path.
+
+    Token counting always uses body-only (frontmatter stripped) so that the
+    numbers match what ComplexityValidator measures against thresholds.
+
+    Args:
+        paths: Paths to count tokens for
+
+    Returns:
+        ``(token count, normalised path)`` per path, in order. A skill folder is
+        normalised to its ``SKILL.md``.
+
+    Raises:
+        typer.Exit: Code 2, after a stderr line, when a path does not exist or cannot be counted.
+    """
+    counter = MarkdownTokenCounter()
+    entries: list[tuple[int, Path]] = []
+    for path in paths:
+        if not path.exists():
+            typer.echo(f"Error: Path does not exist: {path}", err=True)
+            raise typer.Exit(2) from None
+        normalized_path = _normalize_skill_folder(path)
+        # Always count body-only so output matches ComplexityValidator thresholds
+        token_count = counter.count_file_tokens(normalized_path, body_only=True)
+        if token_count is None:
+            typer.echo(f"Error: Could not count tokens for: {normalized_path}", err=True)
+            raise typer.Exit(2) from None
+        entries.append((token_count, normalized_path))
+    return entries
+
+
 def _handle_tokens_only(paths: list[Path], *, batch: bool = False) -> None:
     r"""Output only the integer token count for each path, then exit.
 
@@ -1366,19 +1411,7 @@ def _handle_tokens_only(paths: list[Path], *, batch: bool = False) -> None:
     Raises:
         typer.Exit: Always exits (code 0 on success, code 2 on error)
     """
-    counter = MarkdownTokenCounter()
-    entries: list[tuple[int, Path]] = []
-    for path in paths:
-        if not path.exists():
-            typer.echo(f"Error: Path does not exist: {path}", err=True)
-            raise typer.Exit(2) from None
-        normalized_path = _normalize_skill_folder(path)
-        # Always count body-only so output matches ComplexityValidator thresholds
-        token_count = counter.count_file_tokens(normalized_path, body_only=True)
-        if token_count is None:
-            typer.echo(f"Error: Could not count tokens for: {normalized_path}", err=True)
-            raise typer.Exit(2) from None
-        entries.append((token_count, normalized_path))
+    entries = _count_body_tokens(paths)
 
     if batch:
         for count, path in entries:
@@ -1673,6 +1706,134 @@ def violations_to_result(violations: list[dict]) -> ValidationResult:
     return ValidationResult(passed=not errors, errors=errors, warnings=warnings, info=info)
 
 
+def _open_record_console(record: Path | None, *, no_color: bool, json_output: bool) -> _Console | None:
+    """Return the console ``--record`` renders into, or ``None`` when no recording was asked for.
+
+    Under ``--json`` the console writes to an in-memory buffer, so the recording is made without
+    anything reaching the terminal.
+
+    Args:
+        record: The ``--record`` destination, if any.
+        no_color: Whether ``--no-color`` was given.
+        json_output: Whether ``--json`` was given.
+
+    Returns:
+        A recording console, or ``None``.
+    """
+    if record is None:
+        return None
+    return _make_recording_console(no_color=no_color, file=StringIO() if json_output else None)
+
+
+def _export_recording_on_exit(record_console: _Console | None, record: Path | None, *, json_output: bool) -> None:
+    """Write the ``--record`` file when a run ends in an exit, as the text path does.
+
+    Args:
+        record_console: The recording console, if a recording was asked for.
+        record: The ``--record`` destination, if any.
+        json_output: Whether ``--json`` was given. A file that cannot be written then exits 2 with
+            one plain stderr line instead of a traceback.
+    """
+    if json_output and record is not None and record_console is not None:
+        _export_recording_for_json(record_console, record)
+    else:
+        _maybe_export_recording(record_console, record)
+
+
+def _finish_check_json(
+    outcome: CheckRun | list[tuple[int, Path]],
+    *,
+    record: Path | None,
+    record_console: _Console | None,
+    verbose: bool,
+    no_color: bool,
+    show_progress: bool,
+    show_summary: bool,
+) -> NoReturn:
+    """End a ``check --json`` run: record the usual rendering when asked, then print the response.
+
+    The ``--record`` file is rendered by the same ``report_results`` the text path calls, with the
+    same ``no_color`` and ``show_summary``, and is written before the response names it.
+
+    Args:
+        outcome: The scan, or the token counts of ``--tokens-only``.
+        record: The ``--record`` destination, if any.
+        record_console: The buffer-backed recording console, if a recording was asked for.
+        verbose: Whether ``--verbose`` was given.
+        no_color: Whether ``--no-color`` was given.
+        show_progress: Whether ``--show-progress`` was given.
+        show_summary: Whether ``--show-summary`` was given.
+
+    Raises:
+        typer.Exit: Always: 0 for a pass, 1 for a failed scan, 2 when the ``--record`` file cannot be written.
+    """
+    record_path = None
+    if record is not None and record_console is not None:
+        if isinstance(outcome, CheckRun):
+            report_results(
+                outcome,
+                verbose=verbose,
+                no_color=no_color,
+                show_progress=show_progress,
+                show_summary=show_summary,
+                record_console=record_console,
+            )
+        record_path = _export_recording_for_json(record_console, record)
+    if not isinstance(outcome, CheckRun):
+        emit_and_exit(build_tokens_response(outcome, record_path=record_path))
+    response = build_check_response(
+        outcome.results, verbose=verbose, show_progress=show_progress, fixes=outcome.fixes, record_path=record_path
+    )
+    emit_and_exit(response, code=1 if response.status == "failed" else 0)
+
+
+def _require_usable_paths(
+    ctx: typer.Context, paths: list[Path] | None, *, check: bool, fix: bool, platform: str | None, json_output: bool
+) -> list[Path]:
+    """Reject the argument combinations ``check`` cannot run, and return the paths.
+
+    On the text path, no paths or a path that does not exist prints the command's help on stdout.
+    Under ``--json`` stdout stays empty: the same stderr lines are printed and the help is not.
+
+    Args:
+        ctx: The context of the running command.
+        paths: The positional paths, if any.
+        check: Whether ``--check`` was given.
+        fix: Whether ``--fix`` was given.
+        platform: The ``--platform`` value, if any.
+        json_output: Whether ``--json`` was given.
+
+    Returns:
+        The paths, all of which exist.
+
+    Raises:
+        typer.Exit: Code 0 for no paths on the text path (after the help), 2 for any other rejection.
+    """
+    # Show help when no arguments provided
+    if not paths:
+        if json_output:
+            fail_missing_argument(ctx, "paths")
+        _show_help_and_exit(ctx, code=0)
+
+    if check and fix:
+        typer.echo("Error: Cannot use both --check and --fix flags", err=True)
+        raise typer.Exit(2) from None
+
+    if fix and platform:
+        typer.echo("Error: Cannot use --fix with --platform", err=True)
+        raise typer.Exit(2) from None
+
+    # Validate that all provided paths exist; report non-existent ones
+    bad_paths = [str(p) for p in paths if not p.exists()]
+    if bad_paths:
+        typer.echo(f"Path does not exist: {', '.join(bad_paths)}", err=True)
+        typer.echo("", err=True)
+        if json_output:
+            raise typer.Exit(2) from None
+        _show_help_and_exit(ctx, code=2)
+    return paths
+
+
 def main(
     ctx: typer.Context,
     paths: Annotated[
@@ -1732,36 +1893,20 @@ def main(
     ] = None,
     record: Path | None = None,
     include_gitignore: bool = False,
+    json_output: bool = False,
 ) -> None:
     """Validate Claude Code plugins, skills, agents, and commands."""
     # If a subcommand was invoked, don't run validation
     if ctx.invoked_subcommand is not None:
         return
 
-    # Show help when no arguments provided
-    if not paths:
-        _show_help_and_exit(ctx, code=0)
-
-    if check and fix:
-        typer.echo("Error: Cannot use both --check and --fix flags", err=True)
-        raise typer.Exit(2) from None
-
-    if fix and platform:
-        typer.echo("Error: Cannot use --fix with --platform", err=True)
-        raise typer.Exit(2) from None
-
-    # Validate that all provided paths exist; report non-existent ones
-    bad_paths = [str(p) for p in paths if not p.exists()]
-    if bad_paths:
-        typer.echo(f"Path does not exist: {', '.join(bad_paths)}", err=True)
-        typer.echo("", err=True)
-        _show_help_and_exit(ctx, code=2)
+    paths = _require_usable_paths(ctx, paths, check=check, fix=fix, platform=platform, json_output=json_output)
 
     platform_override = _resolve_platform_override(platform)
 
-    record_console = _make_recording_console(no_color=no_color) if record is not None else None
+    record_console = _open_record_console(record, no_color=no_color, json_output=json_output)
 
-    def _run_validation_command() -> None:
+    def _run_validation_command() -> CheckRun | list[tuple[int, Path]] | None:
         expanded_paths, is_batch = _resolve_filter_and_expand_paths(
             paths,
             filter_glob,
@@ -1773,6 +1918,8 @@ def main(
             expanded_paths = [_normalize_skill_folder(path) for path in expanded_paths]
 
         if tokens_only:
+            if json_output:
+                return _count_body_tokens(expanded_paths)
             _handle_tokens_only(expanded_paths, batch=is_batch)
 
         # One shared cache per scan run — prevents re-walking the directory
@@ -1793,6 +1940,20 @@ def main(
                 fixes_out=fixes_out,
             )
 
+        if json_output:
+            return collect_validation_results(
+                expanded_paths=expanded_paths,
+                check=check,
+                fix=fix,
+                verbose=verbose,
+                platform_override=platform_override,
+                validate_single_path=_validate_with_cache,
+                validate_file=lambda p, a, o: validate_file(p, a, o, policy_cache=per_run_policy_cache),
+                violations_to_result=violations_to_result,
+                adapters=ADAPTERS,
+                include_gitignore=include_gitignore,
+            )
+
         run_validation_loop(
             expanded_paths=expanded_paths,
             check=check,
@@ -1809,15 +1970,28 @@ def main(
             record_console=record_console,
             include_gitignore=include_gitignore,
         )
+        return None
 
     try:
-        _run_validation_command()
+        outcome = _run_validation_command()
     except (SystemExit, typer.Exit):
-        _maybe_export_recording(record_console, record)
+        _export_recording_on_exit(record_console, record, json_output=json_output)
         raise
     except KeyboardInterrupt:
         typer.echo("\nInterrupted by user", err=True)
         raise typer.Exit(130) from None
+
+    # Only a --json run returns here; every other run ends in an exit above.
+    if outcome is not None:
+        _finish_check_json(
+            outcome,
+            record=record,
+            record_console=record_console,
+            verbose=verbose,
+            no_color=no_color,
+            show_progress=show_progress,
+            show_summary=show_summary,
+        )
 
 
 # =============================================================================
@@ -2033,6 +2207,7 @@ def check_cmd(
             help=("Scan files that are excluded by .gitignore rules. By default, gitignored paths are skipped."),
         ),
     ] = False,
+    json_output: JsonOption = False,
 ) -> None:
     """Validate Claude Code plugins, skills, agents, and commands."""
     main(
@@ -2050,6 +2225,7 @@ def check_cmd(
         platform=platform,
         record=record,
         include_gitignore=include_gitignore,
+        json_output=json_output,
     )
 
 
@@ -2064,7 +2240,6 @@ from rich.table import Table as _Table
 from rich.text import Text as _Text
 
 from skilllint.fixture_loader import FIXTURES_ROOT as _FIXTURES_ROOT, discover_fixtures as _discover_fixtures
-from skilllint.responses import build_rule_response, build_rules_response, build_unknown_rule_response
 from skilllint.rule_registry import RuleCategory, RulePlatform, get_rule as _get_rule, list_rules as _list_rules
 from skilllint.rules.pa_series import PluginAgentFrontmatterValidator
 
