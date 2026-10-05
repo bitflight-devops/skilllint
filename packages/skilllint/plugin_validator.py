@@ -99,6 +99,7 @@ from skilllint.responses import (
     build_rules_response,
     build_tokens_response,
     build_unknown_rule_response,
+    build_version_response,
 )
 from skilllint.rule_registry import RULE_REGISTRY, rule_authority, rule_reference
 from skilllint.rules.as_series import run_as_series
@@ -2015,11 +2016,21 @@ app.add_typer(docs_app, name="docs")
 def _callback(
     ctx: typer.Context,
     version: Annotated[bool, typer.Option("--version", "-V", help="Show version and exit", is_eager=True)] = False,
+    json_output: Annotated[
+        bool, typer.Option("--json", help="With --version, print one compact JSON line instead of text.")
+    ] = False,
 ) -> None:
     """Validate Claude Code plugins, skills, agents, and commands."""
     if version:
+        if json_output:
+            emit_and_exit(build_version_response(__version__))
         print(f"skilllint {__version__}")
         raise typer.Exit
+    if json_output:
+        # Click does not hand a root option to the subcommand, so it would be a silent no-op here.
+        ctx.fail(
+            "--json before a command is valid only with --version; give it after the command, e.g. skilllint check PATH --json"
+        )
     if ctx.invoked_subcommand is None:
         print("Use 'skilllint --help' for usage.")
         raise typer.Exit(1)

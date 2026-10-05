@@ -1,16 +1,11 @@
 """Probes for the ``--json`` contract of the ``skilllint`` CLI.
 
-``--json`` does not exist yet. Every probe that needs it is ``xfail(strict=True)``
-and fails today for one recorded reason: the flag is rejected with
-``No such option: --json`` and exit 2. Each such probe's first assertion checks
-exactly that, so an unrelated failure cannot hide behind the marker, and each
-xfail names the migration step that makes the probe pass. When that step lands
-the probe XPASSes, strict mode turns the XPASS into a failure, and the author of
-the step removes the marker in the same commit.
-
-Probes that already pass are plain tests that guard behaviour the migration must
-keep: a ``--json`` before the subcommand stays rejected, and the SVG normaliser
-that record comparisons rely on works on today's default output.
+The probes were written before ``--json`` existed, as strict xfails that failed for
+one recorded reason: the flag was rejected with ``No such option: --json`` and exit
+2. Each migration step removed the markers of the probes it made pass, in the same
+commit. Every probe now runs as a plain test. :func:`assert_flag_recognised` stays as
+the first assertion of each, so a regression that makes the CLI reject the flag again
+is reported as that, not as a shape mismatch.
 
 Everything runs the real executable as a subprocess in a pinned environment
 (``cli_probe``); ``CliRunner`` is never used. The expected response shapes live in
@@ -90,36 +85,6 @@ if TYPE_CHECKING:
 
     from pydantic import BaseModel
 
-# --- what each probe is waiting for -----------------------------------------------
-
-STEP_DOCS: Final = "migration step 4 (docs --json)"
-STEP_RULES: Final = "migration step 5 (rules and rule --json, with --record)"
-STEP_CHECK: Final = "migration step 6 (check --json)"
-STEP_VERSION: Final = "migration step 7 (--version --json and the root guard)"
-
-
-def pending(step: str) -> pytest.MarkDecorator:
-    """Mark a probe as red until *step* lands.
-
-    Returns:
-        A strict xfail that accepts only an ``AssertionError``, so a harness
-        crash or an unexpected exception stays visible as a real failure.
-    """
-    return pytest.mark.xfail(
-        strict=True,
-        raises=AssertionError,
-        reason=f"RED until {step}: --json is rejected today with 'No such option: --json' (exit 2)",
-    )
-
-
-LANDED_STEPS: Final = frozenset({STEP_DOCS, STEP_RULES, STEP_CHECK})
-"""Steps whose probes already pass. A step is added here in the commit that lands it."""
-
-
-def pending_marks(step: str) -> list[pytest.MarkDecorator]:
-    """Return the strict xfail for *step*, or nothing once the step has landed."""
-    return [] if step in LANDED_STEPS else [pending(step)]
-
 
 def case(
     args: tuple[str, ...],
@@ -152,7 +117,6 @@ class Probe:
     case: Case
     exit_code: int
     model: type[BaseModel]
-    step: str
 
 
 def _docs_case(*args: str, setup: Callable[[Sandbox, Endpoints], None] = docs_page) -> Case:
@@ -160,51 +124,29 @@ def _docs_case(*args: str, setup: Callable[[Sandbox, Endpoints], None] = docs_pa
 
 
 PROBES: Final = (
-    Probe("check-pass", case(("check", "valid_skill.md", "--json")), 0, CheckResponse, STEP_CHECK),
-    Probe("check-fail", case(("check", "invalid-skill/SKILL.md", "--json")), 1, CheckResponse, STEP_CHECK),
-    Probe("check-plugin-dir", case(("check", "plug", "--json")), 1, CheckResponse, STEP_CHECK),
-    Probe("check-fix", case(("check", "fixme/SKILL.md", "--fix", "--json")), 0, CheckResponse, STEP_CHECK),
-    Probe(
-        "check-platform", case(("check", "plug", "--platform", "claude-code", "--json")), 1, CheckResponse, STEP_CHECK
-    ),
-    Probe(
-        "check-tokens-only-file",
-        case(("check", "valid_skill.md", "--tokens-only", "--json")),
-        0,
-        TokensResponse,
-        STEP_CHECK,
-    ),
+    Probe("check-pass", case(("check", "valid_skill.md", "--json")), 0, CheckResponse),
+    Probe("check-fail", case(("check", "invalid-skill/SKILL.md", "--json")), 1, CheckResponse),
+    Probe("check-plugin-dir", case(("check", "plug", "--json")), 1, CheckResponse),
+    Probe("check-fix", case(("check", "fixme/SKILL.md", "--fix", "--json")), 0, CheckResponse),
+    Probe("check-platform", case(("check", "plug", "--platform", "claude-code", "--json")), 1, CheckResponse),
+    Probe("check-tokens-only-file", case(("check", "valid_skill.md", "--tokens-only", "--json")), 0, TokensResponse),
     Probe(
         "check-tokens-only-batch",
         case(("check", "valid_skill.md", "invalid-skill/SKILL.md", "--tokens-only", "--json")),
         0,
         TokensResponse,
-        STEP_CHECK,
     ),
-    Probe("rules", case(("rules", "--json")), 0, RulesResponse, STEP_RULES),
-    Probe(
-        "rules-no-match",
-        case(("rules", "--platform", "cursor", "--category", "codex", "--json")),
-        0,
-        RulesResponse,
-        STEP_RULES,
-    ),
-    Probe("rule-found", case(("rule", "FM010", "--json")), 0, RuleFoundResponse, STEP_RULES),
-    Probe("rule-unknown", case(("rule", "ZZ999", "--json")), 1, RuleUnknownResponse, STEP_RULES),
-    Probe("version", case(("--version", "--json")), 0, VersionResponse, STEP_VERSION),
-    Probe(
-        "docs-fetch-new",
-        _docs_case("fetch", f"{SERVED_TOKEN}/new.md", setup=empty_workspace),
-        0,
-        FetchResponse,
-        STEP_DOCS,
-    ),
+    Probe("rules", case(("rules", "--json")), 0, RulesResponse),
+    Probe("rules-no-match", case(("rules", "--platform", "cursor", "--category", "codex", "--json")), 0, RulesResponse),
+    Probe("rule-found", case(("rule", "FM010", "--json")), 0, RuleFoundResponse),
+    Probe("rule-unknown", case(("rule", "ZZ999", "--json")), 1, RuleUnknownResponse),
+    Probe("version", case(("--version", "--json")), 0, VersionResponse),
+    Probe("docs-fetch-new", _docs_case("fetch", f"{SERVED_TOKEN}/new.md", setup=empty_workspace), 0, FetchResponse),
     Probe(
         "docs-fetch-no-cache",
         _docs_case("fetch", f"{CLOSED_TOKEN}/new.md", setup=empty_workspace),
         1,
         FetchNoCacheResponse,
-        STEP_DOCS,
     ),
     Probe(
         "docs-fetch-authorities",
@@ -216,34 +158,24 @@ PROBES: Final = (
         ),
         1,
         AuthoritiesResponse,
-        STEP_DOCS,
     ),
     Probe(
         "docs-fetch-authorities-empty-registry",
         case(("docs", "fetch-authorities", "--json"), empty_workspace, docs=True, authority_urls=()),
         0,
         AuthoritiesResponse,
-        STEP_DOCS,
     ),
-    Probe("docs-latest-found", _docs_case("latest", "page"), 0, LatestFoundResponse, STEP_DOCS),
-    Probe("docs-latest-not-found", _docs_case("latest", "absent"), 1, LatestNotFoundResponse, STEP_DOCS),
-    Probe("docs-sections", _docs_case("sections", PAGE_PATH), 0, SectionsResponse, STEP_DOCS),
-    Probe("docs-section-found", _docs_case("section", PAGE_PATH, "Usage"), 0, SectionFoundResponse, STEP_DOCS),
-    Probe("docs-section-not-found", _docs_case("section", PAGE_PATH, "Absent"), 1, SectionNotFoundResponse, STEP_DOCS),
-    Probe("docs-verify-intact", _docs_case("verify", PAGE_PATH), 0, VerifyResponse, STEP_DOCS),
-    Probe(
-        "docs-verify-modified", _docs_case("verify", PAGE_PATH, setup=docs_page_modified), 1, VerifyResponse, STEP_DOCS
-    ),
-    Probe(
-        "docs-verify-unverifiable",
-        _docs_case("verify", PAGE_PATH, setup=docs_page_unverifiable),
-        1,
-        VerifyResponse,
-        STEP_DOCS,
-    ),
+    Probe("docs-latest-found", _docs_case("latest", "page"), 0, LatestFoundResponse),
+    Probe("docs-latest-not-found", _docs_case("latest", "absent"), 1, LatestNotFoundResponse),
+    Probe("docs-sections", _docs_case("sections", PAGE_PATH), 0, SectionsResponse),
+    Probe("docs-section-found", _docs_case("section", PAGE_PATH, "Usage"), 0, SectionFoundResponse),
+    Probe("docs-section-not-found", _docs_case("section", PAGE_PATH, "Absent"), 1, SectionNotFoundResponse),
+    Probe("docs-verify-intact", _docs_case("verify", PAGE_PATH), 0, VerifyResponse),
+    Probe("docs-verify-modified", _docs_case("verify", PAGE_PATH, setup=docs_page_modified), 1, VerifyResponse),
+    Probe("docs-verify-unverifiable", _docs_case("verify", PAGE_PATH, setup=docs_page_unverifiable), 1, VerifyResponse),
 )
 
-_PROBE_PARAMS: Final = [pytest.param(probe, marks=pending_marks(probe.step), id=probe.id) for probe in PROBES]
+_PROBE_PARAMS: Final = [pytest.param(probe, id=probe.id) for probe in PROBES]
 
 
 @pytest.mark.parametrize("probe", _PROBE_PARAMS)
@@ -297,51 +229,37 @@ class UsageProbe:
 
     id: str
     args: tuple[str, ...]
-    step: str
     same_stderr_as_default: bool
     message: bytes | None = None
     """Text the stderr must contain, when the default path has no such error to copy."""
 
 
 _USAGE_PROBES: Final = (
-    UsageProbe("check-no-paths", ("check",), STEP_CHECK, same_stderr_as_default=False, message=b"Missing argument"),
-    UsageProbe("check-nonexistent-path", ("check", "nope.md"), STEP_CHECK, same_stderr_as_default=True),
+    UsageProbe("check-no-paths", ("check",), same_stderr_as_default=False, message=b"Missing argument"),
+    UsageProbe("check-nonexistent-path", ("check", "nope.md"), same_stderr_as_default=True),
     UsageProbe(
-        "check-tokens-only-nonexistent-path",
-        ("check", "nope.md", "--tokens-only"),
-        STEP_CHECK,
-        same_stderr_as_default=True,
+        "check-tokens-only-nonexistent-path", ("check", "nope.md", "--tokens-only"), same_stderr_as_default=True
     ),
-    UsageProbe("check-unknown-file-type", ("check", "weird.xyz"), STEP_CHECK, same_stderr_as_default=True),
-    UsageProbe(
-        "check-check-and-fix", ("check", "valid_skill.md", "--check", "--fix"), STEP_CHECK, same_stderr_as_default=True
-    ),
+    UsageProbe("check-unknown-file-type", ("check", "weird.xyz"), same_stderr_as_default=True),
+    UsageProbe("check-check-and-fix", ("check", "valid_skill.md", "--check", "--fix"), same_stderr_as_default=True),
     UsageProbe(
         "check-fix-and-platform",
         ("check", "valid_skill.md", "--fix", "--platform", "claude-code"),
-        STEP_CHECK,
         same_stderr_as_default=True,
     ),
-    UsageProbe(
-        "check-invalid-platform", ("check", "plug", "--platform", "bogus"), STEP_CHECK, same_stderr_as_default=True
-    ),
-    UsageProbe(
-        "check-invalid-filter-type", ("check", "plug", "--filter-type", "foo"), STEP_CHECK, same_stderr_as_default=True
-    ),
+    UsageProbe("check-invalid-platform", ("check", "plug", "--platform", "bogus"), same_stderr_as_default=True),
+    UsageProbe("check-invalid-filter-type", ("check", "plug", "--filter-type", "foo"), same_stderr_as_default=True),
     UsageProbe(
         "check-filter-with-filter-type",
         ("check", "plug", "--filter", "skills/*", "--filter-type", "skills"),
-        STEP_CHECK,
         same_stderr_as_default=True,
     ),
-    UsageProbe("rules-invalid-severity", ("rules", "--severity", "bogus"), STEP_RULES, same_stderr_as_default=True),
-    UsageProbe("rule-missing-argument", ("rule",), STEP_RULES, same_stderr_as_default=True),
+    UsageProbe("rules-invalid-severity", ("rules", "--severity", "bogus"), same_stderr_as_default=True),
+    UsageProbe("rule-missing-argument", ("rule",), same_stderr_as_default=True),
 )
 
 
-@pytest.mark.parametrize(
-    "probe", [pytest.param(probe, marks=pending_marks(probe.step), id=probe.id) for probe in _USAGE_PROBES]
-)
+@pytest.mark.parametrize("probe", [pytest.param(probe, id=probe.id) for probe in _USAGE_PROBES])
 def test_usage_errors_exit_2_with_plain_stderr_and_empty_stdout(probe: UsageProbe, tmp_path: Path) -> None:
     """The stdout help dump of the default path is dropped; the stderr message stays as it is."""
     _, run = run_probe(tmp_path, case((*probe.args, "--json")))
@@ -372,20 +290,19 @@ class RecordProbe:
     args: tuple[str, ...]
     exit_code: int
     model: type[RecordedResponse]
-    step: str
 
 
 _RECORD_COMMANDS: Final = (
-    RecordProbe("check", ("check", "invalid-skill/SKILL.md"), 1, CheckResponse, STEP_CHECK),
-    RecordProbe("check-tokens-only", ("check", "invalid-skill", "--tokens-only"), 0, TokensResponse, STEP_CHECK),
-    RecordProbe("rules", ("rules",), 0, RulesResponse, STEP_RULES),
-    RecordProbe("rule", ("rule", "FM010"), 0, RuleFoundResponse, STEP_RULES),
+    RecordProbe("check", ("check", "invalid-skill/SKILL.md"), 1, CheckResponse),
+    RecordProbe("check-tokens-only", ("check", "invalid-skill", "--tokens-only"), 0, TokensResponse),
+    RecordProbe("rules", ("rules",), 0, RulesResponse),
+    RecordProbe("rule", ("rule", "FM010"), 0, RuleFoundResponse),
 )
 _RECORD_SUFFIX_START: Final = {".svg": "<svg", ".html": "<!DOCTYPE html>"}
 
 
 _RECORD_PARAMS: Final = [
-    pytest.param(probe, suffix, marks=pending_marks(probe.step), id=f"{probe.id}{suffix}")
+    pytest.param(probe, suffix, id=f"{probe.id}{suffix}")
     for probe in _RECORD_COMMANDS
     for suffix in _RECORD_SUFFIX_START
 ]
@@ -409,9 +326,7 @@ def test_record_path_is_absolute_and_resolved_and_the_file_exists(
     assert expected.read_text(encoding="utf-8").startswith(_RECORD_SUFFIX_START[suffix])
 
 
-@pytest.mark.parametrize(
-    "probe", [pytest.param(probe, marks=pending_marks(probe.step), id=probe.id) for probe in _RECORD_COMMANDS]
-)
+@pytest.mark.parametrize("probe", [pytest.param(probe, id=probe.id) for probe in _RECORD_COMMANDS])
 def test_html_record_is_byte_identical_to_the_default_path(probe: RecordProbe, tmp_path: Path) -> None:
     """HTML carries no title, so ``--json`` must not change the recorded bytes at all."""
     args = (*probe.args, "--record", "out.html")
@@ -423,9 +338,7 @@ def test_html_record_is_byte_identical_to_the_default_path(probe: RecordProbe, t
     assert (json_sandbox.case / "out.html").read_bytes() == (default_sandbox.case / "out.html").read_bytes()
 
 
-@pytest.mark.parametrize(
-    "probe", [pytest.param(probe, marks=pending_marks(probe.step), id=probe.id) for probe in _RECORD_COMMANDS]
-)
+@pytest.mark.parametrize("probe", [pytest.param(probe, id=probe.id) for probe in _RECORD_COMMANDS])
 def test_svg_record_differs_from_the_default_path_only_in_title_and_id(probe: RecordProbe, tmp_path: Path) -> None:
     """The SVG title is the argv, so it gains ``--json``; the Rich id hash follows the title. Nothing else changes."""
     args = (*probe.args, "--record", "out.svg")
@@ -919,7 +832,6 @@ def test_a_directory_argument_keeps_failing_as_it_does_today(subcommand: tuple[s
 
 
 @pytest.mark.parametrize("args", [("--version", "--json"), ("--json", "--version"), ("-V", "--json")], ids=" ".join)
-@pending(STEP_VERSION)
 def test_version_json_prints_name_and_version_in_any_flag_order(args: tuple[str, ...], tmp_path: Path) -> None:
     """The root ``--json`` is valid with ``--version``, before or after it, long or short."""
     _, run = run_probe(tmp_path, case(args))
