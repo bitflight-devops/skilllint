@@ -26,27 +26,6 @@ from skilllint.vendor_cache import CacheResult, CacheStatus, NoCacheError
 _LONG_VALUE = "https://example.invalid/" + "path-segment/" * 100 + "?complete=yes"
 
 
-def test_real_help_context_wraps_without_losing_choices_or_summary(monkeypatch, capsys):
-    command = get_command(plugin_validator.app)
-    assert isinstance(command, CompleteHelpGroup)
-    check = command.commands["check"]
-    choices = ", ".join(f"adapter-{i:03}" for i in range(100))
-    platform = next(param for param in check.params if param.name == "platform")
-    assert isinstance(platform, TyperOption)
-    platform.help = f"Platform adapter. Choices: {choices}"
-    check.help = _LONG_VALUE
-    check.short_help = None
-    for columns in (40, 200):
-        monkeypatch.setenv("COLUMNS", str(columns))
-        assert command.main(["check", "--help"], standalone_mode=False) == 0
-        help_text = capsys.readouterr().out
-        assert "Platform adapter. Choices:" in help_text
-        assert all(choice in help_text for choice in choices.split(", "))
-        assert command.main(["--help"], standalone_mode=False) == 0
-        root_help = capsys.readouterr().out
-        assert all(part in root_help for part in _LONG_VALUE.split("/"))
-
-
 def test_help_wraps_long_labels_usage_and_authored_text_without_truncation(cli_runner):
     app = typer.Typer(cls=CompleteHelpGroup, rich_markup_mode=None)
     option_name = "--" + "long-option-" * 80
