@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final, no_type_check
 
 import pytest
-from hypothesis import given, strategies as st
+from hypothesis import given, settings, strategies as st
 
 from skilllint import responses
 from skilllint.models import AppliedFix, ValidationIssue, ValidationResult
@@ -146,6 +146,9 @@ def _register_strategies() -> None:  # pragma: no cover - registration only
 
 
 @pytest.mark.parametrize("model", RESPONSE_MODELS, ids=lambda model: model.__name__)
+@settings(
+    deadline=None
+)  # Building and dumping a large generated response is slow under a loaded machine; time is not the contract.
 @given(data=st.data())
 def test_response_survives_a_json_round_trip(model: type[Response], data: st.DataObject) -> None:
     """Dumping and validating again gives an equal model, and the dump is one line."""
