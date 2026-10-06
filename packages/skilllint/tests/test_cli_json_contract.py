@@ -821,14 +821,15 @@ def test_a_missing_file_is_distinguishable_from_an_empty_one_by_file_exists(
 @pytest.mark.parametrize(
     "subcommand", [("sections", "sources"), ("section", "sources", "Usage"), ("verify", "sources")]
 )
-def test_a_directory_argument_keeps_failing_as_it_does_today(subcommand: tuple[str, ...], tmp_path: Path) -> None:
-    """Pre-existing behaviour, unchanged: ``IsADirectoryError``, exit 1, and no JSON on stdout."""
+def test_a_directory_argument_is_a_usage_error(subcommand: tuple[str, ...], tmp_path: Path) -> None:
+    """An existing directory is neither a document result nor an internal traceback."""
     _, run = docs_json(tmp_path, *subcommand)
 
     assert_flag_recognised(run)
-    assert run.returncode == 1
+    assert run.returncode == 2
     assert run.stdout == b""
-    assert b"IsADirectoryError" in run.stderr
+    assert b"Expected a file path: sources" in run.stderr
+    assert b"Traceback" not in run.stderr
 
 
 # --- version and the root --------------------------------------------------------------------
