@@ -369,25 +369,25 @@ def test_verify_response_has_null_expectations_without_a_sidecar() -> None:
 # --- output -----------------------------------------------------------------------------------
 
 
-def test_emit_response_writes_one_compact_line_with_non_ascii_as_utf8() -> None:
-    """``model_dump_json()`` plus one newline, nothing else, and no ``\\u`` escape for non-ASCII."""
+def test_emit_response_writes_one_compact_ascii_safe_line() -> None:
+    """Non-ASCII is escaped so surrogateescaped POSIX paths remain reversible JSON."""
     buffer = io.StringIO()
 
     with redirect_stdout(buffer):
         emit_response(build_version_response("1.0.0-é"))
 
-    assert buffer.getvalue() == '{"command":"version","name":"skilllint","version":"1.0.0-é"}\n'
+    assert buffer.getvalue() == '{"command":"version","name":"skilllint","version":"1.0.0-\\u00e9"}\n'
 
 
-def test_emit_response_is_byte_equal_to_model_dump_json_for_ordinary_content() -> None:
-    """Building the line with ``json`` changes nothing for text that is valid UTF-8, controls and quotes included."""
+def test_emit_response_round_trips_ordinary_content() -> None:
+    """Escaping changes representation, not the parsed response data."""
     response = build_rules_response([_rule('# T "q" \\ \t tab \u2028 é 𝄞\x01\n' + "x" * 50)])
     buffer = io.StringIO()
 
     with redirect_stdout(buffer):
         emit_response(response)
 
-    assert buffer.getvalue() == response.model_dump_json() + "\n"
+    assert json.loads(buffer.getvalue()) == response.model_dump(mode="json")
 
 
 if __name__ == "__main__":
