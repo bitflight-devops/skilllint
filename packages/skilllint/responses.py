@@ -25,6 +25,7 @@ Contract:
 from __future__ import annotations
 
 import json
+import re
 import sys
 from typing import TYPE_CHECKING, Final, Literal
 
@@ -99,6 +100,14 @@ RULES_LIST_COMMAND: Final = "skilllint rules"
 """The command that lists every rule id, named by an unknown-rule response."""
 
 Status = Literal["passed", "failed"]
+
+_LONE_SURROGATE: Final = re.compile(r"[\ud800-\udfff]")
+"""A str holds a surrogate only for a byte that was not UTF-8, so every match is lone."""
+
+
+def _escape_surrogate(match: re.Match[str]) -> str:
+    """Return the JSON escape of one lone surrogate."""
+    return f"\\u{ord(match.group()):04x}"
 
 
 class Response(BaseModel):
@@ -722,16 +731,18 @@ def emit_response(response: BaseModel) -> None:
     r"""Write *response* to stdout as one compact JSON line.
 
     This is the only stdout writer on the ``--json`` path. The line is the response as compact JSON
-    plus ``\\n``: no indentation, no extra whitespace, non-ASCII as UTF-8.
+    plus a newline: no indentation, no extra whitespace, non-ASCII as UTF-8.
 
-    A POSIX path or argument may hold bytes that are not UTF-8; Python carries them as lone
-    surrogates, which no UTF-8 encoder accepts, so ``model_dump_json()`` would raise. The text
-    path writes through a stdout that replaces what it cannot encode (``?``), so the line is
-    built here and given the same replacement. Every other character is written unchanged.
+    A POSIX path or argument may hold bytes that are not UTF-8. Python carries them as lone
+    surrogates, which no UTF-8 encoder accepts. ``model_dump_json()`` raises on them even with
+    ``ensure_ascii=True``, and Pydantic's JSON parser rejects the escape that would carry them, so
+    the line is built with :mod:`json`. A lone surrogate is written as its JSON escape (``\\udcff``),
+    which is valid JSON, keeps two different bad paths apart, and gives the original bytes back to a
+    Python consumer through ``os.fsencode(json.loads(line))``. No other character is escaped.
 
     Args:
         response: The response model to print.
     """
     document = json.dumps(response.model_dump(mode="json"), ensure_ascii=False, separators=(",", ":"))
-    sys.stdout.write(document.encode("utf-8", errors="replace").decode("utf-8") + "\n")
+    sys.stdout.write(_LONE_SURROGATE.sub(_escape_surrogate, document) + "\n")
     sys.stdout.flush()
