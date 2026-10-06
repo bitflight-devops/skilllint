@@ -9,8 +9,10 @@ from __future__ import annotations
 import contextlib
 import os
 import tempfile
+from copy import copy
 from pathlib import Path
 
+from rich.cells import cell_len
 from rich.console import Console
 
 __all__ = ["build_svg_title", "export_recording", "make_recording_console"]
@@ -31,7 +33,7 @@ def make_recording_console(*, no_color: bool = False) -> Console:
     Returns:
         A :class:`rich.console.Console` instance ready for recording.
     """
-    return Console(record=True, force_terminal=True, no_color=no_color)
+    return Console(record=True, force_terminal=True, no_color=no_color, soft_wrap=True)
 
 
 def _strip_trailing_whitespace(content: str) -> str:
@@ -90,7 +92,20 @@ def export_recording(console: Console, path: Path, *, title: str) -> None:
     suffix = path.suffix.lower()
     if suffix not in {".svg", ".html"}:
         raise ValueError(f"Unsupported file extension {path.suffix!r}. Use .svg or .html.")
-    content = console.export_html(clear=False) if suffix == ".html" else console.export_svg(title=title, clear=False)
+    if suffix == ".html":
+        content = console.export_html(clear=False)
+    else:
+        # SVG's canvas is sized from console.width, even when the recorded
+        # output was deliberately wider. Measure the capture before exporting
+        # so the image does not clip content that survived terminal rendering.
+        export_console = copy(console)
+        # Explicit dimensions bypass Rich's TERM=dumb width fallback. The copy
+        # shares the recorded segments but leaves the caller's layout intact.
+        export_console.height = console.height
+        export_console.width = max(
+            (cell_len(line) for line in console.export_text(clear=False).splitlines()), default=console.width
+        )
+        content = export_console.export_svg(title=title, clear=False)
     content = _strip_trailing_whitespace(content)
 
     # Atomic write: write to a sibling temp file, then rename.
