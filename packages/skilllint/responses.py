@@ -730,16 +730,13 @@ def emit_response(response: BaseModel) -> None:
     r"""Write *response* to stdout as one compact JSON line.
 
     This is the only stdout writer on the ``--json`` path. The line is the response as compact JSON
-    plus ``\\n``: no indentation, no extra whitespace, non-ASCII as UTF-8.
-
-    A POSIX path or argument may hold bytes that are not UTF-8; Python carries them as lone
-    surrogates, which no UTF-8 encoder accepts, so ``model_dump_json()`` would raise. The text
-    path writes through a stdout that replaces what it cannot encode (``?``), so the line is
-    built here and given the same replacement. Every other character is written unchanged.
+    plus ``\\n``: no indentation or extra whitespace. Non-ASCII characters use JSON
+    escapes so lone surrogates produced by POSIX ``surrogateescape`` remain reversible instead
+    of collapsing distinct filesystem paths to the same replacement character.
 
     Args:
         response: The response model to print.
     """
-    document = json.dumps(response.model_dump(mode="json"), ensure_ascii=False, separators=(",", ":"))
-    sys.stdout.write(document.encode("utf-8", errors="replace").decode("utf-8") + "\n")
+    document = json.dumps(response.model_dump(mode="json"), ensure_ascii=True, separators=(",", ":"))
+    sys.stdout.write(document + "\n")
     sys.stdout.flush()
