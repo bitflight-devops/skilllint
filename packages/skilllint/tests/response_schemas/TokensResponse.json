@@ -1,0 +1,58 @@
+{
+  "$defs": {
+    "TokenCount": {
+      "additionalProperties": false,
+      "description": "Body token count of one resolved path.",
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "tokens": {
+          "title": "Tokens",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "path",
+        "tokens"
+      ],
+      "title": "TokenCount",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "``skilllint check --tokens-only --json``: one entry per resolved path, always a list.",
+  "properties": {
+    "command": {
+      "const": "check --tokens-only",
+      "default": "check --tokens-only",
+      "title": "Command",
+      "type": "string"
+    },
+    "record_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Record Path"
+    },
+    "tokens": {
+      "items": {
+        "$ref": "#/$defs/TokenCount"
+      },
+      "title": "Tokens",
+      "type": "array"
+    }
+  },
+  "required": [
+    "tokens"
+  ],
+  "title": "TokensResponse",
+  "type": "object"
+}
