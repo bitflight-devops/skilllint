@@ -7,10 +7,10 @@ state the input its rule actually reads (frontmatter dict, file content,
 a filesystem path, a parsed manifest, ...), which varies by what the rule
 needs to detect.
 
-Import note: ``rules/`` functions that need ``ValidationIssue`` (and other
-``plugin_validator`` symbols) import them inside the function body rather
-than at module level, because ``plugin_validator`` imports ``rules/`` —
-a module-level import the other way would be circular.
+Dependency note: rule modules depend on domain owners such as
+``skilllint.models`` and ``skilllint.rule_registry``, never on the legacy
+``skilllint.plugin_validator`` CLI/compatibility facade. This keeps rule
+registration below orchestration and avoids circular ownership.
 """
 
 from __future__ import annotations
