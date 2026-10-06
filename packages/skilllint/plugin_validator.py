@@ -1515,6 +1515,49 @@ def _show_rule_doc(rule_id: str, *, console: _Console) -> None:
     print_panel(console, _Panel(_Syntax(resolved_doc, "markdown", word_wrap=False), title=entry.id, border_style="dim"))
 
 
+def _show_rules_report(
+    platform: str | None = None, category: str | None = None, severity: str | None = None, *, console: _Console
+) -> None:
+    """Show the rules table and the footer that points at ``skilllint rule`` (rules_cmd and its ``--json`` record)."""
+    _show_rules_list(platform=platform, category=category, severity=severity, console=console)
+    console.print("\n[dim]Run [bold]skilllint rule [yellow]RULE_ID[/yellow][/bold] for details.[/dim]")
+
+
+def _rules_json(*, platform: str | None, category: str | None, severity: str | None, record: Path | None) -> NoReturn:
+    """Finish ``rules --json``: record the usual rendering into a buffer when asked, then print the response.
+
+    Raises:
+        typer.Exit: Always, with code 0, or 2 when the ``--record`` file cannot be written.
+    """
+    record_path = None
+    if record is not None:
+        console = _make_recording_console(file=StringIO())
+        _show_rules_report(platform=platform, category=category, severity=severity, console=console)
+        record_path = _export_recording_for_json(console, record)
+    rules = _list_rules(platform=platform, category=category, severity=severity)
+    emit_and_exit(build_rules_response(rules, record_path=record_path))
+
+
+def _rule_json(rule_id: str, record: Path | None) -> NoReturn:
+    """Finish ``rule --json``: record the usual rendering into a buffer when asked, then print the response.
+
+    An unknown rule writes no file, as on the text path, so its response has no ``record_path``.
+
+    Raises:
+        typer.Exit: Always, with code 0, 1 for an unknown rule, or 2 when the ``--record`` file cannot be written.
+    """
+    entry = _get_rule(rule_id)
+    if entry is None:
+        emit_and_exit(build_unknown_rule_response(rule_id), code=1)
+    record_path = None
+    if record is not None:
+        console = _make_recording_console(file=StringIO())
+        _show_rule_doc(rule_id, console=console)
+        record_path = _export_recording_for_json(console, record)
+    documentation = _resolve_example_markers(entry.docstring)
+    emit_and_exit(build_rule_response(entry, documentation=documentation, record_path=record_path))
+
+
 # =============================================================================
 # CHECK COMMAND
 # =============================================================================
