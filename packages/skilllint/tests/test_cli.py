@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 @pytest.fixture(autouse=True)
 def _controlled_claude_plugin_validation(mocker: MockerFixture) -> None:
     mocker.patch(
-        "skilllint.plugin_validator._run_claude_plugin_validate",
+        "skilllint.validators.plugins._run_claude_plugin_validate",
         return_value=subprocess.CompletedProcess(
             args=["claude", "plugin", "validate"], returncode=0, stdout="validation passed", stderr=""
         ),
@@ -600,9 +600,9 @@ class TestPathArguments:
         manifest.parent.mkdir(parents=True)
         manifest.write_text('{"skills": ["custom/missing-skill"]}')
         mocker.patch("shutil.which", return_value="/usr/local/bin/claude")
-        mocker.patch("skilllint.plugin_validator._should_skip_claude_validate", return_value=False)
+        mocker.patch("skilllint.validators.plugins._should_skip_claude_validate", return_value=False)
         mocker.patch(
-            "skilllint.plugin_validator._run_claude_plugin_validate",
+            "skilllint.validators.plugins._run_claude_plugin_validate",
             return_value=subprocess.CompletedProcess(
                 args=["claude", "plugin", "validate"], returncode=1, stdout="referenced file does not exist", stderr=""
             ),

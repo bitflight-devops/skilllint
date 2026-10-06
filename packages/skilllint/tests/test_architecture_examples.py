@@ -65,6 +65,42 @@ def test_legacy_validator_reexports_dependency_owned_utilities() -> None:
     assert scan_runtime._load_plugin_json is load_plugin_json
 
 
+def test_plugin_validators_and_helpers_reexport_from_legacy_facade() -> None:
+    """Legacy plugin-validator imports resolve to the focused owner."""
+    import skilllint.plugin_validator as legacy
+    from skilllint.validators import plugins
+
+    for name in (
+        "PluginLinkEscapeValidator",
+        "PluginRegistrationValidator",
+        "PluginStructureValidator",
+        "CLAUDE_PLUGIN_MANIFEST",
+        "CODEX_PLUGIN_MANIFEST",
+        "LK004_SCOPE_DIRS",
+        "find_link_scope_plugin_dir",
+        "_run_claude_plugin_validate",
+        "_git_bash_path",
+        "_should_skip_claude_validate",
+        "is_claude_available",
+        "validate_with_claude",
+    ):
+        assert getattr(legacy, name) is getattr(plugins, name)
+
+
+def test_plugin_validator_owner_does_not_import_legacy_or_fixing() -> None:
+    """Plugin validation stays below the compatibility facade and fixing orchestration."""
+    path = ROOT / "packages" / "skilllint" / "validators" / "plugins.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    forbidden = {"skilllint.plugin_validator", "skilllint.fixing", "skilllint.reporting"}
+    imported: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module is not None:
+            imported.add(node.module)
+        elif isinstance(node, ast.Import):
+            imported.update(alias.name for alias in node.names)
+    assert not imported & forbidden
+
+
 def test_frontmatter_validators_and_helpers_reexport_from_legacy_facade() -> None:
     """Legacy frontmatter imports resolve to the focused subsystem owner."""
     import skilllint.plugin_validator as legacy

@@ -137,7 +137,7 @@ def _clear_plugin_json_cache() -> None:
 @pytest.fixture(autouse=True)
 def _controlled_claude_plugin_validation(mocker: MockerFixture) -> None:
     mocker.patch(
-        "skilllint.plugin_validator._run_claude_plugin_validate",
+        "skilllint.validators.plugins._run_claude_plugin_validate",
         return_value=subprocess.CompletedProcess(
             args=["claude", "plugin", "validate"], returncode=0, stdout="validation passed", stderr=""
         ),
