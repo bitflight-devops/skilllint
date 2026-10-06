@@ -58,13 +58,13 @@ def default_listed_path(tmp_path: Path, *args: str) -> str:
 
 
 def test_check_lists_the_path_as_the_default_output_shows_it(tmp_path: Path) -> None:
-    """The file path in ``files`` is the one the default output prints, ``?`` included."""
+    """The JSON path remains exact even though the text reporter must display a replacement."""
     _, run = run_probe(tmp_path, case("check", f"{BAD_NAME}/SKILL.md", "--verbose", "--json"))
     shown = default_listed_path(tmp_path, f"{BAD_NAME}/SKILL.md", "--verbose")
 
     response = parse(CheckResponse, run)
-    assert shown == f"{SHOWN_NAME}/SKILL.md"
-    assert [file.path for file in response.files] == [shown]
+    assert shown == f"{BAD_NAME}/SKILL.md"
+    assert [file.path for file in response.files] == [f"{BAD_NAME}/SKILL.md"]
     assert run.returncode in {0, 1}
 
 
@@ -74,7 +74,7 @@ def test_fix_reports_the_fixed_path_the_same_way(tmp_path: Path) -> None:
 
     response = parse(CheckResponse, run)
     assert response.fixes
-    assert {fix.path for fix in response.fixes} == {f"{SHOWN_NAME}/SKILL.md"}
+    assert {fix.path for fix in response.fixes} == {f"{BAD_NAME}/SKILL.md"}
     assert (sandbox.case / BAD_NAME / "SKILL.md").read_bytes() != (sandbox.case / "invalid_skill.md").read_bytes()
 
 
@@ -83,7 +83,7 @@ def test_tokens_only_lists_the_path_the_same_way(tmp_path: Path) -> None:
     _, run = run_probe(tmp_path, case("check", f"{BAD_NAME}/SKILL.md", "--tokens-only", "--json"))
 
     response = parse(TokensResponse, run)
-    assert [entry.path for entry in response.tokens] == [f"{SHOWN_NAME}/SKILL.md"]
+    assert [entry.path for entry in response.tokens] == [f"{BAD_NAME}/SKILL.md"]
     assert run.returncode == 0
 
 
@@ -102,7 +102,7 @@ def test_docs_file_argument_is_echoed_the_same_way(
     _, run = run_probe(tmp_path, case(*args, "--json"))
 
     response = parse(model, run)
-    assert response.file == f"{SHOWN_NAME}.md"
+    assert response.file == f"{BAD_NAME}.md"
     assert response.file_exists is False
 
 
@@ -111,7 +111,33 @@ def test_docs_section_query_and_rule_id_are_echoed_the_same_way(tmp_path: Path) 
     _, section = run_probe(tmp_path, case("docs", "section", "absent.md", BAD_NAME, "--json"), root="section")
     _, rule = run_probe(tmp_path, case("rule", BAD_NAME, "--json"), root="rule")
 
-    assert parse(SectionNotFoundResponse, section).query == SHOWN_NAME
+    assert parse(SectionNotFoundResponse, section).query == BAD_NAME
     unknown = parse(RuleUnknownResponse, rule)
-    assert unknown.rule_id == SHOWN_NAME
+    assert unknown.rule_id == BAD_NAME
     assert rule.returncode == 1
+
+def test_distinct_non_utf8_paths_do_not_collapse_after_json_round_trip(tmp_path: Path) -> None:
+    """Different undecodable bytes remain different machine-readable path identities."""
+    other_name = os.fsdecode(b"sk\xfe")
+
+    def two_bad_workspaces(sandbox: Sandbox, endpoints: Endpoints) -> None:
+        workspace(sandbox, endpoints)
+        shutil.copytree(sandbox.case / "fixme", sandbox.case / BAD_NAME)
+        shutil.copytree(sandbox.case / "fixme", sandbox.case / other_name)
+
+    _, first = run_probe(
+        tmp_path,
+        case("check", f"{BAD_NAME}/SKILL.md", "--show-progress", "--json", setup=two_bad_workspaces),
+        root="first",
+    )
+    _, second = run_probe(
+        tmp_path,
+        case("check", f"{other_name}/SKILL.md", "--show-progress", "--json", setup=two_bad_workspaces),
+        root="second",
+    )
+
+    first_path = parse(CheckResponse, first).files[0].path
+    second_path = parse(CheckResponse, second).files[0].path
+    assert first_path == f"{BAD_NAME}/SKILL.md"
+    assert second_path == f"{other_name}/SKILL.md"
+    assert first_path != second_path
