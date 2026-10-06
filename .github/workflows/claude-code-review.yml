@@ -54,14 +54,11 @@ jobs:
           prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }} --comment'
           # The inline-comment MCP server is only installed when its tool is
           # listed here; tool list from the action's docs/solutions.md review example.
-          # Run 37478584859 (job 112320461611): the review's first turn launched a
-          # background subagent for the eligibility check, then its second turn
-          # said "Waiting for the eligibility check to finish" and ended. Ending
-          # the turn ends this headless job, so no review ran. The appended
-          # system prompt keeps every subagent in the foreground.
+          # Run 37478584859 (job 112320461611) ended while an eligibility
+          # subagent was still running. The documented environment control above
+          # forces Agent calls to stay in the foreground for this headless job.
           claude_args: |
             --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
-            --append-system-prompt "Run every subagent in the foreground: set run_in_background to false on each Agent call, and do not end your turn while a subagent is still running."
           # Without this the job log hides the whole run ("full output hidden for
           # security"), so a review that stops after two turns and posts nothing
           # cannot be diagnosed. The log is readable by anyone who can read this
