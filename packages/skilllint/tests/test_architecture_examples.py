@@ -92,7 +92,12 @@ def test_plugin_validator_owner_does_not_import_legacy_or_fixing() -> None:
     path = ROOT / "packages" / "skilllint" / "validators" / "plugins.py"
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     forbidden = {"skilllint.plugin_validator", "skilllint.fixing", "skilllint.reporting"}
-    imported = {node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) and node.module is not None}
+    imported: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module is not None:
+            imported.add(node.module)
+        elif isinstance(node, ast.Import):
+            imported.update(alias.name for alias in node.names)
     assert not imported & forbidden
 
 
