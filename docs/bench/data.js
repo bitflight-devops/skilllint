@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1791296993882,
+  "lastUpdate": 1791299138339,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -3438,6 +3438,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 353.044,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "dependabot[bot]",
+            "username": "dependabot[bot]",
+            "email": "49699333+dependabot[bot]@users.noreply.github.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "a08c63f2cec8ed1c7f999ba294e0b8d607c6598d",
+          "message": "build(deps-dev): bump the python-dev group across 1 directory with 6 updates (#323)\n\n* build(deps-dev): bump the python-dev group across 1 directory with 6 updates\n\nBumps the python-dev group with 6 updates in the / directory:\n\n| Package | From | To |\n| --- | --- | --- |\n| [hatchling](https://github.com/pypa/hatch) | `1.32.3` | `1.32.4` |\n| [hypothesis](https://github.com/HypothesisWorks/hypothesis) | `6.168.0` | `6.168.3` |\n| [prek](https://github.com/j178/prek) | `0.5.3` | `0.5.4` |\n| [pytest-mock](https://github.com/pytest-dev/pytest-mock) | `3.15.1` | `3.16.0` |\n| [ruff](https://github.com/astral-sh/ruff) | `0.16.8` | `0.16.10` |\n| [ty](https://github.com/astral-sh/ty) | `0.0.82` | `0.0.84` |\n\n\n\nUpdates `hatchling` from 1.32.3 to 1.32.4\n- [Release notes](https://github.com/pypa/hatch/releases)\n- [Commits](https://github.com/pypa/hatch/compare/hatchling-v1.32.3...hatchling-v1.32.4)\n\nUpdates `hypothesis` from 6.168.0 to 6.168.3\n- [Release notes](https://github.com/HypothesisWorks/hypothesis/releases)\n- [Commits](https://github.com/HypothesisWorks/hypothesis/compare/v6.168.0...v6.168.3)\n\nUpdates `prek` from 0.5.3 to 0.5.4\n- [Release notes](https://github.com/j178/prek/releases)\n- [Changelog](https://github.com/j178/prek/blob/master/CHANGELOG.md)\n- [Commits](https://github.com/j178/prek/compare/v0.5.3...v0.5.4)\n\nUpdates `pytest-mock` from 3.15.1 to 3.16.0\n- [Release notes](https://github.com/pytest-dev/pytest-mock/releases)\n- [Changelog](https://github.com/pytest-dev/pytest-mock/blob/main/CHANGELOG.rst)\n- [Commits](https://github.com/pytest-dev/pytest-mock/compare/v3.15.1...v3.16.0)\n\nUpdates `ruff` from 0.16.8 to 0.16.10\n- [Release notes](https://github.com/astral-sh/ruff/releases)\n- [Changelog](https://github.com/astral-sh/ruff/blob/main/CHANGELOG.md)\n- [Commits](https://github.com/astral-sh/ruff/compare/0.16.8...0.16.10)\n\nUpdates `ty` from 0.0.82 to 0.0.84\n- [Release notes](https://github.com/astral-sh/ty/releases)\n- [Changelog](https://github.com/astral-sh/ty/blob/main/CHANGELOG.md)\n- [Commits](https://github.com/astral-sh/ty/compare/0.0.82...0.0.84)\n\n---\nupdated-dependencies:\n- dependency-name: hatchling\n  dependency-version: 1.32.4\n  dependency-type: direct:development\n  update-type: version-update:semver-patch\n  dependency-group: python-dev\n- dependency-name: hypothesis\n  dependency-version: 6.168.3\n  dependency-type: direct:development\n  update-type: version-update:semver-patch\n  dependency-group: python-dev\n- dependency-name: prek\n  dependency-version: 0.5.4\n  dependency-type: direct:development\n  update-type: version-update:semver-patch\n  dependency-group: python-dev\n- dependency-name: pytest-mock\n  dependency-version: 3.16.0\n  dependency-type: direct:development\n  update-type: version-update:semver-minor\n  dependency-group: python-dev\n- dependency-name: ruff\n  dependency-version: 0.16.10\n  dependency-type: direct:development\n  update-type: version-update:semver-patch\n  dependency-group: python-dev\n- dependency-name: ty\n  dependency-version: 0.0.84\n  dependency-type: direct:development\n  update-type: version-update:semver-patch\n  dependency-group: python-dev\n...\n\nSigned-off-by: dependabot[bot] <support@github.com>\n\n* build(deps-dev): advance direct dependency floors\n\n* build(deps-dev): align ruff hook with project version\n\n* build(deps-dev): sync lock requirement metadata\n\n---------\n\nSigned-off-by: dependabot[bot] <support@github.com>\nCo-authored-by: dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>\nCo-authored-by: Jamie Nelson <stack@bitflight.io>",
+          "timestamp": "2026-10-06T15:02:42Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/a08c63f2cec8ed1c7f999ba294e0b8d607c6598d"
+        },
+        "date": 1791299137801,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 4748.602,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 5035.99,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 5573.102,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 198.769,
             "unit": "files/s"
           }
         ]
