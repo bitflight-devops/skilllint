@@ -325,7 +325,7 @@ def assert_one_compact_line(stdout: bytes) -> None:
     assert stdout.endswith(b"\n"), "stdout does not end in a newline"
     assert stdout.count(b"\n") == 1, "stdout is more than one line"
     document = _JSON_DOCUMENT.validate_json(stdout)
-    compact = json.dumps(document, separators=(",", ":"), ensure_ascii=False) + "\n"
+    compact = json.dumps(document, separators=(",", ":"), ensure_ascii=True) + "\n"
     assert stdout.decode("utf-8") == compact, "stdout is valid JSON but not compact"
 
 
