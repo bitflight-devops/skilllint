@@ -1,0 +1,66 @@
+{
+  "$defs": {
+    "SectionEntry": {
+      "additionalProperties": false,
+      "description": "One section of a markdown file; the preamble is ``heading: \"\"`` and ``level: 0``.",
+      "properties": {
+        "heading": {
+          "title": "Heading",
+          "type": "string"
+        },
+        "level": {
+          "title": "Level",
+          "type": "integer"
+        },
+        "line_end": {
+          "title": "Line End",
+          "type": "integer"
+        },
+        "line_start": {
+          "title": "Line Start",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "level",
+        "heading",
+        "line_start",
+        "line_end"
+      ],
+      "title": "SectionEntry",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "``skilllint docs sections --json``.\n\n``file_exists`` is JSON-only: the default output reports a missing file like an empty one.",
+  "properties": {
+    "command": {
+      "const": "docs sections",
+      "default": "docs sections",
+      "title": "Command",
+      "type": "string"
+    },
+    "file": {
+      "title": "File",
+      "type": "string"
+    },
+    "file_exists": {
+      "title": "File Exists",
+      "type": "boolean"
+    },
+    "sections": {
+      "items": {
+        "$ref": "#/$defs/SectionEntry"
+      },
+      "title": "Sections",
+      "type": "array"
+    }
+  },
+  "required": [
+    "file",
+    "file_exists",
+    "sections"
+  ],
+  "title": "SectionsResponse",
+  "type": "object"
+}
