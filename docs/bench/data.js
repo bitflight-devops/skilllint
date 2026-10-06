@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1790771423749,
+  "lastUpdate": 1791270857896,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -3354,6 +3354,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 107.952,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "9552fe102388ed3f501a6f9de18511bf4f019c8f",
+          "message": "fix(cli): preserve complete output at content-driven widths (#312)\n\n* fix(cli): render help at a fixed width regardless of terminal size\n\n`check --help` wrapped and truncated the platform choices line in a\nnarrow terminal (40 columns cut \"--platform\" and the choices list).\nFollow the daily-releases scripts' Typer pattern: set\ncontext_settings={\"terminal_width\": 800} and rich_markup_mode=None on\nthe root app so Click renders plain, unwrapped help. Rich help sizes\nitself from TERMINAL_WIDTH/COLUMNS and ignores terminal_width, so both\nsettings are needed. Tighten the platform help test to assert the full\nchoices line under COLUMNS=40.\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01K5rAHJfvZyEEaUQghV7hCQ\n\n* fix(cli): disable Typer pretty exceptions on the root app\n\nComplete the Typer app pattern used by the daily-releases,\nreceiving-pr-reviews and create-merge-request-changelog skill scripts\nin claude_skills: pretty_exceptions_enable=False alongside the fixed\nterminal_width and rich_markup_mode=None, so tracebacks are plain and\nnot wrapped to the terminal width either.\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01K5rAHJfvZyEEaUQghV7hCQ\n\n* docs(cli): source the 800-column help width\n\nState why terminal_width is fixed, how Click uses it\n(typer/_click/formatting.py), and that 800 matches the Typer apps in\nclaude_skills, per the repository's no-invented-constraints rule.\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01K5rAHJfvZyEEaUQghV7hCQ\n\n* fix(cli): keep docstring sections and drop dead Rich help settings\n\nAddress review findings on the fixed-width help change:\n\n- Click re-wraps help paragraphs, so Args:/Raises: docstring sections ran\n  together on one line once rich_markup_mode=None applied. Mark those\n  paragraphs with Click's \\b no-rewrap marker (D301 noqa: ruff's autofix\n  would add an r prefix and silently break the marker).\n- The root app's rich_markup_mode=None governs every sub-app, so\n  docs_app's rich_markup_mode=\"rich\" and the rich_help_panel arguments\n  did nothing. Help output is byte-identical across all 11 screens\n  without them; remove them.\n- State the real default help width, including its 50-column floor\n  (typer/_click/formatting.py), in the terminal_width comment.\n- Test that every help screen (root, check, rule, rules, docs, docs\n  fetch) renders identically at 40 and 200 columns, which also covers\n  the docs sub-app inheriting terminal_width, and that each docstring\n  section keeps its own lines.\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01K5rAHJfvZyEEaUQghV7hCQ\n\n* test(cli): test help width through the real formatter, set docs_app Rich off\n\nTyper's CliRunner forces the help width to 80 columns while it runs, so\nthe width tests passed even with terminal_width removed (mutation check:\n0 of 6 screens failed). Call the app directly with COLUMNS set so the\nreal width path runs; dropping terminal_width and re-enabling Rich now\neach fail 7 tests.\n\nAlso state rich_markup_mode=None on docs_app instead of leaving the\nTyper default (\"rich\") and relying on the root app to override it. The\nroot app governs every sub-app, so output is unchanged.\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01K5rAHJfvZyEEaUQghV7hCQ\n\n* fix(cli): preserve complete output with content-driven rendering\n\nReplace fixed-width help reflow with complete-content Typer formatting.\nMeasure Rich tables and panels from content, preserve raw docs and literal\ndiagnostic values, and size SVG recordings from their captured lines.\n\nVerify long fields, nested Markdown, row context, narrow terminals, and\nTERM=dumb with forced color. Full suite: 1936 passed, 14 skipped.\n\n* perf(cli): render complete diagnostics once per file\n\n---------\n\nCo-authored-by: Claude <noreply@anthropic.com>",
+          "timestamp": "2026-10-06T07:10:44Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/9552fe102388ed3f501a6f9de18511bf4f019c8f"
+        },
+        "date": 1791270857144,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 15101.696,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 15528.378,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 16088.578,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 64.463,
             "unit": "files/s"
           }
         ]
