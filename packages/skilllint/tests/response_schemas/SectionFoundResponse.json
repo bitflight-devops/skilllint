@@ -1,0 +1,62 @@
+{
+  "additionalProperties": false,
+  "description": "``skilllint docs section --json`` with a match; ``text`` is the section slice, unaltered.",
+  "properties": {
+    "command": {
+      "const": "docs section",
+      "default": "docs section",
+      "title": "Command",
+      "type": "string"
+    },
+    "file": {
+      "title": "File",
+      "type": "string"
+    },
+    "file_exists": {
+      "title": "File Exists",
+      "type": "boolean"
+    },
+    "heading": {
+      "title": "Heading",
+      "type": "string"
+    },
+    "level": {
+      "title": "Level",
+      "type": "integer"
+    },
+    "line_end": {
+      "title": "Line End",
+      "type": "integer"
+    },
+    "line_start": {
+      "title": "Line Start",
+      "type": "integer"
+    },
+    "query": {
+      "title": "Query",
+      "type": "string"
+    },
+    "status": {
+      "const": "found",
+      "default": "found",
+      "title": "Status",
+      "type": "string"
+    },
+    "text": {
+      "title": "Text",
+      "type": "string"
+    }
+  },
+  "required": [
+    "file",
+    "file_exists",
+    "query",
+    "heading",
+    "level",
+    "line_start",
+    "line_end",
+    "text"
+  ],
+  "title": "SectionFoundResponse",
+  "type": "object"
+}
