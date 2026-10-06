@@ -28,10 +28,10 @@ keywords = [
 ]
 requires-python = ">=3.11,<3.15"
 dependencies = [
-    "gitpython>=3.1.61",
+    "gitpython>=3.2.0",
     "httpx>=0.28.1",
     "marko>=2.2.4",
-    "msgspec>=0.21.1",
+    "msgspec>=0.22.0",
     "pydantic>=2.13.5",
     "ruamel-yaml>=0.19.1",
     "tiktoken>=0.14.0",
