@@ -70,7 +70,8 @@ def test_help_wraps_long_labels_usage_and_authored_text_without_truncation(cli_r
     assert "..." not in result.stdout
 
 
-@pytest.mark.parametrize("columns", [40, 200])\ndef test_table_preserves_values_on_their_rows_and_in_recording(columns, tmp_path):
+@pytest.mark.parametrize("columns", [40, 200])
+def test_table_preserves_values_on_their_rows_and_in_recording(columns, tmp_path):
     console = Console(file=io.StringIO(), width=columns, height=25, record=True)
     table = Table("ID", "Description")
     table.add_row("RULE_IDENTIFIER", _LONG_VALUE)
