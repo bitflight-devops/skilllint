@@ -99,7 +99,10 @@ from skilllint.rules.as_series import run_as_series
 from skilllint.rules.fm_series import check_fm001, check_fm010
 from skilllint.rules.hk_series import _git_file_has_execute_bit  # noqa: F401 - compatibility re-export
 from skilllint.scan_runtime import (
+    CheckRun,
     _resolve_filter_and_expand_paths,
+    collect_validation_results,
+    report_results,
     find_marketplace_dir,  # noqa: F401 - compatibility re-export
     find_plugin_dir,  # noqa: F401 - compatibility re-export
     run_validation_loop,
@@ -762,21 +765,24 @@ def validate_single_path(
 
 
 def _count_body_tokens(paths: list[Path]) -> list[tuple[int, Path]]:
-    """Count body tokens for each path.
+    """Count body tokens for each path and return normalized path entries."""
+    counter = MarkdownTokenCounter()
+    entries: list[tuple[int, Path]] = []
+    for path in paths:
+        if not path.exists():
+            typer.echo(f"Error: Path does not exist: {path}", err=True)
+            raise typer.Exit(2) from None
+        normalized_path = _normalize_skill_folder(path)
+        token_count = counter.count_file_tokens(normalized_path, body_only=True)
+        if token_count is None:
+            typer.echo(f"Error: Could not count tokens for: {normalized_path}", err=True)
+            raise typer.Exit(2) from None
+        entries.append((token_count, normalized_path))
+    return entries
 
-    Token counting always uses body-only (frontmatter stripped) so that the
-    numbers match what ComplexityValidator measures against thresholds.
 
-    Args:
-        paths: Paths to count tokens for
-
-    Returns:
-        ``(token count, normalised path)`` per path, in order. A skill folder is
-        normalised to its ``SKILL.md``.
-
-    Raises:
-        typer.Exit: Code 2, after a stderr line, when a path does not exist or cannot be counted.
-    """
+def _handle_tokens_only(paths: list[Path], *, batch: bool = False) -> None:
+    """Print token counts using the existing text contract and exit."""
     entries = _count_body_tokens(paths)
     if batch:
         for count, path in entries:
