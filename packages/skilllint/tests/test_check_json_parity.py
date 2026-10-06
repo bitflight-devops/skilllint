@@ -261,11 +261,15 @@ def assert_parity(file_results: FileResults, text: str, *, verbose: bool, show_p
     expected = parse_text(text)
 
     assert [file.path for file in actual] == [file.path for file in expected], "listed files differ"
-    assert [(f.path, v.name) for f in actual for v in f.validators] == [
-        (f.path, v.name) for f in expected for v in f.validators
-    ], "listed validators differ"
+    # JSON may intentionally expose additional passed validators under --show-progress so
+    # omitted machine-readable results are recoverable. Every validator visible in text
+    # must still be present with the same identity and status.
+    actual_validators = {(f.path, v.name): v for f in actual for v in f.validators}
+    expected_validators = {(f.path, v.name): v for f in expected for v in f.validators}
+    assert expected_validators.keys() <= actual_validators.keys(), "text-visible validator missing from JSON"
     for text_file, json_file in zip(expected, actual, strict=True):
-        for text_validator, json_validator in zip(text_file.validators, json_file.validators, strict=True):
+        for text_validator in text_file.validators:
+            json_validator = actual_validators[(text_file.path, text_validator.name)]
             if text_validator.status is not None:
                 assert json_validator.status == text_validator.status, (text_file.path, text_validator.name)
     assert [(f.path, v.name, *i) for f in actual for v in f.validators for i in v.issues] == [
