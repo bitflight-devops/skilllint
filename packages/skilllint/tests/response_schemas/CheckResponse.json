@@ -1,0 +1,298 @@
+{
+  "$defs": {
+    "AppliedFix": {
+      "description": "Record of one fix a validator applied to a file under --fix.",
+      "properties": {
+        "codes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Codes",
+          "type": "array"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "path": {
+          "format": "path",
+          "title": "Path",
+          "type": "string"
+        },
+        "validator": {
+          "title": "Validator",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "validator",
+        "codes",
+        "description"
+      ],
+      "title": "AppliedFix",
+      "type": "object"
+    },
+    "CheckSummary": {
+      "additionalProperties": false,
+      "description": "Counts over every file that was checked, listed or not.\n\n``passed_with_warnings`` is what ``scan_runtime._compute_summary`` calls ``warnings``: the\npassed files that carry at least one warning.",
+      "properties": {
+        "failed": {
+          "title": "Failed",
+          "type": "integer"
+        },
+        "passed": {
+          "title": "Passed",
+          "type": "integer"
+        },
+        "passed_with_warnings": {
+          "title": "Passed With Warnings",
+          "type": "integer"
+        },
+        "total_files": {
+          "title": "Total Files",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "total_files",
+        "passed",
+        "failed",
+        "passed_with_warnings"
+      ],
+      "title": "CheckSummary",
+      "type": "object"
+    },
+    "CheckedFile": {
+      "additionalProperties": false,
+      "description": "One listed file; ``path`` is exactly what the text reporters print.",
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "passed",
+            "failed"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "validators": {
+          "items": {
+            "$ref": "#/$defs/CheckedValidator"
+          },
+          "title": "Validators",
+          "type": "array"
+        }
+      },
+      "required": [
+        "path",
+        "status",
+        "validators"
+      ],
+      "title": "CheckedFile",
+      "type": "object"
+    },
+    "CheckedValidator": {
+      "additionalProperties": false,
+      "description": "One validator listed inside a file; ``status`` is the validator's own ``passed``.",
+      "properties": {
+        "issues": {
+          "items": {
+            "$ref": "#/$defs/ValidationIssue"
+          },
+          "title": "Issues",
+          "type": "array"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "passed",
+            "failed"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "status",
+        "issues"
+      ],
+      "title": "CheckedValidator",
+      "type": "object"
+    },
+    "Omitted": {
+      "additionalProperties": false,
+      "description": "What ``files`` left out, and the flags that bring it back.\n\nAll counts are 0 and ``retrieve_with`` is empty when nothing was left out. A flag that was\nalready given is never named, because it restores nothing.",
+      "properties": {
+        "info_issues": {
+          "title": "Info Issues",
+          "type": "integer"
+        },
+        "passed_files": {
+          "title": "Passed Files",
+          "type": "integer"
+        },
+        "passed_validators": {
+          "title": "Passed Validators",
+          "type": "integer"
+        },
+        "retrieve_with": {
+          "items": {
+            "enum": [
+              "--show-progress",
+              "--verbose"
+            ],
+            "type": "string"
+          },
+          "title": "Retrieve With",
+          "type": "array"
+        }
+      },
+      "required": [
+        "passed_files",
+        "passed_validators",
+        "info_issues",
+        "retrieve_with"
+      ],
+      "title": "Omitted",
+      "type": "object"
+    },
+    "ValidationIssue": {
+      "description": "A single validation issue.",
+      "properties": {
+        "code": {
+          "pattern": "^[A-Z]{2}\\d{3}$",
+          "title": "Code",
+          "type": "string"
+        },
+        "docs_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Docs Url"
+        },
+        "field": {
+          "title": "Field",
+          "type": "string"
+        },
+        "line": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Line"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "severity": {
+          "enum": [
+            "error",
+            "warning",
+            "info"
+          ],
+          "title": "Severity",
+          "type": "string"
+        },
+        "suggestion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Suggestion"
+        }
+      },
+      "required": [
+        "field",
+        "severity",
+        "message",
+        "code"
+      ],
+      "title": "ValidationIssue",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "``skilllint check --json``.",
+  "properties": {
+    "command": {
+      "const": "check",
+      "default": "check",
+      "title": "Command",
+      "type": "string"
+    },
+    "files": {
+      "items": {
+        "$ref": "#/$defs/CheckedFile"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "fixes": {
+      "items": {
+        "$ref": "#/$defs/AppliedFix"
+      },
+      "title": "Fixes",
+      "type": "array"
+    },
+    "omitted": {
+      "$ref": "#/$defs/Omitted"
+    },
+    "record_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Record Path"
+    },
+    "status": {
+      "enum": [
+        "passed",
+        "failed"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "summary": {
+      "$ref": "#/$defs/CheckSummary"
+    }
+  },
+  "required": [
+    "status",
+    "summary",
+    "files",
+    "fixes",
+    "omitted"
+  ],
+  "title": "CheckResponse",
+  "type": "object"
+}
