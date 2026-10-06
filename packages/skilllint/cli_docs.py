@@ -259,6 +259,9 @@ def sections(
     """
     if json_output:
         file_exists = file_path.exists()
+        if file_exists and not file_path.is_file():
+            typer.echo(f"Expected a file path: {file_path}", err=True)
+            raise typer.Exit(code=2) from None
         emit_and_exit(build_sections_response(file_path, list_sections(file_path), file_exists=file_exists))
     table = format_section_index(file_path)
     typer.echo(table)
@@ -284,6 +287,9 @@ def section(
     """
     if json_output:
         file_exists = file_path.exists()
+        if file_exists and not file_path.is_file():
+            typer.echo(f"Expected a file path: {file_path}", err=True)
+            raise typer.Exit(code=2) from None
         found = find_section(file_path, heading)
         emit_and_exit(
             build_section_response(file_path, heading, found, file_exists=file_exists),
@@ -318,6 +324,9 @@ def verify(
     """
     if json_output:
         file_exists = file_path.exists()
+        if file_exists and not file_path.is_file():
+            typer.echo(f"Expected a file path: {file_path}", err=True)
+            raise typer.Exit(code=2) from None
         outcome = verify_integrity(file_path)
         emit_and_exit(
             build_verify_response(outcome, file_exists=file_exists),
