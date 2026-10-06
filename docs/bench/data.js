@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1791270857896,
+  "lastUpdate": 1791296993882,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -3396,6 +3396,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 64.463,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "1d395b28fd5724b53c430aab60a54ca495cd0dce",
+          "message": "fix(bench): make the clean benchmark fixture actually clean (#328)\n\nbenchmark-plugin-1000-skills.zip is documented as \"clean, no violations\"\nand timed as the scan-clean scenario, but every one of its 1000 files\nreported FM010, SK008, SK005, SK006 and 28 LK001 findings. No generator\nexisted for it; the same findings appear when the rules at the commit\nthat added it (bcdfd32) scan it, so this is not rule drift.\n\nAdd scripts/generate_clean_fixture.py (deterministic, mirrors\ngenerate_violations_fixture.py), regenerate the archive with it, and add\ntests/test_benchmark_clean_fixture.py, which runs the real CLI on the\nextracted archive and asserts exit 0 and no rule findings.\n\n\nClaude-Session: https://claude.ai/code/session_01K5rAHJfvZyEEaUQghV7hCQ\n\nCo-authored-by: Claude <noreply@anthropic.com>",
+          "timestamp": "2026-10-06T14:27:22Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/1d395b28fd5724b53c430aab60a54ca495cd0dce"
+        },
+        "date": 1791296992646,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 2610.295,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 2835.338,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 3246.795,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 353.044,
             "unit": "files/s"
           }
         ]
