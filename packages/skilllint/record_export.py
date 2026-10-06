@@ -28,7 +28,8 @@ def make_recording_console(*, no_color: bool = False, file: TextIO | None = None
     The console uses ``record=True`` so that output written to it can later be
     exported via :func:`export_recording`.  ``force_terminal=True`` ensures
     Rich renders ANSI codes and colours regardless of whether stdout is a TTY
-    (required for faithful SVG/HTML output).
+    (required for faithful SVG/HTML output). Emoji replacement is off, so a
+    ``:name:`` in printed data (``:100:`` in ``file:100:``) stays literal.
 
     Args:
         no_color: When *True*, disable colour output (passes ``no_color=True``
@@ -41,7 +42,7 @@ def make_recording_console(*, no_color: bool = False, file: TextIO | None = None
     Returns:
         A :class:`rich.console.Console` instance ready for recording.
     """
-    return Console(record=True, force_terminal=True, no_color=no_color, soft_wrap=True, file=file)
+    return Console(record=True, force_terminal=True, no_color=no_color, soft_wrap=True, file=file, emoji=False)
 
 
 def _strip_trailing_whitespace(content: str) -> str:
