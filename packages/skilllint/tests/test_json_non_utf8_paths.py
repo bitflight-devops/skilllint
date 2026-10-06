@@ -63,7 +63,7 @@ def test_check_lists_the_path_as_the_default_output_shows_it(tmp_path: Path) -> 
     shown = default_listed_path(tmp_path, f"{BAD_NAME}/SKILL.md", "--verbose")
 
     response = parse(CheckResponse, run)
-    assert shown == f"{BAD_NAME}/SKILL.md"
+    assert shown == f"{SHOWN_NAME}/SKILL.md"
     assert [file.path for file in response.files] == [f"{BAD_NAME}/SKILL.md"]
     assert run.returncode in {0, 1}
 
