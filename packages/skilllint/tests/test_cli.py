@@ -861,7 +861,7 @@ class TestHelpRendering:
     """Help text is plain and does not depend on the caller's terminal."""
 
     @pytest.mark.parametrize("args", _HELP_INVOCATIONS, ids=" ".join)
-    def test_help_is_independent_of_terminal_width(
+    def test_help_wraps_to_terminal_width(
         self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], args: list[str]
     ) -> None:
         """Help renders identically in a 40- and a 200-column terminal.
