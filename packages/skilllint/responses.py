@@ -235,8 +235,8 @@ def build_check_response(
     """Build the ``check`` response, listing what ``ConsoleReporter`` and ``CIReporter`` print.
 
     A file is listed in full unless every validator passed and none has a visible issue. Under
-    *show_progress* such a file is listed with no validators, the way the reporters print one
-    ``PASSED`` line for it. Inside a listed file a validator appears when it has a visible issue
+    *show_progress* such a file includes its passed validator records so machine readers can
+    recover the complete validation result. Inside a listed file a validator appears when it has a visible issue
     or *show_progress* is set. Statuses come from ``ValidationResult.passed``, never from the
     number of errors. Everything not listed is counted in :class:`Omitted`.
 
@@ -260,8 +260,16 @@ def build_check_response(
         any_visible = any(_visible_issues(result, verbose=verbose) for _, result in validator_results)
         if all_passed and not any_visible:
             if show_progress:
-                files.append(CheckedFile(path=str(file_path), status="passed", validators=[]))
-                omitted_validators += len(validator_results)
+                files.append(
+                    CheckedFile(
+                        path=str(file_path),
+                        status="passed",
+                        validators=[
+                            CheckedValidator(name=name, status="passed", issues=[])
+                            for name, _result in validator_results
+                        ],
+                    )
+                )
             else:
                 omitted_files += 1
             continue
