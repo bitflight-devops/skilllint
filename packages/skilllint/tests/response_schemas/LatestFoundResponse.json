@@ -1,0 +1,32 @@
+{
+  "additionalProperties": false,
+  "description": "``skilllint docs latest --json`` with a match.",
+  "properties": {
+    "command": {
+      "const": "docs latest",
+      "default": "docs latest",
+      "title": "Command",
+      "type": "string"
+    },
+    "page_name": {
+      "title": "Page Name",
+      "type": "string"
+    },
+    "path": {
+      "title": "Path",
+      "type": "string"
+    },
+    "status": {
+      "const": "found",
+      "default": "found",
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "page_name",
+    "path"
+  ],
+  "title": "LatestFoundResponse",
+  "type": "object"
+}
