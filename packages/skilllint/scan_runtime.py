@@ -908,6 +908,124 @@ def _select_reporter(*, no_color: bool, record_console: Console | None) -> Repor
     return ConsoleReporter(no_color=no_color)
 
 
+@dataclass(frozen=True)
+class CheckRun:
+    """What one scan produced, before anything is reported.
+
+    Attributes:
+        results: Validator results per file, in scan order.
+        fixes: Fixes ``--fix`` applied, in the order they were recorded.
+    """
+
+    results: FileResults
+    fixes: list[AppliedFix]
+
+
+def collect_validation_results(
+    *,
+    expanded_paths: list[Path],
+    check: bool,
+    fix: bool,
+    verbose: bool,
+    platform_override: str | None,
+    validate_single_path: ValidateSinglePathFn,
+    validate_file: ValidateFileFn,
+    violations_to_result: ViolationsToResultFn,
+    adapters: dict[str, PlatformAdapter],
+    include_gitignore: bool = False,
+) -> CheckRun:
+    """Validate every path that is not ignored and gather the results.
+
+    Dependencies from ``plugin_validator`` are injected as callbacks to
+    avoid circular imports at module level.
+
+    Args:
+        expanded_paths: Resolved file paths to validate.
+        check: Validate only, don't auto-fix.
+        fix: Auto-fix issues where possible.
+        verbose: Show detailed output.
+        platform_override: Restrict to this adapter ID.
+        validate_single_path: Callback to validate a single path.
+        validate_file: Callback to validate a file with platform adapters.
+        violations_to_result: Callback to convert violations to ValidationResult.
+        adapters: Platform adapter registry dict.
+        include_gitignore: When False (default), paths excluded by git's ignore
+            rules are skipped. When True, gitignored paths are included.
+
+    Returns:
+        The results and the fixes applied.
+    """
+    ignore_patterns = _load_ignore_patterns()
+
+    scan_base = _compute_scan_base(expanded_paths)
+
+    ignored_set: frozenset[str] = (
+        _build_gitignore_set([_ignore_path(path) for path in expanded_paths], scan_base)
+        if not include_gitignore
+        else frozenset()
+    )
+
+    def _should_skip(p: Path) -> bool:
+        if ignore_patterns and _is_ignored(p, ignore_patterns):
+            return True
+        return str(p.resolve()) in ignored_set
+
+    all_results: FileResults = {}
+    all_fixes: list[AppliedFix] = []
+    for path in expanded_paths:
+        if _should_skip(_ignore_path(path)):
+            continue
+        if platform_override is not None:
+            violations = validate_file(_ignore_path(path), adapters, platform_override)
+            all_results[path] = [("platform", violations_to_result(violations))]
+        else:
+            file_results = validate_single_path(path, check=check, fix=fix, verbose=verbose, fixes_out=all_fixes)
+            for file_path, validator_results in file_results.items():
+                if file_path in all_results:
+                    all_results[file_path].extend(validator_results)
+                else:
+                    all_results[file_path] = list(validator_results)
+
+    return CheckRun(results=all_results, fixes=all_fixes)
+
+
+def report_results(
+    run: CheckRun,
+    *,
+    verbose: bool,
+    no_color: bool,
+    show_progress: bool,
+    show_summary: bool,
+    record_console: Console | None = None,
+) -> int:
+    """Render a scan with the selected reporter, as ``check`` prints it.
+
+    Args:
+        run: The scan to report.
+        verbose: Show detailed output.
+        no_color: Disable color output.
+        show_progress: Show per-file status.
+        show_summary: Show summary panel.
+        record_console: When provided, pass this Rich Console to ConsoleReporter
+            so its output is captured for export (e.g. SVG/HTML recording).
+
+    Returns:
+        The number of files that failed.
+    """
+    reporter = _select_reporter(no_color=no_color, record_console=record_console)
+    reporter.report(run.results, verbose=verbose, show_progress=show_progress)
+    if run.fixes:
+        # Printed before summarize(): ConsoleReporter.summarize() mutates
+        # self.console.width to fit its summary panel, so anything printed
+        # afterwards on the same console would inherit that narrowed width.
+        reporter.report_fixes(run.fixes)
+
+    total_files, passed, failed, warnings = _compute_summary(run.results)
+    if show_summary:
+        reporter.summarize(total_files, passed, failed, warnings)
+    return failed
+
+
 def run_validation_loop(
     *,
     expanded_paths: list[Path],
@@ -951,48 +1069,26 @@ def run_validation_loop(
     Raises:
         typer.Exit: Always exits with appropriate code.
     """
-    ignore_patterns = _load_ignore_patterns()
-
-    scan_base = _compute_scan_base(expanded_paths)
-
-    ignored_set: frozenset[str] = (
-        _build_gitignore_set([_ignore_path(path) for path in expanded_paths], scan_base)
-        if not include_gitignore
-        else frozenset()
+    run = collect_validation_results(
+        expanded_paths=expanded_paths,
+        check=check,
+        fix=fix,
+        verbose=verbose,
+        platform_override=platform_override,
+        validate_single_path=validate_single_path,
+        validate_file=validate_file,
+        violations_to_result=violations_to_result,
+        adapters=adapters,
+        include_gitignore=include_gitignore,
     )
-
-    def _should_skip(p: Path) -> bool:
-        if ignore_patterns and _is_ignored(p, ignore_patterns):
-            return True
-        return str(p.resolve()) in ignored_set
-
-    all_results: FileResults = {}
-    all_fixes: list[AppliedFix] = []
-    for path in expanded_paths:
-        if _should_skip(_ignore_path(path)):
-            continue
-        if platform_override is not None:
-            violations = validate_file(_ignore_path(path), adapters, platform_override)
-            all_results[path] = [("platform", violations_to_result(violations))]
-        else:
-            file_results = validate_single_path(path, check=check, fix=fix, verbose=verbose, fixes_out=all_fixes)
-            for file_path, validator_results in file_results.items():
-                if file_path in all_results:
-                    all_results[file_path].extend(validator_results)
-                else:
-                    all_results[file_path] = list(validator_results)
-
-    reporter = _select_reporter(no_color=no_color, record_console=record_console)
-    reporter.report(all_results, verbose=verbose, show_progress=show_progress)
-    if all_fixes:
-        # Printed before summarize(): ConsoleReporter.summarize() mutates
-        # self.console.width to fit its summary panel, so anything printed
-        # afterwards on the same console would inherit that narrowed width.
-        reporter.report_fixes(all_fixes)
-
-    total_files, passed, failed, warnings = _compute_summary(all_results)
-    if show_summary:
-        reporter.summarize(total_files, passed, failed, warnings)
+    failed = report_results(
+        run,
+        verbose=verbose,
+        no_color=no_color,
+        show_progress=show_progress,
+        show_summary=show_summary,
+        record_console=record_console,
+    )
 
     if failed > 0:
         raise typer.Exit(1) from None
