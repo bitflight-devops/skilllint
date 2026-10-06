@@ -57,7 +57,7 @@ def default_listed_path(tmp_path: Path, *args: str) -> str:
     return next(line for line in run.stdout.decode().splitlines() if line.strip())
 
 
-def test_check_lists_the_path_as_the_default_output_shows_it(tmp_path: Path) -> None:
+def test_check_preserves_the_machine_path_while_text_uses_display_replacement(tmp_path: Path) -> None:
     """The JSON path remains exact even though the text reporter must display a replacement."""
     _, run = run_probe(tmp_path, case("check", f"{BAD_NAME}/SKILL.md", "--verbose", "--json"))
     shown = default_listed_path(tmp_path, f"{BAD_NAME}/SKILL.md", "--verbose")
@@ -68,7 +68,7 @@ def test_check_lists_the_path_as_the_default_output_shows_it(tmp_path: Path) -> 
     assert run.returncode in {0, 1}
 
 
-def test_fix_reports_the_fixed_path_the_same_way(tmp_path: Path) -> None:
+def test_fix_preserves_the_machine_path_identity(tmp_path: Path) -> None:
     """``fixes[].path`` carries the replaced character, and the fix itself still happens."""
     sandbox, run = run_probe(tmp_path, case("check", f"{BAD_NAME}/SKILL.md", "--fix", "--json"))
 
@@ -78,7 +78,7 @@ def test_fix_reports_the_fixed_path_the_same_way(tmp_path: Path) -> None:
     assert (sandbox.case / BAD_NAME / "SKILL.md").read_bytes() != (sandbox.case / "invalid_skill.md").read_bytes()
 
 
-def test_tokens_only_lists_the_path_the_same_way(tmp_path: Path) -> None:
+def test_tokens_only_preserves_the_machine_path_identity(tmp_path: Path) -> None:
     """``tokens[].path`` carries the replaced character."""
     _, run = run_probe(tmp_path, case("check", f"{BAD_NAME}/SKILL.md", "--tokens-only", "--json"))
 
@@ -95,7 +95,7 @@ def test_tokens_only_lists_the_path_the_same_way(tmp_path: Path) -> None:
         pytest.param(("docs", "verify", f"{BAD_NAME}.md"), VerifyResponse, id="verify"),
     ],
 )
-def test_docs_file_argument_is_echoed_the_same_way(
+def test_docs_file_argument_preserves_machine_path_identity(
     args: tuple[str, ...], model: type[SectionsResponse | SectionNotFoundResponse | VerifyResponse], tmp_path: Path
 ) -> None:
     """A file argument that is not UTF-8 appears in ``file`` with the replaced character."""
@@ -106,7 +106,7 @@ def test_docs_file_argument_is_echoed_the_same_way(
     assert response.file_exists is False
 
 
-def test_docs_section_query_and_rule_id_are_echoed_the_same_way(tmp_path: Path) -> None:
+def test_docs_query_and_rule_id_preserve_machine_identity(tmp_path: Path) -> None:
     """User strings echoed back (a heading query, a rule id) get the same treatment."""
     _, section = run_probe(tmp_path, case("docs", "section", "absent.md", BAD_NAME, "--json"), root="section")
     _, rule = run_probe(tmp_path, case("rule", BAD_NAME, "--json"), root="rule")
