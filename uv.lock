@@ -1109,10 +1109,10 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "gitpython", specifier = ">=3.1.61" },
+    { name = "gitpython", specifier = ">=3.2.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "marko", specifier = ">=2.2.4" },
-    { name = "msgspec", specifier = ">=0.21.1" },
+    { name = "msgspec", specifier = ">=0.22.0" },
     { name = "pydantic", specifier = ">=2.13.5" },
     { name = "ruamel-yaml", specifier = ">=0.19.1" },
     { name = "tiktoken", specifier = ">=0.14.0" },
