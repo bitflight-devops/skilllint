@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from typer import Context
 from typer._click import Context as ClickContext
-from typer._click.formatting import HelpFormatter, wrap_text  # noqa: PLC2701 - Typer has no public HelpFormatter export.
+from textwrap import TextWrapper
+
+from typer._click.formatting import HelpFormatter  # noqa: PLC2701 - Typer has no public HelpFormatter export.
 from typer.core import TyperCommand, TyperGroup
 
 
@@ -12,9 +14,12 @@ class CompleteHelpFormatter(HelpFormatter):
     """Wrap help at terminal width without splitting authored tokens such as URLs."""
 
     def write_text(self, text: str) -> None:
-        """Write prose at the available width without breaking long words."""
+        """Write prose at the available width without breaking authored tokens."""
         text_width = max(self.width - self.current_indent, 11)
-        self.write(wrap_text(text, text_width, preserve_paragraphs=True, break_long_words=False))
+        wrapper = TextWrapper(width=text_width, break_long_words=False, break_on_hyphens=False)
+        paragraphs = text.split("\n\n")
+        rendered = "\n\n".join(wrapper.fill(" ".join(paragraph.split())) for paragraph in paragraphs)
+        self.write(rendered)
         self.write("\n")
 
 
