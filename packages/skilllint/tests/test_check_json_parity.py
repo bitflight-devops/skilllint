@@ -261,10 +261,21 @@ def assert_parity(file_results: FileResults, text: str, *, verbose: bool, show_p
     expected = parse_text(text)
 
     assert [file.path for file in actual] == [file.path for file in expected], "listed files differ"
-    assert [(f.path, v.name) for f in actual for v in f.validators] == [
-        (f.path, v.name) for f in expected for v in f.validators
+    # A fully passed file is one PASSED line in the text; JSON lists its passed validators in full so a
+    # machine reader can recover the whole result. Every other file lists the same validators in both.
+    pairs = list(zip(expected, actual, strict=True))
+    comparable = []
+    for text_file, json_file in pairs:
+        if show_progress and json_file.validators and not text_file.validators:
+            assert [(v.name, v.status) for v in json_file.validators] == [
+                (name, "passed") for name, _ in file_results[Path(json_file.path)]
+            ], ("passed file lost validators", json_file.path)
+        else:
+            comparable.append((text_file, json_file))
+    assert [(f.path, v.name) for _, f in comparable for v in f.validators] == [
+        (f.path, v.name) for f, _ in comparable for v in f.validators
     ], "listed validators differ"
-    for text_file, json_file in zip(expected, actual, strict=True):
+    for text_file, json_file in comparable:
         for text_validator, json_validator in zip(text_file.validators, json_file.validators, strict=True):
             if text_validator.status is not None:
                 assert json_validator.status == text_validator.status, (text_file.path, text_validator.name)

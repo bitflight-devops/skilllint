@@ -25,7 +25,6 @@ Contract:
 from __future__ import annotations
 
 import json
-import re
 import sys
 from typing import TYPE_CHECKING, Final, Literal
 
@@ -100,14 +99,6 @@ RULES_LIST_COMMAND: Final = "skilllint rules"
 """The command that lists every rule id, named by an unknown-rule response."""
 
 Status = Literal["passed", "failed"]
-
-_LONE_SURROGATE: Final = re.compile(r"[\ud800-\udfff]")
-"""A str holds a surrogate only for a byte that was not UTF-8, so every match is lone."""
-
-
-def _escape_surrogate(match: re.Match[str]) -> str:
-    """Return the JSON escape of one lone surrogate."""
-    return f"\\u{ord(match.group()):04x}"
 
 
 class Response(BaseModel):
@@ -244,8 +235,8 @@ def build_check_response(
     """Build the ``check`` response, listing what ``ConsoleReporter`` and ``CIReporter`` print.
 
     A file is listed in full unless every validator passed and none has a visible issue. Under
-    *show_progress* such a file is listed with no validators, the way the reporters print one
-    ``PASSED`` line for it. Inside a listed file a validator appears when it has a visible issue
+    *show_progress* such a file includes its passed validator records so machine readers can
+    recover the complete validation result. Inside a listed file a validator appears when it has a visible issue
     or *show_progress* is set. Statuses come from ``ValidationResult.passed``, never from the
     number of errors. Everything not listed is counted in :class:`Omitted`.
 
@@ -269,8 +260,16 @@ def build_check_response(
         any_visible = any(_visible_issues(result, verbose=verbose) for _, result in validator_results)
         if all_passed and not any_visible:
             if show_progress:
-                files.append(CheckedFile(path=str(file_path), status="passed", validators=[]))
-                omitted_validators += len(validator_results)
+                files.append(
+                    CheckedFile(
+                        path=str(file_path),
+                        status="passed",
+                        validators=[
+                            CheckedValidator(name=name, status="passed", issues=[])
+                            for name, _result in validator_results
+                        ],
+                    )
+                )
             else:
                 omitted_files += 1
             continue
@@ -731,18 +730,13 @@ def emit_response(response: BaseModel) -> None:
     r"""Write *response* to stdout as one compact JSON line.
 
     This is the only stdout writer on the ``--json`` path. The line is the response as compact JSON
-    plus a newline: no indentation, no extra whitespace, non-ASCII as UTF-8.
-
-    A POSIX path or argument may hold bytes that are not UTF-8. Python carries them as lone
-    surrogates, which no UTF-8 encoder accepts. ``model_dump_json()`` raises on them even with
-    ``ensure_ascii=True``, and Pydantic's JSON parser rejects the escape that would carry them, so
-    the line is built with :mod:`json`. A lone surrogate is written as its JSON escape (``\\udcff``),
-    which is valid JSON, keeps two different bad paths apart, and gives the original bytes back to a
-    Python consumer through ``os.fsencode(json.loads(line))``. No other character is escaped.
+    plus ``\\n``: no indentation or extra whitespace. Non-ASCII characters use JSON
+    escapes so lone surrogates produced by POSIX ``surrogateescape`` remain reversible instead
+    of collapsing distinct filesystem paths to the same replacement character.
 
     Args:
         response: The response model to print.
     """
-    document = json.dumps(response.model_dump(mode="json"), ensure_ascii=False, separators=(",", ":"))
-    sys.stdout.write(_LONE_SURROGATE.sub(_escape_surrogate, document) + "\n")
+    document = json.dumps(response.model_dump(mode="json"), ensure_ascii=True, separators=(",", ":"))
+    sys.stdout.write(document + "\n")
     sys.stdout.flush()

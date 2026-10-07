@@ -482,14 +482,17 @@ def test_validator_status_follows_passed_not_the_error_count(tmp_path: Path) -> 
     assert issues["SK005"].severity == "warning"
 
 
-def test_show_progress_lists_a_passed_file_without_validators(tmp_path: Path) -> None:
-    """The text path prints one ``PASSED`` line for such a file and no validators; so does the JSON."""
+def test_show_progress_makes_passed_validator_results_recoverable(tmp_path: Path) -> None:
+    """Machine-readable progress includes passed validators instead of reporting irretrievable omissions."""
     response = check_json(tmp_path, "--show-progress", target="valid_skill.md")
 
     assert response.status == "passed"
-    assert [(file.path, file.status, file.validators) for file in response.files] == [("valid_skill.md", "passed", [])]
+    assert [(file.path, file.status) for file in response.files] == [("valid_skill.md", "passed")]
+    assert response.files[0].validators
+    assert all(validator.status == "passed" and validator.issues == [] for validator in response.files[0].validators)
     assert response.omitted.passed_files == 0
-    assert response.omitted.passed_validators > 0, "the validators of a passed-and-listed file count as omitted"
+    assert response.omitted.passed_validators == 0
+    assert response.omitted.retrieve_with == []
 
 
 def test_a_clean_tree_lists_nothing_and_says_how_to_see_more(tmp_path: Path) -> None:
@@ -818,14 +821,15 @@ def test_a_missing_file_is_distinguishable_from_an_empty_one_by_file_exists(
 @pytest.mark.parametrize(
     "subcommand", [("sections", "sources"), ("section", "sources", "Usage"), ("verify", "sources")]
 )
-def test_a_directory_argument_keeps_failing_as_it_does_today(subcommand: tuple[str, ...], tmp_path: Path) -> None:
-    """Pre-existing behaviour, unchanged: ``IsADirectoryError``, exit 1, and no JSON on stdout."""
+def test_a_directory_argument_is_a_usage_error(subcommand: tuple[str, ...], tmp_path: Path) -> None:
+    """An existing directory is neither a document result nor an internal traceback."""
     _, run = docs_json(tmp_path, *subcommand)
 
     assert_flag_recognised(run)
-    assert run.returncode == 1
+    assert run.returncode == 2
     assert run.stdout == b""
-    assert b"IsADirectoryError" in run.stderr
+    assert b"Expected a file path: sources" in run.stderr
+    assert b"Traceback" not in run.stderr
 
 
 # --- version and the root --------------------------------------------------------------------

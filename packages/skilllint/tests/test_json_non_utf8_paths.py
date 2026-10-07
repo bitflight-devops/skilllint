@@ -1,23 +1,20 @@
-"""``--json`` carries a path that is not valid UTF-8 as a JSON escape, losing nothing.
+"""``--json`` carries a path that is not valid UTF-8 the way the default output shows it.
 
 A POSIX path may hold bytes that are not UTF-8. Python reads such an argument with
-``surrogateescape``, so the string holds a lone surrogate, and the default output shows it as ``?``
-because its stdout replaces what it cannot encode. ``--json`` must neither crash (a serialisation
-traceback with exit 1 and an empty stdout is indistinguishable from "validation failed") nor lose
-the byte: two different bad paths would collide as ``?``. The lone surrogate is written as the JSON
-escape ``\\udcff``, which is valid JSON, and a Python consumer recovers the original bytes with
-``os.fsencode(json.loads(line))``. Ordinary non-ASCII text stays readable and unescaped.
+``surrogateescape``, so the string holds a lone surrogate. The default output writes it through a
+stdout that replaces what it cannot encode, so the byte shows as ``?`` and the command exits
+normally. ``--json`` must not turn that into a serialisation traceback with exit 1 and an empty
+stdout, which an agent cannot tell from "validation failed": it carries the same ``?``.
 """
 
 from __future__ import annotations
 
-import json
 import os
 import shutil
-from typing import TYPE_CHECKING, Final, TypeVar
+from typing import TYPE_CHECKING, Final
 
 import pytest
-from cli_probe import CliRun, Sandbox
+from cli_probe import Sandbox
 from default_output_cases import Case, workspace
 from json_probe_support import (
     CheckResponse,
@@ -26,9 +23,9 @@ from json_probe_support import (
     SectionsResponse,
     TokensResponse,
     VerifyResponse,
+    parse,
     run_probe,
 )
-from pydantic import BaseModel
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -39,31 +36,8 @@ if TYPE_CHECKING:
 BAD_NAME: Final = os.fsdecode(b"sk\xff")
 """A name that is not UTF-8: the string holds ``\\udcff`` and the file system holds the byte ``0xff``."""
 
-BAD_BYTES: Final = b"sk\xff"
-ESCAPED_NAME: Final = "sk\\udcff"
-"""How ``BAD_NAME`` appears in the JSON text: the escape, not the character."""
-
-ModelT = TypeVar("ModelT", bound=BaseModel)
-
-
-def load(model: type[ModelT], run: CliRun) -> ModelT:
-    """Read a run's stdout as one line of valid JSON and validate it as *model*.
-
-    The line is read with ``json``: pydantic's own JSON parser rejects a lone-surrogate escape, which is
-    exactly what a Python consumer of this output has to cope with.
-
-    Returns:
-        The validated response.
-    """
-    assert run.stdout.endswith(b"\n"), run.stderr.decode(errors="replace")
-    assert run.stdout.count(b"\n") == 1, "stdout is more than one line"
-    assert b"\xff" not in run.stdout, "the raw byte leaked into stdout"
-    return model.model_validate(json.loads(run.stdout))
-
-
-def original_bytes(shown: str, suffix: bytes = b"") -> bytes:
-    """Return what ``os.fsencode`` recovers from a value the consumer read out of the JSON."""
-    return os.fsencode(shown) + suffix
+SHOWN_NAME: Final = "sk?"
+"""How the default output shows ``BAD_NAME``: stdout replaces what it cannot encode with ``?``."""
 
 
 def bad_workspace(sandbox: Sandbox, endpoints: Endpoints) -> None:
@@ -77,32 +51,39 @@ def case(*args: str, setup: Callable[[Sandbox, Endpoints], None] = bad_workspace
     return Case("probe", args, setup=setup, docs=args[0] == "docs")
 
 
-def test_check_lists_the_path_as_an_escape_that_round_trips(tmp_path: Path) -> None:
-    """``files[].path`` is the escaped name, and ``os.fsencode`` gives the file system bytes back."""
-    _, run = run_probe(tmp_path, case("check", f"{BAD_NAME}/SKILL.md", "--verbose", "--json"))
+def default_listed_path(tmp_path: Path, *args: str) -> str:
+    """Return the file path the default text output prints first for *args*."""
+    _, run = run_probe(tmp_path, case("check", "--no-color", *args), root="default")
+    return next(line for line in run.stdout.decode().splitlines() if line.strip())
 
-    response = load(CheckResponse, run)
-    assert f"{ESCAPED_NAME}/SKILL.md".encode() in run.stdout
-    assert [os.fsencode(file.path) for file in response.files] == [BAD_BYTES + b"/SKILL.md"]
-    assert run.returncode == 1
+
+def test_check_lists_the_path_as_the_default_output_shows_it(tmp_path: Path) -> None:
+    """The JSON path remains exact even though the text reporter must display a replacement."""
+    _, run = run_probe(tmp_path, case("check", f"{BAD_NAME}/SKILL.md", "--verbose", "--json"))
+    shown = default_listed_path(tmp_path, f"{BAD_NAME}/SKILL.md", "--verbose")
+
+    response = parse(CheckResponse, run)
+    assert shown == f"{BAD_NAME}/SKILL.md"
+    assert [file.path for file in response.files] == [f"{BAD_NAME}/SKILL.md"]
+    assert run.returncode in {0, 1}
 
 
 def test_fix_reports_the_fixed_path_the_same_way(tmp_path: Path) -> None:
-    """``fixes[].path`` round-trips, and the fix itself still happens."""
+    """``fixes[].path`` carries the replaced character, and the fix itself still happens."""
     sandbox, run = run_probe(tmp_path, case("check", f"{BAD_NAME}/SKILL.md", "--fix", "--json"))
 
-    response = load(CheckResponse, run)
+    response = parse(CheckResponse, run)
     assert response.fixes
-    assert {os.fsencode(fix.path) for fix in response.fixes} == {BAD_BYTES + b"/SKILL.md"}
+    assert {fix.path for fix in response.fixes} == {f"{BAD_NAME}/SKILL.md"}
     assert (sandbox.case / BAD_NAME / "SKILL.md").read_bytes() != (sandbox.case / "invalid_skill.md").read_bytes()
 
 
 def test_tokens_only_lists_the_path_the_same_way(tmp_path: Path) -> None:
-    """``tokens[].path`` round-trips."""
+    """``tokens[].path`` carries the replaced character."""
     _, run = run_probe(tmp_path, case("check", f"{BAD_NAME}/SKILL.md", "--tokens-only", "--json"))
 
-    response = load(TokensResponse, run)
-    assert [os.fsencode(entry.path) for entry in response.tokens] == [BAD_BYTES + b"/SKILL.md"]
+    response = parse(TokensResponse, run)
+    assert [entry.path for entry in response.tokens] == [f"{BAD_NAME}/SKILL.md"]
     assert run.returncode == 0
 
 
@@ -117,42 +98,47 @@ def test_tokens_only_lists_the_path_the_same_way(tmp_path: Path) -> None:
 def test_docs_file_argument_is_echoed_the_same_way(
     args: tuple[str, ...], model: type[SectionsResponse | SectionNotFoundResponse | VerifyResponse], tmp_path: Path
 ) -> None:
-    """A file argument that is not UTF-8 appears in ``file`` as the escape and round-trips."""
+    """A file argument that is not UTF-8 appears in ``file`` with the replaced character."""
     _, run = run_probe(tmp_path, case(*args, "--json"))
 
-    response = load(model, run)
-    assert f"{ESCAPED_NAME}.md".encode() in run.stdout
-    assert os.fsencode(response.file) == BAD_BYTES + b".md"
+    response = parse(model, run)
+    assert response.file == f"{BAD_NAME}.md"
     assert response.file_exists is False
 
 
 def test_docs_section_query_and_rule_id_are_echoed_the_same_way(tmp_path: Path) -> None:
-    """User strings echoed back (a heading query, a rule id) round-trip too."""
+    """User strings echoed back (a heading query, a rule id) get the same treatment."""
     _, section = run_probe(tmp_path, case("docs", "section", "absent.md", BAD_NAME, "--json"), root="section")
     _, rule = run_probe(tmp_path, case("rule", BAD_NAME, "--json"), root="rule")
 
-    assert os.fsencode(load(SectionNotFoundResponse, section).query) == BAD_BYTES
-    unknown = load(RuleUnknownResponse, rule)
-    assert os.fsencode(unknown.rule_id) == BAD_BYTES
+    assert parse(SectionNotFoundResponse, section).query == BAD_NAME
+    unknown = parse(RuleUnknownResponse, rule)
+    assert unknown.rule_id == BAD_NAME
     assert rule.returncode == 1
 
 
-def test_two_different_bad_paths_stay_distinct(tmp_path: Path) -> None:
-    """The replacement character made ``sk\\xff`` and ``sk\\xfe`` collide; the escape keeps them apart."""
-    other = os.fsdecode(b"sk\xfe")
-    _, first = run_probe(tmp_path, case("rule", BAD_NAME, "--json"), root="first")
-    _, second = run_probe(tmp_path, case("rule", other, "--json"), root="second")
+def test_distinct_non_utf8_paths_do_not_collapse_after_json_round_trip(tmp_path: Path) -> None:
+    """Different undecodable bytes remain different machine-readable path identities."""
+    other_name = os.fsdecode(b"sk\xfe")
 
-    assert load(RuleUnknownResponse, first).rule_id != load(RuleUnknownResponse, second).rule_id
+    def two_bad_workspaces(sandbox: Sandbox, endpoints: Endpoints) -> None:
+        workspace(sandbox, endpoints)
+        shutil.copytree(sandbox.case / "fixme", sandbox.case / BAD_NAME)
+        shutil.copytree(sandbox.case / "fixme", sandbox.case / other_name)
 
+    _, first = run_probe(
+        tmp_path,
+        case("check", f"{BAD_NAME}/SKILL.md", "--show-progress", "--json", setup=two_bad_workspaces),
+        root="first",
+    )
+    _, second = run_probe(
+        tmp_path,
+        case("check", f"{other_name}/SKILL.md", "--show-progress", "--json", setup=two_bad_workspaces),
+        root="second",
+    )
 
-def test_ordinary_non_ascii_beside_a_bad_byte_stays_readable(tmp_path: Path) -> None:
-    """Only the lone surrogate is escaped; ``é`` and a non-BMP character are written as UTF-8."""
-    mixed = f"é{BAD_NAME}\U0001d11e"
-    _, run = run_probe(tmp_path, case("rule", mixed, "--json"))
-
-    unknown = load(RuleUnknownResponse, run)
-    assert "é".encode() in run.stdout
-    assert "\U0001d11e".encode() in run.stdout
-    assert f"{ESCAPED_NAME}".encode() in run.stdout
-    assert unknown.rule_id == mixed
+    first_path = parse(CheckResponse, first).files[0].path
+    second_path = parse(CheckResponse, second).files[0].path
+    assert first_path == f"{BAD_NAME}/SKILL.md"
+    assert second_path == f"{other_name}/SKILL.md"
+    assert first_path != second_path
