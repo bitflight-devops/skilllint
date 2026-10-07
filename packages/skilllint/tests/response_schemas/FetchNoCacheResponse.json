@@ -1,0 +1,32 @@
+{
+  "additionalProperties": false,
+  "description": "``skilllint docs fetch --json`` when no cache exists and the network failed (exit 1).",
+  "properties": {
+    "command": {
+      "const": "docs fetch",
+      "default": "docs fetch",
+      "title": "Command",
+      "type": "string"
+    },
+    "reason": {
+      "title": "Reason",
+      "type": "string"
+    },
+    "status": {
+      "const": "no_cache",
+      "default": "no_cache",
+      "title": "Status",
+      "type": "string"
+    },
+    "url": {
+      "title": "Url",
+      "type": "string"
+    }
+  },
+  "required": [
+    "url",
+    "reason"
+  ],
+  "title": "FetchNoCacheResponse",
+  "type": "object"
+}

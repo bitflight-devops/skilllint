@@ -1,0 +1,76 @@
+{
+  "$defs": {
+    "IntegrityStatus": {
+      "description": "Result status returned by :func:`verify_integrity`.",
+      "enum": [
+        "intact",
+        "modified",
+        "unverifiable"
+      ],
+      "title": "IntegrityStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "``skilllint docs verify --json``; exit 0 only when ``status`` is ``intact``.\n\nThe ``expected_*`` fields are null when there is no sidecar.",
+  "properties": {
+    "command": {
+      "const": "docs verify",
+      "default": "docs verify",
+      "title": "Command",
+      "type": "string"
+    },
+    "computed_bytes": {
+      "title": "Computed Bytes",
+      "type": "integer"
+    },
+    "computed_sha256": {
+      "title": "Computed Sha256",
+      "type": "string"
+    },
+    "expected_bytes": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Expected Bytes"
+    },
+    "expected_sha256": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Expected Sha256"
+    },
+    "file": {
+      "title": "File",
+      "type": "string"
+    },
+    "file_exists": {
+      "title": "File Exists",
+      "type": "boolean"
+    },
+    "status": {
+      "$ref": "#/$defs/IntegrityStatus"
+    }
+  },
+  "required": [
+    "status",
+    "file",
+    "file_exists",
+    "computed_sha256",
+    "computed_bytes",
+    "expected_sha256",
+    "expected_bytes"
+  ],
+  "title": "VerifyResponse",
+  "type": "object"
+}

@@ -18,7 +18,7 @@ import re
 import sys
 from dataclasses import dataclass
 from enum import StrEnum
-from io import TextIOWrapper
+from io import StringIO, TextIOWrapper
 from pathlib import Path, PurePath
 from typing import TYPE_CHECKING, Annotated, Literal, NoReturn
 
@@ -30,6 +30,7 @@ import skilllint.rules  # ruff: ignore[unused-import] — ensures all 15 series 
 from skilllint.adapters import ALL_RULE_SERIES, PlatformAdapter, load_adapters, matches_file
 from skilllint.cli_docs import docs_app
 from skilllint.cli_help import CompleteHelpCommand, CompleteHelpGroup
+from skilllint.cli_json import JsonOption, emit_and_exit, fail_missing_argument
 from skilllint.file_types import (
     NAME_BEARING_FILE_TYPES as _NAME_BEARING_FILE_TYPES,
     FileType,
@@ -85,14 +86,25 @@ from skilllint.record_export import (
     export_recording as _export_recording,
     make_recording_console as _make_recording_console,
 )
+from skilllint.responses import (
+    build_check_response,
+    build_rule_response,
+    build_rules_response,
+    build_tokens_response,
+    build_unknown_rule_response,
+    build_version_response,
+)
 from skilllint.rule_registry import RULE_REGISTRY, rule_authority, rule_reference
 from skilllint.rules.as_series import run_as_series
 from skilllint.rules.fm_series import check_fm001, check_fm010
 from skilllint.rules.hk_series import _git_file_has_execute_bit  # noqa: F401 - compatibility re-export
 from skilllint.scan_runtime import (
+    CheckRun,
     _resolve_filter_and_expand_paths,
+    collect_validation_results,
     find_marketplace_dir,  # noqa: F401 - compatibility re-export
     find_plugin_dir,  # noqa: F401 - compatibility re-export
+    report_results,
     run_validation_loop,
 )
 from skilllint.token_counter import TOKEN_ERROR_THRESHOLD, TOKEN_WARNING_THRESHOLD
@@ -752,22 +764,11 @@ def validate_single_path(
     return {path: validator_results}
 
 
-def _handle_tokens_only(paths: list[Path], *, batch: bool = False) -> None:
-    r"""Output only the integer token count for each path, then exit.
+def _count_body_tokens(paths: list[Path]) -> list[tuple[int, Path]]:
+    """Count body tokens for each path.
 
-    For a single path, prints just the integer. For multiple paths (or when
-    ``batch`` is True), prints one entry per line. When ``batch`` is True,
-    each line is tab-separated ``<count>\\t<path>`` for machine readability.
-
-    Token counting always uses body-only (frontmatter stripped) so that the
-    numbers match what ComplexityValidator measures against thresholds.
-
-    Args:
-        paths: Paths to count tokens for
-        batch: When True, emit ``<count>\\t<path>`` tab-separated output.
-
-    Raises:
-        typer.Exit: Always exits (code 0 on success, code 2 on error)
+    Returns:
+        Token count and normalized path for each input path.
     """
     counter = MarkdownTokenCounter()
     entries: list[tuple[int, Path]] = []
@@ -776,13 +777,17 @@ def _handle_tokens_only(paths: list[Path], *, batch: bool = False) -> None:
             typer.echo(f"Error: Path does not exist: {path}", err=True)
             raise typer.Exit(2) from None
         normalized_path = _normalize_skill_folder(path)
-        # Always count body-only so output matches ComplexityValidator thresholds
         token_count = counter.count_file_tokens(normalized_path, body_only=True)
         if token_count is None:
             typer.echo(f"Error: Could not count tokens for: {normalized_path}", err=True)
             raise typer.Exit(2) from None
         entries.append((token_count, normalized_path))
+    return entries
 
+
+def _handle_tokens_only(paths: list[Path], *, batch: bool = False) -> None:
+    """Print token counts using the existing text contract and exit."""
+    entries = _count_body_tokens(paths)
     if batch:
         for count, path in entries:
             print(f"{count}\t{path}")
@@ -1076,6 +1081,134 @@ def violations_to_result(violations: list[dict]) -> ValidationResult:
     return ValidationResult(passed=not errors, errors=errors, warnings=warnings, info=info)
 
 
+def _open_record_console(record: Path | None, *, no_color: bool, json_output: bool) -> _Console | None:
+    """Return the console ``--record`` renders into, or ``None`` when no recording was asked for.
+
+    Under ``--json`` the console writes to an in-memory buffer, so the recording is made without
+    anything reaching the terminal.
+
+    Args:
+        record: The ``--record`` destination, if any.
+        no_color: Whether ``--no-color`` was given.
+        json_output: Whether ``--json`` was given.
+
+    Returns:
+        A recording console, or ``None``.
+    """
+    if record is None:
+        return None
+    return _make_recording_console(no_color=no_color, file=StringIO() if json_output else None)
+
+
+def _export_recording_on_exit(record_console: _Console | None, record: Path | None, *, json_output: bool) -> None:
+    """Write the ``--record`` file when a run ends in an exit, as the text path does.
+
+    Args:
+        record_console: The recording console, if a recording was asked for.
+        record: The ``--record`` destination, if any.
+        json_output: Whether ``--json`` was given. A file that cannot be written then exits 2 with
+            one plain stderr line instead of a traceback.
+    """
+    if json_output and record is not None and record_console is not None:
+        _export_recording_for_json(record_console, record)
+    else:
+        _maybe_export_recording(record_console, record)
+
+
+def _finish_check_json(
+    outcome: CheckRun | list[tuple[int, Path]],
+    *,
+    record: Path | None,
+    record_console: _Console | None,
+    verbose: bool,
+    no_color: bool,
+    show_progress: bool,
+    show_summary: bool,
+) -> NoReturn:
+    """End a ``check --json`` run: record the usual rendering when asked, then print the response.
+
+    The ``--record`` file is rendered by the same ``report_results`` the text path calls, with the
+    same ``no_color`` and ``show_summary``, and is written before the response names it.
+
+    Args:
+        outcome: The scan, or the token counts of ``--tokens-only``.
+        record: The ``--record`` destination, if any.
+        record_console: The buffer-backed recording console, if a recording was asked for.
+        verbose: Whether ``--verbose`` was given.
+        no_color: Whether ``--no-color`` was given.
+        show_progress: Whether ``--show-progress`` was given.
+        show_summary: Whether ``--show-summary`` was given.
+
+    Raises:
+        typer.Exit: Always: 0 for a pass, 1 for a failed scan, 2 when the ``--record`` file cannot be written.
+    """
+    record_path = None
+    if record is not None and record_console is not None:
+        if isinstance(outcome, CheckRun):
+            report_results(
+                outcome,
+                verbose=verbose,
+                no_color=no_color,
+                show_progress=show_progress,
+                show_summary=show_summary,
+                record_console=record_console,
+            )
+        record_path = _export_recording_for_json(record_console, record)
+    if not isinstance(outcome, CheckRun):
+        emit_and_exit(build_tokens_response(outcome, record_path=record_path))
+    response = build_check_response(
+        outcome.results, verbose=verbose, show_progress=show_progress, fixes=outcome.fixes, record_path=record_path
+    )
+    emit_and_exit(response, code=1 if response.status == "failed" else 0)
+
+
+def _require_usable_paths(
+    ctx: typer.Context, paths: list[Path] | None, *, check: bool, fix: bool, platform: str | None, json_output: bool
+) -> list[Path]:
+    """Reject the argument combinations ``check`` cannot run, and return the paths.
+
+    On the text path, no paths or a path that does not exist prints the command's help on stdout.
+    Under ``--json`` stdout stays empty: the same stderr lines are printed and the help is not.
+
+    Args:
+        ctx: The context of the running command.
+        paths: The positional paths, if any.
+        check: Whether ``--check`` was given.
+        fix: Whether ``--fix`` was given.
+        platform: The ``--platform`` value, if any.
+        json_output: Whether ``--json`` was given.
+
+    Returns:
+        The paths, all of which exist.
+
+    Raises:
+        typer.Exit: Code 0 for no paths on the text path (after the help), 2 for any other rejection.
+    """
+    # Show help when no arguments provided
+    if not paths:
+        if json_output:
+            fail_missing_argument(ctx, "paths")
+        _show_help_and_exit(ctx, code=0)
+
+    if check and fix:
+        typer.echo("Error: Cannot use both --check and --fix flags", err=True)
+        raise typer.Exit(2) from None
+
+    if fix and platform:
+        typer.echo("Error: Cannot use --fix with --platform", err=True)
+        raise typer.Exit(2) from None
+
+    # Validate that all provided paths exist; report non-existent ones
+    bad_paths = [str(p) for p in paths if not p.exists()]
+    if bad_paths:
+        typer.echo(f"Path does not exist: {', '.join(bad_paths)}", err=True)
+        typer.echo("", err=True)
+        if json_output:
+            raise typer.Exit(2) from None
+        _show_help_and_exit(ctx, code=2)
+    return paths
+
+
 def main(
     ctx: typer.Context,
     paths: Annotated[
@@ -1135,36 +1268,20 @@ def main(
     ] = None,
     record: Path | None = None,
     include_gitignore: bool = False,
+    json_output: bool = False,
 ) -> None:
     """Validate Claude Code plugins, skills, agents, and commands."""
     # If a subcommand was invoked, don't run validation
     if ctx.invoked_subcommand is not None:
         return
 
-    # Show help when no arguments provided
-    if not paths:
-        _show_help_and_exit(ctx, code=0)
-
-    if check and fix:
-        typer.echo("Error: Cannot use both --check and --fix flags", err=True)
-        raise typer.Exit(2) from None
-
-    if fix and platform:
-        typer.echo("Error: Cannot use --fix with --platform", err=True)
-        raise typer.Exit(2) from None
-
-    # Validate that all provided paths exist; report non-existent ones
-    bad_paths = [str(p) for p in paths if not p.exists()]
-    if bad_paths:
-        typer.echo(f"Path does not exist: {', '.join(bad_paths)}", err=True)
-        typer.echo("", err=True)
-        _show_help_and_exit(ctx, code=2)
+    paths = _require_usable_paths(ctx, paths, check=check, fix=fix, platform=platform, json_output=json_output)
 
     platform_override = _resolve_platform_override(platform)
 
-    record_console = _make_recording_console(no_color=no_color) if record is not None else None
+    record_console = _open_record_console(record, no_color=no_color, json_output=json_output)
 
-    def _run_validation_command() -> None:
+    def _run_validation_command() -> CheckRun | list[tuple[int, Path]] | None:
         expanded_paths, is_batch = _resolve_filter_and_expand_paths(
             paths,
             filter_glob,
@@ -1176,6 +1293,8 @@ def main(
             expanded_paths = [_normalize_skill_folder(path) for path in expanded_paths]
 
         if tokens_only:
+            if json_output:
+                return _count_body_tokens(expanded_paths)
             _handle_tokens_only(expanded_paths, batch=is_batch)
 
         # One shared cache per scan run — prevents re-walking the directory
@@ -1196,6 +1315,20 @@ def main(
                 fixes_out=fixes_out,
             )
 
+        if json_output:
+            return collect_validation_results(
+                expanded_paths=expanded_paths,
+                check=check,
+                fix=fix,
+                verbose=verbose,
+                platform_override=platform_override,
+                validate_single_path=_validate_with_cache,
+                validate_file=lambda p, a, o: validate_file(p, a, o, policy_cache=per_run_policy_cache),
+                violations_to_result=violations_to_result,
+                adapters=ADAPTERS,
+                include_gitignore=include_gitignore,
+            )
+
         run_validation_loop(
             expanded_paths=expanded_paths,
             check=check,
@@ -1212,15 +1345,28 @@ def main(
             record_console=record_console,
             include_gitignore=include_gitignore,
         )
+        return None
 
     try:
-        _run_validation_command()
+        outcome = _run_validation_command()
     except (SystemExit, typer.Exit):
-        _maybe_export_recording(record_console, record)
+        _export_recording_on_exit(record_console, record, json_output=json_output)
         raise
     except KeyboardInterrupt:
         typer.echo("\nInterrupted by user", err=True)
         raise typer.Exit(130) from None
+
+    # Only a --json run returns here; every other run ends in an exit above.
+    if outcome is not None:
+        _finish_check_json(
+            outcome,
+            record=record,
+            record_console=record_console,
+            verbose=verbose,
+            no_color=no_color,
+            show_progress=show_progress,
+            show_summary=show_summary,
+        )
 
 
 # =============================================================================
@@ -1244,11 +1390,21 @@ app.add_typer(docs_app, name="docs")
 def _callback(
     ctx: typer.Context,
     version: Annotated[bool, typer.Option("--version", "-V", help="Show version and exit", is_eager=True)] = False,
+    json_output: Annotated[
+        bool, typer.Option("--json", help="With --version, print one compact JSON line instead of text.")
+    ] = False,
 ) -> None:
     """Validate Claude Code plugins, skills, agents, and commands."""
     if version:
+        if json_output:
+            emit_and_exit(build_version_response(__version__))
         print(f"skilllint {__version__}")
         raise typer.Exit
+    if json_output:
+        # Click does not hand a root option to the subcommand, so it would be a silent no-op here.
+        ctx.fail(
+            "--json before a command is valid only with --version; give it after the command, e.g. skilllint check PATH --json"
+        )
     if ctx.invoked_subcommand is None:
         print("Use 'skilllint --help' for usage.")
         raise typer.Exit(1)
@@ -1363,6 +1519,49 @@ def _show_rule_doc(rule_id: str, *, console: _Console) -> None:
     print_panel(console, _Panel(_Syntax(resolved_doc, "markdown", word_wrap=False), title=entry.id, border_style="dim"))
 
 
+def _show_rules_report(
+    platform: str | None = None, category: str | None = None, severity: str | None = None, *, console: _Console
+) -> None:
+    """Show the rules table and the footer that points at ``skilllint rule`` (rules_cmd and its ``--json`` record)."""
+    _show_rules_list(platform=platform, category=category, severity=severity, console=console)
+    console.print("\n[dim]Run [bold]skilllint rule [yellow]RULE_ID[/yellow][/bold] for details.[/dim]")
+
+
+def _rules_json(*, platform: str | None, category: str | None, severity: str | None, record: Path | None) -> NoReturn:
+    """Finish ``rules --json``: record the usual rendering into a buffer when asked, then print the response.
+
+    Raises:
+        typer.Exit: Always, with code 0, or 2 when the ``--record`` file cannot be written.
+    """
+    record_path = None
+    if record is not None:
+        console = _make_recording_console(file=StringIO())
+        _show_rules_report(platform=platform, category=category, severity=severity, console=console)
+        record_path = _export_recording_for_json(console, record)
+    rules = _list_rules(platform=platform, category=category, severity=severity)
+    emit_and_exit(build_rules_response(rules, record_path=record_path))
+
+
+def _rule_json(rule_id: str, record: Path | None) -> NoReturn:
+    """Finish ``rule --json``: record the usual rendering into a buffer when asked, then print the response.
+
+    An unknown rule writes no file, as on the text path, so its response has no ``record_path``.
+
+    Raises:
+        typer.Exit: Always, with code 0, 1 for an unknown rule, or 2 when the ``--record`` file cannot be written.
+    """
+    entry = _get_rule(rule_id)
+    if entry is None:
+        emit_and_exit(build_unknown_rule_response(rule_id), code=1)
+    record_path = None
+    if record is not None:
+        console = _make_recording_console(file=StringIO())
+        _show_rule_doc(rule_id, console=console)
+        record_path = _export_recording_for_json(console, record)
+    documentation = _resolve_example_markers(entry.docstring)
+    emit_and_exit(build_rule_response(entry, documentation=documentation, record_path=record_path))
+
+
 # =============================================================================
 # CHECK COMMAND
 # =============================================================================
@@ -1393,6 +1592,7 @@ def check_cmd(
             help=("Scan files that are excluded by .gitignore rules. By default, gitignored paths are skipped."),
         ),
     ] = False,
+    json_output: JsonOption = False,
 ) -> None:
     """Validate Claude Code plugins, skills, agents, and commands."""
     main(
@@ -1410,6 +1610,7 @@ def check_cmd(
         platform=platform,
         record=record,
         include_gitignore=include_gitignore,
+        json_output=json_output,
     )
 
 
@@ -1449,6 +1650,30 @@ def _maybe_export_recording(console: _Console | None, record: Path | None) -> No
         _export_recording(console, record, title=_build_svg_title(sys.argv[1:]))
 
 
+def _export_recording_for_json(console: _Console, record: Path) -> str:
+    """Write the ``--record`` file for a ``--json`` run and name it.
+
+    The file is written before any JSON is printed, so a response that names ``record_path`` never
+    names a file that is missing.
+
+    Args:
+        console: The recording console the command rendered into.
+        record: The destination the user gave.
+
+    Returns:
+        The absolute, resolved path of the written file.
+
+    Raises:
+        typer.Exit: With code 2 and one plain line on stderr when the file cannot be written.
+    """
+    try:
+        _export_recording(console, record, title=_build_svg_title(sys.argv[1:]))
+    except (ValueError, OSError) as exc:
+        typer.echo(f"Error: Cannot write the recording to {record}: {exc}", err=True)
+        raise typer.Exit(2) from None
+    return str(record.resolve())
+
+
 _EXAMPLES_MARKER = re.compile(r"<!--\s*examples:\s*(\w+)\s*-->", re.IGNORECASE)
 
 
@@ -1457,8 +1682,11 @@ def rule_cmd(
     rule_id: Annotated[str, typer.Argument(help="Rule identifier (e.g., FM002, SK004).")],
     *,
     record: Annotated[Path | None, typer.Option("--record", help="Record terminal output to SVG or HTML file")] = None,
+    json_output: JsonOption = False,
 ) -> None:
     """Show documentation for a validation rule."""
+    if json_output:
+        _rule_json(rule_id, record)
     console = _make_rule_console(record=record is not None)
     _show_rule_doc(rule_id, console=console)
     _maybe_export_recording(console, record)
@@ -1473,11 +1701,13 @@ def rules_cmd(
     ] = None,
     *,
     record: Annotated[Path | None, typer.Option("--record", help="Record terminal output to SVG or HTML file")] = None,
+    json_output: JsonOption = False,
 ) -> None:
     """List all available validation rules."""
+    if json_output:
+        _rules_json(platform=platform, category=category, severity=severity, record=record)
     console = _make_rule_console(record=record is not None)
-    _show_rules_list(platform=platform, category=category, severity=severity, console=console)
-    console.print("\n[dim]Run [bold]skilllint rule [yellow]RULE_ID[/yellow][/bold] for details.[/dim]")
+    _show_rules_report(platform=platform, category=category, severity=severity, console=console)
     _maybe_export_recording(console, record)
 
 

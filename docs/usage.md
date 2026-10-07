@@ -67,6 +67,31 @@ $ uv run skilllint check --no-color --show-progress --show-summary \
 $ uv run skilllint check --include-gitignore generated/SKILL.md
 ```
 
+Add `--json` to `check`, `rules`, `rule`, or any `docs` command for
+machine-readable output: one compact JSON line on stdout, with no colour or
+layout, whatever the terminal. Every response names its `command`. Exit status
+keeps its meaning: `0` and `1` are results and always print JSON (including
+`docs` outcomes such as `not_found`), while invalid usage still exits `2` with a
+plain message on stderr and an empty stdout. Diagnostics, such as the policy
+warnings described above, stay on stderr. `check --json` lists files by the same
+rule `--verbose` and `--show-progress` set for the text output, and reports what
+it left out in `omitted`; `--no-color` and `--show-summary` have no effect on it.
+`docs sections`, `docs section` and `docs verify` also report `file_exists`, the
+only way to tell a missing file from an empty one: the text output treats both
+the same. With `--record`, the file is written first and the JSON then carries its
+absolute, resolved path as `record_path`. At the root, `--json` is valid only
+with `--version`; give it after the command name otherwise.
+
+One visible change reaches the default output: for a mistyped option, Click's
+close-match hint can now name it, as in `No such option: --jsn (Possible
+options: --json)`. The exit status is still `2`.
+
+```console
+uv run skilllint check --json plugins/my-plugin
+uv run skilllint rule FM007 --json
+uv run skilllint --version --json
+```
+
 ## Rules, thresholds, and severity
 
 `skilllint rules` is the compact catalog; `skilllint rule FM007` explains one

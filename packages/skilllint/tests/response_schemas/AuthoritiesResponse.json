@@ -1,0 +1,111 @@
+{
+  "$defs": {
+    "AuthorityResult": {
+      "additionalProperties": false,
+      "description": "Outcome of one registry URL inside ``docs fetch-authorities``.",
+      "properties": {
+        "page_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Page Name"
+        },
+        "path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Path"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reason"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CacheStatus"
+            },
+            {
+              "const": "failed",
+              "type": "string"
+            }
+          ],
+          "title": "Status"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url",
+        "status",
+        "path",
+        "page_name",
+        "reason"
+      ],
+      "title": "AuthorityResult",
+      "type": "object"
+    },
+    "CacheStatus": {
+      "description": "Result status returned by :func:`fetch_or_cached`.",
+      "enum": [
+        "fresh",
+        "refreshed",
+        "unchanged",
+        "stale",
+        "new"
+      ],
+      "title": "CacheStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "``skilllint docs fetch-authorities --json``; ``failed`` when any URL failed (exit 1).",
+  "properties": {
+    "command": {
+      "const": "docs fetch-authorities",
+      "default": "docs fetch-authorities",
+      "title": "Command",
+      "type": "string"
+    },
+    "results": {
+      "items": {
+        "$ref": "#/$defs/AuthorityResult"
+      },
+      "title": "Results",
+      "type": "array"
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "failed"
+      ],
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "status",
+    "results"
+  ],
+  "title": "AuthoritiesResponse",
+  "type": "object"
+}

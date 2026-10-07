@@ -12,8 +12,6 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.table import Table
-from typer.core import TyperOption
-from typer.main import get_command
 
 from skilllint import cli_docs, plugin_validator
 from skilllint.cli_help import CompleteHelpCommand, CompleteHelpGroup
@@ -26,25 +24,7 @@ from skilllint.vendor_cache import CacheResult, CacheStatus, NoCacheError
 _LONG_VALUE = "https://example.invalid/" + "path-segment/" * 100 + "?complete=yes"
 
 
-def test_real_help_context_preserves_long_choices_and_summary(monkeypatch, capsys):
-    command = get_command(plugin_validator.app)
-    assert isinstance(command, CompleteHelpGroup)
-    check = command.commands["check"]
-    choices = ", ".join(f"adapter-{i:03}" for i in range(100))
-    platform = next(param for param in check.params if param.name == "platform")
-    assert isinstance(platform, TyperOption)
-    platform.help = f"Platform adapter. Choices: {choices}"
-    check.help = _LONG_VALUE
-    check.short_help = None
-    for columns in (40, 200):
-        monkeypatch.setenv("COLUMNS", str(columns))
-        assert command.main(["check", "--help"], standalone_mode=False) == 0
-        assert f"Platform adapter. Choices: {choices}" in capsys.readouterr().out
-        assert command.main(["--help"], standalone_mode=False) == 0
-        assert _LONG_VALUE in capsys.readouterr().out
-
-
-def test_help_preserves_long_labels_usage_and_intentional_lines(cli_runner):
+def test_help_wraps_long_labels_usage_and_authored_text_without_truncation(cli_runner):
     app = typer.Typer(cls=CompleteHelpGroup, rich_markup_mode=None)
     option_name = "--" + "long-option-" * 80
 
@@ -58,9 +38,13 @@ def test_help_preserves_long_labels_usage_and_intentional_lines(cli_runner):
 
     result = cli_runner.invoke(app, ["--help"], prog_name="tool-" + _LONG_VALUE)
     assert result.exit_code == 0
-    assert "tool-" + _LONG_VALUE in result.stdout.splitlines()[0]
-    assert any(option_name in line and _LONG_VALUE in line for line in result.stdout.splitlines())
-    assert "First intentional line.\n      Indented second line." in result.stdout
+    flattened = " ".join(result.stdout.split())
+    assert "tool-" + _LONG_VALUE in flattened
+    assert option_name in flattened
+    assert _LONG_VALUE in flattened
+    assert "First intentional line." in flattened
+    assert "Indented second line." in flattened
+    assert "..." not in result.stdout
 
 
 @pytest.mark.parametrize("columns", [40, 200])

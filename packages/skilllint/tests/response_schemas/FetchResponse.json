@@ -1,0 +1,49 @@
+{
+  "$defs": {
+    "CacheStatus": {
+      "description": "Result status returned by :func:`fetch_or_cached`.",
+      "enum": [
+        "fresh",
+        "refreshed",
+        "unchanged",
+        "stale",
+        "new"
+      ],
+      "title": "CacheStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "``skilllint docs fetch --json`` when a file was produced; ``status`` replaces the stderr status line.",
+  "properties": {
+    "command": {
+      "const": "docs fetch",
+      "default": "docs fetch",
+      "title": "Command",
+      "type": "string"
+    },
+    "page_name": {
+      "title": "Page Name",
+      "type": "string"
+    },
+    "path": {
+      "title": "Path",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/CacheStatus"
+    },
+    "url": {
+      "title": "Url",
+      "type": "string"
+    }
+  },
+  "required": [
+    "status",
+    "path",
+    "page_name",
+    "url"
+  ],
+  "title": "FetchResponse",
+  "type": "object"
+}

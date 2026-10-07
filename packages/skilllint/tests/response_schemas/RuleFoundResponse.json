@@ -1,0 +1,67 @@
+{
+  "additionalProperties": false,
+  "description": "``skilllint rule <known id> --json``; ``documentation`` is raw, unwrapped Markdown.",
+  "properties": {
+    "category": {
+      "title": "Category",
+      "type": "string"
+    },
+    "command": {
+      "const": "rule",
+      "default": "rule",
+      "title": "Command",
+      "type": "string"
+    },
+    "documentation": {
+      "title": "Documentation",
+      "type": "string"
+    },
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "platforms": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Platforms",
+      "type": "array"
+    },
+    "record_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Record Path"
+    },
+    "severity": {
+      "enum": [
+        "error",
+        "warning",
+        "info"
+      ],
+      "title": "Severity",
+      "type": "string"
+    },
+    "status": {
+      "const": "found",
+      "default": "found",
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "severity",
+    "category",
+    "platforms",
+    "documentation"
+  ],
+  "title": "RuleFoundResponse",
+  "type": "object"
+}

@@ -1,0 +1,27 @@
+{
+  "additionalProperties": false,
+  "description": "``skilllint --version --json``.",
+  "properties": {
+    "command": {
+      "const": "version",
+      "default": "version",
+      "title": "Command",
+      "type": "string"
+    },
+    "name": {
+      "const": "skilllint",
+      "default": "skilllint",
+      "title": "Name",
+      "type": "string"
+    },
+    "version": {
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "version"
+  ],
+  "title": "VersionResponse",
+  "type": "object"
+}
