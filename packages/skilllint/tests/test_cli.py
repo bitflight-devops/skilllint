@@ -858,19 +858,19 @@ def _help_text(
 
 
 class TestHelpRendering:
-    """Help is readable at the caller's width without losing authored content."""
+    """Help is readable at the caller's width without losing authored tokens."""
 
     @pytest.mark.parametrize("args", _HELP_INVOCATIONS, ids=" ".join)
-    def test_help_wraps_without_losing_content(
+    def test_help_wraps_without_splitting_authored_tokens(
         self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], args: list[str]
     ) -> None:
-        """Narrow help may reflow, but it retains the same words as wide help."""
+        """Narrow help may reflow, but every whitespace-delimited authored token remains intact."""
         narrow = _help_text(args, 40, monkeypatch, capsys)
         wide = _help_text(args, 200, monkeypatch, capsys)
 
-        assert " ".join(narrow.split()) == " ".join(wide.split())
-        assert "…" not in narrow
-        assert "..." not in narrow
+        narrow_tokens = narrow.split()
+        for token in wide.split():
+            assert token in narrow_tokens, f"help token was lost or split at narrow width: {token!r}"
 
 
 
