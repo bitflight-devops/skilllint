@@ -492,7 +492,8 @@ def test_show_progress_makes_passed_validator_results_recoverable(tmp_path: Path
     assert all(validator.status == "passed" and validator.issues == [] for validator in response.files[0].validators)
     assert response.omitted.passed_files == 0
     assert response.omitted.passed_validators == 0
-    assert response.omitted.retrieve_with == []
+    assert response.omitted.retrieve_with == ["--verbose"]
+    assert response.omitted.info_issues > 0
 
 
 def test_a_clean_tree_lists_nothing_and_says_how_to_see_more(tmp_path: Path) -> None:
