@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1791299138339,
+  "lastUpdate": 1791372360536,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -3480,6 +3480,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 198.769,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "279fd503080e7699020667fe4d5b07172c4d1103",
+          "message": "feat(cli): add structured JSON output for agent consumers (#330)\n\n* feat(cli): add typed JSON response layer\n\n* feat(cli): add typed JSON response layer\n\n* test(cli): add JSON contract coverage\n\n* test(cli): add JSON contract coverage\n\n* test(cli): add JSON contract coverage\n\n* test(cli): add JSON contract coverage\n\n* test(cli): add JSON contract coverage\n\n* feat(cli): integrate JSON responses\n\n* feat(cli): integrate JSON responses\n\n* feat(cli): integrate JSON responses\n\n* refactor(scan): expose validation results for structured output\n\n* feat(cli): integrate structured JSON output\n\n* docs(cli): document machine-readable JSON output\n\n* docs(cli): document machine-readable JSON output\n\n* fix(cli): wrap complete help to terminal width\n\n* test(cli): require width-aware complete help\n\n* test(json): restore contract support artifacts\n\n* test(json): restore contract support artifacts\n\n* test(json): restore contract support artifacts\n\n* test(json): restore contract support artifacts\n\n* test(json): restore contract support artifacts\n\n* test(json): restore contract support artifacts\n\n* test(json): restore CLI probe support\n\n* test(json): restore CLI probe support\n\n* test(json): restore CLI probe support\n\n* test(json): add response schema snapshots\n\n* test(json): add response schema snapshots\n\n* test(json): add response schema snapshots\n\n* test(json): add response schema snapshots\n\n* test(json): add response schema snapshots\n\n* test(json): add response schema snapshots\n\n* test(json): add response schema snapshots\n\n* test(json): add response schema snapshots\n\n* test(json): add response schema snapshots\n\n* test(json): add response schema snapshots\n\n* test(json): add response schema snapshots\n\n* test(json): add response schema snapshots\n\n* fix(cli): preserve extracted validator ownership\n\n* test(help): expect wrapping without truncation\n\n* test(json): assert reversible serialization semantics\n\n* test(types): resolve CLI probe support modules\n\n* fix(cli): repair JSON integration seams\n\n* test(cli): align contracts with intentional wrapping and JSON escaping\n\n* test(cli): align contracts with intentional wrapping and JSON escaping\n\n* test(cli): align contracts with intentional wrapping and JSON escaping\n\n* test(cli): align contracts with intentional wrapping and JSON escaping\n\n* test(help): assert wrapped content without requiring word adjacency\n\n* test(help): assert wrapped content without requiring word adjacency\n\n* fix(cli): remove stale duplicate check command\n\n* fix(cli): restore structured rule response helpers\n\n* test(cli): repair malformed wrapping assertions\n\n* test(cli): repair malformed wrapping assertions\n\n* test(json): prove text visibility without forbidding richer machine output\n\n* test(help): assert readability and content preservation, not layout identity\n\n* test(help): remove redundant formatter-unit coverage\n\n* test(help): remove duplicate help-content scenario\n\n* test(json): name non-UTF8 tests for the actual contract\n\n* fix(help): wrap prose without splitting authored tokens\n\n* test(json): assert recovery metadata for remaining hidden info\n\n* test(json): drop POSIX surrogate tests pending explicit path encoding contract\n\n* test(help): preserve authored tokens across terminal widths\n\n* fix(help): use supported token-preserving wrapping\n\n* test(help): remove synthetic cross-width token equivalence\n\n* style: satisfy lint after help wrapping\n\n* style: document token-count return value\n\n* style: use generator annotation for context manager\n\n* style: clean JSON parity lint\n\n* style: remove obsolete help-test imports\n\n* style: sort scan runtime imports\n\n* style: sort help imports\n\n* style: sort CLI imports",
+          "timestamp": "2026-10-07T11:22:33Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/279fd503080e7699020667fe4d5b07172c4d1103"
+        },
+        "date": 1791372359354,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 4631.935,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 4927.723,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 5461.512,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 203.136,
             "unit": "files/s"
           }
         ]
