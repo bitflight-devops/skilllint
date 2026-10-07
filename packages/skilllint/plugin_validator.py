@@ -81,6 +81,11 @@ from skilllint.policy import (  # noqa: F401 - compatibility re-exports
     _resolve_ignore_config,
     _resolve_policy,
 )
+from skilllint.record_export import (
+    build_svg_title as _build_svg_title,
+    export_recording as _export_recording,
+    make_recording_console as _make_recording_console,
+)
 from skilllint.responses import (
     build_check_response,
     build_rule_response,
@@ -88,11 +93,6 @@ from skilllint.responses import (
     build_tokens_response,
     build_unknown_rule_response,
     build_version_response,
-)
-from skilllint.record_export import (
-    build_svg_title as _build_svg_title,
-    export_recording as _export_recording,
-    make_recording_console as _make_recording_console,
 )
 from skilllint.rule_registry import RULE_REGISTRY, rule_authority, rule_reference
 from skilllint.rules.as_series import run_as_series
