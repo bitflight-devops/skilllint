@@ -267,9 +267,9 @@ def assert_parity(file_results: FileResults, text: str, *, verbose: bool, show_p
     actual_validators = {(f.path, v.name): v for f in actual for v in f.validators}
     expected_validators = {(f.path, v.name): v for f in expected for v in f.validators}
     assert expected_validators.keys() <= actual_validators.keys(), "text-visible validator missing from JSON"
-    for text_file, json_file in zip(expected, actual, strict=True):
+    for text_file, _json_file in zip(expected, actual, strict=True):
         for text_validator in text_file.validators:
-            json_validator = actual_validators[(text_file.path, text_validator.name)]
+            json_validator = actual_validators[text_file.path, text_validator.name]
             if text_validator.status is not None:
                 assert json_validator.status == text_validator.status, (text_file.path, text_validator.name)
     assert [(f.path, v.name, *i) for f in actual for v in f.validators for i in v.issues] == [
