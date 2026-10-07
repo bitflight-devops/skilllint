@@ -765,7 +765,11 @@ def validate_single_path(
 
 
 def _count_body_tokens(paths: list[Path]) -> list[tuple[int, Path]]:
-    """Count body tokens for each path and return normalized path entries."""
+    """Count body tokens for each path.
+
+    Returns:
+        Token count and normalized path for each input path.
+    """
     counter = MarkdownTokenCounter()
     entries: list[tuple[int, Path]] = []
     for path in paths:
