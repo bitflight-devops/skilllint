@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from typer import Context
-from typer._click import Context as ClickContext
 from textwrap import TextWrapper
 
+from typer import Context
+from typer._click import Context as ClickContext
 from typer._click.formatting import HelpFormatter  # noqa: PLC2701 - Typer has no public HelpFormatter export.
 from typer.core import TyperCommand, TyperGroup
 
