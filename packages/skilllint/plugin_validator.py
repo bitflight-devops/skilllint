@@ -102,9 +102,9 @@ from skilllint.scan_runtime import (
     CheckRun,
     _resolve_filter_and_expand_paths,
     collect_validation_results,
-    report_results,
     find_marketplace_dir,  # noqa: F401 - compatibility re-export
     find_plugin_dir,  # noqa: F401 - compatibility re-export
+    report_results,
     run_validation_loop,
 )
 from skilllint.token_counter import TOKEN_ERROR_THRESHOLD, TOKEN_WARNING_THRESHOLD
