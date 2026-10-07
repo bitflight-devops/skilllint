@@ -52,7 +52,7 @@ from typing import TYPE_CHECKING, Final
 from pydantic import BaseModel, ConfigDict
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator, Mapping, Sequence
+    from collections.abc import Callable, Generator, Mapping, Sequence
 
 EXECUTABLE: Final = Path(sys.executable).parent / "skilllint"
 """The console script of the interpreter running the tests (editable install)."""
@@ -396,7 +396,7 @@ class Endpoints:
 
 
 @contextmanager
-def loopback_endpoints(bodies: Mapping[str, bytes]) -> Iterator[Endpoints]:
+def loopback_endpoints(bodies: Mapping[str, bytes]) -> Generator[Endpoints]:
     """Serve *bodies* (URL path to content) on loopback and reserve a closed port.
 
     Yields:
