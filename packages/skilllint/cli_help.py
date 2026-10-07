@@ -4,12 +4,18 @@ from __future__ import annotations
 
 from typer import Context
 from typer._click import Context as ClickContext
-from typer._click.formatting import HelpFormatter  # noqa: PLC2701 - Typer has no public HelpFormatter export.
+from typer._click.formatting import HelpFormatter, wrap_text  # noqa: PLC2701 - Typer has no public HelpFormatter export.
 from typer.core import TyperCommand, TyperGroup
 
 
 class CompleteHelpFormatter(HelpFormatter):
-    """Use Click's width-aware wrapping while preserving complete help text."""
+    """Wrap help at terminal width without splitting authored tokens such as URLs."""
+
+    def write_text(self, text: str) -> None:
+        """Write prose at the available width without breaking long words."""
+        text_width = max(self.width - self.current_indent, 11)
+        self.write(wrap_text(text, text_width, preserve_paragraphs=True, break_long_words=False))
+        self.write("\n")
 
 
 class CompleteHelpContext(Context):
