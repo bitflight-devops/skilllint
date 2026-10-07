@@ -12,8 +12,6 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.table import Table
-from typer.core import TyperOption
-from typer.main import get_command
 
 from skilllint import cli_docs, plugin_validator
 from skilllint.cli_help import CompleteHelpCommand, CompleteHelpGroup
