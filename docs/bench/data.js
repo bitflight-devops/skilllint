@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1791544050059,
+  "lastUpdate": 1791545287124,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -3564,6 +3564,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 384.69,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "ac7f10977672c31aaa4d0cdf2aac9e029d4d4ec7",
+          "message": "fix(record): report unwritable --record targets and keep ANSI off --no-color stdout (#334)\n\nA --record path with an unsupported extension or a missing parent directory\nraised a traceback on the text path. It now exits 2 with the same one-line\nerror --json already gave, through one shared writer.\n\n--no-color --record still forced the terminal copy to ANSI, so bold and\nother attributes reached stdout. The recording console now forces a terminal\nonly when colour is on, as ConsoleReporter does. The SVG keeps its styles.\n\nFixes #314\nFixes #317\n\n\nClaude-Session: https://claude.ai/code/session_01K5rAHJfvZyEEaUQghV7hCQ\n\nCo-authored-by: Claude <noreply@anthropic.com>",
+          "timestamp": "2026-10-09T11:24:54Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/ac7f10977672c31aaa4d0cdf2aac9e029d4d4ec7"
+        },
+        "date": 1791545286537,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 4671.358,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 4922.889,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 5399.658,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 203.336,
             "unit": "files/s"
           }
         ]
