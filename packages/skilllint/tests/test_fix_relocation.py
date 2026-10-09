@@ -13,6 +13,7 @@ fixers that mutate paths during a run and must leave them where they were.
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -117,6 +118,33 @@ def test_folder_move_detects_a_rename_from_the_spelled_paths(
     move = _folder_move(Path(queued), Path(result), was_dir=was_dir)
 
     assert move == (None if expected is None else (Path(expected[0]), Path(expected[1])))
+
+
+def test_name_format_fix_keeps_a_folder_an_outer_plugin_json_registers(tmp_path: Path) -> None:
+    """An inner plugin.json that does not list the folder must not hide an outer one that does."""
+    for root, skills in ((tmp_path, ["./nested/skills/bad--name"]), (tmp_path / "nested", [])):
+        (root / ".claude-plugin").mkdir(parents=True)
+        (root / ".claude-plugin" / "plugin.json").write_text(
+            json.dumps({"name": "p", "skills": skills}), encoding="utf-8"
+        )
+    skill = write_skill(tmp_path / "nested" / "skills", "bad--name", "bad--name")
+
+    assert NameFormatValidator().fix(skill) == []
+    assert skill.is_file()
+
+
+def test_check_fix_keeps_skipping_a_gitignored_file_inside_a_renamed_folder(tmp_path: Path) -> None:
+    """A queued file git ignores stays skipped after its folder is renamed."""
+    sandbox = Sandbox.create(tmp_path)
+    subprocess.run(["git", "init", "-q", str(sandbox.case)], check=True)
+    (sandbox.case / ".gitignore").write_text("CLAUDE.md\n", encoding="utf-8")
+    write_skill(sandbox.case / "skills", "bad--name", "bad--name")
+    (sandbox.case / "skills" / "bad--name" / "CLAUDE.md").write_text("# Ignored\n", encoding="utf-8")
+
+    run = run_cli(("check", ".", "--fix", "--json", "--show-progress"), sandbox)
+
+    assert [file["path"] for file in json.loads(run.stdout)["files"]] == ["skills/bad-name/SKILL.md"]
+    assert (sandbox.case / "skills" / "bad-name" / "CLAUDE.md").is_file()
 
 
 # --- the fixer contract ------------------------------------------------------

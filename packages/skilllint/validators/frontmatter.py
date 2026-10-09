@@ -938,23 +938,29 @@ class NameFormatValidator:
 
     @staticmethod
     def _registered_in_plugin_json(skill_dir: Path) -> bool:
-        """Return whether the nearest ``plugin.json`` lists *skill_dir* or its ``SKILL.md`` under ``skills``.
+        """Return whether any enclosing ``plugin.json`` lists *skill_dir* or its ``SKILL.md`` under ``skills``.
 
         Renaming such a folder would leave the manifest naming a path that no
         longer exists (PR002), and changing only the ``name`` field would create a
         name/folder mismatch (FM010), so the fixer leaves such a skill unchanged.
+        Every enclosing plugin is checked, because an inner plugin.json does not
+        stop an outer one from registering a path inside it.
         """
-        # The frontmatter owner may not import scan orchestration (test_architecture_examples), so
-        # walk up to the nearest plugin root here instead of using scan_runtime.find_plugin_dir.
-        plugin_dir = next((d for d in skill_dir.parents if (d / ".claude-plugin" / "plugin.json").is_file()), None)
-        manifest = load_plugin_json(plugin_dir) if plugin_dir is not None else None
-        if plugin_dir is None or manifest is None:
-            return False
-        entries = manifest.get("skills")
-        listed = [entries] if isinstance(entries, str) else entries if isinstance(entries, list) else []
         # An entry may name the folder or the SKILL.md inside it; both stop resolving after a rename.
         targets = {skill_dir.resolve(), (skill_dir / "SKILL.md").resolve()}
-        return any(isinstance(entry, str) and (plugin_dir / entry).resolve() in targets for entry in listed)
+        # The frontmatter owner may not import scan orchestration (test_architecture_examples), so
+        # walk up to the plugin roots here instead of using scan_runtime.find_plugin_dir.
+        for plugin_dir in skill_dir.parents:
+            manifest = (
+                load_plugin_json(plugin_dir) if (plugin_dir / ".claude-plugin" / "plugin.json").is_file() else None
+            )
+            if manifest is None:
+                continue
+            entries = manifest.get("skills")
+            listed = [entries] if isinstance(entries, str) else entries if isinstance(entries, list) else []
+            if any(isinstance(entry, str) and (plugin_dir / entry).resolve() in targets for entry in listed):
+                return True
+        return False
 
     @staticmethod
     def _rename_directory(skill_dir: Path, fixed_name: str) -> bool:
