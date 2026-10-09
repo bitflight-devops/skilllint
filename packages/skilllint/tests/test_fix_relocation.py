@@ -147,6 +147,25 @@ def test_check_fix_keeps_skipping_a_gitignored_file_inside_a_renamed_folder(tmp_
     assert (sandbox.case / "skills" / "bad-name" / "CLAUDE.md").is_file()
 
 
+def test_check_fix_rebases_results_collected_before_the_folder_moved(tmp_path: Path) -> None:
+    """A file listed before its skill keeps no stale old-folder path once the skill renames the folder."""
+    sandbox = Sandbox.create(tmp_path)
+    skill = write_skill(sandbox.case / "skills", "bad--name", "bad--name")
+    (skill.parent / "CLAUDE.md").write_text("# Notes\n", encoding="utf-8")
+
+    run = run_cli(
+        ("check", "skills/bad--name/CLAUDE.md", "skills/bad--name/SKILL.md", "--fix", "--json", "--show-progress"),
+        sandbox,
+    )
+
+    response = json.loads(run.stdout)
+    assert sorted(file["path"] for file in response["files"]) == [
+        "skills/bad-name/CLAUDE.md",
+        "skills/bad-name/SKILL.md",
+    ]
+    assert all("bad--name" not in fix["path"] for fix in response["fixes"])
+
+
 # --- the fixer contract ------------------------------------------------------
 
 

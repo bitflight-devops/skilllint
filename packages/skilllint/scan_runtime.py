@@ -10,7 +10,7 @@ from __future__ import annotations
 import fnmatch
 import os
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path, PurePath
 from typing import TYPE_CHECKING, Any, NoReturn
 
@@ -989,6 +989,7 @@ def collect_validation_results(
                 for file_path in file_results:
                     if (move := _folder_move(path, file_path, was_dir=was_dir)) is not None:
                         moved_folders[move[0]] = move[1]
+                        _rebase_collected(all_results, all_fixes, *move)
             for file_path, validator_results in file_results.items():
                 if file_path in all_results:
                     all_results[file_path].extend(validator_results)
@@ -1013,6 +1014,18 @@ def _folder_move(queued: Path, result: Path, *, was_dir: bool) -> tuple[Path, Pa
     if str(result) == str(queued) or str(moved_to) == str(folder) or str(moved_to.parent) != str(folder.parent):
         return None
     return folder, moved_to
+
+
+def _rebase_collected(results: FileResults, fixes: list[AppliedFix], old: Path, new: Path) -> None:
+    """Move results and fixes already collected under *old* to *new*, in place.
+
+    Paths listed before the skill that renamed their folder were recorded under the old spelling.
+    """
+    for key in [key for key in results if key.is_relative_to(old)]:
+        results[new / key.relative_to(old)] = results.pop(key)
+    for index, fix in enumerate(fixes):
+        if fix.path.is_relative_to(old):
+            fixes[index] = replace(fix, path=new / fix.path.relative_to(old))
 
 
 def _follow_moved_folders(path: Path, moved_folders: dict[Path, Path]) -> Path:
