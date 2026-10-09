@@ -81,7 +81,7 @@ class TestLineNumberIsLiteral:
 
         assert f"description:{line}: Missing required field" in text
 
-    @given(line=st.integers(min_value=1, max_value=100_000))
+    @given(line=st.integers(min_value=1))
     @example(line=100)
     @example(line=1234)
     def test_report_any_line_number_prints_digits(self, line: int) -> None:
@@ -94,7 +94,7 @@ class TestLineNumberIsLiteral:
 class TestEveryDataFieldIsLiteral:
     """Every user-controlled string in a diagnostic survives emoji replacement."""
 
-    @given(name=st.from_regex(r"[a-z0-9_+]{1,12}", fullmatch=True))
+    @given(name=st.from_regex(r"[a-z0-9_+]+", fullmatch=True))
     @example(name="smile")
     @example(name="100")
     @example(name="warning")
