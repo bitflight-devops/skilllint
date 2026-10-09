@@ -29,7 +29,8 @@ def make_recording_console(*, no_color: bool = False, file: TextIO | None = None
     exported via :func:`export_recording`.  The terminal copy is forced to ANSI
     unless *no_color* is set, the same rule ``ConsoleReporter`` follows. The
     recording keeps its styles either way: export reads the recorded segments,
-    not the bytes written to the terminal.
+    not the bytes written to the terminal. Emoji replacement is off, so a
+    ``:name:`` in printed data (``:100:`` in ``file:100:``) stays literal.
 
     Args:
         no_color: When *True*, disable colour output (passes ``no_color=True``
@@ -42,7 +43,7 @@ def make_recording_console(*, no_color: bool = False, file: TextIO | None = None
     Returns:
         A :class:`rich.console.Console` instance ready for recording.
     """
-    return Console(record=True, force_terminal=not no_color, no_color=no_color, soft_wrap=True, file=file)
+    return Console(record=True, force_terminal=not no_color, no_color=no_color, soft_wrap=True, file=file, emoji=False)
 
 
 def _strip_trailing_whitespace(content: str) -> str:

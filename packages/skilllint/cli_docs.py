@@ -17,7 +17,7 @@ from rich.panel import Panel
 
 from skilllint.cli_help import CompleteHelpCommand, CompleteHelpGroup
 from skilllint.cli_json import JsonOption, emit_and_exit
-from skilllint.output import print_panel
+from skilllint.output import ICON_ERROR, ICON_PASSED, ICON_WARNING, print_panel
 from skilllint.responses import (
     AuthorityResult,
     authority_failed,
@@ -48,8 +48,8 @@ from skilllint.vendor_cache import (
 # Consoles
 # ---------------------------------------------------------------------------
 
-console = Console(soft_wrap=True)  # stdout — file paths and data output
-err_console = Console(stderr=True, soft_wrap=True)  # stderr — status, warnings, errors
+console = Console(soft_wrap=True, emoji=False)  # stdout — file paths and data output
+err_console = Console(stderr=True, soft_wrap=True, emoji=False)  # stderr — status, warnings, errors
 
 # ---------------------------------------------------------------------------
 # Typer sub-app
@@ -114,7 +114,7 @@ def fetch(
             err_console,
             Panel(
                 f"[bold]URL:[/bold] {escape(str(exc.url))}\n[bold]Reason:[/bold] {escape(str(exc.reason))}",
-                title=":cross_mark: No Cache Available",
+                title=f"{ICON_ERROR} No Cache Available",
                 border_style="red",
             ),
         )
@@ -124,10 +124,10 @@ def fetch(
         emit_and_exit(build_fetch_response(result))
 
     if result.status is CacheStatus.STALE:
-        err_console.print(":warning: [yellow]Serving stale cache — network unavailable[/yellow]")
+        err_console.print(f"{ICON_WARNING} [yellow]Serving stale cache — network unavailable[/yellow]")
     else:
         status_label = _format_status_label(result.status)
-        err_console.print(f":white_check_mark: [green]{status_label}[/green] {escape(str(result.page_name))}")
+        err_console.print(f"{ICON_PASSED} [green]{status_label}[/green] {escape(str(result.page_name))}")
 
     typer.echo(str(result.path))
 
@@ -186,7 +186,7 @@ def fetch_authorities(
         response = build_authorities_response(results)
         emit_and_exit(response, code=1 if response.status == "failed" else 0)
     if not authority_urls:
-        err_console.print(":warning: [yellow]No authority URLs found in the rule registry[/yellow]")
+        err_console.print(f"{ICON_WARNING} [yellow]No authority URLs found in the rule registry[/yellow]")
         return
 
     had_failure = False
@@ -195,18 +195,18 @@ def fetch_authorities(
             result = fetch_or_cached(url, ttl_hours=ttl, force=force)
         except NoCacheError as exc:
             had_failure = True
-            err_console.print(f":cross_mark: [red]FAILED[/red] {escape(str(exc.url))} ({escape(str(exc.reason))})")
+            err_console.print(f"{ICON_ERROR} [red]FAILED[/red] {escape(str(exc.url))} ({escape(str(exc.reason))})")
             continue
         except Exception as exc:  # noqa: BLE001 — collect-and-continue contract: all URLs must be attempted
             had_failure = True
-            err_console.print(f":cross_mark: [red]FAILED[/red] {escape(str(url))} ({escape(str(exc))})")
+            err_console.print(f"{ICON_ERROR} [red]FAILED[/red] {escape(str(url))} ({escape(str(exc))})")
             continue
 
         if result.status is CacheStatus.STALE:
-            err_console.print(f":warning: [yellow]STALE[/yellow] {escape(str(url))} — serving stale cache")
+            err_console.print(f"{ICON_WARNING} [yellow]STALE[/yellow] {escape(str(url))} — serving stale cache")
         else:
             status_label = _format_status_label(result.status)
-            err_console.print(f":white_check_mark: [green]{status_label}[/green] {escape(str(url))}")
+            err_console.print(f"{ICON_PASSED} [green]{status_label}[/green] {escape(str(url))}")
 
         typer.echo(str(result.path))
 
@@ -237,7 +237,7 @@ def latest(
     if json_output:
         emit_and_exit(build_latest_response(page_name, path), code=0 if path is not None else 1)
     if path is None:
-        err_console.print(f":cross_mark: [red]No cached file found for page name:[/red] {escape(str(page_name))}")
+        err_console.print(f"{ICON_ERROR} [red]No cached file found for page name:[/red] {escape(str(page_name))}")
         raise typer.Exit(code=1)
 
     typer.echo(str(path))
@@ -298,7 +298,7 @@ def section(
     text = read_section(file_path, heading)
     if text is None:
         err_console.print(
-            f":cross_mark: [red]Section not found:[/red] {escape(repr(heading))} in {escape(str(file_path))}"
+            f"{ICON_ERROR} [red]Section not found:[/red] {escape(repr(heading))} in {escape(str(file_path))}"
         )
         raise typer.Exit(code=1)
 
@@ -337,7 +337,7 @@ def verify(
     match result.status:
         case IntegrityStatus.INTACT:
             console.print(
-                f":white_check_mark: [green]INTACT[/green] {escape(str(file_path))}\n"
+                f"{ICON_PASSED} [green]INTACT[/green] {escape(str(file_path))}\n"
                 f"  sha256: {escape(str(result.computed_sha256))}\n"
                 f"  bytes:  {result.computed_bytes}"
             )
@@ -351,7 +351,7 @@ def verify(
                     f"[bold]Expected sha256:[/bold]  {escape(str(result.expected_sha256))}\n"
                     f"[bold]Computed bytes:[/bold]   {result.computed_bytes}\n"
                     f"[bold]Expected bytes:[/bold]   {result.expected_bytes}",
-                    title=":warning: MODIFIED — file differs from sidecar",
+                    title=f"{ICON_WARNING} MODIFIED — file differs from sidecar",
                     border_style="yellow",
                 ),
             )
@@ -362,7 +362,7 @@ def verify(
                 err_console,
                 Panel(
                     f"[bold]File:[/bold] {escape(str(file_path))}\nNo .meta.json sidecar found — cannot verify this file.",
-                    title=":warning: UNVERIFIABLE — no sidecar",
+                    title=f"{ICON_WARNING} UNVERIFIABLE — no sidecar",
                     border_style="yellow",
                 ),
             )
