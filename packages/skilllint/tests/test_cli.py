@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
+from typer.testing import CliRunner as TyperCliRunner
 
 import skilllint.plugin_validator as plugin_validator
 
@@ -1209,3 +1210,35 @@ class TestRecordOption:
         assert not record_path.exists(), (
             f"No SVG file should be created when the rule command fails, but found: {record_path}"
         )
+
+    @pytest.mark.parametrize("target", ["out.txt", "missing-dir/out.svg"], ids=["unsupported-suffix", "missing-dir"])
+    @pytest.mark.parametrize("command", ["check", "rules"])
+    def test_record_that_cannot_be_written_is_a_one_line_error(
+        self, command: str, target: str, cli_runner: CliRunner, tmp_path: Path
+    ) -> None:
+        """A ``--record`` path that cannot be written exits 2 with one stderr line, not a traceback (#314)."""
+        record_path = tmp_path / target
+        args = [command, str(self._make_valid_skill(tmp_path))] if command == "check" else [command]
+
+        result = cli_runner.invoke(plugin_validator.app, [*args, "--record", str(record_path)])
+
+        assert result.exit_code == 2
+        assert f"Error: Cannot write the recording to {record_path}" in result.stderr
+        assert isinstance(result.exception, SystemExit)
+
+    def test_no_color_record_writes_no_ansi_to_stdout(self, tmp_path: Path) -> None:
+        """``--no-color --record`` keeps escape sequences out of stdout; the SVG still has styles (#317).
+
+        The ``cli_runner`` fixture strips ANSI, which would hide the defect, so this uses a plain runner
+        with a colour-capable ``TERM`` and no colour overrides from the environment.
+        """
+        record_path = tmp_path / "out.svg"
+
+        result = TyperCliRunner().invoke(
+            plugin_validator.app,
+            ["check", str(self._make_skill_with_violation(tmp_path)), "--no-color", "--record", str(record_path)],
+            env={"TERM": "xterm-256color", "NO_COLOR": None, "FORCE_COLOR": None},
+        )
+
+        assert "\x1b[" not in result.stdout
+        assert "font-weight: bold" in record_path.read_text(encoding="utf-8")
