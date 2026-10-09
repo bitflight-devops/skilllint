@@ -1503,7 +1503,7 @@ def _show_rule_doc(rule_id: str, *, console: _Console) -> None:
     """Show documentation for a single rule (shared logic for callback and rule_cmd)."""
     entry = _get_rule(rule_id)
     if not entry:
-        console.print(f"[red]Unknown rule: {rule_id}[/red]")
+        console.print(f"[red]Unknown rule: {_escape(rule_id)}[/red]")
         console.print("\n[dim]Run [bold]skilllint rules[/bold] to see all available rules.[/dim]")
         raise typer.Exit(1)
 
@@ -1621,6 +1621,7 @@ def check_cmd(
 # =============================================================================
 
 from rich.console import Console as _Console
+from rich.markup import escape as _escape
 from rich.panel import Panel as _Panel
 from rich.syntax import Syntax as _Syntax
 from rich.table import Table as _Table
@@ -1644,7 +1645,7 @@ def _make_rule_console(*, record: bool = False) -> _Console:
     """
     if record:
         return _make_recording_console()
-    return _Console(soft_wrap=True)
+    return _Console(soft_wrap=True, emoji=False)
 
 
 def _maybe_export_recording(console: _Console | None, record: Path | None) -> None:

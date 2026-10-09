@@ -13,7 +13,7 @@ from rich.console import Console, ConsoleRenderable, RichCast
 from rich.markup import escape
 from rich.panel import Panel
 
-from skilllint.output import print_panel, rendered_width
+from skilllint.output import ICON_ERROR, ICON_FIXED, ICON_INFO, ICON_PASSED, ICON_WARNING, print_panel, rendered_width
 
 if TYPE_CHECKING:
     from skilllint.models import AppliedFix, ValidationIssue, ValidationResult
@@ -49,7 +49,7 @@ class ConsoleReporter:
         if console is not None:
             self.console = console
         else:
-            self.console = Console(force_terminal=not no_color, no_color=no_color, soft_wrap=True)
+            self.console = Console(force_terminal=not no_color, no_color=no_color, soft_wrap=True, emoji=False)
         self.no_color = no_color
 
     @staticmethod
@@ -68,7 +68,7 @@ class ConsoleReporter:
         Returns:
             Issue, suggestion and documentation lines in display order.
         """
-        severity_icons = {"error": ":cross_mark:", "warning": ":warning:", "info": ":information:"}
+        severity_icons = {"error": ICON_ERROR, "warning": ICON_WARNING, "info": ICON_INFO}
         severity_colors = {"error": "red", "warning": "yellow", "info": "blue"}
         icon = severity_icons.get(issue.severity, "")
         color = severity_colors.get(issue.severity, "white")
@@ -85,7 +85,12 @@ class ConsoleReporter:
     def _print_issue(self, issue: ValidationIssue) -> None:
         """Print a single validation issue with Rich formatting."""
         self.console.print(
-            "\n".join(self._issue_lines(issue)), crop=False, overflow="ignore", soft_wrap=True, highlight=False
+            "\n".join(self._issue_lines(issue)),
+            crop=False,
+            overflow="ignore",
+            soft_wrap=True,
+            highlight=False,
+            emoji=False,
         )
 
     def report(self, file_results: FileResults, verbose: bool = False, *, show_progress: bool = False) -> None:
@@ -96,11 +101,12 @@ class ConsoleReporter:
             if all_passed and not any_issues:
                 if show_progress:
                     self.console.print(
-                        f":white_check_mark: [green]{escape(str(file_path))}[/green] - PASSED",
+                        f"{ICON_PASSED} [green]{escape(str(file_path))}[/green] - PASSED",
                         crop=False,
                         overflow="ignore",
                         soft_wrap=True,
                         highlight=False,
+                        emoji=False,
                     )
                 continue
 
@@ -111,15 +117,17 @@ class ConsoleReporter:
                     issues_to_show.extend(result.info)
                 if not issues_to_show:
                     if show_progress:
-                        lines.append(f"  :white_check_mark: [dim]{escape(validator_name)}:[/dim] PASSED")
+                        lines.append(f"  {ICON_PASSED} [dim]{escape(validator_name)}:[/dim] PASSED")
                     continue
-                status_icon = ":cross_mark:" if not result.passed else ":warning:"
+                status_icon = ICON_ERROR if not result.passed else ICON_WARNING
                 lines.append(f"  {status_icon} [dim]{escape(validator_name)}:[/dim]")
                 for issue in issues_to_show:
                     lines.extend(self._issue_lines(issue))
             # Render once per file. Large scans can contain tens of thousands
             # of diagnostics; per-line Rich calls dominated their runtime.
-            self.console.print("\n".join(lines), crop=False, overflow="ignore", soft_wrap=True, highlight=False)
+            self.console.print(
+                "\n".join(lines), crop=False, overflow="ignore", soft_wrap=True, highlight=False, emoji=False
+            )
 
     def report_fixes(self, fixes: list[AppliedFix]) -> None:
         """Display a summary of files and rules that --fix modified.
@@ -134,25 +142,28 @@ class ConsoleReporter:
         for applied_fix in fixes:
             fixes_by_path.setdefault(applied_fix.path, []).append(applied_fix)
         for file_path, path_fixes in fixes_by_path.items():
-            self.console.print(f"[bold]{escape(str(file_path))}[/bold]", crop=False, overflow="ignore", soft_wrap=True)
+            self.console.print(
+                f"[bold]{escape(str(file_path))}[/bold]", crop=False, overflow="ignore", soft_wrap=True, emoji=False
+            )
             for applied_fix in path_fixes:
                 codes = ", ".join(applied_fix.codes)
                 self.console.print(
-                    f"  :wrench: [magenta][{escape(codes)}][/magenta] "
+                    f"  {ICON_FIXED} [magenta][{escape(codes)}][/magenta] "
                     f"[dim]{escape(applied_fix.validator)}:[/dim] {escape(applied_fix.description)}",
                     crop=False,
                     overflow="ignore",
                     soft_wrap=True,
+                    emoji=False,
                 )
 
     def summarize(self, total_files: int, passed: int, failed: int, warnings: int) -> None:
         """Display summary statistics with Rich formatting."""
         if failed == 0:
-            status_icon = ":white_check_mark:"
+            status_icon = ICON_PASSED
             status_text = "PASSED"
             status_color = "green"
         else:
-            status_icon = ":cross_mark:"
+            status_icon = ICON_ERROR
             status_text = "FAILED"
             status_color = "red"
 
