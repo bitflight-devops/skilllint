@@ -179,6 +179,19 @@ def test_name_format_fix_ignores_a_plugin_json_entry_with_a_nul_byte(tmp_path: P
     assert any("Renamed directory" in d for d in descriptions)
 
 
+def test_check_fix_skips_a_file_gitignore_matches_only_at_its_new_path(tmp_path: Path) -> None:
+    """A file that becomes ignored once its folder is renamed is skipped in the same run."""
+    sandbox = Sandbox.create(tmp_path)
+    subprocess.run(["git", "init", "-q", str(sandbox.case)], check=True)
+    (sandbox.case / ".gitignore").write_text("skills/bad-name/CLAUDE.md\n", encoding="utf-8")
+    write_skill(sandbox.case / "skills", "bad--name", "bad--name")
+    (sandbox.case / "skills" / "bad--name" / "CLAUDE.md").write_text("# Notes\n", encoding="utf-8")
+
+    run = run_cli(("check", ".", "--fix", "--json", "--show-progress"), sandbox)
+
+    assert [file["path"] for file in json.loads(run.stdout)["files"]] == ["skills/bad-name/SKILL.md"]
+
+
 # --- the fixer contract ------------------------------------------------------
 
 

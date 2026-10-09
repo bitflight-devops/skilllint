@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Literal, cast
 from pydantic import ValidationError
 from ruamel.yaml import YAMLError
 
+from skilllint.boundary.plugin_level_config_ingest import ingest_plugin_component_paths
 from skilllint.file_types import FileType
 from skilllint.frontmatter_core import (
     AgentFrontmatter,
@@ -33,7 +34,6 @@ from skilllint.frontmatter_yaml import (
     safe_load_yaml_with_colon_fix,
 )
 from skilllint.models import ValidationIssue, ValidationResult, YamlValue
-from skilllint.plugin_manifest import load_plugin_json
 from skilllint.rule_registry import rule_reference
 from skilllint.rules.ag_series import check_ag001, check_ag002, check_ag003
 from skilllint.rules.fm_series import check_fm004, check_fm007, check_fm010
@@ -950,20 +950,12 @@ class NameFormatValidator:
         folder = skill_dir.resolve()
         # The frontmatter owner may not import scan orchestration (test_architecture_examples), so
         # walk up to the plugin roots here instead of using scan_runtime.find_plugin_dir.
-        for plugin_dir in skill_dir.parents:
-            manifest = (
-                load_plugin_json(plugin_dir) if (plugin_dir / ".claude-plugin" / "plugin.json").is_file() else None
-            )
-            if manifest is None:
-                continue
-            for field in ("skills", "commands", "agents"):
-                entries = manifest.get(field)
-                listed = [entries] if isinstance(entries, str) else entries if isinstance(entries, list) else []
-                # Entries holding a NUL byte cannot be paths; the registration parser (pr_series) skips them too.
-                valid = [entry for entry in listed if isinstance(entry, str) and "\x00" not in entry]
-                if any((plugin_dir / entry).resolve().is_relative_to(folder) for entry in valid):
-                    return True
-        return False
+        return any(
+            (plugin_dir / entry).resolve().is_relative_to(folder)
+            for plugin_dir in skill_dir.parents
+            if (plugin_dir / ".claude-plugin" / "plugin.json").is_file()
+            for entry in ingest_plugin_component_paths(plugin_dir)
+        )
 
     @staticmethod
     def _rename_directory(skill_dir: Path, fixed_name: str) -> bool:

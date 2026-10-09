@@ -976,8 +976,17 @@ def collect_validation_results(
     moved_folders: dict[Path, Path] = {}
     for queued in expanded_paths:
         path = _follow_moved_folders(queued, moved_folders)
-        # The gitignore set was built from the paths as discovered, before any folder moved.
+        # The gitignore set was built from the paths as discovered, before any folder moved;
+        # a rebased path is asked again because its new spelling may match other ignore rules.
         if _should_skip(_ignore_path(queued)) or _should_skip(_ignore_path(path)):
+            continue
+        if (
+            not include_gitignore
+            and path != queued
+            and scan_base is not None
+            # The scan base may itself lie under a renamed folder; git needs a directory that exists.
+            and _build_gitignore_set([_ignore_path(path)], _follow_moved_folders(scan_base, moved_folders))
+        ):
             continue
         if platform_override is not None:
             violations = validate_file(_ignore_path(path), adapters, platform_override)
