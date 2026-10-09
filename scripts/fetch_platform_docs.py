@@ -39,6 +39,14 @@ if TYPE_CHECKING:
 
 DRIFT_FILE = VENDOR_DIR / ".drift-pending.json"
 
+# Process exit statuses. The SessionStart hook (.claude/hooks/vendor-drift-check.cjs)
+# acts only on DRIFT_EXIT_CODE, so no other outcome may use it.
+DRIFT_EXIT_CODE = 2
+# Click/Typer exit with 2 for a usage error (ClickException subclass UsageError.exit_code).
+CLICK_USAGE_EXIT_CODE = 2
+# sysexits.h EX_USAGE: "command line usage error".
+USAGE_EXIT_CODE = 64
+
 console = Console()
 err_console = Console(stderr=True)
 
@@ -504,7 +512,7 @@ def fetch(
     clones, git clone for first run.
 
     Raises:
-        typer.Exit: Exit code 2 when vendor changes are detected (non-dry-run).
+        typer.Exit: Exit code DRIFT_EXIT_CODE (2) when vendor changes are detected (non-dry-run).
     """
     if dry_run:
         console.print(
@@ -554,10 +562,36 @@ def fetch(
                 border_style="yellow",
             )
         )
-        raise typer.Exit(code=2)
+        raise typer.Exit(code=DRIFT_EXIT_CODE)
     else:
         console.print(f":white_check_mark: [bold green]Done. Vendor dir: {VENDOR_DIR}[/bold green]")
 
 
+def main() -> None:
+    """Run the CLI, keeping usage errors off the drift exit code.
+
+    Click and Typer report a usage error with exit status 2, the same status
+    ``fetch`` uses for drift. A usage error is shown as Click shows it and then
+    re-reported as ``USAGE_EXIT_CODE`` so a caller that acts on ``DRIFT_EXIT_CODE`` never mistakes it for drift.
+    Every other outcome keeps the status Typer would have produced.
+
+    Raises:
+        SystemExit: Always, carrying the process exit status.
+        Exception: Any error that is not a usage error, unchanged.
+    """
+    try:
+        exit_code = app(standalone_mode=False)
+    except typer.Abort:
+        err_console.print("Aborted!")
+        raise SystemExit(1) from None
+    except Exception as exc:
+        if getattr(exc, "exit_code", None) != CLICK_USAGE_EXIT_CODE:
+            raise
+        # ``UsageError.show`` prints the ``Usage:`` line and ``--help`` hint, then the message, to stderr.
+        getattr(exc, "show")()  # noqa: B009 — Click's exception type is not imported here
+        raise SystemExit(USAGE_EXIT_CODE) from None
+    raise SystemExit(exit_code or 0)
+
+
 if __name__ == "__main__":
-    app()
+    main()

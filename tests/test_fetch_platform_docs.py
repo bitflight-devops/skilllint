@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
+from pathlib import Path
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
@@ -24,8 +26,6 @@ from scripts.fetch_platform_docs import (
 from skilllint.vendor_io import read_text_or_none as _read_text_or_none, sha256_hex as _sha256
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from pytest_mock import MockerFixture
 
 # ---------------------------------------------------------------------------
@@ -908,3 +908,54 @@ def test_drift_pending_json_matches_schema(tmp_path: Path, mocker: MockerFixture
     assert http_entry["provider"] == "site_b"
     assert isinstance(http_entry["files"], list)
     assert len(http_entry["files"]) == 1
+
+
+# ---------------------------------------------------------------------------
+# Real-process exit codes: drift and usage errors must be distinguishable
+# ---------------------------------------------------------------------------
+
+REPO_ROOT = Path(__file__).parent.parent
+SCRIPT = REPO_ROOT / "scripts" / "fetch_platform_docs.py"
+DRIFT_EXIT_CODE = 2
+
+# Runs the script's real process entry point with network access replaced by a
+# canned drift result, so the exit status comes from a real interpreter exit.
+DRIFT_DRIVER = """
+import pathlib, sys, tempfile
+from unittest.mock import patch
+import scripts.fetch_platform_docs as script
+
+drift_file = pathlib.Path(tempfile.mkdtemp()) / ".drift-pending.json"
+result = script.GitDriftResult(provider="t", before_sha="a", after_sha="b")
+with (
+    patch.object(script, "GIT_PLATFORMS", [script.GitPlatform("t", "https://example.com/r")]),
+    patch.object(script, "DOC_SITE_PLATFORMS", []),
+    patch.object(script, "DRIFT_FILE", drift_file),
+    patch.object(script, "clone_or_update_repo", return_value=result),
+):
+    script.main()
+"""
+
+
+def test_main_exits_2_when_drift_detected() -> None:
+    """A drift run exits with the documented drift code, 2."""
+    # Act
+    completed = subprocess.run(
+        [sys.executable, "-c", DRIFT_DRIVER], cwd=REPO_ROOT, capture_output=True, text=True, check=False
+    )
+
+    # Assert
+    assert completed.returncode == DRIFT_EXIT_CODE, completed.stderr
+
+
+def test_script_usage_error_does_not_exit_with_drift_code() -> None:
+    """An unknown option must not exit with the drift code the SessionStart hook acts on."""
+    # Act
+    completed = subprocess.run(
+        [sys.executable, str(SCRIPT), "--no-such-option"], cwd=REPO_ROOT, capture_output=True, text=True, check=False
+    )
+
+    # Assert
+    assert completed.returncode not in {0, DRIFT_EXIT_CODE}
+    assert "No such option" in completed.stderr
+    assert "Usage:" in completed.stderr
