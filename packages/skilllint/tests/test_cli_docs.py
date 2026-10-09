@@ -13,6 +13,7 @@ Why: The docs subcommand group is a pure CLI adapter over vendor_cache.
 
 from __future__ import annotations
 
+import operator
 import re
 import subprocess
 import sys
@@ -761,3 +762,17 @@ class TestDocsVerify:
 
         # Assert
         mock_verify.assert_called_once_with(Path(target))
+
+
+@pytest.mark.parametrize("args", [("sections",), ("section", "Usage"), ("verify",)], ids=operator.itemgetter(0))
+def test_directory_argument_is_a_usage_error_without_json(
+    args: tuple[str, ...], cli_runner: CliRunner, tmp_path: Path
+) -> None:
+    """A directory gets the same usage error as under ``--json``, not an ``IsADirectoryError`` traceback (#315)."""
+    # Act
+    result = cli_runner.invoke(plugin_validator.app, ["docs", args[0], str(tmp_path), *args[1:]])
+
+    # Assert
+    assert result.exit_code == 2
+    assert f"Expected a file path: {tmp_path}" in result.stderr
+    assert result.exception is None or isinstance(result.exception, SystemExit)
