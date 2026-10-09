@@ -1106,19 +1106,15 @@ def _open_record_console(record: Path | None, *, no_color: bool, json_output: bo
     return _make_recording_console(no_color=no_color, file=StringIO() if json_output else None)
 
 
-def _export_recording_on_exit(record_console: _Console | None, record: Path | None, *, json_output: bool) -> None:
+def _export_recording_on_exit(record_console: _Console | None, record: Path | None) -> None:
     """Write the ``--record`` file when a run ends in an exit, as the text path does.
 
     Args:
         record_console: The recording console, if a recording was asked for.
-        record: The ``--record`` destination, if any.
-        json_output: Whether ``--json`` was given. A file that cannot be written then exits 2 with
+        record: The ``--record`` destination, if any. A file that cannot be written exits 2 with
             one plain stderr line instead of a traceback.
     """
-    if json_output and record is not None and record_console is not None:
-        _export_recording_for_json(record_console, record)
-    else:
-        _maybe_export_recording(record_console, record)
+    _maybe_export_recording(record_console, record)
 
 
 def _finish_check_json(
@@ -1159,7 +1155,7 @@ def _finish_check_json(
                 show_summary=show_summary,
                 record_console=record_console,
             )
-        record_path = _export_recording_for_json(record_console, record)
+        record_path = _write_recording(record_console, record)
     if not isinstance(outcome, CheckRun):
         emit_and_exit(build_tokens_response(outcome, record_path=record_path))
     response = build_check_response(
@@ -1356,7 +1352,7 @@ def main(
     try:
         outcome = _run_validation_command()
     except (SystemExit, typer.Exit):
-        _export_recording_on_exit(record_console, record, json_output=json_output)
+        _export_recording_on_exit(record_console, record)
         raise
     except KeyboardInterrupt:
         typer.echo("\nInterrupted by user", err=True)
@@ -1543,7 +1539,7 @@ def _rules_json(*, platform: str | None, category: str | None, severity: str | N
     if record is not None:
         console = _make_recording_console(file=StringIO())
         _show_rules_report(platform=platform, category=category, severity=severity, console=console)
-        record_path = _export_recording_for_json(console, record)
+        record_path = _write_recording(console, record)
     rules = _list_rules(platform=platform, category=category, severity=severity)
     emit_and_exit(build_rules_response(rules, record_path=record_path))
 
@@ -1563,7 +1559,7 @@ def _rule_json(rule_id: str, record: Path | None) -> NoReturn:
     if record is not None:
         console = _make_recording_console(file=StringIO())
         _show_rule_doc(rule_id, console=console)
-        record_path = _export_recording_for_json(console, record)
+        record_path = _write_recording(console, record)
     documentation = _resolve_example_markers(entry.docstring)
     emit_and_exit(build_rule_response(entry, documentation=documentation, record_path=record_path))
 
@@ -1652,15 +1648,20 @@ def _make_rule_console(*, record: bool = False) -> _Console:
 
 
 def _maybe_export_recording(console: _Console | None, record: Path | None) -> None:
+    """Write the ``--record`` file, when one was asked for.
+
+    Raises:
+        typer.Exit: With code 2 and one plain line on stderr when the file cannot be written.
+    """
     if record is not None and console is not None:
-        _export_recording(console, record, title=_build_svg_title(sys.argv[1:]))
+        _write_recording(console, record)
 
 
-def _export_recording_for_json(console: _Console, record: Path) -> str:
-    """Write the ``--record`` file for a ``--json`` run and name it.
+def _write_recording(console: _Console, record: Path) -> str:
+    """Write the ``--record`` file and name it.
 
-    The file is written before any JSON is printed, so a response that names ``record_path`` never
-    names a file that is missing.
+    Under ``--json`` the file is written before any JSON is printed, so a response that names
+    ``record_path`` never names a file that is missing.
 
     Args:
         console: The recording console the command rendered into.
