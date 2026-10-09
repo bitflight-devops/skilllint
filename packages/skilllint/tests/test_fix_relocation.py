@@ -209,6 +209,24 @@ def test_validate_single_path_keys_results_by_the_moved_path(tmp_path: Path) -> 
     assert {fix.path for fix in fixes} == {moved}
 
 
+def test_fix_outcome_is_falsy_when_nothing_was_applied(tmp_path: Path) -> None:
+    """``apply_authorized_fixes`` used to return a bool; its truthiness still means "a fixer applied"."""
+    assert not fixing.FixOutcome(applied=False, path=tmp_path)
+    assert fixing.FixOutcome(applied=True, path=tmp_path)
+
+
+def test_validate_single_path_keeps_a_config_that_moved_with_the_folder(tmp_path: Path) -> None:
+    """A ``.skilllint.json`` inside the renamed folder still suppresses its codes after ``--fix``."""
+    skill = write_skill(tmp_path, "bad--name", "bad--name")
+    (skill.parent / ".skilllint.json").write_text(json.dumps({"ignore": {"": ["SK004"]}}), encoding="utf-8")
+
+    results = validate_single_path(skill, check=True, fix=True, verbose=False)
+
+    moved = results[tmp_path / "bad-name" / "SKILL.md"]
+    codes = {issue.code for _, result in moved for issue in (*result.errors, *result.warnings, *result.info)}
+    assert "SK004" not in codes
+
+
 # --- other fixers that mutate paths during a run: they keep the path ---------
 
 

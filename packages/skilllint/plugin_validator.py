@@ -754,7 +754,12 @@ def validate_single_path(
             outcome = apply_authorized_fixes(
                 _get_fixers_for_path(validators, path), path, raw_codes=raw_codes, fixes_out=fixes_out
             )
-            path = outcome.path
+            if outcome.path != path:
+                # A config inside a moved folder moved with it; resolve again from the new location.
+                path = outcome.path
+                ignore_config, config_root = _resolve_ignore_config(path, cache)
+                policy, _policy_root = _resolve_policy(path, policy_cache)
+                policy = ValidationPolicy(policy.thresholds, policy.severity, ignore_config)
 
             # Re-validate after fixes, at the path the file has now
             if outcome.applied:

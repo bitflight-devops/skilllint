@@ -56,6 +56,14 @@ class FixOutcome:
     applied: bool
     path: Path
 
+    def __bool__(self) -> bool:
+        """Keep the truthiness of the ``bool`` this function returned before it reported a path.
+
+        Returns:
+            Whether a fixer applied a mutation.
+        """
+        return self.applied
+
 
 def apply_authorized_fixes(
     fixers: Sequence[Validator], path: Path, *, raw_codes: Collection[str], fixes_out: list[AppliedFix] | None = None
