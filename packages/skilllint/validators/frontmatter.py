@@ -938,7 +938,7 @@ class NameFormatValidator:
 
     @staticmethod
     def _registered_in_plugin_json(skill_dir: Path) -> bool:
-        """Return whether the nearest ``plugin.json`` lists *skill_dir* under ``skills``.
+        """Return whether the nearest ``plugin.json`` lists *skill_dir* or its ``SKILL.md`` under ``skills``.
 
         Renaming such a folder would leave the manifest naming a path that no
         longer exists (PR002), and changing only the ``name`` field would create a
@@ -952,8 +952,9 @@ class NameFormatValidator:
             return False
         entries = manifest.get("skills")
         listed = [entries] if isinstance(entries, str) else entries if isinstance(entries, list) else []
-        target = skill_dir.resolve()
-        return any(isinstance(entry, str) and (plugin_dir / entry).resolve() == target for entry in listed)
+        # An entry may name the folder or the SKILL.md inside it; both stop resolving after a rename.
+        targets = {skill_dir.resolve(), (skill_dir / "SKILL.md").resolve()}
+        return any(isinstance(entry, str) and (plugin_dir / entry).resolve() in targets for entry in listed)
 
     @staticmethod
     def _rename_directory(skill_dir: Path, fixed_name: str) -> bool:
