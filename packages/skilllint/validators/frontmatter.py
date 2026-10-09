@@ -938,16 +938,16 @@ class NameFormatValidator:
 
     @staticmethod
     def _registered_in_plugin_json(skill_dir: Path) -> bool:
-        """Return whether any enclosing ``plugin.json`` lists *skill_dir* or its ``SKILL.md`` under ``skills``.
+        """Return whether any enclosing ``plugin.json`` registers a path in or at *skill_dir*.
 
-        Renaming such a folder would leave the manifest naming a path that no
-        longer exists (PR002), and changing only the ``name`` field would create a
-        name/folder mismatch (FM010), so the fixer leaves such a skill unchanged.
-        Every enclosing plugin is checked, because an inner plugin.json does not
-        stop an outer one from registering a path inside it.
+        ``skills``, ``commands`` and ``agents`` all take paths (``pr_series`` checks the same
+        fields), and an entry naming the folder, its ``SKILL.md`` or any file inside it stops
+        resolving once the folder is renamed (PR002). Changing only the ``name`` field would
+        create a name/folder mismatch (FM010), so the fixer leaves such a skill unchanged.
+        Every enclosing plugin is checked, because an inner plugin.json does not stop an outer
+        one from registering a path inside it.
         """
-        # An entry may name the folder or the SKILL.md inside it; both stop resolving after a rename.
-        targets = {skill_dir.resolve(), (skill_dir / "SKILL.md").resolve()}
+        folder = skill_dir.resolve()
         # The frontmatter owner may not import scan orchestration (test_architecture_examples), so
         # walk up to the plugin roots here instead of using scan_runtime.find_plugin_dir.
         for plugin_dir in skill_dir.parents:
@@ -956,12 +956,13 @@ class NameFormatValidator:
             )
             if manifest is None:
                 continue
-            entries = manifest.get("skills")
-            listed = [entries] if isinstance(entries, str) else entries if isinstance(entries, list) else []
-            # Entries holding a NUL byte cannot be paths; the registration parser (pr_series) skips them too.
-            valid = [entry for entry in listed if isinstance(entry, str) and "\x00" not in entry]
-            if any((plugin_dir / entry).resolve() in targets for entry in valid):
-                return True
+            for field in ("skills", "commands", "agents"):
+                entries = manifest.get(field)
+                listed = [entries] if isinstance(entries, str) else entries if isinstance(entries, list) else []
+                # Entries holding a NUL byte cannot be paths; the registration parser (pr_series) skips them too.
+                valid = [entry for entry in listed if isinstance(entry, str) and "\x00" not in entry]
+                if any((plugin_dir / entry).resolve().is_relative_to(folder) for entry in valid):
+                    return True
         return False
 
     @staticmethod

@@ -229,12 +229,20 @@ def test_name_format_fix_leaves_the_folder_in_place_when_the_target_exists(tmp_p
     assert not any("Renamed directory" in d for d in descriptions)
 
 
-@pytest.mark.parametrize("entry", ["./skills/bad--name", "./skills/bad--name/SKILL.md"], ids=["folder", "skill-md"])
-def test_name_format_fix_keeps_a_folder_that_plugin_json_registers(entry: str, tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("field", "entry"),
+    [
+        pytest.param("skills", "./skills/bad--name", id="skills-folder"),
+        pytest.param("skills", "./skills/bad--name/SKILL.md", id="skills-skill-md"),
+        pytest.param("commands", "./skills/bad--name/SKILL.md", id="commands-skill-md"),
+        pytest.param("agents", "./skills/bad--name/helper.md", id="agents-file-inside"),
+    ],
+)
+def test_name_format_fix_keeps_a_folder_that_plugin_json_registers(field: str, entry: str, tmp_path: Path) -> None:
     """A folder ``plugin.json`` lists is left alone: a rename breaks the manifest (PR002), a name-only fix adds FM010."""
     (tmp_path / ".claude-plugin").mkdir()
     (tmp_path / ".claude-plugin" / "plugin.json").write_text(
-        json.dumps({"name": "p", "skills": [entry]}), encoding="utf-8"
+        json.dumps({"name": "p", field: [entry]}), encoding="utf-8"
     )
     skill = write_skill(tmp_path / "skills", "bad--name", "bad--name")
     fixer = NameFormatValidator()
