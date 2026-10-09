@@ -26,9 +26,10 @@ def make_recording_console(*, no_color: bool = False, file: TextIO | None = None
     """Return a Rich Console configured for recording.
 
     The console uses ``record=True`` so that output written to it can later be
-    exported via :func:`export_recording`.  ``force_terminal=True`` ensures
-    Rich renders ANSI codes and colours regardless of whether stdout is a TTY
-    (required for faithful SVG/HTML output).
+    exported via :func:`export_recording`.  The terminal copy is forced to ANSI
+    unless *no_color* is set, the same rule ``ConsoleReporter`` follows. The
+    recording keeps its styles either way: export reads the recorded segments,
+    not the bytes written to the terminal.
 
     Args:
         no_color: When *True*, disable colour output (passes ``no_color=True``
@@ -41,7 +42,7 @@ def make_recording_console(*, no_color: bool = False, file: TextIO | None = None
     Returns:
         A :class:`rich.console.Console` instance ready for recording.
     """
-    return Console(record=True, force_terminal=True, no_color=no_color, soft_wrap=True, file=file)
+    return Console(record=True, force_terminal=not no_color, no_color=no_color, soft_wrap=True, file=file)
 
 
 def _strip_trailing_whitespace(content: str) -> str:
