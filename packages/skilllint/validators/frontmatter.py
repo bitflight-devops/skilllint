@@ -838,7 +838,13 @@ class NameFormatValidator:
     FM010 has exactly one reporter (``FrontmatterValidator``) and exactly one
     fixer (this class). ``validate()`` remains available to callers that want
     the rule in isolation.
+
+    Renaming the skill directory moves the ``SKILL.md`` the fixer was handed;
+    the new location is available from :meth:`relocated_path` so the caller
+    does not keep using the old one.
     """
+
+    moved_to: Path | None = None
 
     def validate(self, path: Path) -> ValidationResult:
         """Validate name format in frontmatter.
@@ -917,8 +923,42 @@ class NameFormatValidator:
         Returns:
             List of fix descriptions, or empty if nothing was fixed
         """
+        self.moved_to = None
         fixes = self._try_fix_name_format(path)
         return fixes if fixes is not None else []
+
+    def relocated_path(self) -> Path | None:
+        """Return where the latest :meth:`fix` left the file, or None when it did not move.
+
+        Returns:
+            The ``SKILL.md`` path inside the renamed directory, or None.
+        """
+        return self.moved_to
+
+    @staticmethod
+    def _rename_directory(skill_dir: Path, fixed_name: str) -> bool:
+        """Rename *skill_dir* to *fixed_name* through a temporary name.
+
+        The two steps make ``Test-Skill`` -> ``test-skill`` work on
+        case-insensitive filesystems. When the second step fails (for example
+        because the target exists) the first is undone, so the directory is
+        never left under the temporary name.
+
+        Returns:
+            True when the directory now has *fixed_name*; False when it kept its name.
+        """
+        parent_dir = skill_dir.parent
+        temp_dir = parent_dir / f"{skill_dir.name}.fmtemp"
+        try:
+            skill_dir.rename(temp_dir)
+        except OSError:
+            return False  # Directory rename best-effort; frontmatter fix already applied
+        try:
+            temp_dir.rename(parent_dir / fixed_name)
+        except OSError:
+            temp_dir.rename(skill_dir)
+            return False
+        return True
 
     def _read_name_and_frontmatter(self, path: Path) -> tuple[str, dict[str, YamlValue], str] | None:
         """Read file, parse frontmatter, extract name.
@@ -973,16 +1013,13 @@ class NameFormatValidator:
 
         fixes = [f"Normalized name from '{name}' to '{fixed_name}'"]
         # Rename skill directory to match (two-step on case-insensitive filesystems)
-        if path.name == "SKILL.md" and path.parent.name != fixed_name:
-            skill_dir = path.parent
-            parent_dir = skill_dir.parent
-            try:
-                temp_name = f"{skill_dir.name}.fmtemp"
-                skill_dir.rename(parent_dir / temp_name)
-                (parent_dir / temp_name).rename(parent_dir / fixed_name)
-                fixes.append(f"Renamed directory to '{fixed_name}'")
-            except OSError:
-                pass  # Directory rename best-effort; frontmatter fix already applied
+        if (
+            path.name == "SKILL.md"
+            and path.parent.name != fixed_name
+            and self._rename_directory(path.parent, fixed_name)
+        ):
+            fixes.append(f"Renamed directory to '{fixed_name}'")
+            self.moved_to = path.parent.with_name(fixed_name) / path.name
 
         return fixes
 

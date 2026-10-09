@@ -751,12 +751,13 @@ def validate_single_path(
         if "failing-examples" in path.parts:
             _logger.debug("Skipping auto-fix for fixture file: %s", path)
         else:
-            fixes_applied = apply_authorized_fixes(
+            outcome = apply_authorized_fixes(
                 _get_fixers_for_path(validators, path), path, raw_codes=raw_codes, fixes_out=fixes_out
             )
+            path = outcome.path
 
-            # Re-validate after fixes
-            if fixes_applied:
+            # Re-validate after fixes, at the path the file has now
+            if outcome.applied:
                 validator_results = _collect_validator_results(
                     validators, path, config_root=config_root, ignore_config=ignore_config, policy=policy
                 )

@@ -8,9 +8,10 @@ does not select fixers or import concrete validator implementations.
 from __future__ import annotations
 
 from collections.abc import Collection, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 
-from skilllint.models import AppliedFix, Validator
+from skilllint.models import AppliedFix, RelocatingFixer, Validator
 
 # Rule codes that authorise a fixer to run against a path under --fix.
 # Keyed by validator class name, matching the historical compatibility
@@ -41,13 +42,32 @@ def get_fixer_trigger_codes(validator: Validator) -> frozenset[str]:
     return FIXER_TRIGGER_CODES.get(type(validator).__name__, frozenset())
 
 
+@dataclass(frozen=True)
+class FixOutcome:
+    """Result of running the authorised fixers against one path.
+
+    Attributes:
+        applied: True when at least one fixer reported an applied mutation and
+            the caller should revalidate.
+        path: Where the file is after the fixers ran. It differs from the path
+            passed in when a fixer renamed or moved it.
+    """
+
+    applied: bool
+    path: Path
+
+
 def apply_authorized_fixes(
     fixers: Sequence[Validator], path: Path, *, raw_codes: Collection[str], fixes_out: list[AppliedFix] | None = None
-) -> bool:
+) -> FixOutcome:
     """Run ordered fixers whose declared rule codes fired for path.
 
     raw_codes must contain pre-suppression findings. Reporting suppression
     does not revoke authorization to repair a finding.
+
+    A fixer that moves the file (a :class:`~skilllint.models.RelocatingFixer`)
+    hands the new path to the fixers after it, and every fix recorded in
+    ``fixes_out`` carries the final path: the one that exists after the run.
 
     Args:
         fixers: Already ordered fixer sequence selected for the path.
@@ -56,10 +76,12 @@ def apply_authorized_fixes(
         fixes_out: Optional append-only record of applied fixes.
 
     Returns:
-        True when at least one fixer reports an applied mutation and the
-        caller should revalidate the path.
+        The outcome: whether a fixer applied a mutation, and the path the file
+        has afterwards.
     """
     applied = False
+    current = path
+    recorded: list[tuple[str, tuple[str, ...], str]] = []
     for fixer in fixers:
         if not fixer.can_fix():
             continue
@@ -69,7 +91,7 @@ def apply_authorized_fixes(
             continue
 
         try:
-            descriptions = fixer.fix(path)
+            descriptions = fixer.fix(current)
         except NotImplementedError:
             continue
 
@@ -77,14 +99,17 @@ def apply_authorized_fixes(
             continue
 
         applied = True
-        if fixes_out is not None:
-            codes = tuple(sorted(triggered_codes))
-            fixes_out.extend(
-                AppliedFix(path=path, validator=type(fixer).__name__, codes=codes, description=description)
-                for description in descriptions
-            )
+        codes = tuple(sorted(triggered_codes))
+        recorded.extend((type(fixer).__name__, codes, description) for description in descriptions)
+        if isinstance(fixer, RelocatingFixer):
+            current = fixer.relocated_path() or current
 
-    return applied
+    if fixes_out is not None:
+        fixes_out.extend(
+            AppliedFix(path=current, validator=validator, codes=codes, description=description)
+            for validator, codes, description in recorded
+        )
+    return FixOutcome(applied=applied, path=current)
 
 
-__all__ = ["FIXER_TRIGGER_CODES", "apply_authorized_fixes", "get_fixer_trigger_codes"]
+__all__ = ["FIXER_TRIGGER_CODES", "FixOutcome", "apply_authorized_fixes", "get_fixer_trigger_codes"]
