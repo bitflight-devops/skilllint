@@ -17,10 +17,13 @@ from typing import TYPE_CHECKING, Final
 import pytest
 from cli_probe import Sandbox, run_cli
 from hypothesis import example, given, strategies as st
+from rich.cells import cell_len
 from rich.console import Console
 from rich.emoji import Emoji
+from rich.panel import Panel
 
 from skilllint import plugin_validator
+from skilllint.output import print_panel
 from skilllint.plugin_validator import AppliedFix, ErrorCode, ValidationIssue, ValidationResult
 from skilllint.record_export import make_recording_console
 from skilllint.reporting import ConsoleReporter
@@ -250,3 +253,18 @@ class TestErrorTextFromUserInput:
 
         assert result.exit_code == 1
         assert "Unknown rule: [/bold]" in result.output
+
+
+class TestPanelWidth:
+    """A panel holding ``:name:`` data is measured the way it is printed."""
+
+    def test_panel_border_fits_literal_emoji_code(self) -> None:
+        """The border is as wide as the literal ``:100:`` line, so the text neither wraps nor spills."""
+        buffer = StringIO()
+        console = Console(file=buffer, width=200, soft_wrap=True, emoji=False)  # as the docs consoles are built
+
+        print_panel(console, Panel("a :100: b :smile: c :warning: d"))
+
+        lines = buffer.getvalue().splitlines()
+        assert any("a :100: b :smile: c :warning: d" in line for line in lines)
+        assert len({cell_len(line) for line in lines}) == 1

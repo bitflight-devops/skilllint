@@ -47,7 +47,8 @@ def rendered_width(renderable: ConsoleRenderable | RichCast | str) -> int:
     # surface, not a cap imposed on the output's content-driven width.
     # Rich's dumb-terminal fallback ignores an explicit width unless height is
     # explicit too (e.g. TERM=dumb with FORCE_COLOR). Retain its detected height.
-    temporary = Console(width=999999, height=Console().height)
+    # Measure text as it prints: output consoles keep ``:name:`` data literal (emoji off).
+    temporary = Console(width=999999, height=Console().height, emoji=False)
     return Measurement.get(temporary, temporary.options, renderable).maximum
 
 
