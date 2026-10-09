@@ -972,7 +972,10 @@ def collect_validation_results(
 
     all_results: FileResults = {}
     all_fixes: list[AppliedFix] = []
-    for path in expanded_paths:
+    # Folders --fix renamed during this run (old -> new). Paths queued under an old folder follow it.
+    moved_folders: dict[Path, Path] = {}
+    for queued in expanded_paths:
+        path = _follow_moved_folders(queued, moved_folders)
         if _should_skip(_ignore_path(path)):
             continue
         if platform_override is not None:
@@ -980,6 +983,10 @@ def collect_validation_results(
             all_results[path] = [("platform", violations_to_result(violations))]
         else:
             file_results = validate_single_path(path, check=check, fix=fix, verbose=verbose, fixes_out=all_fixes)
+            if fix and not path.exists():
+                # The input moved during --fix: it was the skill folder itself or the SKILL.md inside it.
+                for file_path in file_results:
+                    moved_folders[path.parent if path.name == file_path.name else path] = file_path.parent
             for file_path, validator_results in file_results.items():
                 if file_path in all_results:
                     all_results[file_path].extend(validator_results)
@@ -987,6 +994,18 @@ def collect_validation_results(
                     all_results[file_path] = list(validator_results)
 
     return CheckRun(results=all_results, fixes=all_fixes)
+
+
+def _follow_moved_folders(path: Path, moved_folders: dict[Path, Path]) -> Path:
+    """Return where *path* is now, given the folders renamed earlier in the run.
+
+    Returns:
+        *path* rebased onto the new folder when it lay under a renamed one, otherwise *path*.
+    """
+    for old, new in moved_folders.items():
+        if path.is_relative_to(old):
+            return new / path.relative_to(old)
+    return path
 
 
 def report_results(

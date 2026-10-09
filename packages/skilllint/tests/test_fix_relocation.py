@@ -66,6 +66,20 @@ def test_check_fix_json_on_renamed_folder_carries_the_new_path(tmp_path: Path) -
     assert all(file["path"] == RENAMED_SKILL for file in response["files"])
 
 
+def test_check_fix_on_a_directory_follows_queued_files_into_the_renamed_folder(tmp_path: Path) -> None:
+    """A file queued under the folder before the rename is validated at its new path, not reported missing."""
+    sandbox = Sandbox.create(tmp_path)
+    write_skill(sandbox.case / "skills", "bad--name", "bad--name")
+    (sandbox.case / "skills" / "bad--name" / "CLAUDE.md").write_text("# Notes\n", encoding="utf-8")
+
+    run = run_cli(("check", ".", "--fix", "--no-color"), sandbox)
+
+    assert b"does not exist" not in run.stderr
+    assert b"Traceback" not in run.stderr
+    assert run.returncode != 2
+    assert (sandbox.case / "skills" / "bad-name" / "CLAUDE.md").is_file()
+
+
 # --- the fixer contract ------------------------------------------------------
 
 
