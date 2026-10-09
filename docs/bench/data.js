@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1791372360536,
+  "lastUpdate": 1791544050059,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -3522,6 +3522,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 203.136,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "1cbccf27e0bea04ab9d65058317b9dc7226feac2",
+          "message": "fix(vendor-drift): keep usage errors off the drift exit code (#331)\n\n* fix(vendor-drift): keep usage errors off the drift exit code\n\nfetch_platform_docs.py exits 2 for detected vendor drift, and Click/Typer\nalso exit 2 for a usage error, so the SessionStart hook that acts only on\nexit 2 could not tell a malformed invocation from drift (#316).\n\nAdd main(), which re-reports a usage error as 64 (sysexits EX_USAGE) and\nleaves every other outcome unchanged. The drift code stays 2, so the hook,\ntests and docs that rely on it are unaffected.\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01K5rAHJfvZyEEaUQghV7hCQ\n\n* fix(vendor-drift): show Click's usage text for usage errors\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01K5rAHJfvZyEEaUQghV7hCQ\n\n---------\n\nCo-authored-by: Claude <noreply@anthropic.com>",
+          "timestamp": "2026-10-09T11:04:18Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/1cbccf27e0bea04ab9d65058317b9dc7226feac2"
+        },
+        "date": 1791544049320,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 2447.938,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 2602.094,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 2899.395,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 384.69,
             "unit": "files/s"
           }
         ]
