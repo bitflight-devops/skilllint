@@ -22,6 +22,7 @@ from default_output_cases import NO_ENDPOINTS, renamed_folder_workspace
 from skilllint import fixing
 from skilllint.models import AppliedFix, RelocatingFixer, ValidationResult
 from skilllint.plugin_validator import validate_single_path
+from skilllint.scan_runtime import _follow_moved_folders
 from skilllint.validators.frontmatter import NameFormatValidator
 from skilllint.validators.hooks import HookValidator
 from skilllint.validators.symlinks import SymlinkTargetValidator
@@ -78,6 +79,18 @@ def test_check_fix_on_a_directory_follows_queued_files_into_the_renamed_folder(t
     assert b"Traceback" not in run.stderr
     assert run.returncode != 2
     assert (sandbox.case / "skills" / "bad-name" / "CLAUDE.md").is_file()
+
+
+def test_queued_paths_follow_a_chain_of_nested_folder_renames(tmp_path: Path) -> None:
+    """An outer rename and then an inner rename both apply to a file queued under the inner folder."""
+    moved = {
+        tmp_path / "outer--bad": tmp_path / "outer-bad",
+        tmp_path / "outer-bad" / "inner--bad": tmp_path / "outer-bad" / "inner-bad",
+    }
+
+    followed = _follow_moved_folders(tmp_path / "outer--bad" / "inner--bad" / "CLAUDE.md", moved)
+
+    assert followed == tmp_path / "outer-bad" / "inner-bad" / "CLAUDE.md"
 
 
 # --- the fixer contract ------------------------------------------------------

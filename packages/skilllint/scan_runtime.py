@@ -999,12 +999,15 @@ def collect_validation_results(
 def _follow_moved_folders(path: Path, moved_folders: dict[Path, Path]) -> Path:
     """Return where *path* is now, given the folders renamed earlier in the run.
 
+    Moves are applied in the order they happened, so a rename inside an already renamed folder
+    (recorded against the folder's new name) is followed too.
+
     Returns:
-        *path* rebased onto the new folder when it lay under a renamed one, otherwise *path*.
+        *path* rebased onto every renamed folder it lay under, otherwise *path*.
     """
     for old, new in moved_folders.items():
         if path.is_relative_to(old):
-            return new / path.relative_to(old)
+            path = new / path.relative_to(old)
     return path
 
 
