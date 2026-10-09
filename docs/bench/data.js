@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1791545287124,
+  "lastUpdate": 1791546611913,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -3606,6 +3606,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 203.336,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "782353bbff0436added6e65b5c566e3acb053cda",
+          "message": "fix(reporting): print diagnostic data literally, not as Rich emoji (#332)\n\n* fix(reporting): print diagnostic data literally, not as Rich emoji\n\nA line number that is also a Rich emoji code (:100:, :1234:) rendered as an\nemoji in ConsoleReporter output. rich.markup.escape protects \"[\" only, so\nevery string that mixed status-icon tokens with data was exposed: paths,\nfields, messages, URLs, validator names and fix descriptions.\n\nResolve the status icons to glyphs up front (output.emoji_glyph) and turn\nemoji replacement off on the data-carrying prints and on the consoles\n(reporter default, --record, rules, docs). Also escape the unknown rule id\nechoed by `skilllint rule`, which raised MarkupError for \"[/bold]\".\n\nFixes #327\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01K5rAHJfvZyEEaUQghV7hCQ\n\n* test(reporting): drop unsourced bounds from the literal-text properties\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01K5rAHJfvZyEEaUQghV7hCQ\n\n* fix(output): measure panels with emoji replacement off, as they print\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01K5rAHJfvZyEEaUQghV7hCQ\n\n---------\n\nCo-authored-by: Claude <noreply@anthropic.com>",
+          "timestamp": "2026-10-09T11:47:28Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/782353bbff0436added6e65b5c566e3acb053cda"
+        },
+        "date": 1791546611163,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 2677.245,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 2937.737,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 3456.12,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 340.738,
             "unit": "files/s"
           }
         ]
