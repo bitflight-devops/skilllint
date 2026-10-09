@@ -22,7 +22,7 @@ from default_output_cases import NO_ENDPOINTS, renamed_folder_workspace
 from skilllint import fixing
 from skilllint.models import AppliedFix, RelocatingFixer, ValidationResult
 from skilllint.plugin_validator import validate_single_path
-from skilllint.scan_runtime import _follow_moved_folders
+from skilllint.scan_runtime import _folder_move, _follow_moved_folders
 from skilllint.validators.frontmatter import NameFormatValidator
 from skilllint.validators.hooks import HookValidator
 from skilllint.validators.symlinks import SymlinkTargetValidator
@@ -91,6 +91,32 @@ def test_queued_paths_follow_a_chain_of_nested_folder_renames(tmp_path: Path) ->
     followed = _follow_moved_folders(tmp_path / "outer--bad" / "inner--bad" / "CLAUDE.md", moved)
 
     assert followed == tmp_path / "outer-bad" / "inner-bad" / "CLAUDE.md"
+
+
+@pytest.mark.parametrize(
+    ("queued", "result", "was_dir", "expected"),
+    [
+        pytest.param("s/bad--name", "s/bad-name/SKILL.md", True, ("s/bad--name", "s/bad-name"), id="folder-input"),
+        pytest.param(
+            "s/bad--name/SKILL.md", "s/bad-name/SKILL.md", False, ("s/bad--name", "s/bad-name"), id="file-input"
+        ),
+        pytest.param(
+            "s/SKILL.md", "s/skill-md/SKILL.md", True, ("s/SKILL.md", "s/skill-md"), id="folder-named-skill-md"
+        ),
+        pytest.param(
+            "s/Test-Skill/SKILL.md", "s/test-skill/SKILL.md", False, ("s/Test-Skill", "s/test-skill"), id="case-only"
+        ),
+        pytest.param("s/fine", "s/fine/SKILL.md", True, None, id="folder-unchanged"),
+        pytest.param("plugin", "plugin", True, None, id="plugin-root-key"),
+    ],
+)
+def test_folder_move_detects_a_rename_from_the_spelled_paths(
+    queued: str, result: str, was_dir: bool, expected: tuple[str, str] | None
+) -> None:
+    """A move is a sibling folder with another spelling; nothing else counts."""
+    move = _folder_move(Path(queued), Path(result), was_dir=was_dir)
+
+    assert move == (None if expected is None else (Path(expected[0]), Path(expected[1])))
 
 
 # --- the fixer contract ------------------------------------------------------

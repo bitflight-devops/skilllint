@@ -982,11 +982,12 @@ def collect_validation_results(
             violations = validate_file(_ignore_path(path), adapters, platform_override)
             all_results[path] = [("platform", violations_to_result(violations))]
         else:
+            was_dir = path.is_dir()
             file_results = validate_single_path(path, check=check, fix=fix, verbose=verbose, fixes_out=all_fixes)
-            if fix and not path.exists():
-                # The input moved during --fix: it was the skill folder itself or the SKILL.md inside it.
+            if fix:
                 for file_path in file_results:
-                    moved_folders[path.parent if path.name == file_path.name else path] = file_path.parent
+                    if (move := _folder_move(path, file_path, was_dir=was_dir)) is not None:
+                        moved_folders[move[0]] = move[1]
             for file_path, validator_results in file_results.items():
                 if file_path in all_results:
                     all_results[file_path].extend(validator_results)
@@ -994,6 +995,23 @@ def collect_validation_results(
                     all_results[file_path] = list(validator_results)
 
     return CheckRun(results=all_results, fixes=all_fixes)
+
+
+def _folder_move(queued: Path, result: Path, *, was_dir: bool) -> tuple[Path, Path] | None:
+    """Return ``(old, new)`` when validating *queued* renamed its skill folder, else None.
+
+    *queued* is the folder or a file directly in it (*was_dir* says which, as checked before
+    validation). The folder moved when the result's folder sits beside it under another spelling.
+    Spellings are compared as strings because Windows paths compare equal across a case-only rename.
+
+    Returns:
+        The old and new folder, or None when the folder kept its name.
+    """
+    folder = queued if was_dir else queued.parent
+    moved_to = result.parent
+    if str(result) == str(queued) or str(moved_to) == str(folder) or str(moved_to.parent) != str(folder.parent):
+        return None
+    return folder, moved_to
 
 
 def _follow_moved_folders(path: Path, moved_folders: dict[Path, Path]) -> Path:
