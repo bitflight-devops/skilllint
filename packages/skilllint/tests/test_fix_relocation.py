@@ -166,6 +166,19 @@ def test_check_fix_rebases_results_collected_before_the_folder_moved(tmp_path: P
     assert all("bad--name" not in fix["path"] for fix in response["fixes"])
 
 
+def test_name_format_fix_ignores_a_plugin_json_entry_with_a_nul_byte(tmp_path: Path) -> None:
+    """A malformed registration is skipped, as the registration parser skips it, instead of raising."""
+    (tmp_path / ".claude-plugin").mkdir()
+    (tmp_path / ".claude-plugin" / "plugin.json").write_text(
+        json.dumps({"name": "p", "skills": ["./skills/x\u0000y"]}), encoding="utf-8"
+    )
+    skill = write_skill(tmp_path / "skills", "bad--name", "bad--name")
+
+    descriptions = NameFormatValidator().fix(skill)
+
+    assert any("Renamed directory" in d for d in descriptions)
+
+
 # --- the fixer contract ------------------------------------------------------
 
 

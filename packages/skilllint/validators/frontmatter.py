@@ -958,7 +958,9 @@ class NameFormatValidator:
                 continue
             entries = manifest.get("skills")
             listed = [entries] if isinstance(entries, str) else entries if isinstance(entries, list) else []
-            if any(isinstance(entry, str) and (plugin_dir / entry).resolve() in targets for entry in listed):
+            # Entries holding a NUL byte cannot be paths; the registration parser (pr_series) skips them too.
+            valid = [entry for entry in listed if isinstance(entry, str) and "\x00" not in entry]
+            if any((plugin_dir / entry).resolve() in targets for entry in valid):
                 return True
         return False
 
