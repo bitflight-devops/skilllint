@@ -33,6 +33,7 @@ from skilllint.frontmatter_yaml import (
     safe_load_yaml_with_colon_fix,
 )
 from skilllint.models import ValidationIssue, ValidationResult, YamlValue
+from skilllint.plugin_manifest import load_plugin_json
 from skilllint.rule_registry import rule_reference
 from skilllint.rules.ag_series import check_ag001, check_ag002, check_ag003
 from skilllint.rules.fm_series import check_fm004, check_fm007, check_fm010
@@ -936,6 +937,25 @@ class NameFormatValidator:
         return self.moved_to
 
     @staticmethod
+    def _registered_in_plugin_json(skill_dir: Path) -> bool:
+        """Return whether the nearest ``plugin.json`` lists *skill_dir* under ``skills``.
+
+        Renaming such a folder would leave the manifest naming a path that no
+        longer exists (PR002), and changing only the ``name`` field would create a
+        name/folder mismatch (FM010), so the fixer leaves such a skill unchanged.
+        """
+        # The frontmatter owner may not import scan orchestration (test_architecture_examples), so
+        # walk up to the nearest plugin root here instead of using scan_runtime.find_plugin_dir.
+        plugin_dir = next((d for d in skill_dir.parents if (d / ".claude-plugin" / "plugin.json").is_file()), None)
+        manifest = load_plugin_json(plugin_dir) if plugin_dir is not None else None
+        if plugin_dir is None or manifest is None:
+            return False
+        entries = manifest.get("skills")
+        listed = [entries] if isinstance(entries, str) else entries if isinstance(entries, list) else []
+        target = skill_dir.resolve()
+        return any(isinstance(entry, str) and (plugin_dir / entry).resolve() == target for entry in listed)
+
+    @staticmethod
     def _rename_directory(skill_dir: Path, fixed_name: str) -> bool:
         """Rename *skill_dir* to *fixed_name* through a temporary name.
 
@@ -997,6 +1017,8 @@ class NameFormatValidator:
 
         fixed_name = _normalize_skill_name(name)
         if not fixed_name or fixed_name == name or not re.match(NAME_PATTERN, fixed_name):
+            return None
+        if path.name == "SKILL.md" and path.parent.name != fixed_name and self._registered_in_plugin_json(path.parent):
             return None
 
         data["name"] = fixed_name
