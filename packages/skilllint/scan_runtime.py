@@ -1016,16 +1016,31 @@ def _folder_move(queued: Path, result: Path, *, was_dir: bool) -> tuple[Path, Pa
     return folder, moved_to
 
 
+def _rebased(path: Path, old: Path, new: Path) -> Path | None:
+    """Return *path* moved from under *old* to under *new*, or None when it is not under *old*.
+
+    Compares spellings as strings: ``Path.is_relative_to`` is too slow to call for every collected
+    path on every rename of a large --fix run, and a string match also keeps case-only renames apart.
+    """
+    text, prefix = str(path), str(old)
+    if text == prefix:
+        return new
+    if text.startswith(prefix + os.sep):
+        return new / text[len(prefix) + 1 :]
+    return None
+
+
 def _rebase_collected(results: FileResults, fixes: list[AppliedFix], old: Path, new: Path) -> None:
     """Move results and fixes already collected under *old* to *new*, in place.
 
     Paths listed before the skill that renamed their folder were recorded under the old spelling.
     """
-    for key in [key for key in results if key.is_relative_to(old)]:
-        results[new / key.relative_to(old)] = results.pop(key)
+    for key in list(results):
+        if (moved := _rebased(key, old, new)) is not None:
+            results[moved] = results.pop(key)
     for index, fix in enumerate(fixes):
-        if fix.path.is_relative_to(old):
-            fixes[index] = replace(fix, path=new / fix.path.relative_to(old))
+        if (moved := _rebased(fix.path, old, new)) is not None:
+            fixes[index] = replace(fix, path=moved)
 
 
 def _follow_moved_folders(path: Path, moved_folders: dict[Path, Path]) -> Path:
@@ -1038,8 +1053,8 @@ def _follow_moved_folders(path: Path, moved_folders: dict[Path, Path]) -> Path:
         *path* rebased onto every renamed folder it lay under, otherwise *path*.
     """
     for old, new in moved_folders.items():
-        if path.is_relative_to(old):
-            path = new / path.relative_to(old)
+        if (moved := _rebased(path, old, new)) is not None:
+            path = moved
     return path
 
 
