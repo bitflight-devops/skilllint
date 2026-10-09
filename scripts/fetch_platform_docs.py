@@ -571,8 +571,8 @@ def main() -> None:
     """Run the CLI, keeping usage errors off the drift exit code.
 
     Click and Typer report a usage error with exit status 2, the same status
-    ``fetch`` uses for drift. A usage error is re-reported as ``USAGE_EXIT_CODE``
-    so a caller that acts on ``DRIFT_EXIT_CODE`` never mistakes it for drift.
+    ``fetch`` uses for drift. A usage error is shown as Click shows it and then
+    re-reported as ``USAGE_EXIT_CODE`` so a caller that acts on ``DRIFT_EXIT_CODE`` never mistakes it for drift.
     Every other outcome keeps the status Typer would have produced.
 
     Raises:
@@ -587,7 +587,8 @@ def main() -> None:
     except Exception as exc:
         if getattr(exc, "exit_code", None) != CLICK_USAGE_EXIT_CODE:
             raise
-        err_console.print(f"Error: {exc}", markup=False, highlight=False)
+        # ``UsageError.show`` prints the ``Usage:`` line and ``--help`` hint, then the message, to stderr.
+        getattr(exc, "show")()  # noqa: B009 — Click's exception type is not imported here
         raise SystemExit(USAGE_EXIT_CODE) from None
     raise SystemExit(exit_code or 0)
 

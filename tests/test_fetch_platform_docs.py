@@ -958,3 +958,4 @@ def test_script_usage_error_does_not_exit_with_drift_code() -> None:
     # Assert
     assert completed.returncode not in {0, DRIFT_EXIT_CODE}
     assert "No such option" in completed.stderr
+    assert "Usage:" in completed.stderr
