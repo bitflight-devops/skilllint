@@ -841,3 +841,16 @@ def test_hook_fix_changes_the_mode_of_the_script_and_keeps_hooks_json_in_place(t
 
     assert hooks.is_file()
     assert script.is_file()
+
+
+def test_registration_guard_finds_a_manifest_above_a_relative_skill_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A skill path relative to a cwd inside the plugin still reaches the manifest above the cwd."""
+    write_skill(tmp_path / "skills", "bad--name", "bad--name")
+    manifest = tmp_path / ".claude-plugin" / "plugin.json"
+    manifest.parent.mkdir()
+    manifest.write_text(json.dumps({"name": "p", "skills": ["./skills/bad--name"]}), encoding="utf-8")
+    monkeypatch.chdir(tmp_path / "skills")
+
+    assert NameFormatValidator._registered_in_plugin_json(Path("bad--name"))
