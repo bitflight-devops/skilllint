@@ -994,6 +994,12 @@ def collect_validation_results(
         The results and the fixes applied.
     """
     ignore_patterns = _load_ignore_patterns()
+    # Keep each input's decision: ignored and unignored spellings can normalize to the same path.
+    initially_ignored = {
+        index
+        for index, path in enumerate(expanded_paths)
+        if ignore_patterns and _is_ignored(_ignore_path(path), ignore_patterns)
+    }
 
     expanded_paths = [_normalize_parent_alias(path) for path in expanded_paths] if fix else expanded_paths
     scan_base = _compute_scan_base(expanded_paths)
@@ -1011,22 +1017,24 @@ def collect_validation_results(
         return str(p.resolve()) in ignored_set
 
     # A move can remove a queued directory's original SKILL.md probe or change a symlink target.
-    initially_ignored = {path for path in expanded_paths if _should_skip(_ignore_path(path))}
+    initially_ignored.update(index for index, path in enumerate(expanded_paths) if _should_skip(_ignore_path(path)))
     all_results: FileResults = {}
     all_fixes: list[AppliedFix] = []
     collected_identities: dict[Path, Path] = {}
     # Folders --fix renamed during this run (old -> new). Paths queued under an old folder follow it.
     moved_folders: dict[Path, Path] = {}
     folder_identities: dict[Path, Path] = {}
-    for queued in expanded_paths:
-        path = _follow_moved_folders(queued, moved_folders, queued_identities.get(queued), folder_identities)
+    for index in range(len(expanded_paths)):
+        path = _follow_moved_folders(
+            expanded_paths[index], moved_folders, queued_identities.get(expanded_paths[index]), folder_identities
+        )
         # The gitignore set was built from the paths as discovered, before any folder moved;
         # a rebased path is asked again because its new spelling may match other ignore rules.
-        if queued in initially_ignored or _should_skip(_ignore_path(path)):
+        if index in initially_ignored or _should_skip(_ignore_path(path)):
             continue
         if (
             not include_gitignore
-            and path != queued
+            and path != expanded_paths[index]
             and scan_base is not None
             # The scan base may itself lie under a renamed folder; git needs a directory that exists.
             and _build_gitignore_set(

@@ -407,6 +407,46 @@ def test_check_fix_keeps_an_originally_ignored_skill_skipped_after_its_parent_mo
     assert not outer.parent.exists()
 
 
+@pytest.mark.parametrize(
+    ("paths", "should_fix"),
+    [
+        pytest.param(("skills/../skills/bad--name/SKILL.md",), False, id="ignored-alias-only"),
+        pytest.param(
+            ("skills/../skills/bad--name/SKILL.md", "skills/bad--name/SKILL.md"), True, id="ignored-alias-first"
+        ),
+        pytest.param(
+            ("skills/bad--name/SKILL.md", "skills/../skills/bad--name/SKILL.md"), True, id="ignored-alias-last"
+        ),
+    ],
+)
+def test_check_fix_preserves_ignore_decisions_for_each_original_path_spelling(
+    tmp_path: Path, paths: tuple[str, ...], should_fix: bool
+) -> None:
+    """An ignored alias keeps its own decision when another spelling selects the same skill."""
+    sandbox = Sandbox.create(tmp_path)
+    skill = write_skill(sandbox.case / "skills", "bad--name", "bad--name")
+    original = skill.read_bytes()
+    (sandbox.case / ".pluginvalidatorignore").write_text("skills/../skills/bad--name/SKILL.md\n", encoding="utf-8")
+
+    run = run_cli(("check", *paths, "--fix", "--json", "--show-progress"), sandbox)
+
+    assert run.returncode == 0
+    response = json.loads(run.stdout)
+    moved = sandbox.case / "skills" / "bad-name" / "SKILL.md"
+    if should_fix:
+        assert moved.is_file()
+        assert moved.read_bytes() != original
+        assert not skill.exists()
+        assert {file["path"] for file in response["files"]} == {"skills/bad-name/SKILL.md"}
+        assert {fix["path"] for fix in response["fixes"]} == {"skills/bad-name/SKILL.md"}
+    else:
+        assert skill.is_file()
+        assert skill.read_bytes() == original
+        assert not moved.exists()
+        assert response["files"] == []
+        assert response["fixes"] == []
+
+
 def test_check_fix_follows_a_move_recorded_through_a_directory_symlink(tmp_path: Path) -> None:
     """The queued parent traversal and symlink-spelled mover identify the same physical folder."""
     sandbox = Sandbox.create(tmp_path)
