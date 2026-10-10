@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter, ValidationError
 
 from skilllint.plugin_manifest import load_plugin_json
 
@@ -120,3 +120,48 @@ __all__ = [
     "ingest_plugin_level_mcp_server_names",
     "mcp_server_names_from_mcp_servers_document",
 ]
+
+
+# ``plugin.json`` fields that take component paths; ``rules/pr_series.py`` reads the same three.
+COMPONENT_PATH_FIELDS = ("skills", "commands", "agents")
+
+_COMPONENT_FIELD = TypeAdapter(str | list[JsonValue])
+
+
+def component_paths_from_plugin_document(raw: object) -> tuple[str, ...]:
+    """Return every path string ``plugin.json`` lists under ``skills``, ``commands`` and ``agents``.
+
+    A field may hold one string or a list. Non-string list items and strings holding a NUL
+    byte are dropped, as ``pr_series._component_paths`` drops them, because none can be a path.
+
+    Args:
+        raw: Root object from ``json.loads`` (or equivalent).
+
+    Returns:
+        The path strings in field order; empty when the root is not an object.
+    """
+    if not isinstance(raw, dict):
+        return ()
+    paths: list[str] = []
+    for field in COMPONENT_PATH_FIELDS:
+        try:
+            value = _COMPONENT_FIELD.validate_python(raw.get(field), strict=True)
+        except ValidationError:
+            continue
+        items = [value] if isinstance(value, str) else value
+        paths.extend(item for item in items if isinstance(item, str) and "\x00" not in item)
+    return tuple(paths)
+
+
+def ingest_plugin_component_paths(plugin_dir: Path, manifest_path: str | None = None) -> tuple[str, ...]:
+    """Load a plugin manifest and return its component path strings.
+
+    Args:
+        plugin_dir: Plugin root directory.
+        manifest_path: Adapter-declared manifest location; defaults to the Claude layout.
+
+    Returns:
+        Path strings from ``skills``, ``commands`` and ``agents``; empty when the manifest is
+        missing, unreadable or not an object.
+    """
+    return component_paths_from_plugin_document(load_plugin_json(plugin_dir, manifest_path))

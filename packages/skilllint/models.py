@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated, Literal, Protocol, TypeAlias
+from typing import Annotated, Literal, Protocol, TypeAlias, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -81,4 +81,26 @@ class Validator(Protocol):
         ...
 
 
-__all__ = ["AppliedFix", "FileResults", "ValidationIssue", "ValidationResult", "Validator", "YamlValue"]
+@runtime_checkable
+class RelocatingFixer(Protocol):
+    """Fixer that can move the path it was given.
+
+    A fixer that renames or moves its input implements this next to
+    :class:`Validator`, so the caller can follow the path instead of using the
+    one it started with.
+    """
+
+    def relocated_path(self) -> Path | None:
+        """Return where the most recent ``fix`` call left the path, or None when it did not move."""
+        ...
+
+
+__all__ = [
+    "AppliedFix",
+    "FileResults",
+    "RelocatingFixer",
+    "ValidationIssue",
+    "ValidationResult",
+    "Validator",
+    "YamlValue",
+]

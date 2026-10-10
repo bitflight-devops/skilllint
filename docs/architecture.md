@@ -9,7 +9,7 @@ validator protocol, and shared value aliases) are owned by `models.py`.
 suppression filtering. `frontmatter_core.py` owns frontmatter schema contracts
 and the frontmatter-exempt filename set. `file_types.py` owns scan/file-type
 and frontmatter-requirement classification. `plugin_manifest.py` owns cached
-Claude plugin manifest decoding. `frontmatter_yaml.py` owns YAML parsing/repair
+plugin manifest decoding. `frontmatter_yaml.py` owns YAML parsing/repair
 and SKILL.md document parsing. `scan_runtime.py` owns path discovery and
 plugin/marketplace root ancestry. `fixing.py` owns fail-closed fixer
 authorization and generic ordered execution.

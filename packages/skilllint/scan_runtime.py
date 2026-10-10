@@ -10,7 +10,7 @@ from __future__ import annotations
 import fnmatch
 import os
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path, PurePath
 from typing import TYPE_CHECKING, Any, NoReturn
 
@@ -890,6 +890,44 @@ def _ignore_path(path: Path) -> Path:
     return skill_file if path.is_dir() and skill_file.is_file() else path
 
 
+def _normalize_parent_alias(path: Path) -> Path:
+    """Resolve parent traversals before a fixer moves them, retaining the remaining spelling.
+
+    Returns:
+        The equivalent path after resolving through the last parent traversal.
+    """
+    parts = path.parts
+    if os.pardir not in parts:
+        return path
+    prefix_length = len(parts) - parts[::-1].index(os.pardir)
+    normalized = Path(*parts[:prefix_length]).resolve().joinpath(*parts[prefix_length:])
+    return normalized if path.is_absolute() else Path(os.path.relpath(normalized))
+
+
+def _path_identity(path: Path, *, follow_file_symlinks: bool = False) -> Path:
+    """Return a canonical spelling, following file targets only when requested."""
+    canonical = (
+        path.resolve()
+        if follow_file_symlinks and path.is_symlink() and path.is_file()
+        else path.parent.resolve() / path.name
+    )
+    return canonical if path.is_absolute() else Path(os.path.relpath(canonical))
+
+
+def _queued_identities(paths: list[Path], scan_base: Path | None) -> dict[Path, Path]:
+    """Snapshot path identities before a rename can leave a directory alias dangling.
+
+    Returns:
+        Immutable identities for queued inputs and the scan base; file aliases track their targets.
+    """
+    identities: dict[Path, Path] = {}
+    for path in [*paths, *([scan_base] if scan_base is not None else [])]:
+        target = _ignore_path(path)
+        identity = _path_identity(target, follow_file_symlinks=True)
+        identities[path] = identity if str(target) == str(path) else identity.parent
+    return identities
+
+
 def _select_reporter(*, no_color: bool, record_console: Console | None) -> Reporter:
     """Choose the reporter implementation for this run.
 
@@ -956,8 +994,16 @@ def collect_validation_results(
         The results and the fixes applied.
     """
     ignore_patterns = _load_ignore_patterns()
+    # Keep each input's decision: ignored and unignored spellings can normalize to the same path.
+    initially_ignored = {
+        index
+        for index, path in enumerate(expanded_paths)
+        if ignore_patterns and _is_ignored(_ignore_path(path), ignore_patterns)
+    }
 
+    expanded_paths = [_normalize_parent_alias(path) for path in expanded_paths] if fix else expanded_paths
     scan_base = _compute_scan_base(expanded_paths)
+    queued_identities = _queued_identities(expanded_paths, scan_base) if fix else {}
 
     ignored_set: frozenset[str] = (
         _build_gitignore_set([_ignore_path(path) for path in expanded_paths], scan_base)
@@ -970,16 +1016,53 @@ def collect_validation_results(
             return True
         return str(p.resolve()) in ignored_set
 
+    # A move can remove a queued directory's original SKILL.md probe or change a symlink target.
+    initially_ignored.update(index for index, path in enumerate(expanded_paths) if _should_skip(_ignore_path(path)))
     all_results: FileResults = {}
     all_fixes: list[AppliedFix] = []
-    for path in expanded_paths:
-        if _should_skip(_ignore_path(path)):
+    collected_identities: dict[Path, Path] = {}
+    # Folders --fix renamed during this run (old -> new). Paths queued under an old folder follow it.
+    moved_folders: dict[Path, Path] = {}
+    folder_identities: dict[Path, Path] = {}
+    for index in range(len(expanded_paths)):
+        path = _follow_moved_folders(
+            expanded_paths[index], moved_folders, queued_identities.get(expanded_paths[index]), folder_identities
+        )
+        # The gitignore set was built from the paths as discovered, before any folder moved;
+        # a rebased path is asked again because its new spelling may match other ignore rules.
+        if index in initially_ignored or _should_skip(_ignore_path(path)):
+            continue
+        if (
+            not include_gitignore
+            and path != expanded_paths[index]
+            and scan_base is not None
+            # The scan base may itself lie under a renamed folder; git needs a directory that exists.
+            and _build_gitignore_set(
+                [_ignore_path(path)],
+                _follow_moved_folders(scan_base, moved_folders, queued_identities.get(scan_base), folder_identities),
+            )
+        ):
             continue
         if platform_override is not None:
             violations = validate_file(_ignore_path(path), adapters, platform_override)
             all_results[path] = [("platform", violations_to_result(violations))]
         else:
+            was_dir = path.is_dir()
             file_results = validate_single_path(path, check=check, fix=fix, verbose=verbose, fixes_out=all_fixes)
+            if fix:
+                collected_identities.update({
+                    file_path: _path_identity(file_path, follow_file_symlinks=True) for file_path in file_results
+                })
+                for file_path in file_results:
+                    if (move := _folder_move(path, file_path, was_dir=was_dir)) is not None:
+                        _record_folder_move(
+                            moved_folders,
+                            all_results,
+                            all_fixes,
+                            collected_identities,
+                            move,
+                            folder_identities=folder_identities,
+                        )
             for file_path, validator_results in file_results.items():
                 if file_path in all_results:
                     all_results[file_path].extend(validator_results)
@@ -987,6 +1070,127 @@ def collect_validation_results(
                     all_results[file_path] = list(validator_results)
 
     return CheckRun(results=all_results, fixes=all_fixes)
+
+
+def _folder_move(queued: Path, result: Path, *, was_dir: bool) -> tuple[Path, Path] | None:
+    """Return ``(old, new)`` when validating *queued* renamed its skill folder, else None.
+
+    *queued* is the folder or a file directly in it (*was_dir* says which, as checked before
+    validation). The folder moved when the result's folder sits beside it under another spelling.
+    Spellings are compared as strings because Windows paths compare equal across a case-only rename.
+
+    Returns:
+        The old and new folder, or None when the folder kept its name.
+    """
+    folder = queued if was_dir else queued.parent
+    moved_to = result.parent
+    if str(result) == str(queued) or str(moved_to) == str(folder) or str(moved_to.parent) != str(folder.parent):
+        return None
+    return folder, moved_to
+
+
+def _record_folder_move(
+    moved_folders: dict[Path, Path],
+    results: FileResults,
+    fixes: list[AppliedFix],
+    identities: dict[Path, Path],
+    move: tuple[Path, Path],
+    *,
+    folder_identities: dict[Path, Path],
+) -> None:
+    """Track a rename under its supplied and canonical-parent spellings."""
+    old, new = move
+    # Resolve only the parent: the folder itself may be a renamed symlink.
+    canonical_old = _path_identity(old)
+    moved_folders[old] = new
+    folder_identities[old] = canonical_old
+    _rebase_collected(results, fixes, identities, old, new, canonical_old=canonical_old)
+
+
+def _rebased(path: Path, old: Path, new: Path) -> Path | None:
+    """Return *path* moved from under *old* to under *new*, or None when it is not under *old*.
+
+    Compares platform-normalized spellings without constructing paths for unrelated inputs.
+    Matching paths retain the destination spelling and the original descendant components.
+    """
+    text, prefix = os.path.normcase(str(path)), os.path.normcase(str(old))
+    if text == prefix:
+        return new
+    if text.startswith(prefix + os.sep):
+        return new.joinpath(*path.parts[len(old.parts) :])
+    return None
+
+
+def _rebase_collected(
+    results: FileResults,
+    fixes: list[AppliedFix],
+    identities: dict[Path, Path],
+    old: Path,
+    new: Path,
+    *,
+    canonical_old: Path,
+) -> None:
+    """Move results and fixes already collected under *old* to *new*, in place.
+
+    Paths listed before the skill that renamed their folder were recorded under the old spelling.
+    """
+    for key in list(results):
+        moved, identity = _rebase_path_identity(key, identities.get(key, key), old, new, canonical_old)
+        identities[moved] = identity
+        if str(moved) != str(key):
+            # Pop first: differently cased Windows paths compare as the same key.
+            validator_results = results.pop(key)
+            results.setdefault(moved, []).extend(validator_results)
+    for index, fix in enumerate(fixes):
+        moved, identity = _rebase_path_identity(fix.path, identities.get(fix.path, fix.path), old, new, canonical_old)
+        identities[moved] = identity
+        if str(moved) != str(fix.path):
+            fixes[index] = replace(fix, path=moved)
+
+
+def _rebase_path_identity(path: Path, identity: Path, old: Path, new: Path, canonical_old: Path) -> tuple[Path, Path]:
+    """Advance a spelled path and its saved identity through one folder move.
+
+    Returns:
+        The current path and identity, retaining a working spelled route when possible.
+    """
+    # Every rename is checked against every collected and queued path, so plain string tests skip
+    # the paths this move cannot touch before any Path is built: a path under *old* starts with its
+    # spelling or its identity's, unless a ``..`` segment (pathlib drops ``.``) spells it otherwise.
+    text, old_text = os.path.normcase(str(path)), os.path.normcase(str(old))
+    if not (
+        text.startswith(old_text)
+        or os.path.normcase(str(identity)).startswith(os.path.normcase(str(canonical_old)))
+        or ".." in text
+        or ".." in old_text
+    ):
+        return path, identity
+    moved = _rebased(path, old, new) or _rebased(Path(os.path.normpath(path)), Path(os.path.normpath(old)), new)
+    moved_identity = _rebased(identity, canonical_old, canonical_old.with_name(new.name))
+    return moved or moved_identity or path, moved_identity or identity
+
+
+def _follow_moved_folders(
+    path: Path,
+    moved_folders: dict[Path, Path],
+    identity: Path | None = None,
+    folder_identities: dict[Path, Path] | None = None,
+) -> Path:
+    """Return where *path* is now, given the folders renamed earlier in the run.
+
+    Moves are applied in the order they happened, so a rename inside an already renamed folder
+    (recorded against the folder's new name) is followed too. A spelling with ``..`` segments is
+    matched in its normalized form, because ``Path`` keeps ``..`` and the old folder no longer
+    exists to resolve against; a path no rename touches keeps its spelling.
+
+    Returns:
+        *path* rebased onto every renamed folder it lay under, otherwise *path*.
+    """
+    identity = path if identity is None else identity
+    for old, new in moved_folders.items():
+        canonical_old = old if folder_identities is None else folder_identities[old]
+        path, identity = _rebase_path_identity(path, identity, old, new, canonical_old)
+    return path
 
 
 def report_results(

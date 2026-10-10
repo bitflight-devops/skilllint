@@ -15,6 +15,8 @@ from typing import TYPE_CHECKING, Literal, cast
 from pydantic import ValidationError
 from ruamel.yaml import YAMLError
 
+from skilllint.adapters import PlatformPluginDiscovery, load_adapters
+from skilllint.boundary.plugin_level_config_ingest import ingest_plugin_component_paths
 from skilllint.file_types import FileType
 from skilllint.frontmatter_core import (
     AgentFrontmatter,
@@ -838,7 +840,13 @@ class NameFormatValidator:
     FM010 has exactly one reporter (``FrontmatterValidator``) and exactly one
     fixer (this class). ``validate()`` remains available to callers that want
     the rule in isolation.
+
+    Renaming the skill directory moves the ``SKILL.md`` the fixer was handed;
+    the new location is available from :meth:`relocated_path` so the caller
+    does not keep using the old one.
     """
+
+    moved_to: Path | None = None
 
     def validate(self, path: Path) -> ValidationResult:
         """Validate name format in frontmatter.
@@ -917,8 +925,76 @@ class NameFormatValidator:
         Returns:
             List of fix descriptions, or empty if nothing was fixed
         """
+        self.moved_to = None
         fixes = self._try_fix_name_format(path)
         return fixes if fixes is not None else []
+
+    def relocated_path(self) -> Path | None:
+        """Return where the latest :meth:`fix` left the file, or None when it did not move.
+
+        Returns:
+            The ``SKILL.md`` path inside the renamed directory, or None.
+        """
+        return self.moved_to
+
+    @staticmethod
+    def _registered_in_plugin_json(skill_dir: Path) -> bool:
+        """Return whether any enclosing ``plugin.json`` registers a path in or at *skill_dir*.
+
+        ``skills``, ``commands`` and ``agents`` all take paths (``pr_series`` checks the same
+        fields), and an entry naming the folder, its ``SKILL.md`` or any file inside it stops
+        resolving once the folder is renamed (PR002). Changing only the ``name`` field would
+        create a name/folder mismatch (FM010), so the fixer leaves such a skill unchanged.
+        Every enclosing plugin is checked, because an inner plugin.json does not stop an outer
+        one from registering a path inside it.
+        """
+        folder = skill_dir.resolve()
+        manifest_paths = {
+            layout.manifest_path
+            for adapter in load_adapters()
+            if isinstance(adapter, PlatformPluginDiscovery)
+            for layout in adapter.plugin_layouts()
+        }
+        # The frontmatter owner may not import scan orchestration (test_architecture_examples), so
+        # walk up to the adapter-declared plugin roots here instead of using scan_runtime.find_plugin_dir.
+        # Every prefix must remain traversable, even when a later symlink resolves outside the folder.
+        # The absolute (not resolved) spelling reaches manifests above a relative path's cwd.
+        for plugin_dir in skill_dir.absolute().parents:
+            for manifest_path in manifest_paths:
+                if not (plugin_dir / manifest_path).is_file():
+                    continue
+                for entry in ingest_plugin_component_paths(plugin_dir, manifest_path):
+                    registered = plugin_dir / entry
+                    if any(
+                        candidate.resolve().is_relative_to(folder) for candidate in (registered, *registered.parents)
+                    ):
+                        return True
+        return False
+
+    @staticmethod
+    def _rename_directory(skill_dir: Path, fixed_name: str) -> bool:
+        """Rename *skill_dir* to *fixed_name* through a temporary name.
+
+        The two steps make ``Test-Skill`` -> ``test-skill`` work on
+        case-insensitive filesystems. When the second step fails (for example
+        because the target exists) the first is undone, so the directory is
+        never left under the temporary name.
+
+        Returns:
+            True when the directory now has *fixed_name*; False when it kept its name.
+        """
+        parent_dir = skill_dir.parent
+        temp_dir = parent_dir / f"{skill_dir.name}.fmtemp"
+        try:
+            skill_dir.rename(temp_dir)
+        except OSError:
+            return False  # Directory rename best-effort; frontmatter fix already applied
+        try:
+            temp_dir.rename(parent_dir / fixed_name)
+        except OSError:
+            temp_dir.rename(skill_dir)
+            return False
+        return True
 
     def _read_name_and_frontmatter(self, path: Path) -> tuple[str, dict[str, YamlValue], str] | None:
         """Read file, parse frontmatter, extract name.
@@ -958,6 +1034,8 @@ class NameFormatValidator:
         fixed_name = _normalize_skill_name(name)
         if not fixed_name or fixed_name == name or not re.match(NAME_PATTERN, fixed_name):
             return None
+        if path.name == "SKILL.md" and path.parent.name != fixed_name and self._registered_in_plugin_json(path.parent):
+            return None
 
         data["name"] = fixed_name
         end_match = re.search(r"\n---\s*\n", content[3:])
@@ -973,16 +1051,13 @@ class NameFormatValidator:
 
         fixes = [f"Normalized name from '{name}' to '{fixed_name}'"]
         # Rename skill directory to match (two-step on case-insensitive filesystems)
-        if path.name == "SKILL.md" and path.parent.name != fixed_name:
-            skill_dir = path.parent
-            parent_dir = skill_dir.parent
-            try:
-                temp_name = f"{skill_dir.name}.fmtemp"
-                skill_dir.rename(parent_dir / temp_name)
-                (parent_dir / temp_name).rename(parent_dir / fixed_name)
-                fixes.append(f"Renamed directory to '{fixed_name}'")
-            except OSError:
-                pass  # Directory rename best-effort; frontmatter fix already applied
+        if (
+            path.name == "SKILL.md"
+            and path.parent.name != fixed_name
+            and self._rename_directory(path.parent, fixed_name)
+        ):
+            fixes.append(f"Renamed directory to '{fixed_name}'")
+            self.moved_to = path.parent.with_name(fixed_name) / path.name
 
         return fixes
 
