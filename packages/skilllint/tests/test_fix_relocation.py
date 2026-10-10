@@ -106,6 +106,21 @@ def test_check_fix_follows_a_queued_path_that_spells_the_renamed_folder_differen
     assert (sandbox.case / "skills" / "bad-name" / "CLAUDE.md").is_file()
 
 
+def test_check_fix_follows_a_queued_symlink_alias_of_the_renamed_folder(tmp_path: Path) -> None:
+    """A queued path through a symlink to the renamed folder is followed, not reported missing."""
+    sandbox = Sandbox.create(tmp_path)
+    write_skill(sandbox.case / "skills", "bad--name", "bad--name")
+    (sandbox.case / "skills" / "bad--name" / "CLAUDE.md").write_text("# Notes\n", encoding="utf-8")
+    (sandbox.case / "alias").symlink_to(sandbox.case / "skills" / "bad--name", target_is_directory=True)
+
+    run = run_cli(("check", "skills/bad--name/SKILL.md", "alias/CLAUDE.md", "--fix", "--no-color"), sandbox)
+
+    assert b"does not exist" not in run.stderr
+    assert b"Traceback" not in run.stderr
+    assert run.returncode != 2
+    assert (sandbox.case / "skills" / "bad-name" / "CLAUDE.md").is_file()
+
+
 @pytest.mark.parametrize("manifest_path", PLUGIN_MANIFESTS)
 def test_check_fix_preserves_registered_skills_without_a_platform_override(tmp_path: Path, manifest_path: str) -> None:
     """Default discovery must not let name repair break another platform's registered skill."""

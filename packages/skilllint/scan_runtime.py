@@ -10,7 +10,7 @@ from __future__ import annotations
 import fnmatch
 import os
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field as dataclass_field, replace
 from pathlib import Path, PurePath
 from typing import TYPE_CHECKING, Any, NoReturn
 
@@ -972,10 +972,9 @@ def collect_validation_results(
 
     all_results: FileResults = {}
     all_fixes: list[AppliedFix] = []
-    # Folders --fix renamed during this run (old -> new). Paths queued under an old folder follow it.
-    moved_folders: dict[Path, Path] = {}
+    moves = _FolderMoves({queued: queued.resolve() for queued in expanded_paths} if fix else {})
     for queued in expanded_paths:
-        path = _follow_moved_folders(queued, moved_folders)
+        path = moves.follow(queued)
         # The gitignore set was built from the paths as discovered, before any folder moved;
         # a rebased path is asked again because its new spelling may match other ignore rules.
         if _should_skip(_ignore_path(queued)) or _should_skip(_ignore_path(path)):
@@ -985,7 +984,7 @@ def collect_validation_results(
             and path != queued
             and scan_base is not None
             # The scan base may itself lie under a renamed folder; git needs a directory that exists.
-            and _build_gitignore_set([_ignore_path(path)], _follow_moved_folders(scan_base, moved_folders))
+            and _build_gitignore_set([_ignore_path(path)], _follow_moved_folders(scan_base, moves.folders))
         ):
             continue
         if platform_override is not None:
@@ -993,12 +992,12 @@ def collect_validation_results(
             all_results[path] = [("platform", violations_to_result(violations))]
         else:
             was_dir = path.is_dir()
+            folder_identity = (path if was_dir else path.parent).resolve() if fix else None
             file_results = validate_single_path(path, check=check, fix=fix, verbose=verbose, fixes_out=all_fixes)
-            if fix:
-                for file_path in file_results:
-                    if (move := _folder_move(path, file_path, was_dir=was_dir)) is not None:
-                        moved_folders[move[0]] = move[1]
-                        _rebase_collected(all_results, all_fixes, *move)
+            if folder_identity is not None:
+                moves.record(path, file_results, was_dir=was_dir, identity=folder_identity)
+                for move in moves.recorded:
+                    _rebase_collected(all_results, all_fixes, *move)
             for file_path, validator_results in file_results.items():
                 if file_path in all_results:
                     all_results[file_path].extend(validator_results)
@@ -1006,6 +1005,40 @@ def collect_validation_results(
                     all_results[file_path] = list(validator_results)
 
     return CheckRun(results=all_results, fixes=all_fixes)
+
+
+@dataclass
+class _FolderMoves:
+    """Folders --fix renamed during a run, so paths queued under an old folder follow it.
+
+    A symlink alias of a renamed folder dangles after the move, so each queued path's resolved
+    *identities* entry is taken before any rename and matched against the renamed folders' own.
+    """
+
+    identities: dict[Path, Path]
+    folders: dict[Path, Path] = dataclass_field(default_factory=dict)
+    by_identity: dict[Path, Path] = dataclass_field(default_factory=dict)
+    recorded: list[tuple[Path, Path]] = dataclass_field(default_factory=list)
+
+    def follow(self, queued: Path) -> Path:
+        """Return where *queued* is now, through its spelling or else its pre-rename identity.
+
+        Returns:
+            The current path of *queued*.
+        """
+        path = _follow_moved_folders(queued, self.folders)
+        identity = self.identities.get(queued)
+        if path != queued or identity is None:
+            return path
+        followed = _follow_moved_folders(identity, self.by_identity)
+        return queued if followed == identity else followed
+
+    def record(self, path: Path, results: FileResults, *, was_dir: bool, identity: Path) -> None:
+        """Record the folder moves validating *path* made; ``recorded`` lists this call's moves."""
+        self.recorded = [move for result in results if (move := _folder_move(path, result, was_dir=was_dir))]
+        for old, new in self.recorded:
+            self.folders[old] = new
+            self.by_identity[identity] = new
 
 
 def _folder_move(queued: Path, result: Path, *, was_dir: bool) -> tuple[Path, Path] | None:
