@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Literal, cast
 from pydantic import ValidationError
 from ruamel.yaml import YAMLError
 
+from skilllint.adapters import PlatformPluginDiscovery, load_adapters
 from skilllint.boundary.plugin_level_config_ingest import ingest_plugin_component_paths
 from skilllint.file_types import FileType
 from skilllint.frontmatter_core import (
@@ -948,14 +949,26 @@ class NameFormatValidator:
         one from registering a path inside it.
         """
         folder = skill_dir.resolve()
+        manifest_paths = {
+            layout.manifest_path
+            for adapter in load_adapters()
+            if isinstance(adapter, PlatformPluginDiscovery)
+            for layout in adapter.plugin_layouts()
+        }
         # The frontmatter owner may not import scan orchestration (test_architecture_examples), so
-        # walk up to the plugin roots here instead of using scan_runtime.find_plugin_dir.
-        return any(
-            (plugin_dir / entry).resolve().is_relative_to(folder)
-            for plugin_dir in skill_dir.parents
-            if (plugin_dir / ".claude-plugin" / "plugin.json").is_file()
-            for entry in ingest_plugin_component_paths(plugin_dir)
-        )
+        # walk up to the adapter-declared plugin roots here instead of using scan_runtime.find_plugin_dir.
+        # Every prefix must remain traversable, even when a later symlink resolves outside the folder.
+        for plugin_dir in skill_dir.parents:
+            for manifest_path in manifest_paths:
+                if not (plugin_dir / manifest_path).is_file():
+                    continue
+                for entry in ingest_plugin_component_paths(plugin_dir, manifest_path):
+                    registered = plugin_dir / entry
+                    if any(
+                        candidate.resolve().is_relative_to(folder) for candidate in (registered, *registered.parents)
+                    ):
+                        return True
+        return False
 
     @staticmethod
     def _rename_directory(skill_dir: Path, fixed_name: str) -> bool:

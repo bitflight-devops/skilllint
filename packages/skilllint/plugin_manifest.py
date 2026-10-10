@@ -1,6 +1,6 @@
-"""Dependency-light Claude plugin manifest loading.
+"""Dependency-light plugin manifest loading.
 
-This module owns cached decoding of ``.claude-plugin/plugin.json`` so low-level
+This module owns cached decoding of plugin manifests so low-level
 classification and boundary ingestion do not depend on scan/CLI orchestration.
 """
 
@@ -12,19 +12,20 @@ from pathlib import Path
 
 
 @functools.cache
-def load_plugin_json(plugin_root: Path) -> dict | None:
-    """Load and cache ``.claude-plugin/plugin.json`` for a plugin root.
+def load_plugin_json(plugin_root: Path, manifest_path: str | None = None) -> dict | None:
+    """Load and cache a JSON plugin manifest relative to its plugin root.
 
     Args:
-        plugin_root: Directory containing ``.claude-plugin/plugin.json``.
+        plugin_root: Plugin root directory.
+        manifest_path: Adapter-declared manifest location; defaults to the Claude layout.
 
     Returns:
         Parsed mapping, or None when the manifest is missing, unreadable,
         invalid JSON, or not a JSON object.
     """
-    manifest_path = plugin_root / ".claude-plugin" / "plugin.json"
+    path = plugin_root / (manifest_path if manifest_path is not None else ".claude-plugin/plugin.json")
     try:
-        raw = json.loads(manifest_path.read_text(encoding="utf-8"))
+        raw = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return None
     return raw if isinstance(raw, dict) else None

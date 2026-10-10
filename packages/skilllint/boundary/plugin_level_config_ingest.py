@@ -153,14 +153,15 @@ def component_paths_from_plugin_document(raw: object) -> tuple[str, ...]:
     return tuple(paths)
 
 
-def ingest_plugin_component_paths(plugin_dir: Path) -> tuple[str, ...]:
-    """Load ``plugin_dir/.claude-plugin/plugin.json`` and return its component path strings.
+def ingest_plugin_component_paths(plugin_dir: Path, manifest_path: str | None = None) -> tuple[str, ...]:
+    """Load a plugin manifest and return its component path strings.
 
     Args:
         plugin_dir: Plugin root directory.
+        manifest_path: Adapter-declared manifest location; defaults to the Claude layout.
 
     Returns:
         Path strings from ``skills``, ``commands`` and ``agents``; empty when the manifest is
         missing, unreadable or not an object.
     """
-    return component_paths_from_plugin_document(load_plugin_json(plugin_dir))
+    return component_paths_from_plugin_document(load_plugin_json(plugin_dir, manifest_path))

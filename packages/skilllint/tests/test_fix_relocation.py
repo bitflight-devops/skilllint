@@ -26,10 +26,18 @@ from skilllint.plugin_validator import validate_single_path
 from skilllint.scan_runtime import _folder_move, _follow_moved_folders
 from skilllint.validators.frontmatter import NameFormatValidator
 from skilllint.validators.hooks import HookValidator
+from skilllint.validators.plugins import PluginRegistrationValidator
 from skilllint.validators.symlinks import SymlinkTargetValidator
 
 RENAMED_SKILL = "violations-1/SKILL.md"
 """Where ``violations--1/SKILL.md`` lives once ``--fix`` normalised the folder name."""
+
+PLUGIN_MANIFESTS = (
+    ".claude-plugin/plugin.json",
+    "plugin.json",
+    ".codex-plugin/plugin.json",
+    ".cursor-plugin/plugin.json",
+)
 
 
 def run_fix(tmp_path: Path, *args: str) -> tuple[Sandbox, CliRun]:
@@ -82,6 +90,30 @@ def test_check_fix_on_a_directory_follows_queued_files_into_the_renamed_folder(t
     assert (sandbox.case / "skills" / "bad-name" / "CLAUDE.md").is_file()
 
 
+@pytest.mark.parametrize("manifest_path", PLUGIN_MANIFESTS)
+def test_check_fix_preserves_registered_skills_without_a_platform_override(tmp_path: Path, manifest_path: str) -> None:
+    """Default discovery must not let name repair break another platform's registered skill."""
+    sandbox = Sandbox.create(tmp_path)
+    skill = write_skill(sandbox.case / "skills", "bad--name", "bad--name")
+    manifest = sandbox.case / manifest_path
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    manifest.write_text(json.dumps({"name": "p", "skills": ["./skills/bad--name"]}), encoding="utf-8")
+    original = skill.read_bytes()
+
+    run = run_cli(("check", ".", "--fix", "--json"), sandbox)
+
+    response = json.loads(run.stdout)
+    codes = {
+        issue["code"] for file in response["files"] for validator in file["validators"] for issue in validator["issues"]
+    }
+    assert run.returncode == 1
+    assert "FM010" in codes
+    assert "PR002" not in codes
+    assert skill.read_bytes() == original
+    assert not (skill.parent.parent / "bad-name").exists()
+    assert json.loads(manifest.read_text(encoding="utf-8"))["skills"] == ["./skills/bad--name"]
+
+
 def test_queued_paths_follow_a_chain_of_nested_folder_renames(tmp_path: Path) -> None:
     """An outer rename and then an inner rename both apply to a file queued under the inner folder."""
     moved = {
@@ -120,13 +152,25 @@ def test_folder_move_detects_a_rename_from_the_spelled_paths(
     assert move == (None if expected is None else (Path(expected[0]), Path(expected[1])))
 
 
-def test_name_format_fix_keeps_a_folder_an_outer_plugin_json_registers(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("outer_manifest", "inner_manifest"),
+    [
+        (".claude-plugin/plugin.json", ".claude-plugin/plugin.json"),
+        ("plugin.json", ".claude-plugin/plugin.json"),
+        (".codex-plugin/plugin.json", ".cursor-plugin/plugin.json"),
+    ],
+)
+def test_name_format_fix_keeps_a_folder_an_outer_plugin_json_registers(
+    tmp_path: Path, outer_manifest: str, inner_manifest: str
+) -> None:
     """An inner plugin.json that does not list the folder must not hide an outer one that does."""
-    for root, skills in ((tmp_path, ["./nested/skills/bad--name"]), (tmp_path / "nested", [])):
-        (root / ".claude-plugin").mkdir(parents=True)
-        (root / ".claude-plugin" / "plugin.json").write_text(
-            json.dumps({"name": "p", "skills": skills}), encoding="utf-8"
-        )
+    for root, manifest_path, skills in (
+        (tmp_path, outer_manifest, ["./nested/skills/bad--name"]),
+        (tmp_path / "nested", inner_manifest, []),
+    ):
+        manifest = root / manifest_path
+        manifest.parent.mkdir(parents=True, exist_ok=True)
+        manifest.write_text(json.dumps({"name": "p", "skills": skills}), encoding="utf-8")
     skill = write_skill(tmp_path / "nested" / "skills", "bad--name", "bad--name")
 
     assert NameFormatValidator().fix(skill) == []
@@ -242,6 +286,7 @@ def test_name_format_fix_leaves_the_folder_in_place_when_the_target_exists(tmp_p
     assert not any("Renamed directory" in d for d in descriptions)
 
 
+@pytest.mark.parametrize("manifest_path", PLUGIN_MANIFESTS)
 @pytest.mark.parametrize(
     ("field", "entry"),
     [
@@ -251,22 +296,81 @@ def test_name_format_fix_leaves_the_folder_in_place_when_the_target_exists(tmp_p
         pytest.param("agents", "./skills/bad--name/helper.md", id="agents-file-inside"),
     ],
 )
-def test_name_format_fix_keeps_a_folder_that_plugin_json_registers(field: str, entry: str, tmp_path: Path) -> None:
+def test_name_format_fix_keeps_a_folder_that_plugin_json_registers(
+    field: str, entry: str, manifest_path: str, tmp_path: Path
+) -> None:
     """A folder ``plugin.json`` lists is left alone: a rename breaks the manifest (PR002), a name-only fix adds FM010."""
-    (tmp_path / ".claude-plugin").mkdir()
-    (tmp_path / ".claude-plugin" / "plugin.json").write_text(
-        json.dumps({"name": "p", field: [entry]}), encoding="utf-8"
-    )
+    manifest = tmp_path / manifest_path
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    manifest.write_text(json.dumps({"name": "p", field: [entry]}), encoding="utf-8")
     skill = write_skill(tmp_path / "skills", "bad--name", "bad--name")
+    if field == "agents":
+        (skill.parent / "helper.md").write_text("# Helper\n", encoding="utf-8")
     fixer = NameFormatValidator()
 
     before = skill.read_text(encoding="utf-8")
+    assert (tmp_path / entry).exists()
 
     descriptions = fixer.fix(skill)
 
     assert descriptions == []
     assert fixer.relocated_path() is None
     assert skill.read_text(encoding="utf-8") == before
+    assert (tmp_path / entry).exists()
+
+
+@pytest.mark.parametrize("manifest_path", PLUGIN_MANIFESTS)
+def test_name_format_fix_can_rename_a_skill_when_the_manifest_registers_another_skill(
+    tmp_path: Path, manifest_path: str
+) -> None:
+    """An enclosing manifest only prevents a rename when its own registrations would break."""
+    skill = write_skill(tmp_path / "skills", "bad--name", "bad--name")
+    other = write_skill(tmp_path / "skills", "kept", "kept")
+    manifest = tmp_path / manifest_path
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    manifest.write_text(json.dumps({"name": "p", "skills": ["./skills/kept"]}), encoding="utf-8")
+    fixer = NameFormatValidator()
+
+    fixer.fix(skill)
+
+    moved = tmp_path / "skills" / "bad-name" / "SKILL.md"
+    assert fixer.relocated_path() == moved
+    assert moved.is_file()
+    assert not skill.exists()
+    assert other.is_file()
+
+
+@pytest.mark.parametrize(
+    ("link_inside_skill", "entry"),
+    [
+        pytest.param(True, "./skills/bad--name/helper.md", id="link-inside"),
+        pytest.param(False, "./helper.md", id="target-inside"),
+        pytest.param(True, "./skills/other/../bad--name/helper.md", id="link-inside-parent-segment"),
+    ],
+)
+def test_name_format_fix_preserves_a_registration_through_a_symlink(
+    tmp_path: Path, link_inside_skill: bool, entry: str
+) -> None:
+    """Both a registered link inside the folder and a link targeting it depend on the old name."""
+    skill = write_skill(tmp_path / "skills", "bad--name", "bad--name")
+    inner = skill.parent / "helper.md"
+    outer = tmp_path / "helper.md"
+    link, target = (inner, outer) if link_inside_skill else (outer, inner)
+    target.write_text("# Helper\n", encoding="utf-8")
+    link.symlink_to(target)
+    (tmp_path / "skills" / "other").mkdir()
+    manifest = tmp_path / ".claude-plugin" / "plugin.json"
+    manifest.parent.mkdir()
+    manifest.write_text(json.dumps({"name": "p", "agents": [entry]}), encoding="utf-8")
+    assert PluginRegistrationValidator().validate(tmp_path).errors == []
+    before = skill.read_bytes()
+
+    assert NameFormatValidator().fix(skill) == []
+
+    assert skill.read_bytes() == before
+    assert link.is_file()
+    assert link.resolve() == target
+    assert PluginRegistrationValidator().validate(tmp_path).errors == []
 
 
 class MovingFixer:
@@ -326,16 +430,15 @@ def test_apply_authorized_fixes_hands_later_fixers_the_moved_path(
     monkeypatch.setitem(fixing.FIXER_TRIGGER_CODES, "RecordingFixer", frozenset({"X001"}))
     original = tmp_path / "a.md"
     original.write_text("x", encoding="utf-8")
-    mover, recorder = MovingFixer(), RecordingFixer()
+    mover, recorder, later = MovingFixer(), RecordingFixer(), RecordingFixer()
     fixes: list[AppliedFix] = []
 
-    outcome = fixing.apply_authorized_fixes(
-        [recorder, mover, RecordingFixer()], original, raw_codes={"X001"}, fixes_out=fixes
-    )
+    outcome = fixing.apply_authorized_fixes([recorder, mover, later], original, raw_codes={"X001"}, fixes_out=fixes)
 
     assert outcome.applied
     assert outcome.path == tmp_path / "moved" / "a.md"
     assert recorder.seen == original
+    assert later.seen == outcome.path
     assert {fix.path for fix in fixes} == {outcome.path}
     assert [fix.description for fix in fixes] == ["recorded", "moved", "recorded"]
 
