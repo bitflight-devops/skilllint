@@ -256,6 +256,131 @@ def test_check_fix_rebases_results_collected_before_the_folder_moved(tmp_path: P
     assert all("bad--name" not in fix["path"] for fix in response["fixes"])
 
 
+@pytest.mark.parametrize(
+    "paths",
+    [
+        pytest.param(("skills/bad--name/SKILL.md", "skills/../skills/bad--name/CLAUDE.md"), id="queued-alias"),
+        pytest.param(("skills/../skills/bad--name/CLAUDE.md", "skills/bad--name/SKILL.md"), id="collected-alias"),
+        pytest.param(
+            ("skills/../skills/bad--name/SKILL.md", "skills/bad--name/CLAUDE.md"), id="queued-after-aliased-skill"
+        ),
+        pytest.param(
+            ("skills/bad--name/CLAUDE.md", "skills/../skills/bad--name/SKILL.md"), id="collected-before-aliased-skill"
+        ),
+        pytest.param(
+            ("skills/bad--name/SKILL.md", "alias/../bad--name/CLAUDE.md"), id="queued-through-directory-symlink"
+        ),
+        pytest.param(("skills/bad--name/SKILL.md", "alias/CLAUDE.md"), id="queued-through-renamed-target"),
+        pytest.param(("alias/CLAUDE.md", "skills/bad--name/SKILL.md"), id="collected-through-renamed-target"),
+    ],
+)
+def test_check_fix_rebases_lexically_different_paths_to_the_moved_folder(
+    tmp_path: Path, paths: tuple[str, str]
+) -> None:
+    """Queued and collected aliases keep identifying the moved files once the folder is renamed."""
+    sandbox = Sandbox.create(tmp_path)
+    skill = write_skill(sandbox.case / "skills", "bad--name", "bad--name")
+    (skill.parent / "CLAUDE.md").write_text("# Notes\n", encoding="utf-8")
+    (sandbox.case / "alias").symlink_to("skills/bad--name", target_is_directory=True)
+    assert {(sandbox.case / path).resolve(strict=True) for path in paths} == {skill, skill.parent / "CLAUDE.md"}
+
+    run = run_cli(("check", *paths, "--fix", "--json", "--show-progress"), sandbox)
+
+    assert run.returncode in {0, 1}
+    response = json.loads(run.stdout)
+    reported = [sandbox.case / file["path"] for file in response["files"]]
+    moved_folder = sandbox.case / "skills" / "bad-name"
+    assert all(path.is_file() for path in reported)
+    assert {path.resolve() for path in reported} == {moved_folder / "SKILL.md", moved_folder / "CLAUDE.md"}
+    assert all((sandbox.case / fix["path"]).is_file() for fix in response["fixes"])
+    assert not skill.parent.exists()
+
+
+def test_check_fix_follows_a_move_recorded_through_a_directory_symlink(tmp_path: Path) -> None:
+    """The queued parent traversal and symlink-spelled mover identify the same physical folder."""
+    sandbox = Sandbox.create(tmp_path)
+    skill = write_skill(sandbox.case / "actual" / "skills", "bad--name", "bad--name")
+    (skill.parent / "CLAUDE.md").write_text("# Notes\n", encoding="utf-8")
+    (sandbox.case / "link").symlink_to("actual/skills", target_is_directory=True)
+    paths = ("link/bad--name/SKILL.md", "link/../skills/bad--name/CLAUDE.md")
+    assert {(sandbox.case / path).resolve(strict=True) for path in paths} == {skill, skill.parent / "CLAUDE.md"}
+
+    run = run_cli(("check", *paths, "--fix", "--json", "--show-progress"), sandbox)
+
+    assert run.returncode in {0, 1}
+    response = json.loads(run.stdout)
+    reported = [sandbox.case / file["path"] for file in response["files"]]
+    moved_folder = skill.parent.with_name("bad-name")
+    assert all(path.is_file() for path in reported)
+    assert {path.resolve() for path in reported} == {moved_folder / "SKILL.md", moved_folder / "CLAUDE.md"}
+    assert all((sandbox.case / fix["path"]).is_file() for fix in response["fixes"])
+    assert not skill.parent.exists()
+
+
+def test_check_fix_preserves_a_symlink_skill_directory_after_parent_traversal(tmp_path: Path) -> None:
+    """Normalizing the parent traversal must keep the skill link as the directory being renamed."""
+    sandbox = Sandbox.create(tmp_path)
+    skill = write_skill(sandbox.case / "actual", "bad--name", "bad--name")
+    (sandbox.case / "skills").mkdir()
+    old_link = sandbox.case / "bad--name"
+    old_link.symlink_to("actual/bad--name", target_is_directory=True)
+    selected = "skills/../bad--name/SKILL.md"
+    assert (sandbox.case / selected).resolve(strict=True) == skill
+
+    run = run_cli(("check", selected, "--fix", "--json"), sandbox)
+
+    assert run.returncode in {0, 1}
+    moved_link = sandbox.case / "bad-name"
+    assert moved_link.is_symlink()
+    assert moved_link.readlink() == Path("actual/bad--name")
+    assert not old_link.is_symlink()
+    assert not old_link.exists()
+    assert skill.parent.is_dir()
+    assert skill.is_file()
+    assert not skill.parent.with_name("bad-name").exists()
+    response = json.loads(run.stdout)
+    assert {(sandbox.case / file["path"]).resolve(strict=True) for file in response["files"]} == {skill}
+    assert all((sandbox.case / fix["path"]).is_file() for fix in response["fixes"])
+
+
+def test_check_fix_keeps_the_original_queued_file_when_an_alias_target_is_reused(tmp_path: Path) -> None:
+    """A later folder occupying the old alias target must not replace the file selected before fixing."""
+    sandbox = Sandbox.create(tmp_path)
+    first = write_skill(sandbox.case / "skills", "a-b", "a--c")
+    second = write_skill(sandbox.case / "skills", "a--b", "a--b")
+    original_notes = "# Original first file\n"
+    (first.parent / "CLAUDE.md").write_text(original_notes, encoding="utf-8")
+    (second.parent / "CLAUDE.md").write_text("# Original second file\n", encoding="utf-8")
+    (sandbox.case / "alias").symlink_to("skills/a-b", target_is_directory=True)
+    assert (sandbox.case / "alias" / "CLAUDE.md").resolve(strict=True) == first.parent / "CLAUDE.md"
+
+    run = run_cli(
+        (
+            "check",
+            "skills/a-b/SKILL.md",
+            "skills/a--b/SKILL.md",
+            "alias/CLAUDE.md",
+            "--fix",
+            "--json",
+            "--show-progress",
+        ),
+        sandbox,
+    )
+
+    assert run.returncode in {0, 1}
+    response = json.loads(run.stdout)
+    reported = [sandbox.case / file["path"] for file in response["files"]]
+    moved_first = sandbox.case / "skills" / "a-c"
+    moved_second = sandbox.case / "skills" / "a-b"
+    assert {path.resolve(strict=True) for path in reported} == {
+        moved_first / "SKILL.md",
+        moved_first / "CLAUDE.md",
+        moved_second / "SKILL.md",
+    }
+    assert [path.read_text(encoding="utf-8") for path in reported if path.name == "CLAUDE.md"] == [original_notes]
+    assert all((sandbox.case / fix["path"]).is_file() for fix in response["fixes"])
+
+
 def test_name_format_fix_ignores_a_plugin_json_entry_with_a_nul_byte(tmp_path: Path) -> None:
     """A malformed registration is skipped, as the registration parser skips it, instead of raising."""
     (tmp_path / ".claude-plugin").mkdir()
