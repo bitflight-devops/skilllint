@@ -904,9 +904,13 @@ def _normalize_parent_alias(path: Path) -> Path:
     return normalized if path.is_absolute() else Path(os.path.relpath(normalized))
 
 
-def _path_identity(path: Path) -> Path:
-    """Return a canonical parent spelling while preserving the final directory entry."""
-    canonical = path.parent.resolve() / path.name
+def _path_identity(path: Path, *, follow_file_symlinks: bool = False) -> Path:
+    """Return a canonical spelling, following file targets only when requested."""
+    canonical = (
+        path.resolve()
+        if follow_file_symlinks and path.is_symlink() and path.is_file()
+        else path.parent.resolve() / path.name
+    )
     return canonical if path.is_absolute() else Path(os.path.relpath(canonical))
 
 
@@ -914,15 +918,12 @@ def _queued_identities(paths: list[Path], scan_base: Path | None) -> dict[Path, 
     """Snapshot path identities before a rename can leave a directory alias dangling.
 
     Returns:
-        Immutable identities for queued inputs and the scan base; file symlinks keep their leaf.
+        Immutable identities for queued inputs and the scan base; file aliases track their targets.
     """
     identities: dict[Path, Path] = {}
     for path in [*paths, *([scan_base] if scan_base is not None else [])]:
         target = _ignore_path(path)
-        # A file symlink's own entry never moves with a renamed folder; its target can.
-        identity = _path_identity(target) if not (target.is_symlink() and target.is_file()) else target.resolve()
-        if not path.is_absolute() and identity.is_absolute():
-            identity = Path(os.path.relpath(identity))
+        identity = _path_identity(target, follow_file_symlinks=True)
         identities[path] = identity if str(target) == str(path) else identity.parent
     return identities
 
@@ -998,9 +999,10 @@ def collect_validation_results(
     scan_base = _compute_scan_base(expanded_paths)
     queued_identities = _queued_identities(expanded_paths, scan_base) if fix else {}
 
-    ignore_probes = {path: _ignore_path(path) for path in expanded_paths}
     ignored_set: frozenset[str] = (
-        _build_gitignore_set(list(ignore_probes.values()), scan_base) if not include_gitignore else frozenset()
+        _build_gitignore_set([_ignore_path(path) for path in expanded_paths], scan_base)
+        if not include_gitignore
+        else frozenset()
     )
 
     def _should_skip(p: Path) -> bool:
@@ -1008,6 +1010,8 @@ def collect_validation_results(
             return True
         return str(p.resolve()) in ignored_set
 
+    # A move can remove a queued directory's original SKILL.md probe or change a symlink target.
+    initially_ignored = {path for path in expanded_paths if _should_skip(_ignore_path(path))}
     all_results: FileResults = {}
     all_fixes: list[AppliedFix] = []
     collected_identities: dict[Path, Path] = {}
@@ -1016,10 +1020,9 @@ def collect_validation_results(
     folder_identities: dict[Path, Path] = {}
     for queued in expanded_paths:
         path = _follow_moved_folders(queued, moved_folders, queued_identities.get(queued), folder_identities)
-        # The gitignore set was built from the paths as discovered, before any folder moved, so the
-        # probe it saw (a folder's SKILL.md, gone once the folder moves) is asked, and the rebased
-        # path is asked again because its new spelling may match other ignore rules.
-        if _should_skip(ignore_probes[queued]) or _should_skip(_ignore_path(path)):
+        # The gitignore set was built from the paths as discovered, before any folder moved;
+        # a rebased path is asked again because its new spelling may match other ignore rules.
+        if queued in initially_ignored or _should_skip(_ignore_path(path)):
             continue
         if (
             not include_gitignore
@@ -1039,7 +1042,9 @@ def collect_validation_results(
             was_dir = path.is_dir()
             file_results = validate_single_path(path, check=check, fix=fix, verbose=verbose, fixes_out=all_fixes)
             if fix:
-                collected_identities.update({file_path: _path_identity(file_path) for file_path in file_results})
+                collected_identities.update({
+                    file_path: _path_identity(file_path, follow_file_symlinks=True) for file_path in file_results
+                })
                 for file_path in file_results:
                     if (move := _folder_move(path, file_path, was_dir=was_dir)) is not None:
                         _record_folder_move(

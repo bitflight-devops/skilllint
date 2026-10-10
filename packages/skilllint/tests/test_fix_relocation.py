@@ -348,6 +348,65 @@ def test_check_fix_rebases_lexically_different_paths_to_the_moved_folder(
     assert not skill.parent.exists()
 
 
+@pytest.mark.parametrize(
+    ("leaf_name", "alias_first", "use_folder"),
+    [
+        pytest.param("SKILL.md", False, False, id="queued-skill-file"),
+        pytest.param("CLAUDE.md", False, False, id="queued-notes-file"),
+        pytest.param("CLAUDE.md", True, False, id="collected-notes-file"),
+        pytest.param("SKILL.md", False, True, id="queued-skill-folder"),
+    ],
+)
+def test_check_fix_follows_file_symlinks_when_the_target_folder_moves(
+    tmp_path: Path, leaf_name: str, alias_first: bool, use_folder: bool
+) -> None:
+    """A file alias selected before fixing must still report its original target after a rename."""
+    sandbox = Sandbox.create(tmp_path)
+    skill = write_skill(sandbox.case / "skills", "bad--name", "bad--name")
+    (skill.parent / "CLAUDE.md").write_text("# Original notes\n", encoding="utf-8")
+    alias = sandbox.case / "alias" / leaf_name
+    alias.parent.mkdir()
+    alias.symlink_to(f"../skills/bad--name/{leaf_name}")
+    assert alias.resolve(strict=True) == skill.parent / leaf_name
+    selected = "alias" if use_folder else f"alias/{leaf_name}"
+    real_skill = "skills/bad--name/SKILL.md"
+    paths = (selected, real_skill) if alias_first else (real_skill, selected)
+
+    run = run_cli(("check", *paths, "--fix", "--json", "--show-progress"), sandbox)
+
+    assert run.returncode in {0, 1}
+    response = json.loads(run.stdout)
+    reported = [sandbox.case / file["path"] for file in response["files"]]
+    moved_folder = sandbox.case / "skills" / "bad-name"
+    assert all(path.is_file() for path in reported)
+    assert {path.resolve(strict=True) for path in reported} == {moved_folder / "SKILL.md", moved_folder / leaf_name}
+    assert all((sandbox.case / fix["path"]).is_file() for fix in response["fixes"])
+    assert not skill.parent.exists()
+
+
+@pytest.mark.parametrize("ignore_file", [".gitignore", ".pluginvalidatorignore"])
+def test_check_fix_keeps_an_originally_ignored_skill_skipped_after_its_parent_moves(
+    tmp_path: Path, ignore_file: str
+) -> None:
+    """An old-path ignore decision survives an outer rename without exposing a nested skill to fixes."""
+    sandbox = Sandbox.create(tmp_path)
+    subprocess.run(["git", "init", "-q", str(sandbox.case)], check=True)
+    outer = write_skill(sandbox.case, "outer--bad", "outer--bad")
+    inner = write_skill(outer.parent, "inner", "Inner")
+    original_inner = inner.read_bytes()
+    (sandbox.case / ignore_file).write_text("outer--bad/inner/SKILL.md\n", encoding="utf-8")
+
+    run = run_cli(("check", "outer--bad", "outer--bad/inner", "--fix", "--json", "--show-progress"), sandbox)
+
+    assert run.returncode == 0
+    response = json.loads(run.stdout)
+    moved_inner = sandbox.case / "outer-bad" / "inner" / "SKILL.md"
+    assert moved_inner.read_bytes() == original_inner
+    assert {file["path"] for file in response["files"]} == {"outer-bad/SKILL.md"}
+    assert {fix["path"] for fix in response["fixes"]} == {"outer-bad/SKILL.md"}
+    assert not outer.parent.exists()
+
+
 def test_check_fix_follows_a_move_recorded_through_a_directory_symlink(tmp_path: Path) -> None:
     """The queued parent traversal and symlink-spelled mover identify the same physical folder."""
     sandbox = Sandbox.create(tmp_path)
