@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1791546611913,
+  "lastUpdate": 1791668083876,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -3648,6 +3648,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 340.738,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "203fad5fedd68131874f0362f1ae14ac74776f27",
+          "message": "fix(fix): follow a renamed skill folder through the rest of the --fix run (#335)\n\n* fix(fix): follow a skill folder renamed by --fix instead of crashing\n\nNameFormatValidator renamed violations--1 to violations-1, then later fixers\nand the post-fix revalidation still used the old SKILL.md path and raised\nFileNotFoundError. A fixer that moves its file now reports the new path\n(RelocatingFixer); apply_authorized_fixes hands it to later fixers and\nreturns it, and results and recorded fixes use the path that exists.\n\nWhen the second step of the two-step rename fails (target exists), the first\nstep is undone, so the folder is never left under its .fmtemp name.\n\nFixes #326\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01K5rAHJfvZyEEaUQghV7hCQ\n\n* fix(fix): keep FixOutcome falsy when nothing applied and re-resolve config after a move\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01K5rAHJfvZyEEaUQghV7hCQ\n\n* fix(fix): leave a skill folder that plugin.json registers unrenamed\n\nRenaming a folder listed under plugin.json skills left the manifest naming a\nmissing path (PR002) while --fix exited 0. The name fix now skips such a\nskill entirely, so its original findings stay reported.\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01K5rAHJfvZyEEaUQghV7hCQ\n\n* fix(fix): also keep a skill whose SKILL.md plugin.json registers directly\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01K5rAHJfvZyEEaUQghV7hCQ\n\n* fix(fix): follow queued paths into a folder renamed earlier in the run\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01K5rAHJfvZyEEaUQghV7hCQ\n\n* fix(fix): follow chained folder renames and case-only renames\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01K5rAHJfvZyEEaUQghV7hCQ\n\n* fix(fix): detect folder moves from spelled paths, not existence or basenames\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01K5rAHJfvZyEEaUQghV7hCQ\n\n* fix(fix): check every enclosing plugin.json and keep gitignored paths skipped after a move\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01K5rAHJfvZyEEaUQghV7hCQ\n\n* fix(fix): rebase results collected before a folder moved\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01K5rAHJfvZyEEaUQghV7hCQ\n\n* perf(fix): rebase moved paths with string prefixes, not Path.is_relative_to\n\nProfiling the 200-skill violations fixture showed the per-rename rebase\nhelpers at 2.2s cumulative; string prefix matching brings them to 0.18s.\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01K5rAHJfvZyEEaUQghV7hCQ\n\n* fix(fix): skip plugin.json skill entries that hold a NUL byte\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01K5rAHJfvZyEEaUQghV7hCQ\n\n* fix(fix): keep a skill folder that plugin.json commands or agents register\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01K5rAHJfvZyEEaUQghV7hCQ\n\n* fix(fix): read plugin.json registrations through a typed boundary and re-check gitignore after a move\n\nThe rename guard now takes component paths from\nboundary.plugin_level_config_ingest.ingest_plugin_component_paths, a\nTypeAdapter-validated reader of skills, commands and agents, instead of\nfiltering the raw manifest dict. A path rebased onto a renamed folder is\nasked against git's ignore rules again, from a scan base that still exists.\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01K5rAHJfvZyEEaUQghV7hCQ\n\n* fix(fix): preserve registrations across plugin layouts\n\nRead enclosing manifests from adapter-declared layouts and validate their component paths through the existing typed boundary. Preserve registrations that traverse the skill directory, including paths containing symlinks or parent-directory segments.\n\nCover default CLI behavior, mixed enclosing layouts, manifest cache separation, symlink registrations, and the path passed to later fixers.\n\n* fix(fix): follow '..' spellings of a renamed folder in queued paths\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01K5rAHJfvZyEEaUQghV7hCQ\n\n* fix(fix): follow symlink aliases of a renamed folder in queued paths\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01K5rAHJfvZyEEaUQghV7hCQ\n\n* fix(fix): preserve queued and reported identities across renames\n\nResolve parent traversals before mutation while preserving subsequent symlink entries. Snapshot queued identities and advance collected identities with each actual folder move, pairing spelled and canonical routes so aliases retain the originally selected file even when a later rename reuses the old target name.\n\nRetain the incoming lexical and symlink alias regression tests. Add coverage for already-collected aliases, directory-symlink traversal, preservation of a renamed symlink entry, and reused alias targets.\n\nValidation: 255 passed, 1 skipped in the combined affected regression suite; uv run prek run --all-files passed.\n\n* fix(fix): retain diagnostics after case-only folder renames\n\nRemove the old results entry before inserting the renamed key. Windows paths with different casing compare equal, so inserting first and then popping removes the same dictionary entry.\n\nAdd a host-independent regression using Windows path equality and separator semantics to preserve both the diagnostic list and the new key spelling.\n\nValidation: 162 relocation and scan-runtime tests passed; uv run prek run --all-files passed.\n\n* perf(fix): skip rename bookkeeping for paths a move cannot touch\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01K5rAHJfvZyEEaUQghV7hCQ\n\n* fix(fix): follow queued file symlinks and keep old-path ignore probes across renames\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01K5rAHJfvZyEEaUQghV7hCQ\n\n* fix(fix): preserve file targets and initial ignore decisions\n\nTrack file symlink targets consistently for queued and collected results while preserving directory entries for folder moves. Snapshot original ignore decisions before renames invalidate their probes. Retain incoming regressions and cover queued, collected, directory, and custom-ignore cases.\n\n* fix(fix): retain ignore decisions for original path spellings\n\nCapture custom ignore matches before normalizing parent traversal aliases. Track decisions by input index so a separately selected unignored canonical path still runs. Cover ignored-only input and both mixed-input orders with real CLI regressions.\n\n* fix(fix): find plugin manifests above a relative skill path\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01K5rAHJfvZyEEaUQghV7hCQ\n\n* fix(fix): match relocated paths with platform case rules\n\nUse normcase for containment while keeping destination spelling and original descendant components. Cover differently cased Windows queued and collected paths, and extend registered-skill CLI coverage to nested working directories across all supported manifests.\n\n---------\n\nCo-authored-by: Claude <noreply@anthropic.com>",
+          "timestamp": "2026-10-10T21:31:36Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/203fad5fedd68131874f0362f1ae14ac74776f27"
+        },
+        "date": 1791668083078,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 4700.005,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 4959.715,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 5466.839,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 201.826,
             "unit": "files/s"
           }
         ]
