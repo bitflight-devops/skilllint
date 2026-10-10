@@ -919,7 +919,10 @@ def _queued_identities(paths: list[Path], scan_base: Path | None) -> dict[Path, 
     identities: dict[Path, Path] = {}
     for path in [*paths, *([scan_base] if scan_base is not None else [])]:
         target = _ignore_path(path)
-        identity = _path_identity(target)
+        # A file symlink's own entry never moves with a renamed folder; its target can.
+        identity = _path_identity(target) if not (target.is_symlink() and target.is_file()) else target.resolve()
+        if not path.is_absolute() and identity.is_absolute():
+            identity = Path(os.path.relpath(identity))
         identities[path] = identity if str(target) == str(path) else identity.parent
     return identities
 
@@ -995,10 +998,9 @@ def collect_validation_results(
     scan_base = _compute_scan_base(expanded_paths)
     queued_identities = _queued_identities(expanded_paths, scan_base) if fix else {}
 
+    ignore_probes = {path: _ignore_path(path) for path in expanded_paths}
     ignored_set: frozenset[str] = (
-        _build_gitignore_set([_ignore_path(path) for path in expanded_paths], scan_base)
-        if not include_gitignore
-        else frozenset()
+        _build_gitignore_set(list(ignore_probes.values()), scan_base) if not include_gitignore else frozenset()
     )
 
     def _should_skip(p: Path) -> bool:
@@ -1014,9 +1016,10 @@ def collect_validation_results(
     folder_identities: dict[Path, Path] = {}
     for queued in expanded_paths:
         path = _follow_moved_folders(queued, moved_folders, queued_identities.get(queued), folder_identities)
-        # The gitignore set was built from the paths as discovered, before any folder moved;
-        # a rebased path is asked again because its new spelling may match other ignore rules.
-        if _should_skip(_ignore_path(queued)) or _should_skip(_ignore_path(path)):
+        # The gitignore set was built from the paths as discovered, before any folder moved, so the
+        # probe it saw (a folder's SKILL.md, gone once the folder moves) is asked, and the rebased
+        # path is asked again because its new spelling may match other ignore rules.
+        if _should_skip(ignore_probes[queued]) or _should_skip(_ignore_path(path)):
             continue
         if (
             not include_gitignore

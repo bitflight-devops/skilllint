@@ -124,6 +124,36 @@ def test_check_fix_follows_a_queued_symlink_alias_of_the_renamed_folder(tmp_path
     assert (sandbox.case / "skills" / "bad-name" / "CLAUDE.md").is_file()
 
 
+def test_check_fix_follows_a_queued_file_symlink_into_the_renamed_folder(tmp_path: Path) -> None:
+    """A queued file symlink to a skill in the renamed folder is followed, not reported missing."""
+    sandbox = Sandbox.create(tmp_path)
+    skill = write_skill(sandbox.case / "skills", "bad--name", "bad--name")
+    (sandbox.case / "alias").mkdir()
+    (sandbox.case / "alias" / "SKILL.md").symlink_to(skill)
+
+    run = run_cli(("check", "skills/bad--name/SKILL.md", "alias/SKILL.md", "--fix", "--no-color"), sandbox)
+
+    assert b"does not exist" not in run.stderr
+    assert b"Traceback" not in run.stderr
+    assert run.returncode != 2
+    assert (sandbox.case / "skills" / "bad-name" / "SKILL.md").is_file()
+
+
+def test_check_fix_keeps_skipping_a_queued_skill_folder_ignored_at_its_old_path(tmp_path: Path) -> None:
+    """A queued skill folder git ignores by its old SKILL.md path stays skipped after its parent moves."""
+    sandbox = Sandbox.create(tmp_path)
+    subprocess.run(["git", "init", "-q", str(sandbox.case)], check=True)
+    (sandbox.case / ".gitignore").write_text("outer--bad/inner/SKILL.md\n", encoding="utf-8")
+    outer = write_skill(sandbox.case, "outer--bad", "outer--bad")
+    write_skill(outer.parent, "inner", "inner")
+
+    run = run_cli(("check", "outer--bad/SKILL.md", "outer--bad/inner", "--fix", "--json"), sandbox)
+
+    assert b"Traceback" not in run.stderr
+    assert (sandbox.case / "outer-bad" / "inner" / "SKILL.md").is_file()
+    assert [file["path"] for file in json.loads(run.stdout)["files"]] == ["outer-bad/SKILL.md"]
+
+
 @pytest.mark.parametrize("manifest_path", PLUGIN_MANIFESTS)
 def test_check_fix_preserves_registered_skills_without_a_platform_override(tmp_path: Path, manifest_path: str) -> None:
     """Default discovery must not let name repair break another platform's registered skill."""
