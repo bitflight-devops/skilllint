@@ -1138,6 +1138,14 @@ def _rebase_path_identity(path: Path, identity: Path, old: Path, new: Path, cano
     Returns:
         The current path and identity, retaining a working spelled route when possible.
     """
+    # Every rename is checked against every collected and queued path, so plain string tests skip
+    # the paths this move cannot touch before any Path is built: a path under *old* starts with its
+    # spelling or its identity's, unless a ``..`` segment (pathlib drops ``.``) spells it otherwise.
+    text, old_text = str(path), str(old)
+    if not (
+        text.startswith(old_text) or str(identity).startswith(str(canonical_old)) or ".." in text or ".." in old_text
+    ):
+        return path, identity
     moved = _rebased(path, old, new) or _rebased(Path(os.path.normpath(path)), Path(os.path.normpath(old)), new)
     moved_identity = _rebased(identity, canonical_old, canonical_old.with_name(new.name))
     return moved or moved_identity or path, moved_identity or identity
