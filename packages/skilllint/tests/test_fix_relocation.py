@@ -90,6 +90,22 @@ def test_check_fix_on_a_directory_follows_queued_files_into_the_renamed_folder(t
     assert (sandbox.case / "skills" / "bad-name" / "CLAUDE.md").is_file()
 
 
+def test_check_fix_follows_a_queued_path_that_spells_the_renamed_folder_differently(tmp_path: Path) -> None:
+    """A ``..`` spelling of the renamed folder is followed to the new folder, not reported missing."""
+    sandbox = Sandbox.create(tmp_path)
+    write_skill(sandbox.case / "skills", "bad--name", "bad--name")
+    (sandbox.case / "skills" / "bad--name" / "CLAUDE.md").write_text("# Notes\n", encoding="utf-8")
+
+    run = run_cli(
+        ("check", "skills/bad--name/SKILL.md", "skills/../skills/bad--name/CLAUDE.md", "--fix", "--no-color"), sandbox
+    )
+
+    assert b"does not exist" not in run.stderr
+    assert b"Traceback" not in run.stderr
+    assert run.returncode != 2
+    assert (sandbox.case / "skills" / "bad-name" / "CLAUDE.md").is_file()
+
+
 @pytest.mark.parametrize("manifest_path", PLUGIN_MANIFESTS)
 def test_check_fix_preserves_registered_skills_without_a_platform_override(tmp_path: Path, manifest_path: str) -> None:
     """Default discovery must not let name repair break another platform's registered skill."""
@@ -124,6 +140,21 @@ def test_queued_paths_follow_a_chain_of_nested_folder_renames(tmp_path: Path) ->
     followed = _follow_moved_folders(tmp_path / "outer--bad" / "inner--bad" / "CLAUDE.md", moved)
 
     assert followed == tmp_path / "outer-bad" / "inner-bad" / "CLAUDE.md"
+
+
+@pytest.mark.parametrize(
+    ("queued", "expected"),
+    [
+        pytest.param("s/../s/bad--name/CLAUDE.md", "s/bad-name/CLAUDE.md", id="dotdot-alias"),
+        pytest.param("./s/bad--name/CLAUDE.md", "s/bad-name/CLAUDE.md", id="dot-alias"),
+        pytest.param("./s/other/CLAUDE.md", "./s/other/CLAUDE.md", id="unmoved-keeps-spelling"),
+    ],
+)
+def test_queued_aliases_of_a_renamed_folder_follow_the_rename(queued: str, expected: str) -> None:
+    """Lexically different spellings of a renamed folder follow it; unmoved paths keep their spelling."""
+    followed = _follow_moved_folders(Path(queued), {Path("s/bad--name"): Path("s/bad-name")})
+
+    assert str(followed) == str(Path(expected))
 
 
 @pytest.mark.parametrize(

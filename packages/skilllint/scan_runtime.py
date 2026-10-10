@@ -1056,14 +1056,17 @@ def _follow_moved_folders(path: Path, moved_folders: dict[Path, Path]) -> Path:
     """Return where *path* is now, given the folders renamed earlier in the run.
 
     Moves are applied in the order they happened, so a rename inside an already renamed folder
-    (recorded against the folder's new name) is followed too.
+    (recorded against the folder's new name) is followed too. A spelling with ``..`` segments is
+    matched in its normalized form, because ``Path`` keeps ``..`` and the old folder no longer
+    exists to resolve against; a path no rename touches keeps its spelling.
 
     Returns:
         *path* rebased onto every renamed folder it lay under, otherwise *path*.
     """
+    normalized = Path(os.path.normpath(path))
     for old, new in moved_folders.items():
-        if (moved := _rebased(path, old, new)) is not None:
-            path = moved
+        if (moved := _rebased(path, old, new) or _rebased(normalized, Path(os.path.normpath(old)), new)) is not None:
+            path = normalized = moved
     return path
 
 
