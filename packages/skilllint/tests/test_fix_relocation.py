@@ -155,8 +155,11 @@ def test_check_fix_keeps_skipping_a_queued_skill_folder_ignored_at_its_old_path(
 
 
 @pytest.mark.parametrize("manifest_path", PLUGIN_MANIFESTS)
-def test_check_fix_preserves_registered_skills_without_a_platform_override(tmp_path: Path, manifest_path: str) -> None:
-    """Default discovery must not let name repair break another platform's registered skill."""
+@pytest.mark.parametrize("from_skills_directory", [False, True], ids=["plugin-cwd", "skills-cwd"])
+def test_check_fix_preserves_registered_skills_without_a_platform_override(
+    tmp_path: Path, manifest_path: str, from_skills_directory: bool
+) -> None:
+    """A registered skill stays unchanged when checked from its plugin root or a nested directory."""
     sandbox = Sandbox.create(tmp_path)
     skill = write_skill(sandbox.case / "skills", "bad--name", "bad--name")
     manifest = sandbox.case / manifest_path
@@ -164,7 +167,10 @@ def test_check_fix_preserves_registered_skills_without_a_platform_override(tmp_p
     manifest.write_text(json.dumps({"name": "p", "skills": ["./skills/bad--name"]}), encoding="utf-8")
     original = skill.read_bytes()
 
-    run = run_cli(("check", ".", "--fix", "--json"), sandbox)
+    working = (
+        Sandbox(case=skill.parent.parent, home=sandbox.home, bin=sandbox.bin) if from_skills_directory else sandbox
+    )
+    run = run_cli(("check", "bad--name" if from_skills_directory else ".", "--fix", "--json"), working)
 
     response = json.loads(run.stdout)
     codes = {
@@ -248,6 +254,42 @@ def test_rebase_collected_preserves_diagnostics_for_a_case_only_windows_rename(m
 
     assert [str(path) for path in results] == [str(moved)]
     assert results[moved] == [("frontmatter", diagnostic)]
+
+
+@pytest.mark.parametrize(
+    "queued_spelling",
+    [
+        pytest.param("skills/TEST-SKILL/Docs/CLAUDE.md", id="differently-cased-descendant"),
+        pytest.param("alias/CLAUDE.md", id="differently-cased-identity"),
+    ],
+)
+@no_type_check  # PureWindowsPath intentionally models Windows Path keys on every test host.
+def test_windows_queued_and_collected_paths_follow_a_move_with_different_casing(
+    monkeypatch: pytest.MonkeyPatch, queued_spelling: str
+) -> None:
+    """Windows containment ignores casing while the reported destination and suffix retain theirs."""
+    monkeypatch.setattr(scan_runtime, "os", SimpleNamespace(sep="\\", path=ntpath))
+    old = PureWindowsPath("skills", "Test-Skill")
+    new = PureWindowsPath("skills", "test-skill")
+    queued = PureWindowsPath(queued_spelling)
+    # A descendant resolves through the on-disk TEST-SKILL directory before the rename.
+    # Recording the move resolves only old.parent, retaining the caller's Test-Skill leaf.
+    identity = PureWindowsPath("skills", "TEST-SKILL", "Docs", "CLAUDE.md")
+    moved = new / "Docs" / "CLAUDE.md"
+    issue = ValidationIssue(field="name", severity="error", message="Existing diagnostic", code="FM010")
+    diagnostic = ValidationResult(passed=False, errors=[issue], warnings=[], info=[])
+    results = {queued: [("frontmatter", diagnostic)]}
+    fixes = [AppliedFix(path=queued, validator="FrontmatterValidator", codes=("FM007",), description="Earlier fix")]
+    identities = {queued: identity}
+
+    followed = _follow_moved_folders(queued, {old: new}, identity, {old: old})
+    scan_runtime._rebase_collected(results, fixes, identities, old, new, canonical_old=old)
+
+    assert str(followed) == str(moved)
+    assert [str(path) for path in results] == [str(moved)]
+    assert results[moved] == [("frontmatter", diagnostic)]
+    assert [str(fix.path) for fix in fixes] == [str(moved)]
+    assert str(identities[moved]) == str(moved)
 
 
 @pytest.mark.parametrize(

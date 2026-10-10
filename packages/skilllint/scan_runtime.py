@@ -1110,14 +1110,14 @@ def _record_folder_move(
 def _rebased(path: Path, old: Path, new: Path) -> Path | None:
     """Return *path* moved from under *old* to under *new*, or None when it is not under *old*.
 
-    Compares spellings as strings: ``Path.is_relative_to`` is too slow to call for every collected
-    path on every rename of a large --fix run, and a string match also keeps case-only renames apart.
+    Compares platform-normalized spellings without constructing paths for unrelated inputs.
+    Matching paths retain the destination spelling and the original descendant components.
     """
-    text, prefix = str(path), str(old)
+    text, prefix = os.path.normcase(str(path)), os.path.normcase(str(old))
     if text == prefix:
         return new
     if text.startswith(prefix + os.sep):
-        return new / text[len(prefix) + 1 :]
+        return new.joinpath(*path.parts[len(old.parts) :])
     return None
 
 
@@ -1157,9 +1157,12 @@ def _rebase_path_identity(path: Path, identity: Path, old: Path, new: Path, cano
     # Every rename is checked against every collected and queued path, so plain string tests skip
     # the paths this move cannot touch before any Path is built: a path under *old* starts with its
     # spelling or its identity's, unless a ``..`` segment (pathlib drops ``.``) spells it otherwise.
-    text, old_text = str(path), str(old)
+    text, old_text = os.path.normcase(str(path)), os.path.normcase(str(old))
     if not (
-        text.startswith(old_text) or str(identity).startswith(str(canonical_old)) or ".." in text or ".." in old_text
+        text.startswith(old_text)
+        or os.path.normcase(str(identity)).startswith(os.path.normcase(str(canonical_old)))
+        or ".." in text
+        or ".." in old_text
     ):
         return path, identity
     moved = _rebased(path, old, new) or _rebased(Path(os.path.normpath(path)), Path(os.path.normpath(old)), new)
