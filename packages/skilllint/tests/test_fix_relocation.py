@@ -13,15 +13,18 @@ fixers that mutate paths during a run and must leave them where they were.
 from __future__ import annotations
 
 import json
+import ntpath
 import subprocess
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
+from types import SimpleNamespace
+from typing import no_type_check
 
 import pytest
 from cli_probe import CliRun, Sandbox, run_cli
 from default_output_cases import NO_ENDPOINTS, renamed_folder_workspace
 
-from skilllint import fixing
-from skilllint.models import AppliedFix, RelocatingFixer, ValidationResult
+from skilllint import fixing, scan_runtime
+from skilllint.models import AppliedFix, RelocatingFixer, ValidationIssue, ValidationResult
 from skilllint.plugin_validator import validate_single_path
 from skilllint.scan_runtime import _folder_move, _follow_moved_folders
 from skilllint.validators.frontmatter import NameFormatValidator
@@ -196,6 +199,25 @@ def test_folder_move_detects_a_rename_from_the_spelled_paths(
     move = _folder_move(Path(queued), Path(result), was_dir=was_dir)
 
     assert move == (None if expected is None else (Path(expected[0]), Path(expected[1])))
+
+
+@no_type_check  # PureWindowsPath intentionally models Windows Path keys on every test host.
+def test_rebase_collected_preserves_diagnostics_for_a_case_only_windows_rename(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Equal Windows keys must retain the existing diagnostics under the renamed spelling."""
+    monkeypatch.setattr(scan_runtime, "os", SimpleNamespace(sep="\\", path=ntpath))
+    old = PureWindowsPath("skills", "Test-Skill")
+    new = PureWindowsPath("skills", "test-skill")
+    original = old / "CLAUDE.md"
+    moved = new / "CLAUDE.md"
+    issue = ValidationIssue(field="name", severity="error", message="Existing diagnostic", code="FM010")
+    diagnostic = ValidationResult(passed=False, errors=[issue], warnings=[], info=[])
+    results = {original: [("frontmatter", diagnostic)]}
+    identities = {original: original}
+
+    scan_runtime._rebase_collected(results, [], identities, old, new, canonical_old=old)
+
+    assert [str(path) for path in results] == [str(moved)]
+    assert results[moved] == [("frontmatter", diagnostic)]
 
 
 @pytest.mark.parametrize(

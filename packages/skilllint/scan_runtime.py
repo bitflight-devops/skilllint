@@ -1122,7 +1122,9 @@ def _rebase_collected(
         moved, identity = _rebase_path_identity(key, identities.get(key, key), old, new, canonical_old)
         identities[moved] = identity
         if str(moved) != str(key):
-            results.setdefault(moved, []).extend(results.pop(key))
+            # Pop first: differently cased Windows paths compare as the same key.
+            validator_results = results.pop(key)
+            results.setdefault(moved, []).extend(validator_results)
     for index, fix in enumerate(fixes):
         moved, identity = _rebase_path_identity(fix.path, identities.get(fix.path, fix.path), old, new, canonical_old)
         identities[moved] = identity
