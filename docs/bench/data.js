@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1791668083876,
+  "lastUpdate": 1793098665270,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -293,6 +293,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 201.826,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "60774bb9bece9a60a3f4d8b4646fecfbe5f5b448",
+          "message": "perf(validation): parse each frontmatter once per path and load adapters once (#342)\n\nProfiling the 1000-skill clean scan showed 5000 YAML parses for 1000 files:\nthe frontmatter validator, content validator, rule series, AS008 and MCP\ndiscovery each parsed the same frontmatter. Parses are now shared inside a\nper-path scope (each caller gets a deep copy). Under --fix, the plugin\nmanifest guard also reloaded every adapter entry point per skill folder; the\nmanifest locations are now loaded once per process.\n\n\nClaude-Session: https://claude.ai/code/session_01K5rAHJfvZyEEaUQghV7hCQ\n\nCo-authored-by: Claude <noreply@anthropic.com>",
+          "timestamp": "2026-10-27T10:54:13Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/60774bb9bece9a60a3f4d8b4646fecfbe5f5b448"
+        },
+        "date": 1793098664545,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 2740.665,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 2995.048,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 3500.258,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 334.218,
             "unit": "files/s"
           }
         ]
