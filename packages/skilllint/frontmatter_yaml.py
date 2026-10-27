@@ -7,7 +7,11 @@ plugin_validator module or own schema/rule dispatch.
 
 from __future__ import annotations
 
+import copy
 import re
+from collections.abc import Generator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from io import StringIO
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -32,8 +36,33 @@ _rt_yaml.preserve_quotes = False
 _rt_yaml.width = 10000  # prevent line wrapping
 
 
+# Parses shared inside one ``shared_yaml_parses()`` scope, keyed by YAML text. The validators and
+# rules that check one path each parse its frontmatter, so without sharing a file is parsed once
+# per consumer. ``None`` outside a scope, where every call parses.
+_shared_parses: ContextVar[dict[str, YamlValue] | None] = ContextVar("_shared_parses", default=None)
+
+
+@contextmanager
+def shared_yaml_parses() -> Generator[None]:
+    """Parse each distinct YAML text once for the duration of the ``with`` block.
+
+    The cache lives only for the block, so its size is bounded by the texts that block parses.
+
+    Yields:
+        None.
+    """
+    token = _shared_parses.set({})
+    try:
+        yield
+    finally:
+        _shared_parses.reset(token)
+
+
 def _safe_load_yaml(text: str) -> YamlValue:
     """Parse a YAML string using ruamel.yaml safe loader.
+
+    Inside ``shared_yaml_parses()`` a text already parsed is not parsed again. Each caller gets
+    its own deep copy, so a caller that mutates the result cannot change what another receives.
 
     Args:
         text: YAML text to parse (frontmatter content, no --- delimiters).
@@ -43,7 +72,12 @@ def _safe_load_yaml(text: str) -> YamlValue:
     """
     if not text or not text.strip():
         return {}
-    return _yaml_safe.load(text)
+    shared = _shared_parses.get()
+    if shared is None:
+        return _yaml_safe.load(text)
+    if text not in shared:
+        shared[text] = _yaml_safe.load(text)
+    return copy.deepcopy(shared[text])
 
 
 def _dump_yaml(data: dict[str, YamlValue]) -> str:
@@ -258,4 +292,4 @@ def parse_skill_md(path: Path) -> tuple[dict, list[str], str | None, list[str]]:
     return frontmatter_dict, body_lines, yaml_err, colon_fields
 
 
-__all__ = ["parse_skill_md", "safe_load_yaml_with_colon_fix"]
+__all__ = ["parse_skill_md", "safe_load_yaml_with_colon_fix", "shared_yaml_parses"]
