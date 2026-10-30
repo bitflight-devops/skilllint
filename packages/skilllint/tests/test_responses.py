@@ -195,6 +195,17 @@ def test_applied_fix_is_serialised_with_its_four_fields() -> None:
     assert CheckResponse.model_validate_json(response.model_dump_json()).fixes == [fix]
 
 
+def test_applied_fix_rejects_unknown_keys() -> None:
+    """The nested dataclass rejects extra keys, as its generated schema declares."""
+    fix = AppliedFix(path=Path("a/SKILL.md"), validator="FrontmatterValidator", codes=("FM004",), description="d")
+    response = build_check_response({}, verbose=False, show_progress=False, fixes=[fix])
+    payload = json.loads(response.model_dump_json())
+    payload["fixes"][0]["surprise"] = 1
+
+    with pytest.raises(ValueError, match="Unexpected keyword argument"):
+        CheckResponse.model_validate_json(json.dumps(payload))
+
+
 # --- check ------------------------------------------------------------------------------------
 
 

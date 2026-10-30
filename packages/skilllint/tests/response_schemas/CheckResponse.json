@@ -1,6 +1,7 @@
 {
   "$defs": {
     "AppliedFix": {
+      "additionalProperties": false,
       "description": "Record of one fix a validator applied to a file under --fix.",
       "properties": {
         "codes": {
