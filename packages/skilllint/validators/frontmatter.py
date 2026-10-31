@@ -8,6 +8,7 @@ remain in ``frontmatter_core``.
 
 from __future__ import annotations
 
+import functools
 import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, cast
@@ -825,6 +826,24 @@ class FrontmatterValidator:
 # ============================================================================
 
 
+@functools.cache
+def _plugin_manifest_paths() -> frozenset[str]:
+    """Return every plugin manifest location the registered adapters declare.
+
+    Adapters come from installed entry points, which do not change while the process runs, so they
+    are loaded once instead of once per skill folder the name fixer considers renaming.
+
+    Returns:
+        The manifest paths, relative to a plugin root.
+    """
+    return frozenset(
+        layout.manifest_path
+        for adapter in load_adapters()
+        if isinstance(adapter, PlatformPluginDiscovery)
+        for layout in adapter.plugin_layouts()
+    )
+
+
 class NameFormatValidator:
     """Repairs skill/agent/command name format (FM010).
 
@@ -949,12 +968,7 @@ class NameFormatValidator:
         one from registering a path inside it.
         """
         folder = skill_dir.resolve()
-        manifest_paths = {
-            layout.manifest_path
-            for adapter in load_adapters()
-            if isinstance(adapter, PlatformPluginDiscovery)
-            for layout in adapter.plugin_layouts()
-        }
+        manifest_paths = _plugin_manifest_paths()
         # The frontmatter owner may not import scan orchestration (test_architecture_examples), so
         # walk up to the adapter-declared plugin roots here instead of using scan_runtime.find_plugin_dir.
         # Every prefix must remain traversable, even when a later symlink resolves outside the folder.

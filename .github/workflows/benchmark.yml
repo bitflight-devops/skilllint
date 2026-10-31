@@ -41,7 +41,7 @@ jobs:
           fetch-depth: 0
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v10.2.0
+        uses: astral-sh/setup-uv@v10.3.0
         with:
           enable-cache: true
 
@@ -101,7 +101,7 @@ jobs:
           benchmark-data-dir-path: docs/bench
 
       - name: Upload compare benchmark results
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: benchmark-results-io-compare
           path: |
@@ -188,7 +188,7 @@ jobs:
 
       - name: Upload base benchmark results
         if: steps.base_ref_io.outputs.ref != ''
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: benchmark-results-io-base
           path: |
@@ -220,7 +220,7 @@ jobs:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.compare_ref || github.sha }}
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v10.2.0
+        uses: astral-sh/setup-uv@v10.3.0
         with:
           enable-cache: true
 
@@ -261,7 +261,7 @@ jobs:
           benchmark-data-dir-path: docs/bench
 
       - name: Upload CPU compare benchmark results
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: benchmark-results-cpu-compare
           path: scripts/results/bench_cpu_gh.json
@@ -316,7 +316,7 @@ jobs:
 
       - name: Upload CPU base benchmark results
         if: steps.base_ref_cpu.outputs.ref != ''
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: benchmark-results-cpu-base
           path: scripts/results/bench_cpu_base_gh.json
@@ -333,7 +333,7 @@ jobs:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.compare_ref || github.sha }}
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v10.2.0
+        uses: astral-sh/setup-uv@v10.3.0
         with:
           enable-cache: true
 
@@ -366,7 +366,7 @@ jobs:
           benchmark-data-dir-path: docs/bench
 
       - name: Upload import compare benchmark results
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: benchmark-results-import-compare
           path: scripts/results/bench_import_gh.json
@@ -418,7 +418,7 @@ jobs:
 
       - name: Upload import base benchmark results
         if: steps.base_ref_import.outputs.ref != ''
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: benchmark-results-import-base
           path: scripts/results/bench_import_base_gh.json
@@ -433,43 +433,43 @@ jobs:
       - uses: actions/checkout@v7.0.1
 
       - name: Download IO compare results
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@v8.0.2
         with:
           name: benchmark-results-io-compare
           path: scripts/results/
 
       - name: Download IO base results
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@v8.0.2
         with:
           name: benchmark-results-io-base
           path: scripts/results/base/
 
       - name: Download CPU compare results
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@v8.0.2
         with:
           name: benchmark-results-cpu-compare
           path: scripts/results/
 
       - name: Download CPU base results
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@v8.0.2
         with:
           name: benchmark-results-cpu-base
           path: scripts/results/base/
 
       - name: Download import compare results
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@v8.0.2
         with:
           name: benchmark-results-import-compare
           path: scripts/results/
 
       - name: Download import base results
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@v8.0.2
         with:
           name: benchmark-results-import-base
           path: scripts/results/base/
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v10.2.0
+        uses: astral-sh/setup-uv@v10.3.0
         with:
           enable-cache: true
 
@@ -508,7 +508,7 @@ jobs:
           fetch-depth: 0
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v10.2.0
+        uses: astral-sh/setup-uv@v10.3.0
         with:
           enable-cache: true
 
@@ -599,7 +599,7 @@ jobs:
           benchmark-data-dir-path: docs/bench
 
       - name: Upload release benchmark results
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: release-benchmark-${{ github.ref_name }}
           path: scripts/results/
