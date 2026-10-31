@@ -56,6 +56,7 @@ from skilllint.frontmatter_yaml import (  # noqa: F401 - compatibility re-export
     _safe_load_yaml,
     parse_skill_md,
     safe_load_yaml_with_colon_fix,
+    shared_yaml_parses,
 )
 from skilllint.models import (
     AppliedFix,
@@ -1308,15 +1309,17 @@ def main(
         def _validate_with_cache(
             p: Path, *, check: bool, fix: bool, verbose: bool, fixes_out: list[AppliedFix] | None = None
         ) -> FileResults:
-            return validate_single_path(
-                p,
-                check=check,
-                fix=fix,
-                verbose=verbose,
-                per_run_cache=per_run_cache,
-                per_run_policy_cache=per_run_policy_cache,
-                fixes_out=fixes_out,
-            )
+            # The validators and rules for one path each parse its frontmatter; share those parses.
+            with shared_yaml_parses():
+                return validate_single_path(
+                    p,
+                    check=check,
+                    fix=fix,
+                    verbose=verbose,
+                    per_run_cache=per_run_cache,
+                    per_run_policy_cache=per_run_policy_cache,
+                    fixes_out=fixes_out,
+                )
 
         if json_output:
             return collect_validation_results(
