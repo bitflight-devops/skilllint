@@ -65,6 +65,8 @@ skilllint check --tokens-only .claude/CLAUDE.md
 
 Exit codes: `0` = all checks passed · `1` = validation errors · `2` = usage error
 
+See [output examples](examples/output/README.md) for captured reports and colour SVG previews.
+
 ---
 
 ## GitHub Action

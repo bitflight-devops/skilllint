@@ -92,6 +92,49 @@ uv run skilllint rule FM007 --json
 uv run skilllint --version --json
 ```
 
+### JSON Lines
+
+Use `check --output-format json-lines` for a flat stream of findings:
+
+```console
+uv run skilllint check --output-format json-lines plugins/my-plugin
+```
+
+Stdout contains one compact JSON object per line (LF, or CRLF on Windows), with no ANSI
+colour, progress, summary, or envelope. `--show-progress` and `--show-summary`
+never add text to this stream. Info findings require `--verbose`, just as in
+human output. Records are ordered lexicographically by their serialized JSON;
+duplicate findings are retained. They are emitted after the scan completes,
+not streamed during validation. A clean scan emits no bytes.
+
+Every record has `schema_version: 1`, `path`, `validator`, `code`, `severity`,
+`message`, and `field`. Optional `suggestion`, `docs_url`, and `source_location`
+are omitted when unavailable, rather than emitted as null. `path` identifies
+the checked target; `source_location.path` identifies the actual source file,
+which can differ from the checked target. Absolute paths beneath the working
+directory become relative. Already-relative paths retain their spelling,
+including `..`; absolute external paths remain absolute, including paths on
+a different Windows drive. Path normalization does not resolve symlinks.
+A known span includes `start` and `end` objects with one-based `line` and
+`column`. Columns count Unicode code points, with each tab counting as one;
+the end position is exclusive. A point has `start` without `end`, and a
+file-only location has just `path`.
+Unknown locations are omitted, and legacy coordinates are not invented.
+`docs_url` preserves the diagnostic help reference, which can be a URL or a
+command such as `skilllint rule FM010`.
+
+`schema_version` increments for breaking field or semantic changes. Consumers
+should tolerate unknown additive fields under the same schema version.
+
+Check the process exit status as well as the stream: validation success exits
+`0`, failure exits `1`, and invalid CLI usage exits `2`. A validator can fail
+without supplying a finding, so an empty stream alone does not prove success.
+Diagnostics stay on stderr. `--json` retains the existing envelope format;
+`--json` and `--tokens-only` cannot be combined with explicit `--output-format`.
+With `--record`, the sidecar remains a human-rendered report, not JSONL.
+
+See the [captured raw output and colour SVG preview](../examples/output/README.md).
+
 ## Rules, thresholds, and severity
 
 `skilllint rules` is the compact catalog; `skilllint rule FM007` explains one
