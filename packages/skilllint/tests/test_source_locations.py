@@ -439,3 +439,34 @@ def test_fix_invalidates_old_aggregate_spans_and_preserves_fresh_spans(tmp_path:
     assert fresh[0].source_location == SourceLocation.from_offsets(
         current, content, start, start + len("../../../outside.md")
     )
+
+
+@pytest.mark.parametrize("severity", ["error", "warning", "info"])
+@pytest.mark.parametrize("operation", ["rename", "rewrite"])
+def test_unrelated_fix_keeps_existing_result_models(
+    tmp_path: Path, severity: Literal["error", "warning", "info"], operation: str
+) -> None:
+    """Every fix visits earlier results without copying unrelated or empty models."""
+    from skilllint.models import AppliedFix, ValidationResult
+    from skilllint.scan_runtime import _clear_changed_source_spans, _rebase_collected
+
+    source = tmp_path / "other.md"
+    location = SourceLocation(path=source, start=SourcePosition(line=2, column=3))
+    issue = ValidationIssue(field="label", severity=severity, message="link", code="LK004", source_location=location)
+    result = ValidationResult(
+        passed=severity != "error",
+        errors=[issue] if severity == "error" else [],
+        warnings=[issue] if severity == "warning" else [],
+        info=[issue] if severity == "info" else [],
+    )
+    empty = ValidationResult(passed=True, errors=[], warnings=[], info=[])
+    results = {tmp_path: [("plugin", result), ("empty", empty)]}
+    old, new = tmp_path / "old", tmp_path / "new"
+    if operation == "rename":
+        _rebase_collected(results, [], {source: source}, old, new, canonical_old=old)
+    else:
+        fix = AppliedFix(path=old / "SKILL.md", validator="frontmatter", codes=("FM004",), description="rewrite")
+        _clear_changed_source_spans(results, [fix], {source: source})
+    assert results[tmp_path][0][1] is result
+    assert results[tmp_path][1][1] is empty
+    assert issue.source_location == location

@@ -1114,24 +1114,40 @@ def _clear_changed_source_spans(results: FileResults, fixes: list[AppliedFix], i
 
     def clear(issue: ValidationIssue) -> ValidationIssue:
         location = issue.source_location
-        if location is None or identities.get(location.path, location.path).absolute() not in changed:
+        if (
+            location is None
+            or location.start is None
+            or identities.get(location.path, location.path).absolute() not in changed
+        ):
             return issue
         return issue.model_copy(update={"source_location": location.model_copy(update={"start": None, "end": None})})
 
     for path, validator_results in results.items():
-        results[path] = [
-            (
-                name,
-                result.model_copy(
-                    update={
-                        "errors": [clear(issue) for issue in result.errors],
-                        "warnings": [clear(issue) for issue in result.warnings],
-                        "info": [clear(issue) for issue in result.info],
-                    }
-                ),
-            )
-            for name, result in validator_results
-        ]
+        results[path] = [(name, _map_changed_issues(result, clear)) for name, result in validator_results]
+
+
+def _map_changed_issues(
+    result: ValidationResult, transform: Callable[[ValidationIssue], ValidationIssue]
+) -> ValidationResult:
+    """Copy only changed severity lists, keeping unrelated results cheap to visit.
+
+    A fix or rename can affect aggregated findings under any result key. Most
+    results are unaffected, so do not copy every model for every changed file.
+
+    Returns:
+        The original result when no issue changed, otherwise an updated copy.
+    """
+    if not (result.errors or result.warnings or result.info):
+        return result
+    updates = {}
+    for severity in ("errors", "warnings", "info"):
+        issues = getattr(result, severity)
+        if not issues:
+            continue
+        updated = [transform(issue) for issue in issues]
+        if any(old is not new for old, new in zip(issues, updated, strict=True)):
+            updates[severity] = updated
+    return result.model_copy(update=updates) if updates else result
 
 
 def _folder_move(queued: Path, result: Path, *, was_dir: bool) -> tuple[Path, Path] | None:
@@ -1244,13 +1260,7 @@ def _rebase_result_locations(
         identities[moved] = identity if moved.is_absolute() else Path(os.path.relpath(identity))
         return issue.model_copy(update={"source_location": location.model_copy(update={"path": moved})})
 
-    return result.model_copy(
-        update={
-            "errors": [relocate(issue) for issue in result.errors],
-            "warnings": [relocate(issue) for issue in result.warnings],
-            "info": [relocate(issue) for issue in result.info],
-        }
-    )
+    return _map_changed_issues(result, relocate)
 
 
 def _rebase_path_identity(path: Path, identity: Path, old: Path, new: Path, canonical_old: Path) -> tuple[Path, Path]:
