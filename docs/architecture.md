@@ -76,7 +76,7 @@ supplied files retain the existing explicit-file behavior.
 
 The adapter boundary remains dictionary-shaped for compatibility, but
 conversion preserves diagnostic identity (`field`, `line`, `suggestion`,
-and `docs_url`) before reporter output. Adapters assign severity on finding
+`docs_url`, and optional `source_location`) before reporter output. Adapters assign severity on finding
 dictionaries; the core interprets it into `ValidationResult`, applies fixer
 authorization on the non-platform fixing path, and owns reporter output.
 Adapter metadata or registration does not prove that a rule emits a finding:
@@ -154,6 +154,35 @@ per-path validation and revalidation. `scan_runtime.run_validation_loop`
 orchestrates file iteration and sends resulting `FileResults` to the selected
 reporter. Exit status is derived from resulting errors and usage/validation
 contracts, not adapter registration.
+
+### Diagnostic source locations
+
+`ValidationIssue.source_location` carries source identity separately from the
+semantic `field` label and the legacy `line` value. `SourceLocation` in
+`source_location.py` contains a path and optional `SourcePosition` start/end.
+Lines and columns are one-based Unicode code-point positions, not UTF-8 byte
+offsets or terminal display cells. A tab counts as one character. Ends are
+exclusive. A known file with unknown coordinates has a path but no start/end;
+an unknown source has no location. Consumers must not substitute line one for
+missing coordinates. Reporters own display paths and repository relativization.
+
+The first producers are frontmatter validation and LK001/LK004. Frontmatter
+locations identify unique authored top-level keys, or the original YAML
+parser's syntax-error point. Missing keys, ambiguous keys, and values parsed
+only after recovery do not acquire invented spans. Markdown locations identify
+the destination as authored, before URL decoding, with code/comments masked
+without shifting offsets. Plugin-tree findings carry the linking Markdown
+file, not the plugin directory used to start validation.
+
+Source metadata survives adapter conversion and severity remapping. When `--fix`
+renames a folder, collected locations follow the move, including source paths
+inside aggregated plugin findings and saved symlink identities. Earlier findings
+for files rewritten by a later fix retain file identity but lose obsolete
+coordinates; freshly revalidated findings keep their new spans. Metadata is
+intentionally excluded from existing issue serialization and JSON schemas:
+`--json`, legacy terminal formats, and the Action's output contract remain
+unchanged. Future output formats must explicitly consume these locations and
+convert code-point coordinates when a target protocol uses another unit.
 
 ## Maintainer map
 

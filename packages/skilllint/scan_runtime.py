@@ -26,7 +26,7 @@ from .reporting import CIReporter, ConsoleReporter, FileResults, Reporter
 if TYPE_CHECKING:
     from rich.console import Console
 
-    from .models import AppliedFix
+    from .models import AppliedFix, ValidationIssue, ValidationResult
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -1048,12 +1048,11 @@ def collect_validation_results(
             all_results[path] = [("platform", violations_to_result(violations))]
         else:
             was_dir = path.is_dir()
-            file_results = validate_single_path(path, check=check, fix=fix, verbose=verbose, fixes_out=all_fixes)
+            path_run = _validate_path_with_fix_record(validate_single_path, path, check=check, fix=fix, verbose=verbose)
+            all_fixes.extend(path_run.fixes)
             if fix:
-                collected_identities.update({
-                    file_path: _path_identity(file_path, follow_file_symlinks=True) for file_path in file_results
-                })
-                for file_path in file_results:
+                collected_identities.update(_result_source_identities(path_run.results))
+                for file_path in path_run.results:
                     if (move := _folder_move(path, file_path, was_dir=was_dir)) is not None:
                         _record_folder_move(
                             moved_folders,
@@ -1063,13 +1062,76 @@ def collect_validation_results(
                             move,
                             folder_identities=folder_identities,
                         )
-            for file_path, validator_results in file_results.items():
+                _clear_changed_source_spans(all_results, path_run.fixes, collected_identities)
+            for file_path, validator_results in path_run.results.items():
                 if file_path in all_results:
                     all_results[file_path].extend(validator_results)
                 else:
                     all_results[file_path] = list(validator_results)
 
     return CheckRun(results=all_results, fixes=all_fixes)
+
+
+def _validate_path_with_fix_record(
+    validate_single_path: ValidateSinglePathFn, path: Path, *, check: bool, fix: bool, verbose: bool
+) -> CheckRun:
+    """Collect one path's results and the mutations from that validation only.
+
+    Returns:
+        The new results and fixes, separate from previously collected findings.
+    """
+    fixes: list[AppliedFix] = []
+    results = validate_single_path(path, check=check, fix=fix, verbose=verbose, fixes_out=fixes)
+    return CheckRun(results=results, fixes=fixes)
+
+
+def _result_source_identities(results: FileResults) -> dict[Path, Path]:
+    """Snapshot grouped and aggregated source paths before a later rename.
+
+    Returns:
+        Saved identities, including sources spelled through symlinks.
+    """
+    sources = {
+        issue.source_location.path
+        for validator_results in results.values()
+        for _name, result in validator_results
+        for issue in (*result.errors, *result.warnings, *result.info)
+        if issue.source_location is not None
+    }
+    return {path: _path_identity(path, follow_file_symlinks=True) for path in (*results, *sources)}
+
+
+def _clear_changed_source_spans(results: FileResults, fixes: list[AppliedFix], identities: dict[Path, Path]) -> None:
+    """Drop obsolete coordinates in earlier findings for newly modified files.
+
+    Fresh revalidation results have not been added to ``results`` yet. Clearing
+    only their earlier counterparts avoids another scan or claiming an old
+    span in rewritten source. File identity and legacy diagnostics are retained.
+    """
+    if not fixes:
+        return
+    changed = {identities.get(fix.path, fix.path).absolute() for fix in fixes}
+
+    def clear(issue: ValidationIssue) -> ValidationIssue:
+        location = issue.source_location
+        if location is None or identities.get(location.path, location.path).absolute() not in changed:
+            return issue
+        return issue.model_copy(update={"source_location": location.model_copy(update={"start": None, "end": None})})
+
+    for path, validator_results in results.items():
+        results[path] = [
+            (
+                name,
+                result.model_copy(
+                    update={
+                        "errors": [clear(issue) for issue in result.errors],
+                        "warnings": [clear(issue) for issue in result.warnings],
+                        "info": [clear(issue) for issue in result.info],
+                    }
+                ),
+            )
+            for name, result in validator_results
+        ]
 
 
 def _folder_move(queued: Path, result: Path, *, was_dir: bool) -> tuple[Path, Path] | None:
@@ -1137,15 +1199,58 @@ def _rebase_collected(
     for key in list(results):
         moved, identity = _rebase_path_identity(key, identities.get(key, key), old, new, canonical_old)
         identities[moved] = identity
+        validator_results = [
+            (name, _rebase_result_locations(result, identities, old, new, canonical_old=canonical_old))
+            for name, result in results[key]
+        ]
         if str(moved) != str(key):
             # Pop first: differently cased Windows paths compare as the same key.
-            validator_results = results.pop(key)
+            results.pop(key)
             results.setdefault(moved, []).extend(validator_results)
+        else:
+            results[key] = validator_results
     for index, fix in enumerate(fixes):
         moved, identity = _rebase_path_identity(fix.path, identities.get(fix.path, fix.path), old, new, canonical_old)
         identities[moved] = identity
         if str(moved) != str(fix.path):
             fixes[index] = replace(fix, path=moved)
+
+
+def _rebase_result_locations(
+    result: ValidationResult, identities: dict[Path, Path], old: Path, new: Path, *, canonical_old: Path
+) -> ValidationResult:
+    """Keep observed source identities aligned with an authorized folder move.
+
+    Returns:
+        Result with relocated source paths; fields and coordinates are unchanged.
+    """
+
+    def relocate(issue: ValidationIssue) -> ValidationIssue:
+        location = issue.source_location
+        if location is None:
+            return issue
+        # A plugin scan and a later explicit --fix input can use different
+        # absolute/relative spellings. Compare saved identities on the same
+        # absolute basis, retaining the spelled source route when it matches.
+        moved, identity = _rebase_path_identity(
+            location.path, identities.get(location.path, location.path).absolute(), old, new, canonical_old.absolute()
+        )
+        if not location.path.is_absolute() and moved.is_absolute():
+            moved = Path(os.path.relpath(moved))
+        if str(moved) == str(location.path):
+            return issue
+        # Do not change the existing result-key identity convention merely
+        # because source comparison temporarily used absolute coordinates.
+        identities[moved] = identity if moved.is_absolute() else Path(os.path.relpath(identity))
+        return issue.model_copy(update={"source_location": location.model_copy(update={"path": moved})})
+
+    return result.model_copy(
+        update={
+            "errors": [relocate(issue) for issue in result.errors],
+            "warnings": [relocate(issue) for issue in result.warnings],
+            "info": [relocate(issue) for issue in result.info],
+        }
+    )
 
 
 def _rebase_path_identity(path: Path, identity: Path, old: Path, new: Path, canonical_old: Path) -> tuple[Path, Path]:

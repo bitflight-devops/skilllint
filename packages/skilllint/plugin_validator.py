@@ -634,6 +634,7 @@ def _collect_validator_results(
                     message=issue.message,
                     code=issue.code,
                     line=issue.line,
+                    source_location=issue.source_location,
                     docs_url=issue.docs_url,
                     suggestion=issue.suggestion,
                 )
@@ -846,6 +847,8 @@ def _issue_to_violation(issue: ValidationIssue) -> dict:
         Compatibility violation dictionary retaining diagnostic identity.
     """
     violation = issue.model_dump(exclude_none=True)
+    if issue.source_location is not None:
+        violation["source_location"] = issue.source_location.model_dump(mode="json")
     violation["code"] = str(issue.code)
     violation["severity"] = str(issue.severity)
     violation["message"] = str(issue.message)
@@ -1079,6 +1082,7 @@ def violations_to_result(violations: list[dict]) -> ValidationResult:
                 message=str(violation.get("message", "")),
                 code=code,
                 line=line if isinstance(line, int) else None,
+                source_location=violation.get("source_location"),
                 suggestion=(str(violation["suggestion"]) if violation.get("suggestion") is not None else None),
                 docs_url=(str(violation["docs_url"]) if violation.get("docs_url") is not None else None),
             )

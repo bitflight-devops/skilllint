@@ -18,6 +18,7 @@ from skilllint.rules.as_series import run_as_series
 from skilllint.rules.lk_series import check_lk001
 from skilllint.rules.nr_series import check_nr001, check_nr002
 from skilllint.rules.pd_series import check_pd001, check_pd002, check_pd003
+from skilllint.source_location import SourceLocation
 from skilllint.token_counter import TOKEN_ERROR_THRESHOLD, TOKEN_WARNING_THRESHOLD
 
 
@@ -62,13 +63,14 @@ class InternalLinkValidator:
 
         try:
             content = path.read_text(encoding="utf-8")
-        except OSError as exc:
+        except (OSError, UnicodeDecodeError) as exc:
             errors.append(
                 ValidationIssue(
                     field="(file)",
                     severity="error",
                     message=f"Could not read file: {exc}",
                     code="FM002",
+                    source_location=SourceLocation(path=path),
                     docs_url=rule_reference("FM002"),
                 )
             )
