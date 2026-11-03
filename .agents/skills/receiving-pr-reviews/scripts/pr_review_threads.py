@@ -34,7 +34,7 @@ Usage:
 from __future__ import annotations
 
 import subprocess
-import time
+from time import monotonic, sleep
 from typing import Annotated
 
 import typer
@@ -244,7 +244,7 @@ def watch(
     "nothing to report," not a failure. A poll cut short by `deadline` itself is that same honest
     ending rather than a failure; a non-zero `gh` exit never is — see the two handlers below.
     """
-    deadline = time.monotonic() + timeout_seconds
+    deadline = monotonic() + timeout_seconds
     owner, repo = _owner_repo(github, gh_timeout=gh_timeout_seconds)
     # The first fetch is mandatory and is *not* deadline-bounded: with `--timeout-seconds 0` the
     # deadline is already spent, and starving this call would turn the documented immediate
@@ -257,10 +257,10 @@ def watch(
     # attempted since" is itself a confirmed state, not an unknown one.
     last_poll_ok = True
     while not current.has_outstanding_work():
-        remaining = deadline - time.monotonic()
+        remaining = deadline - monotonic()
         if remaining <= 0:
             break
-        time.sleep(min(interval_seconds, remaining))
+        sleep(min(interval_seconds, remaining))
         if remaining <= interval_seconds:
             # That sleep consumed the rest of the window. `gh_timeout_budget` would bound a poll
             # here to nothing, so stop and report the last successfully-fetched state rather than
@@ -283,7 +283,7 @@ def watch(
             # cut short. At or past `deadline` that is the same honest "no time left to check
             # again" this command reports when it stops before polling at all. With time still on
             # the clock it is a real network stall and leaves the tail unconfirmed.
-            last_poll_ok = time.monotonic() >= deadline
+            last_poll_ok = monotonic() >= deadline
             continue
         except subprocess.CalledProcessError:
             # A non-zero exit is an authentication, rate-limit, API or GraphQL error. The deadline
@@ -398,7 +398,7 @@ def checks(
     A `gh` failure mid-wait propagates and exits non-zero rather than being retried inline: unlike
     `watch`, this command is short and re-running it costs one snapshot.
     """
-    deadline = time.monotonic() + timeout_seconds
+    deadline = monotonic() + timeout_seconds
     owner, repo = _owner_repo(github, gh_timeout=gh_timeout_seconds)
     # The first fetch is not deadline-bounded, for the same reason as `watch`'s: with
     # `--timeout-seconds 0` the deadline is already spent, and bounding it would starve the
@@ -408,10 +408,10 @@ def checks(
     # from a `none`, so the grace is spent by taking it rather than by any clock of its own.
     none_grace_spent = False
     while _checks_unsettled(current, none_grace_spent=none_grace_spent):
-        remaining = deadline - time.monotonic()
+        remaining = deadline - monotonic()
         if remaining <= 0:
             break
-        time.sleep(min(interval_seconds, remaining))
+        sleep(min(interval_seconds, remaining))
         if remaining <= interval_seconds:
             # That sleep consumed the rest of the window; `gh_timeout_budget` would bound the poll
             # to nothing. Report the last state fetched rather than spawn a doomed call — same

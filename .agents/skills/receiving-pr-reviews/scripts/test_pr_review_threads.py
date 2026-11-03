@@ -1232,6 +1232,23 @@ def test_has_outstanding_work_false_when_all_clear() -> None:
     assert _state().has_outstanding_work() is False
 
 
+@pytest.mark.parametrize(("clock_name", "args"), [("sleep", (0,)), ("monotonic", ())])
+def test_polling_clock_mocks_leave_shared_time_unchanged(
+    clock_name: str, args: tuple[int, ...], mocker: MockerFixture
+) -> None:
+    """Polling mocks must not change clocks used by concurrent fetches or unrelated callers."""
+    real_clock = getattr(time, clock_name)
+    clock_mock = mocker.patch.object(pr_review_threads, clock_name)
+
+    assert getattr(time, clock_name) is real_clock
+    assert getattr(pr_review_gh.time, clock_name) is real_clock
+    getattr(time, clock_name)(*args)
+    clock_mock.assert_not_called()
+
+    getattr(pr_review_threads, clock_name)(*args)
+    clock_mock.assert_called_once_with(*args)
+
+
 # --- watch: immediate return when already actionable ---------------------------------------------
 
 
@@ -1249,7 +1266,7 @@ def test_watch_returns_immediately_when_first_fetch_already_actionable(
 ) -> None:
     """`watch` returns on its first fetch, without sleeping, when that fetch is already actionable."""
     fetch_mock = mocker.patch.object(pr_review_threads, "build_fetch_result", return_value=state)
-    sleep_mock = mocker.patch.object(pr_review_threads.time, "sleep")
+    sleep_mock = mocker.patch.object(pr_review_threads, "sleep")
 
     result = runner.invoke(app, ["watch", "--pr", "3208", "--interval-seconds", "1", "--timeout-seconds", "20"])
 
@@ -1263,7 +1280,7 @@ def test_watch_returns_immediately_when_first_fetch_already_actionable(
 def test_watch_polls_until_thread_becomes_unresolved(mocker: MockerFixture) -> None:
     """`watch` keeps polling while nothing is outstanding, and returns once a thread appears."""
     mocker.patch.object(pr_review_threads, "build_fetch_result", side_effect=[_state(), _state(unresolved_count=1)])
-    mocker.patch.object(pr_review_threads.time, "sleep")
+    mocker.patch.object(pr_review_threads, "sleep")
 
     # timeout-seconds must exceed interval-seconds: the loop stops once less than one interval
     # remains, and with time.sleep mocked to a no-op almost no wall-clock time elapses, so the
@@ -1297,9 +1314,9 @@ def test_watch_stops_when_less_than_one_interval_remains(mocker: MockerFixture) 
     reported as an honest `timed_out: true`.
     """
     fetch_mock = mocker.patch.object(pr_review_threads, "build_fetch_result", return_value=_state())
-    mocker.patch.object(pr_review_threads.time, "sleep")
+    mocker.patch.object(pr_review_threads, "sleep")
     # 0.0 (deadline = 0.0 + 50), 0.0 (remaining = 50, which is <= the 90s interval -> break).
-    mocker.patch.object(pr_review_threads.time, "monotonic", side_effect=[0.0, 0.0])
+    mocker.patch.object(pr_review_threads, "monotonic", side_effect=[0.0, 0.0])
 
     result = runner.invoke(app, ["watch", "--pr", "3208", "--interval-seconds", "90", "--timeout-seconds", "50"])
 
@@ -1320,7 +1337,7 @@ def test_watch_survives_transient_gh_failure_mid_window(mocker: MockerFixture) -
         "build_fetch_result",
         side_effect=[_state(), subprocess.TimeoutExpired(cmd=["gh"], timeout=30), _state(unresolved_count=1)],
     )
-    mocker.patch.object(pr_review_threads.time, "sleep")
+    mocker.patch.object(pr_review_threads, "sleep")
 
     # 40s leaves a full interval's headroom on the first iteration (see the comment on
     # `test_watch_polls_until_thread_becomes_unresolved` above).
@@ -1353,12 +1370,12 @@ def test_watch_fails_loudly_when_every_poll_fails(mocker: MockerFixture) -> None
             subprocess.CalledProcessError(1, ["gh"]),
         ],
     )
-    mocker.patch.object(pr_review_threads.time, "sleep")
+    mocker.patch.object(pr_review_threads, "sleep")
     # 0.0 (deadline = 0.0 + 100). Iter 1: 0.0 (remaining=100 > the 10s interval) → poll raises
     # TimeoutExpired, whose handler reads 10.0 (< deadline → a real failure). Iter 2: 20.0
     # (remaining=80) → poll raises CalledProcessError, whose handler reads no clock at all: a
     # non-zero exit is never excused by the deadline. Then 105.0 → remaining negative, loop ends.
-    mocker.patch.object(pr_review_threads.time, "monotonic", side_effect=[0.0, 0.0, 10.0, 20.0, 105.0])
+    mocker.patch.object(pr_review_threads, "monotonic", side_effect=[0.0, 0.0, 10.0, 20.0, 105.0])
 
     result = runner.invoke(app, ["watch", "--pr", "3208", "--interval-seconds", "10", "--timeout-seconds", "100"])
 
@@ -1383,10 +1400,10 @@ def test_watch_treats_a_deadline_truncated_poll_as_an_honest_timeout(mocker: Moc
         "build_fetch_result",
         side_effect=[_state(), subprocess.TimeoutExpired(cmd=["gh"], timeout=30)],
     )
-    mocker.patch.object(pr_review_threads.time, "sleep")
+    mocker.patch.object(pr_review_threads, "sleep")
     # 0.0 (deadline=100). Iter 1: 0.0 (remaining=100 > the 10s interval) → poll raises; 100.0 in
     # the handler (>= deadline → the window ended, not a failure). Iter 2: 100.0 → remaining 0.
-    mocker.patch.object(pr_review_threads.time, "monotonic", side_effect=[0.0, 0.0, 100.0, 100.0])
+    mocker.patch.object(pr_review_threads, "monotonic", side_effect=[0.0, 0.0, 100.0, 100.0])
 
     result = runner.invoke(app, ["watch", "--pr", "3208", "--interval-seconds", "10", "--timeout-seconds", "100"])
 
@@ -1405,10 +1422,10 @@ def test_watch_fails_loudly_on_a_nonzero_gh_exit_at_the_deadline(mocker: MockerF
     mocker.patch.object(
         pr_review_threads, "build_fetch_result", side_effect=[_state(), subprocess.CalledProcessError(1, ["gh"])]
     )
-    mocker.patch.object(pr_review_threads.time, "sleep")
+    mocker.patch.object(pr_review_threads, "sleep")
     # Same clock as the test above — 100.0 would have excused a TimeoutExpired but must not excuse
     # this. The handler reads no clock at all, so only four values are consumed.
-    mocker.patch.object(pr_review_threads.time, "monotonic", side_effect=[0.0, 0.0, 100.0, 100.0])
+    mocker.patch.object(pr_review_threads, "monotonic", side_effect=[0.0, 0.0, 100.0, 100.0])
 
     result = runner.invoke(app, ["watch", "--pr", "3208", "--interval-seconds", "10", "--timeout-seconds", "100"])
 
@@ -1475,11 +1492,11 @@ def test_watch_fails_loudly_when_only_final_poll_fails(mocker: MockerFixture) ->
         "build_fetch_result",
         side_effect=[_state(), _state(), subprocess.TimeoutExpired(cmd=["gh"], timeout=30)],
     )
-    mocker.patch.object(pr_review_threads.time, "sleep")
+    mocker.patch.object(pr_review_threads, "sleep")
     # 0.0 (deadline=100). Iter 1: 0.0 (remaining=100) → poll succeeds, so the handler reads no
     # clock. Iter 2: 20.0 (remaining=80) → poll raises, handler reads 30.0 (< deadline → a real
     # failure, not the window ending). Then 105.0 → remaining negative, loop ends.
-    mocker.patch.object(pr_review_threads.time, "monotonic", side_effect=[0.0, 0.0, 20.0, 30.0, 105.0])
+    mocker.patch.object(pr_review_threads, "monotonic", side_effect=[0.0, 0.0, 20.0, 30.0, 105.0])
 
     result = runner.invoke(app, ["watch", "--pr", "3208", "--interval-seconds", "10", "--timeout-seconds", "100"])
 
@@ -1763,7 +1780,7 @@ def test_checks_returns_without_sleeping_once_settled(status: _CheckStatus, mock
     registered yet. See `test_checks_polls_a_none_verdict_through_the_registration_gap`.
     """
     build_mock = mocker.patch.object(pr_review_threads, "build_checks_result", return_value=_checks_result(status))
-    sleep_mock = mocker.patch.object(pr_review_threads.time, "sleep")
+    sleep_mock = mocker.patch.object(pr_review_threads, "sleep")
 
     result = runner.invoke(app, ["checks", "--pr", "3208", "--interval-seconds", "1", "--timeout-seconds", "40"])
 
@@ -1778,7 +1795,7 @@ def test_checks_waits_until_a_running_check_settles(mocker: MockerFixture) -> No
     mocker.patch.object(
         pr_review_threads, "build_checks_result", side_effect=[_checks_result("pending"), _checks_result("passed")]
     )
-    sleep_mock = mocker.patch.object(pr_review_threads.time, "sleep")
+    sleep_mock = mocker.patch.object(pr_review_threads, "sleep")
 
     # As in `test_watch_polls_until_thread_becomes_unresolved`: timeout must exceed interval, since
     # the loop stops once less than one interval remains and mocked sleep consumes no wall clock.
@@ -1814,7 +1831,7 @@ def test_checks_polls_a_none_verdict_through_the_registration_gap(mocker: Mocker
         "build_checks_result",
         side_effect=[_checks_result("none"), _checks_result("pending"), _checks_result("passed")],
     )
-    sleep_mock = mocker.patch.object(pr_review_threads.time, "sleep")
+    sleep_mock = mocker.patch.object(pr_review_threads, "sleep")
 
     result = runner.invoke(app, ["checks", "--pr", "3208", "--interval-seconds", "1", "--timeout-seconds", "40"])
 
@@ -1832,7 +1849,7 @@ def test_checks_settles_a_persistent_none_after_one_grace_poll(mocker: MockerFix
     would make many more.
     """
     build_mock = mocker.patch.object(pr_review_threads, "build_checks_result", return_value=_checks_result("none"))
-    sleep_mock = mocker.patch.object(pr_review_threads.time, "sleep")
+    sleep_mock = mocker.patch.object(pr_review_threads, "sleep")
 
     result = runner.invoke(app, ["checks", "--pr", "3208", "--interval-seconds", "1", "--timeout-seconds", "40"])
 
@@ -1857,7 +1874,7 @@ def test_checks_keeps_waiting_on_a_draft_pr(mocker: MockerFixture) -> None:
         "build_checks_result",
         side_effect=[_checks_result("pending", is_draft=True), _checks_result("passed", is_draft=True)],
     )
-    sleep_mock = mocker.patch.object(pr_review_threads.time, "sleep")
+    sleep_mock = mocker.patch.object(pr_review_threads, "sleep")
 
     result = runner.invoke(app, ["checks", "--pr", "3208", "--interval-seconds", "1", "--timeout-seconds", "40"])
 
@@ -1873,7 +1890,7 @@ def test_checks_stops_waiting_on_a_conflicting_pr(mocker: MockerFixture) -> None
     build_mock = mocker.patch.object(
         pr_review_threads, "build_checks_result", return_value=_checks_result("pending", mergeable="CONFLICTING")
     )
-    sleep_mock = mocker.patch.object(pr_review_threads.time, "sleep")
+    sleep_mock = mocker.patch.object(pr_review_threads, "sleep")
 
     result = runner.invoke(app, ["checks", "--pr", "3208", "--interval-seconds", "1", "--timeout-seconds", "40"])
 
