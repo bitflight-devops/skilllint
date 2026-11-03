@@ -19,7 +19,28 @@ The [fixture](fixtures/demo-skill/SKILL.md) deliberately contains an invalid nam
 The command exits `1` because validation fails. See the
 [JSONL contract](../../docs/usage.md#json-lines) for fields and exit semantics.
 
-Regenerate both artifacts, or verify they match without modifying them:
+## Concise
+
+This **concise actual-output preview** renders the [raw stdout](concise.txt)
+captured from the CLI. Findings remain monochrome; the coloured frame and label
+are presentation only. This is not a platform screenshot or a CI interface.
+Visual wrapping keeps the preview readable; each finding remains one physical
+line in the raw file.
+
+![Concise actual-output preview with monochrome findings and visual wrapping](concise.svg)
+
+Run from the repository root:
+
+```console
+uv run skilllint check --platform claude-code --output-format concise --no-color examples/output/fixtures/demo-skill/SKILL.md
+```
+
+The same deliberately invalid fixture exits `1`. Concise output contains only
+findings, with no headings, fix suggestions, or summary.
+
+## Reproduce the examples
+
+Regenerate all artifacts, or verify they match without modifying them:
 
 ```console
 uv run python scripts/capture_output_examples.py

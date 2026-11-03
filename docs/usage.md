@@ -92,6 +92,39 @@ uv run skilllint rule FM007 --json
 uv run skilllint --version --json
 ```
 
+### Concise
+
+Use `check --output-format concise --no-color` for lightweight pre-commit output:
+
+```console
+uv run skilllint check --output-format concise --no-color plugins/my-plugin
+```
+
+Each visible finding occupies one physical line:
+`path:line:column: severity[CODE] field: message`. The actual source path and
+one-based start position are used when known. Otherwise the checked target is
+shown, with no invented line or column. The semantic field is omitted when empty.
+Absolute paths beneath the working directory become relative; other path
+spellings retain their identity without resolving symlinks.
+
+Concise output is always monochrome, including without `--no-color`. Control
+characters and line separators are escaped, while readable Unicode is retained.
+Lines are sorted lexicographically and duplicates are preserved. Info findings
+require `--verbose`. There are no headings, fix notices, progress, or summaries,
+even with `--show-progress` or `--show-summary`. A clean scan emits no bytes.
+
+`--fix` still applies the same supported changes and reports remaining findings;
+pre-commit itself reports modified files. Exit status remains `0` for success,
+`1` for failed validation, and `2` for invalid usage. An empty output does not
+prove success if a validator failed without a finding. Usage and policy
+diagnostics remain on stderr. `--json` and `--tokens-only` conflict with explicit
+`--output-format`; legacy human output and `--json` remain unchanged.
+With `--record`, the sidecar remains the existing detailed human report rather
+than a capture of concise stdout.
+
+Both published pre-commit hooks select concise output by default. See the
+[raw capture and monochrome SVG preview](../examples/output/README.md#concise).
+
 ### JSON Lines
 
 Use `check --output-format json-lines` for a flat stream of findings:

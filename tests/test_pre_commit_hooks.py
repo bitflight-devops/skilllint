@@ -66,6 +66,10 @@ def test_published_manifest_keeps_only_documented_hooks_and_current_reference() 
     hooks = YAML(typ="safe").load(MANIFEST_PATH.read_text(encoding="utf-8"))
 
     assert [hook["id"] for hook in hooks] == ["skilllint", "skilllint-fix"]
+    assert [hook["entry"] for hook in hooks] == [
+        "skilllint check --output-format concise --no-color",
+        "skilllint check --fix --output-format concise --no-color",
+    ]
     manifest = MANIFEST_PATH.read_text(encoding="utf-8")
     readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
     assert "rev: vX.Y.Z" in manifest
@@ -73,26 +77,28 @@ def test_published_manifest_keeps_only_documented_hooks_and_current_reference() 
 
 
 @pytest.mark.slow
-def test_skilllint_hook_runs_matching_files_and_skips_unmatched_paths(staged_repository: Path) -> None:
+@pytest.mark.parametrize("runner", [("uv", "run", "prek"), ("uv", "run", "--with", "pre-commit", "pre-commit")])
+def test_skilllint_hook_runs_matching_files_and_skips_unmatched_paths(
+    staged_repository: Path, runner: tuple[str, ...]
+) -> None:
     clean_result = _run(
-        ["uv", "run", "prek", "try-repo", str(REPO_ROOT), "skilllint", "--files", "skills/my-skill/SKILL.md"],
-        staged_repository,
+        [*runner, "try-repo", str(REPO_ROOT), "skilllint", "--files", "skills/my-skill/SKILL.md"], staged_repository
     )
     invalid_result = _run(
-        ["uv", "run", "prek", "try-repo", str(REPO_ROOT), "skilllint", "--files", "skills/invalid/SKILL.md"],
-        staged_repository,
+        [*runner, "try-repo", str(REPO_ROOT), "skilllint", "--files", "skills/invalid/SKILL.md"], staged_repository
     )
-    unmatched_result = _run(
-        ["uv", "run", "prek", "try-repo", str(REPO_ROOT), "skilllint", "--files", "LICENSE"], staged_repository
-    )
+    unmatched_result = _run([*runner, "try-repo", str(REPO_ROOT), "skilllint", "--files", "LICENSE"], staged_repository)
     excluded_result = _run(
-        ["uv", "run", "prek", "try-repo", str(REPO_ROOT), "skilllint", "--files", "failing-examples/SKILL.md"],
-        staged_repository,
+        [*runner, "try-repo", str(REPO_ROOT), "skilllint", "--files", "failing-examples/SKILL.md"], staged_repository
     )
 
     assert clean_result.returncode == 0, clean_result.stdout + clean_result.stderr
     assert invalid_result.returncode == 1, invalid_result.stdout + invalid_result.stderr
     assert "FM010" in invalid_result.stdout
+    assert "skills/invalid/SKILL.md:2:1: error[FM010] name:" in invalid_result.stdout
+    assert "\x1b" not in invalid_result.stdout
+    assert "FrontmatterValidator" not in invalid_result.stdout
+    assert "Validation Summary" not in invalid_result.stdout
     assert unmatched_result.returncode == 0, unmatched_result.stdout + unmatched_result.stderr
     assert "Skipped" in unmatched_result.stdout
     assert excluded_result.returncode == 0, excluded_result.stdout + excluded_result.stderr
@@ -100,22 +106,23 @@ def test_skilllint_hook_runs_matching_files_and_skips_unmatched_paths(staged_rep
 
 
 @pytest.mark.slow
-def test_skilllint_fix_hook_edits_once_then_is_idempotent(staged_repository: Path) -> None:
+@pytest.mark.parametrize("runner", [("uv", "run", "prek"), ("uv", "run", "--with", "pre-commit", "pre-commit")])
+def test_skilllint_fix_hook_edits_once_then_is_idempotent(staged_repository: Path, runner: tuple[str, ...]) -> None:
     skill_file = staged_repository / "skills" / "fixable" / "SKILL.md"
     before = skill_file.read_text(encoding="utf-8")
     first_result = _run(
-        ["uv", "run", "prek", "try-repo", str(REPO_ROOT), "skilllint-fix", "--files", "skills/fixable/SKILL.md"],
-        staged_repository,
+        [*runner, "try-repo", str(REPO_ROOT), "skilllint-fix", "--files", "skills/fixable/SKILL.md"], staged_repository
     )
     after_first_run = skill_file.read_text(encoding="utf-8")
     second_result = _run(
-        ["uv", "run", "prek", "try-repo", str(REPO_ROOT), "skilllint-fix", "--files", "skills/fixable/SKILL.md"],
-        staged_repository,
+        [*runner, "try-repo", str(REPO_ROOT), "skilllint-fix", "--files", "skills/fixable/SKILL.md"], staged_repository
     )
 
     assert first_result.returncode == 1, first_result.stdout + first_result.stderr
     assert after_first_run != before
     assert "tools: Read, Grep" in after_first_run
+    assert "\x1b" not in first_result.stdout
+    assert "Fixes applied" not in first_result.stdout
     assert second_result.returncode == 0, second_result.stdout + second_result.stderr
     assert skill_file.read_text(encoding="utf-8") == after_first_run
 

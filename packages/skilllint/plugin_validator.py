@@ -87,6 +87,7 @@ from skilllint.record_export import (
     export_recording as _export_recording,
     make_recording_console as _make_recording_console,
 )
+from skilllint.reporting import emit_concise
 from skilllint.reporting_json_lines import emit_json_lines
 from skilllint.responses import (
     build_check_response,
@@ -1124,7 +1125,7 @@ def _export_recording_on_exit(record_console: _Console | None, record: Path | No
     _maybe_export_recording(record_console, record)
 
 
-def _finish_check_machine_output(
+def _finish_check_formatted_output(
     outcome: CheckRun | list[tuple[int, Path]],
     *,
     record: Path | None,
@@ -1133,12 +1134,12 @@ def _finish_check_machine_output(
     no_color: bool,
     show_progress: bool,
     show_summary: bool,
-    output_format: Literal["json-lines"] | None,
+    output_format: Literal["json-lines", "concise"] | None,
 ) -> NoReturn:
-    """Record the usual human rendering when asked, then emit machine output.
+    """Record the usual human rendering when asked, then emit the selected format.
 
     The ``--record`` file is rendered by the same ``report_results`` the text path calls, with the
-    same ``no_color`` and ``show_summary``, and is written before any machine output.
+    same ``no_color`` and ``show_summary``, and is written before the selected format.
 
     Args:
         outcome: The scan, or the token counts of ``--tokens-only``.
@@ -1167,8 +1168,11 @@ def _finish_check_machine_output(
         record_path = _write_recording(record_console, record)
     if not isinstance(outcome, CheckRun):
         emit_and_exit(build_tokens_response(outcome, record_path=record_path))
-    if output_format == "json-lines":
-        emit_json_lines(outcome.results, verbose=verbose)
+    if output_format is not None:
+        if output_format == "json-lines":
+            emit_json_lines(outcome.results, verbose=verbose)
+        else:
+            emit_concise(outcome.results, verbose=verbose)
         failed = any(not result.passed for results in outcome.results.values() for _, result in results)
         raise typer.Exit(1 if failed else 0) from None
     response = build_check_response(
@@ -1284,7 +1288,7 @@ def main(
     record: Path | None = None,
     include_gitignore: bool = False,
     json_output: bool = False,
-    output_format: Literal["json-lines"] | None = None,
+    output_format: Literal["json-lines", "concise"] | None = None,
 ) -> None:
     """Validate Claude Code plugins, skills, agents, and commands."""
     # If a subcommand was invoked, don't run validation
@@ -1295,12 +1299,12 @@ def main(
         typer.echo("Error: --output-format cannot be combined with --json or --tokens-only", err=True)
         raise typer.Exit(2) from None
 
-    machine_output = json_output or output_format is not None
-    paths = _require_usable_paths(ctx, paths, check=check, fix=fix, platform=platform, json_output=machine_output)
+    formatted_output = json_output or output_format is not None
+    paths = _require_usable_paths(ctx, paths, check=check, fix=fix, platform=platform, json_output=formatted_output)
 
     platform_override = _resolve_platform_override(platform)
 
-    record_console = _open_record_console(record, no_color=no_color, json_output=machine_output)
+    record_console = _open_record_console(record, no_color=no_color, json_output=formatted_output)
 
     def _run_validation_command() -> CheckRun | list[tuple[int, Path]] | None:
         expanded_paths, is_batch = _resolve_filter_and_expand_paths(
@@ -1338,7 +1342,7 @@ def main(
                     fixes_out=fixes_out,
                 )
 
-        if machine_output:
+        if formatted_output:
             return collect_validation_results(
                 expanded_paths=expanded_paths,
                 check=check,
@@ -1379,9 +1383,9 @@ def main(
         typer.echo("\nInterrupted by user", err=True)
         raise typer.Exit(130) from None
 
-    # Only machine-output runs return here; text reporting exits above.
+    # Only explicit formats return here; legacy text reporting exits above.
     if outcome is not None:
-        _finish_check_machine_output(
+        _finish_check_formatted_output(
             outcome,
             record=record,
             record_console=record_console,
@@ -1618,11 +1622,11 @@ def check_cmd(
     ] = False,
     json_output: JsonOption = False,
     output_format: Annotated[
-        Literal["json-lines"] | None,
+        Literal["json-lines", "concise"] | None,
         typer.Option(
             "--output-format",
             metavar="FORMAT",
-            help="Finding output format. json-lines emits one JSON object per finding.",
+            help="Finding output format: json-lines (one JSON object) or concise (one plain line) per finding.",
         ),
     ] = None,
 ) -> None:

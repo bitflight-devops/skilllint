@@ -6,6 +6,7 @@ formatting to a dedicated module without changing user-facing behavior.
 
 from __future__ import annotations
 
+from contextlib import suppress
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, TypeAlias
 
@@ -19,6 +20,51 @@ if TYPE_CHECKING:
     from skilllint.models import AppliedFix, ValidationIssue, ValidationResult
 
 FileResults: TypeAlias = dict[Path, list[tuple[str, "ValidationResult"]]]
+
+
+def _single_line(value: str) -> str:
+    """Escape controls and separators without hiding readable Unicode text.
+
+    Returns:
+        Text with non-printable characters replaced by visible Python escapes.
+    """
+    return "".join(character if character.isprintable() else ascii(character)[1:-1] for character in value)
+
+
+def concise_lines(file_results: FileResults, *, verbose: bool = False) -> list[str]:
+    """Return one plain line per visible finding, preserving duplicate findings.
+
+    Actual source locations take precedence over the checked target. Unknown
+    positions remain absent, rather than guessing from legacy field labels.
+
+    Returns:
+        Deterministically sorted, unwrapped lines without trailing newlines.
+    """
+    base = Path.cwd()
+    lines: list[str] = []
+    for target, validator_results in file_results.items():
+        for _validator, result in validator_results:
+            issues = [*result.errors, *result.warnings, *(result.info if verbose else [])]
+            for issue in issues:
+                source = issue.source_location
+                path = source.path if source is not None else target
+                # Preserve external absolute paths and symlink-sensitive '..'.
+                with suppress(ValueError):
+                    path = path.relative_to(base)
+                location = _single_line(path.as_posix())
+                if source is not None and source.start is not None:
+                    location += f":{source.start.line}:{source.start.column}"
+                field = f"{_single_line(issue.field)}: " if issue.field else ""
+                lines.append(
+                    f"{location}: {issue.severity}[{_single_line(issue.code)}] {field}{_single_line(issue.message)}"
+                )
+    return sorted(lines)
+
+
+def emit_concise(file_results: FileResults, *, verbose: bool = False) -> None:
+    """Write findings only, without ANSI, headings, progress, fixes, or summary."""
+    for line in concise_lines(file_results, verbose=verbose):
+        print(line)
 
 
 class Reporter(Protocol):

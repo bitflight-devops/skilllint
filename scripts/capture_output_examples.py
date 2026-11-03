@@ -1,4 +1,4 @@
-"""Capture actual CLI JSONL bytes and render a deterministic colour SVG preview."""
+"""Capture actual CLI stdout and render deterministic colour SVG previews."""
 
 from __future__ import annotations
 
@@ -24,9 +24,14 @@ COMMAND = (
     "examples/output/fixtures/demo-skill/SKILL.md",
 )
 
+CONCISE_COMMAND = (*COMMAND[:-2], "concise", "--no-color", COMMAND[-1])
 
-def capture_jsonl() -> bytes:
+
+def _capture(command: tuple[str, ...]) -> bytes:
     """Run the documented failing fixture and return its unmodified stdout.
+
+    Args:
+        command: Documented CLI invocation to capture.
 
     Returns:
         Raw stdout bytes from the CLI.
@@ -34,12 +39,30 @@ def capture_jsonl() -> bytes:
     Raises:
         RuntimeError: The fixture did not fail validation or emitted diagnostics.
     """
-    result = subprocess.run(COMMAND, cwd=ROOT, capture_output=True, check=False)
+    result = subprocess.run(command, cwd=ROOT, capture_output=True, check=False)
     if result.returncode != 1 or result.stderr:
         raise RuntimeError(f"Example capture failed: exit={result.returncode}, stderr={result.stderr.decode('utf-8')}")
     if not result.stdout:
         raise RuntimeError("Example fixture produced no findings")
     return result.stdout
+
+
+def capture_jsonl() -> bytes:
+    """Return unmodified stdout from the JSON Lines example.
+
+    Returns:
+        Raw JSONL stdout bytes from the CLI.
+    """
+    return _capture(COMMAND)
+
+
+def capture_concise() -> bytes:
+    """Return unmodified stdout from the monochrome concise example.
+
+    Returns:
+        Raw concise stdout bytes from the CLI.
+    """
+    return _capture(CONCISE_COMMAND)
 
 
 def render_jsonl(raw: bytes) -> bytes:
@@ -62,6 +85,27 @@ def render_jsonl(raw: bytes) -> bytes:
     return "\n".join(line.rstrip() for line in svg.split("\n")).encode("utf-8")
 
 
+def render_concise(raw: bytes) -> bytes:
+    """Render actual concise output without adding diagnostic colours or markup.
+
+    Args:
+        raw: Unmodified UTF-8 concise stdout from the example command.
+
+    Returns:
+        Deterministic UTF-8 SVG bytes; wrapping affects only the preview.
+    """
+    # Match the JSONL preview width for consistent README embedding.
+    console = Console(file=io.StringIO(), record=True, width=100, force_terminal=True, color_system="truecolor")
+    console.print("Concise actual-output preview", style="bold cyan")
+    console.print("Visual wrapping only; raw output has one finding per line.", style="dim")
+    console.print()
+    # A trailing preview blank line keeps Rich's final line clip off the finding.
+    console.print(raw.decode("utf-8"), markup=False, highlight=False, emoji=False)
+    svg = console.export_svg(title="skilllint · Concise", unique_id="skilllint-concise")
+    # Match the repository whitespace hook without changing rendered content.
+    return "\n".join(line.rstrip() for line in svg.split("\n")).encode("utf-8")
+
+
 def main(argv: list[str] | None = None) -> int:
     """Regenerate examples, or report drift without modifying committed files.
 
@@ -75,7 +119,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--check", action="store_true", help="Fail if committed examples differ; do not write files.")
     args = parser.parse_args(argv)
     raw = capture_jsonl()
-    artifacts = {"json-lines.jsonl": raw, "json-lines.svg": render_jsonl(raw)}
+    concise = capture_concise()
+    artifacts = {
+        "json-lines.jsonl": raw,
+        "json-lines.svg": render_jsonl(raw),
+        "concise.txt": concise,
+        "concise.svg": render_concise(concise),
+    }
     stale = []
     for name, content in artifacts.items():
         path = OUTPUT / name

@@ -167,6 +167,11 @@ repos:
       - id: skilllint
 ```
 
+Both `skilllint` and `skilllint-fix` use `--output-format concise --no-color`:
+one plain line per finding, with no progress or summary. The fix hook keeps
+the same file selection and applies supported fixes in place; review the diff.
+See the [captured concise output and SVG preview](examples/output/README.md#concise).
+
 ### Contributor quality checks (local)
 
 Run this sequence before pushing:
