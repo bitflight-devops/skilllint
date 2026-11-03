@@ -77,6 +77,25 @@ The deliberately invalid fixture exits `1`. See the
 for fingerprint identity, severity mapping, and explicitly disclosed limitations
 for findings without a repository file or source position.
 
+## JUnit-style XML
+
+This **JUnit-style XML report preview** adds syntax colour and visual wrapping to
+the [actual CLI XML report](junit.xml). It is not a CI interface screenshot or a
+live ingestion test. The raw XML remains unchanged; this format is distinct
+from xUnit.net's assemblies-based XML dialect.
+
+![JUnit-style XML report preview, not a CI UI screenshot](junit.svg)
+
+Run from the repository root:
+
+```console
+uv run skilllint check --platform claude-code --output-format junit examples/output/fixtures/demo-skill/SKILL.md
+```
+
+The deliberately invalid fixture exits `1`. Its single collected validator
+result becomes one failed testcase, with the full finding and help text. See
+[JUnit result semantics and CI configuration](../../docs/usage.md#junit-style-xml).
+
 ## Reproduce the examples
 
 Regenerate all artifacts, or verify they match without modifying them:

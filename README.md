@@ -81,6 +81,10 @@ For GitLab CI, `skilllint check --output-format gitlab` emits a Code Quality
 JSON report. See the [raw report and colour SVG preview](examples/output/README.md#gitlab-code-quality)
 and [CI configuration](docs/usage.md#gitlab-code-quality).
 
+For test-report consumers, `skilllint check --output-format junit` emits
+JUnit-style XML. See the [raw XML and colour SVG preview](examples/output/README.md#junit-style-xml)
+and [result semantics and CI configuration](docs/usage.md#junit-style-xml).
+
 Replace `X.Y.Z` in the examples with the release you intend to pin. The Action
 ref and the `version` input pin the Action and the installed package
 independently. Packages containing the structured Action runner produce annotations

@@ -24,7 +24,14 @@ def test_svg_is_deterministic_and_labels_visual_wrapping():
 
 
 @pytest.mark.parametrize(
-    "capture_output", [capture.capture_jsonl, capture.capture_concise, capture.capture_github, capture.capture_gitlab]
+    "capture_output",
+    [
+        capture.capture_jsonl,
+        capture.capture_concise,
+        capture.capture_github,
+        capture.capture_gitlab,
+        capture.capture_junit,
+    ],
 )
 def test_capture_preserves_raw_stdout(monkeypatch, capture_output):
     raw = b'{"message":"demo"}\n'
@@ -38,7 +45,14 @@ def test_capture_preserves_raw_stdout(monkeypatch, capture_output):
     ("exit_code", "stdout", "stderr"), [(0, b"", b""), (2, b"", b"bad usage"), (1, b"", b""), (1, b"{}\n", b"warning")]
 )
 @pytest.mark.parametrize(
-    "capture_output", [capture.capture_jsonl, capture.capture_concise, capture.capture_github, capture.capture_gitlab]
+    "capture_output",
+    [
+        capture.capture_jsonl,
+        capture.capture_concise,
+        capture.capture_github,
+        capture.capture_gitlab,
+        capture.capture_junit,
+    ],
 )
 def test_capture_rejects_unexpected_result(monkeypatch, exit_code, stdout, stderr, capture_output):
     monkeypatch.setattr(
@@ -59,6 +73,8 @@ def test_capture_rejects_unexpected_result(monkeypatch, exit_code, stdout, stder
         "github.svg",
         "gitlab.json",
         "gitlab.svg",
+        "junit.xml",
+        "junit.svg",
     ],
 )
 def test_check_detects_drift_without_writing(monkeypatch, tmp_path, artifact):
@@ -67,6 +83,7 @@ def test_check_detects_drift_without_writing(monkeypatch, tmp_path, artifact):
     monkeypatch.setattr(capture, "capture_concise", lambda: b"demo.md:2:1: error[FM010] name: bad name\n")
     monkeypatch.setattr(capture, "capture_github", lambda: b"::error file=demo.md,line=2,col=1,title=FM010::bad name\n")
     monkeypatch.setattr(capture, "capture_gitlab", lambda: b'[\n  {"description": "bad name"}\n]\n')
+    monkeypatch.setattr(capture, "capture_junit", lambda: b'<testsuites><testsuite name="demo" /></testsuites>\n')
     monkeypatch.setattr(capture, "OUTPUT", tmp_path)
     assert capture.main(["--check"]) == 1
     assert not list(tmp_path.iterdir())
@@ -182,3 +199,24 @@ def test_gitlab_preview_and_raw_report_match_real_cli_twice():
     assert findings[0]["fingerprint"] in visible
     assert (capture.OUTPUT / "gitlab.json").read_bytes() == raw
     assert (capture.OUTPUT / "gitlab.svg").read_bytes() == svg
+
+
+def test_junit_preview_and_raw_report_match_real_cli_twice():
+    raw = capture.capture_junit()
+    assert raw == capture.capture_junit()
+    report = ET.fromstring(raw)
+    assert report.attrib["tests"] == "1"
+    assert report.attrib["failures"] == "1"
+    assert report.find(".//failure") is not None
+    assert not raw.startswith(b"\xef\xbb\xbf")
+    assert b"\x1b" not in raw
+    svg = capture.render_junit(raw)
+    assert svg == capture.render_junit(raw)
+    root = ET.fromstring(svg)
+    visible = "".join(root.itertext()).replace("\N{NO-BREAK SPACE}", " ")
+    assert "JUnit-style XML report preview" in visible
+    assert "not a CI UI screenshot" in visible
+    assert "Visual wrapping only" in visible
+    assert "error[FM010]" in visible
+    assert (capture.OUTPUT / "junit.xml").read_bytes() == raw
+    assert (capture.OUTPUT / "junit.svg").read_bytes() == svg
