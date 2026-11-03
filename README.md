@@ -77,6 +77,10 @@ For direct CLI use in Actions, `skilllint check --output-format github` emits
 native workflow annotations. See the [captured commands and colour SVG preview](examples/output/README.md#github-annotations)
 and [format contract](docs/usage.md#github-annotations).
 
+For GitLab CI, `skilllint check --output-format gitlab` emits a Code Quality
+JSON report. See the [raw report and colour SVG preview](examples/output/README.md#gitlab-code-quality)
+and [CI configuration](docs/usage.md#gitlab-code-quality).
+
 Replace `X.Y.Z` in the examples with the release you intend to pin. The Action
 ref and the `version` input pin the Action and the installed package
 independently. Packages containing the structured Action runner produce annotations

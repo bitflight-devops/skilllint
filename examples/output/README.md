@@ -57,6 +57,26 @@ The deliberately invalid fixture exits `1`. The command uses the real source
 range, includes a suggestion, and percent-escapes embedded newlines. See the
 [GitHub annotations contract](../../docs/usage.md#github-annotations).
 
+## GitLab Code Quality
+
+This **GitLab Code Quality report preview** adds syntax colour and visual
+wrapping to the [actual CLI JSON report](gitlab.json). It is not a GitLab
+interface screenshot, and it does not demonstrate live GitLab ingestion.
+The raw file is an unchanged, BOM-free JSON array.
+
+![GitLab Code Quality report preview, not a GitLab UI screenshot](gitlab.svg)
+
+Run from the repository root:
+
+```console
+uv run skilllint check --platform claude-code --output-format gitlab examples/output/fixtures/demo-skill/SKILL.md
+```
+
+The deliberately invalid fixture exits `1`. See the
+[GitLab report contract and CI example](../../docs/usage.md#gitlab-code-quality)
+for fingerprint identity, severity mapping, and explicitly disclosed limitations
+for findings without a repository file or source position.
+
 ## Reproduce the examples
 
 Regenerate all artifacts, or verify they match without modifying them:

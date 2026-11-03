@@ -207,6 +207,75 @@ failure, and `2` for usage errors. Check exit status even when output is empty.
 
 See the [real output and labelled SVG preview](../examples/output/README.md#github-annotations).
 
+### GitLab Code Quality
+
+Use `check --output-format gitlab` to produce a
+[GitLab Code Quality report](https://docs.gitlab.com/ci/testing/code_quality/#code-quality-report-format):
+
+```console
+uv run skilllint check --output-format gitlab plugins/my-plugin > gl-code-quality-report.json
+```
+
+Stdout is one BOM-free JSON array containing `description`, `check_name` (rule
+code), `fingerprint`, `severity`, and `location.path` / `location.lines.begin`.
+The description includes the field, message, and available suggestion/help.
+Skilllint errors map to `major`, warnings to `minor`, and verbose info to `info`.
+These are presentation mappings, not a change to rule severity or exit status.
+
+Paths are relative to the nearest enclosing `.git` checkout root (including
+worktrees). Run from that repository; for a source export without `.git`, run
+from its root because the current directory becomes the report root. Actual
+source paths take precedence over checked targets. Paths use `/` without `./`.
+In-tree symlink spellings are retained; parent traversals are resolved to their
+actual file before relativizing, so a symlink plus `..` is not misinterpreted.
+
+GitLab requires a line. Known source starts use their actual one-based line.
+For a known file with no source position, line `1` is only a **display anchor**,
+and the description explicitly says it is file-level, not a source position.
+Legacy line values and semantic field names are never used to invent positions.
+Directory/global findings, missing files, and sources outside the repository
+(including symlinks to external files) cannot be represented faithfully. Each
+is omitted from the array **with its complete finding details on stderr**.
+Keep the job log and exit status; use `json-lines` when every finding must be in
+one machine-readable artifact. An empty array alone does not prove success.
+
+Fingerprints are SHA-256 hashes of the repository-relative path, validator,
+rule, field, message, and duplicate occurrence number. Source coordinates,
+severity, and help text do not enter the hash. The structured source path is
+repository-relative; text embedded in a message remains part of its identity.
+Occurrences are ordered by source position and report content so input iteration order does
+not change the result. Identical findings have distinct fingerprints, because
+GitLab collapses identical fingerprints. Moving a finding's lines alone keeps
+its fingerprint; adding/removing indistinguishable occurrences can reassign
+occurrence numbers, and changes to the path or message change identity.
+
+A clean scan emits `[]`. No human headings, progress, fix notices, summaries,
+or ANSI escapes appear on stdout. `--fix` reports remaining findings and normal
+exit codes remain `0` (pass), `1` (validation failure), and `2` (usage error).
+Usage errors leave stdout empty. `--json` and `--tokens-only` are incompatible;
+`--record` remains a separate human-rendered SVG/HTML report.
+
+In an existing GitLab job with the repository's environment installed, add:
+
+```yaml
+skilllint:
+  script:
+    - uv run skilllint check --output-format gitlab plugins/my-plugin > gl-code-quality-report.json
+  artifacts:
+    when: always
+    paths:
+      - gl-code-quality-report.json
+    reports:
+      codequality: gl-code-quality-report.json
+```
+
+The command retains its failure status; do not append `|| true`. Uploading the
+artifact does not require making the job pass. Run the job on the target branch
+as well: GitLab needs a target-branch baseline to compare new/resolved findings.
+This integration is checked against the published report contract and actual
+CLI output, not a live GitLab ingestion test. See the
+[raw report and syntax-coloured SVG preview](../examples/output/README.md#gitlab-code-quality).
+
 ## Rules, thresholds, and severity
 
 `skilllint rules` is the compact catalog; `skilllint rule FM007` explains one

@@ -23,7 +23,9 @@ def test_svg_is_deterministic_and_labels_visual_wrapping():
     assert b"&amp;" in first
 
 
-@pytest.mark.parametrize("capture_output", [capture.capture_jsonl, capture.capture_concise, capture.capture_github])
+@pytest.mark.parametrize(
+    "capture_output", [capture.capture_jsonl, capture.capture_concise, capture.capture_github, capture.capture_gitlab]
+)
 def test_capture_preserves_raw_stdout(monkeypatch, capture_output):
     raw = b'{"message":"demo"}\n'
     monkeypatch.setattr(
@@ -35,7 +37,9 @@ def test_capture_preserves_raw_stdout(monkeypatch, capture_output):
 @pytest.mark.parametrize(
     ("exit_code", "stdout", "stderr"), [(0, b"", b""), (2, b"", b"bad usage"), (1, b"", b""), (1, b"{}\n", b"warning")]
 )
-@pytest.mark.parametrize("capture_output", [capture.capture_jsonl, capture.capture_concise, capture.capture_github])
+@pytest.mark.parametrize(
+    "capture_output", [capture.capture_jsonl, capture.capture_concise, capture.capture_github, capture.capture_gitlab]
+)
 def test_capture_rejects_unexpected_result(monkeypatch, exit_code, stdout, stderr, capture_output):
     monkeypatch.setattr(
         capture.subprocess, "run", lambda *args, **kwargs: subprocess.CompletedProcess(args, exit_code, stdout, stderr)
@@ -45,13 +49,24 @@ def test_capture_rejects_unexpected_result(monkeypatch, exit_code, stdout, stder
 
 
 @pytest.mark.parametrize(
-    "artifact", ["json-lines.jsonl", "json-lines.svg", "concise.txt", "concise.svg", "github.txt", "github.svg"]
+    "artifact",
+    [
+        "json-lines.jsonl",
+        "json-lines.svg",
+        "concise.txt",
+        "concise.svg",
+        "github.txt",
+        "github.svg",
+        "gitlab.json",
+        "gitlab.svg",
+    ],
 )
 def test_check_detects_drift_without_writing(monkeypatch, tmp_path, artifact):
     raw = b'{"message":"demo"}\n'
     monkeypatch.setattr(capture, "capture_jsonl", lambda: raw)
     monkeypatch.setattr(capture, "capture_concise", lambda: b"demo.md:2:1: error[FM010] name: bad name\n")
     monkeypatch.setattr(capture, "capture_github", lambda: b"::error file=demo.md,line=2,col=1,title=FM010::bad name\n")
+    monkeypatch.setattr(capture, "capture_gitlab", lambda: b'[\n  {"description": "bad name"}\n]\n')
     monkeypatch.setattr(capture, "OUTPUT", tmp_path)
     assert capture.main(["--check"]) == 1
     assert not list(tmp_path.iterdir())
@@ -146,3 +161,24 @@ def test_committed_github_examples_match_real_cli_twice():
     assert b"\x1b" not in first
     assert (capture.OUTPUT / "github.txt").read_bytes() == first
     assert (capture.OUTPUT / "github.svg").read_bytes() == capture.render_github(first)
+
+
+def test_gitlab_preview_and_raw_report_match_real_cli_twice():
+    raw = capture.capture_gitlab()
+    assert raw == capture.capture_gitlab()
+    findings = json.loads(raw)
+    assert len(findings) == 1
+    assert findings[0]["check_name"] == "FM010"
+    assert findings[0]["location"] == {"path": "examples/output/fixtures/demo-skill/SKILL.md", "lines": {"begin": 2}}
+    assert not raw.startswith(b"\xef\xbb\xbf")
+    assert b"\x1b" not in raw
+    svg = capture.render_gitlab(raw)
+    assert svg == capture.render_gitlab(raw)
+    root = ET.fromstring(svg)
+    visible = "".join(root.itertext()).replace("\N{NO-BREAK SPACE}", " ")
+    assert "GitLab Code Quality report preview" in visible
+    assert "not a GitLab UI screenshot" in visible
+    assert "Visual wrapping only" in visible
+    assert findings[0]["fingerprint"] in visible
+    assert (capture.OUTPUT / "gitlab.json").read_bytes() == raw
+    assert (capture.OUTPUT / "gitlab.svg").read_bytes() == svg
