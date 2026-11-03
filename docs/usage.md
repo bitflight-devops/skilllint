@@ -419,21 +419,78 @@ To observe a failure without blocking a later step, use
 
 ## Pre-commit
 
-The retained hooks run on staged files. Pin a release (or commit SHA), and
-append supported CLI arguments under `args`:
+Install pre-commit and use Python 3.11–3.14 for the skilllint hook:
+
+```console
+python -m pip install pre-commit
+```
+
+Add this configuration to `.pre-commit-config.yaml`. Replace `vX.Y.Z` with a
+release tag or commit SHA that includes the hooks and output format you need.
+The placeholder does not name a published release. Pre-commit installs
+skilllint in an isolated hook environment, so a separate skilllint installation
+is not needed for this configuration.
 
 ```yaml
 repos:
   - repo: https://github.com/bitflight-devops/skilllint
-    rev: v1.7.0
+    rev: vX.Y.Z
     hooks:
       - id: skilllint
-      - id: skilllint-fix
 ```
 
-`skilllint` checks without mutating files; `skilllint-fix` applies supported
-fixes and is idempotent. Use the hook's `exclude` for generated or vendored
-trees. The broad by-file-type hook is intentionally omitted from this guide.
+Install the Git hook and run the check across matching tracked files:
+
+```console
+pre-commit install
+pre-commit run skilllint --all-files
+```
+
+Subsequent commits check matching staged files. To check selected paths without
+making a commit, pass their filenames:
+
+```console
+pre-commit run skilllint --files skills/my-skill/SKILL.md
+```
+
+`skilllint` checks without mutating files. To apply supported fixes instead,
+replace `id: skilllint` with `id: skilllint-fix` in the configuration, then run:
+
+```console
+pre-commit run skilllint-fix --all-files
+git diff
+```
+
+A fix run that changes files stops the commit so you can review and re-stage
+the edits. Run it again after review; supported fixes are idempotent. Use the
+fix hook rather than adding `--fix` to the check hook's `args`.
+
+Both hooks select `--output-format concise --no-color` by default: one plain
+line per remaining finding, with known source coordinates, no ANSI colour,
+and no skilllint headings, progress, fix notices, or summary. The hook runner
+still prints its own pass/fail and modified-file status. The same file matching
+and `failing-examples/` exclusion apply to both hooks.
+
+Append supported CLI arguments with `args: [--verbose]` to include info
+findings. The check hook also accepts `args: [--platform, cursor]`; do not use
+`--platform` with the fix hook. Add a top-level
+`exclude: ^(vendor/|third_party/)` alongside `repos` for additional generated
+or vendored paths while retaining the hook's exclusion. A hook-level `exclude`
+overrides the supplied hook pattern. The broad by-file-type hook is
+intentionally omitted from this guide.
+
+For prek, use the same `.pre-commit-config.yaml` and hook IDs:
+
+```console
+uv tool install prek
+prek install
+prek run skilllint --all-files
+```
+
+After selecting the fix hook, the equivalent command is
+`prek run skilllint-fix --all-files`. The
+[captured concise output and SVG preview](../examples/output/README.md#concise)
+show the diagnostics these hooks produce.
 
 ## Maintainer checks
 

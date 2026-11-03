@@ -32,7 +32,20 @@ def test_usage_guide_keeps_source_blocks_and_contracts() -> None:
             'version: "X.Y.Z"',
             "exit-code",
         ],
-        "Pre-commit": ["id: skilllint", "id: skilllint-fix"],
+        "Pre-commit": [
+            "python -m pip install pre-commit",
+            "rev: vX.Y.Z",
+            "id: skilllint",
+            "id: skilllint-fix",
+            "pre-commit install",
+            "pre-commit run skilllint --all-files",
+            "pre-commit run skilllint --files skills/my-skill/SKILL.md",
+            "pre-commit run skilllint-fix --all-files",
+            "--output-format concise --no-color",
+            "prek install",
+            "prek run skilllint --all-files",
+            "prek run skilllint-fix --all-files",
+        ],
     }
     for heading, snippets in required.items():
         start = text.index(f"## {heading}")

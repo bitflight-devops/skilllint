@@ -176,7 +176,15 @@ jobs:
 
 ## Pre-commit hook
 
-Add to `.pre-commit-config.yaml`, replacing `X.Y.Z` with the release you intend to pin:
+Install pre-commit, using Python 3.11–3.14 for the skilllint hook:
+
+```console
+python -m pip install pre-commit
+```
+
+Add to `.pre-commit-config.yaml`. Replace `X.Y.Z` with a release version that
+includes the hooks and output format you need, or replace the entire `vX.Y.Z`
+with a commit SHA. `vX.Y.Z` is a placeholder, not a published tag.
 
 ```yaml
 repos:
@@ -186,9 +194,24 @@ repos:
       - id: skilllint
 ```
 
+Install the Git hook, then check all matching tracked files once:
+
+```console
+pre-commit install
+pre-commit run skilllint --all-files
+```
+
+Later commits check matching staged files automatically. Pre-commit installs
+skilllint in its own hook environment; a separate skilllint installation is not
+needed for this configuration.
+
 Both `skilllint` and `skilllint-fix` use `--output-format concise --no-color`:
-one plain line per finding, with no progress or summary. The fix hook keeps
-the same file selection and applies supported fixes in place; review the diff.
+one plain line per finding, with no progress or summary. To opt into fixes,
+replace `id: skilllint` with `id: skilllint-fix`, then run
+`pre-commit run skilllint-fix --all-files`. Review and re-stage changed files.
+The fix hook keeps the same file selection and applies supported fixes in place.
+See [pre-commit usage](docs/usage.md#pre-commit) for selected-file checks,
+custom arguments, exclusions, and prek commands.
 See the [captured concise output and SVG preview](examples/output/README.md#concise).
 
 ### Contributor quality checks (local)

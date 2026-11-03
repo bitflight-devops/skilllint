@@ -146,3 +146,41 @@ def test_pre_commit_smoke_runs_published_check_hook(staged_repository: Path) -> 
     )
 
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("runner", [("uv", "run", "prek"), ("uv", "run", "--with", "pre-commit", "pre-commit")])
+def test_documented_config_install_and_run_commands(staged_repository: Path, runner: tuple[str, ...]) -> None:
+    """Execute the guide's config and install/check/fix flow in a disposable repo."""
+    guide = (REPO_ROOT / "docs/usage.md").read_text(encoding="utf-8")
+    section = guide.split("## Pre-commit\n", 1)[1].split("\n## ", 1)[0]
+    example = section.split("```yaml\n", 1)[1].split("\n```", 1)[0]
+    head = _run(["git", "rev-parse", "HEAD"], REPO_ROOT)
+    assert head.returncode == 0, head.stderr
+    config = example.replace("https://github.com/bitflight-devops/skilllint", str(REPO_ROOT)).replace(
+        "rev: vX.Y.Z", f"rev: {head.stdout.strip()}"
+    )
+    config_path = staged_repository / ".pre-commit-config.yaml"
+    config_path.write_text(config + "\n", encoding="utf-8")
+
+    installed = _run([*runner, "install"], staged_repository)
+    assert installed.returncode == 0, installed.stdout + installed.stderr
+    assert (staged_repository / ".git/hooks/pre-commit").is_file()
+
+    all_files = _run([*runner, "run", "skilllint", "--all-files"], staged_repository)
+    assert all_files.returncode == 1, all_files.stdout + all_files.stderr
+    assert "skills/invalid/SKILL.md:2:1: error[FM010]" in all_files.stdout
+    assert "failing-examples/SKILL.md" not in all_files.stdout
+
+    selected = _run([*runner, "run", "skilllint", "--files", "skills/my-skill/SKILL.md"], staged_repository)
+    assert selected.returncode == 0, selected.stdout + selected.stderr
+
+    config_path.write_text(config.replace("id: skilllint", "id: skilllint-fix") + "\n", encoding="utf-8")
+    fixed = _run([*runner, "run", "skilllint-fix", "--all-files"], staged_repository)
+    assert fixed.returncode == 1, fixed.stdout + fixed.stderr
+    skill = staged_repository / "skills/fixable/SKILL.md"
+    assert "tools: Read, Grep" in skill.read_text(encoding="utf-8")
+    assert _run(["git", "diff"], staged_repository).stdout
+
+    again = _run([*runner, "run", "skilllint-fix", "--files", "skills/fixable/SKILL.md"], staged_repository)
+    assert again.returncode == 0, again.stdout + again.stderr
