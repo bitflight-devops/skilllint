@@ -38,6 +38,25 @@ uv run skilllint check --platform claude-code --output-format concise --no-color
 The same deliberately invalid fixture exits `1`. Concise output contains only
 findings, with no headings, fix suggestions, or summary.
 
+## GitHub annotations
+
+This **GitHub workflow-command preview** renders the [actual CLI stdout](github.txt)
+with colour and visual wrapping for readability. It is not a GitHub interface
+screenshot. The raw file contains plain workflow commands which GitHub Actions
+interprets as error, warning, or notice annotations.
+
+![GitHub workflow-command preview, not a GitHub UI screenshot](github.svg)
+
+Run from the repository root:
+
+```console
+uv run skilllint check --platform claude-code --output-format github examples/output/fixtures/demo-skill/SKILL.md
+```
+
+The deliberately invalid fixture exits `1`. The command uses the real source
+range, includes a suggestion, and percent-escapes embedded newlines. See the
+[GitHub annotations contract](../../docs/usage.md#github-annotations).
+
 ## Reproduce the examples
 
 Regenerate all artifacts, or verify they match without modifying them:

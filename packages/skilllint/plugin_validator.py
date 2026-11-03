@@ -16,6 +16,8 @@ from __future__ import annotations
 import logging
 import re
 import sys
+from collections.abc import Callable
+from contextlib import nullcontext
 from dataclasses import dataclass
 from enum import StrEnum
 from io import StringIO, TextIOWrapper
@@ -88,6 +90,7 @@ from skilllint.record_export import (
     make_recording_console as _make_recording_console,
 )
 from skilllint.reporting import emit_concise
+from skilllint.reporting_github import emit_github, github_diagnostics
 from skilllint.reporting_json_lines import emit_json_lines
 from skilllint.responses import (
     build_check_response,
@@ -796,7 +799,12 @@ def _count_body_tokens(paths: list[Path]) -> list[tuple[int, Path]]:
     return entries
 
 
-def _handle_tokens_only(paths: list[Path], *, batch: bool = False) -> None:
+def _handle_tokens_only(
+    paths: list[Path],
+    *,
+    batch: bool = False,
+    action_report: Callable[[CheckRun | list[tuple[int, Path]]], None] | None = None,
+) -> None:
     """Print token counts using the existing text contract and exit."""
     entries = _count_body_tokens(paths)
     if batch:
@@ -805,6 +813,8 @@ def _handle_tokens_only(paths: list[Path], *, batch: bool = False) -> None:
     else:
         for count, _path in entries:
             print(count)
+    if action_report is not None:
+        action_report(entries)
     raise typer.Exit(0) from None
 
 
@@ -1134,7 +1144,7 @@ def _finish_check_formatted_output(
     no_color: bool,
     show_progress: bool,
     show_summary: bool,
-    output_format: Literal["json-lines", "concise"] | None,
+    output_format: Literal["json-lines", "concise", "github"] | None,
 ) -> NoReturn:
     """Record the usual human rendering when asked, then emit the selected format.
 
@@ -1171,6 +1181,8 @@ def _finish_check_formatted_output(
     if output_format is not None:
         if output_format == "json-lines":
             emit_json_lines(outcome.results, verbose=verbose)
+        elif output_format == "github":
+            emit_github(outcome.results, verbose=verbose)
         else:
             emit_concise(outcome.results, verbose=verbose)
         failed = any(not result.passed for results in outcome.results.values() for _, result in results)
@@ -1179,6 +1191,40 @@ def _finish_check_formatted_output(
         outcome.results, verbose=verbose, show_progress=show_progress, fixes=outcome.fixes, record_path=record_path
     )
     emit_and_exit(response, code=1 if response.status == "failed" else 0)
+
+
+def _finish_check_action_output(
+    outcome: CheckRun | list[tuple[int, Path]],
+    action_report: Callable[[CheckRun | list[tuple[int, Path]]], None] | None,
+    *,
+    formatted_output: bool,
+    verbose: bool,
+    no_color: bool,
+    show_progress: bool,
+    show_summary: bool,
+    record_console: _Console | None,
+    record: Path | None,
+) -> None:
+    """Observe the same scan after human rendering, without a second scan.
+
+    Raises:
+        typer.Exit: The ordinary human scan's validation status.
+    """
+    if action_report is None:
+        return
+    if not formatted_output and isinstance(outcome, CheckRun):
+        failed = report_results(
+            outcome,
+            verbose=verbose,
+            no_color=no_color,
+            show_progress=show_progress,
+            show_summary=show_summary,
+            record_console=record_console,
+        )
+        action_report(outcome)
+        _export_recording_on_exit(record_console, record)
+        raise typer.Exit(1 if failed else 0) from None
+    action_report(outcome)
 
 
 def _require_usable_paths(
@@ -1288,7 +1334,8 @@ def main(
     record: Path | None = None,
     include_gitignore: bool = False,
     json_output: bool = False,
-    output_format: Literal["json-lines", "concise"] | None = None,
+    output_format: Literal["json-lines", "concise", "github"] | None = None,
+    action_report: Callable[[CheckRun | list[tuple[int, Path]]], None] | None = None,
 ) -> None:
     """Validate Claude Code plugins, skills, agents, and commands."""
     # If a subcommand was invoked, don't run validation
@@ -1320,7 +1367,7 @@ def main(
         if tokens_only:
             if json_output:
                 return _count_body_tokens(expanded_paths)
-            _handle_tokens_only(expanded_paths, batch=is_batch)
+            _handle_tokens_only(expanded_paths, batch=is_batch, action_report=action_report)
 
         # One shared cache per scan run — prevents re-walking the directory
         # tree for every file when many files share the same config root.
@@ -1342,7 +1389,7 @@ def main(
                     fixes_out=fixes_out,
                 )
 
-        if formatted_output:
+        if formatted_output or action_report is not None:
             return collect_validation_results(
                 expanded_paths=expanded_paths,
                 check=check,
@@ -1383,8 +1430,20 @@ def main(
         typer.echo("\nInterrupted by user", err=True)
         raise typer.Exit(130) from None
 
-    # Only explicit formats return here; legacy text reporting exits above.
+    # The Action observes the same collected scan after ordinary human rendering.
+    # Its private callback is not a CLI option and does not cause another scan.
     if outcome is not None:
+        _finish_check_action_output(
+            outcome,
+            action_report,
+            formatted_output=formatted_output,
+            verbose=verbose,
+            no_color=no_color,
+            show_progress=show_progress,
+            show_summary=show_summary,
+            record_console=record_console,
+            record=record,
+        )
         _finish_check_formatted_output(
             outcome,
             record=record,
@@ -1622,33 +1681,34 @@ def check_cmd(
     ] = False,
     json_output: JsonOption = False,
     output_format: Annotated[
-        Literal["json-lines", "concise"] | None,
+        Literal["json-lines", "concise", "github"] | None,
         typer.Option(
             "--output-format",
             metavar="FORMAT",
-            help="Finding output format: json-lines (one JSON object) or concise (one plain line) per finding.",
+            help="Finding output format: json-lines, concise (one plain line), or github (workflow annotations).",
         ),
     ] = None,
 ) -> None:
     """Validate Claude Code plugins, skills, agents, and commands."""
-    main(
-        ctx=ctx,
-        paths=paths,
-        check=check,
-        fix=fix,
-        verbose=verbose,
-        no_color=no_color,
-        tokens_only=tokens_only,
-        show_progress=show_progress,
-        show_summary=show_summary,
-        filter_glob=filter_glob,
-        filter_type=filter_type,
-        platform=platform,
-        record=record,
-        include_gitignore=include_gitignore,
-        json_output=json_output,
-        output_format=output_format,
-    )
+    with github_diagnostics() if output_format == "github" else nullcontext():
+        main(
+            ctx=ctx,
+            paths=paths,
+            check=check,
+            fix=fix,
+            verbose=verbose,
+            no_color=no_color,
+            tokens_only=tokens_only,
+            show_progress=show_progress,
+            show_summary=show_summary,
+            filter_glob=filter_glob,
+            filter_type=filter_type,
+            platform=platform,
+            record=record,
+            include_gitignore=include_gitignore,
+            json_output=json_output,
+            output_format=output_format,
+        )
 
 
 # =============================================================================

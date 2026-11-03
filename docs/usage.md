@@ -168,6 +168,45 @@ With `--record`, the sidecar remains a human-rendered report, not JSONL.
 
 See the [captured raw output and colour SVG preview](../examples/output/README.md).
 
+### GitHub annotations
+
+Use `check --output-format github` in a GitHub Actions `run` step:
+
+```console
+uv run skilllint check --output-format github plugins/my-plugin
+```
+
+The CLI emits plain [workflow commands](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#setting-an-error-message)
+which GitHub interprets as annotations. Errors use `error`, warnings use
+`warning`, and info findings use `notice` only with `--verbose`. Each annotation
+includes its rule code as a title, message, and available suggestion/help.
+Properties escape percent signs, CR/LF, colons, and commas according to the
+[official Actions toolkit](https://github.com/actions/toolkit/blob/main/packages/core/src/command.ts).
+Messages escape percent signs and CR/LF; other controls are shown as visible
+escapes so hostile filenames or multiline messages cannot inject commands.
+Ordinary diagnostics remain on stderr. In this format, their modern `::` and
+legacy `##[` command markers are neutralized so invalid paths and policy
+warnings cannot masquerade as runner commands.
+
+Actual source paths take precedence over checked targets. Known one-based
+positions are included; legacy field labels and line values are not guessed.
+Half-open source ranges become inclusive GitHub end coordinates. Multiline
+ranges omit columns, as required by GitHub. A range ending at column one excludes
+that final line. Unknown line/column properties are omitted. GitHub itself may
+present a file-only annotation at its default line one; that is not a position
+reported by skilllint. Paths beneath the current directory become relative
+without resolving symlinks, while other spellings remain unchanged.
+
+Commands are sorted and duplicate findings are retained. There are no headings,
+progress, fix notices, summaries, or ANSI escapes, even with forced terminal
+colour. A clean scan emits nothing. `--fix` applies the existing fixes and
+reports remaining findings. Exit codes stay `0` for success, `1` for validation
+failure, and `2` for usage errors. Check exit status even when output is empty.
+`--json` and `--tokens-only` cannot be combined with `--output-format`.
+`--record` remains a detailed human-report sidecar, not the workflow protocol.
+
+See the [real output and labelled SVG preview](../examples/output/README.md#github-annotations).
+
 ## Rules, thresholds, and severity
 
 `skilllint rules` is the compact catalog; `skilllint rule FM007` explains one
@@ -193,6 +232,23 @@ and the documented defaults are used; fix the config rather than relying on a
 fallback.
 
 ## GitHub Action
+
+The Action and package version can be pinned independently. Packages containing
+the structured Action runner publish annotations and all existing outputs from
+one scan, retaining human rendering options and fix behavior. `inspected-count`
+comes from collected results (or token-count entries), and `findings` includes
+visible finding codes plus applied-fix codes. An invalid invocation leaves both
+empty, as before. Human logs are printed with workflow-command interpretation
+suspended; only the explicitly escaped annotations are interpreted.
+
+For older pins without that runner, the Action explicitly announces its legacy
+compatibility path. Historical output parsing and possible counting rescans are
+preserved there; new native annotations are not guaranteed. Use a package with
+the structured runner for the new behavior. `version: source` installs from the
+local Git checkout of this repository and is intended for unreleased-source
+integration tests with `uses: ./`. The checkout must include Git metadata;
+GitHub's downloaded remote Action archive does not include it.
+
 
 Pin the Action ref and the package version independently. Replace `X.Y.Z` in the examples with the release you intend to pin. The Action exposes
 `result` (`passed` or `failed`) and `exit-code` (`0`, `1`, or `2`).

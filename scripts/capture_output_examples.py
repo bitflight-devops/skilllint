@@ -25,6 +25,7 @@ COMMAND = (
 )
 
 CONCISE_COMMAND = (*COMMAND[:-2], "concise", "--no-color", COMMAND[-1])
+GITHUB_COMMAND = (*COMMAND[:-2], "github", COMMAND[-1])
 
 
 def _capture(command: tuple[str, ...]) -> bytes:
@@ -63,6 +64,35 @@ def capture_concise() -> bytes:
         Raw concise stdout bytes from the CLI.
     """
     return _capture(CONCISE_COMMAND)
+
+
+def capture_github() -> bytes:
+    """Return unmodified stdout from the GitHub workflow-command example.
+
+    Returns:
+        Raw GitHub annotation stdout bytes from the CLI.
+    """
+    return _capture(GITHUB_COMMAND)
+
+
+def render_github(raw: bytes) -> bytes:
+    """Render actual annotation commands, labelled as a preview, not GitHub UI.
+
+    Args:
+        raw: Unmodified UTF-8 annotation stdout from the example command.
+
+    Returns:
+        Deterministic SVG bytes, with visual wrapping and presentation colour.
+    """
+    # Match the existing preview width for consistent README embedding.
+    console = Console(file=io.StringIO(), record=True, width=100, force_terminal=True, color_system="truecolor")
+    console.print("GitHub workflow-command preview", style="bold cyan")
+    console.print("Actual CLI output, visually wrapped; not a GitHub UI screenshot.", style="dim")
+    console.print("Colour is presentation only; raw commands are plain text.", style="dim")
+    console.print()
+    console.print(raw.decode("utf-8"), style="red", markup=False, highlight=False, emoji=False)
+    svg = console.export_svg(title="skilllint · GitHub annotations", unique_id="skilllint-github")
+    return "\n".join(line.rstrip() for line in svg.split("\n")).encode("utf-8")
 
 
 def render_jsonl(raw: bytes) -> bytes:
@@ -120,11 +150,14 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     raw = capture_jsonl()
     concise = capture_concise()
+    github = capture_github()
     artifacts = {
         "json-lines.jsonl": raw,
         "json-lines.svg": render_jsonl(raw),
         "concise.txt": concise,
         "concise.svg": render_concise(concise),
+        "github.txt": github,
+        "github.svg": render_github(github),
     }
     stale = []
     for name, content in artifacts.items():

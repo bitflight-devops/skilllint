@@ -23,7 +23,7 @@ def test_svg_is_deterministic_and_labels_visual_wrapping():
     assert b"&amp;" in first
 
 
-@pytest.mark.parametrize("capture_output", [capture.capture_jsonl, capture.capture_concise])
+@pytest.mark.parametrize("capture_output", [capture.capture_jsonl, capture.capture_concise, capture.capture_github])
 def test_capture_preserves_raw_stdout(monkeypatch, capture_output):
     raw = b'{"message":"demo"}\n'
     monkeypatch.setattr(
@@ -35,7 +35,7 @@ def test_capture_preserves_raw_stdout(monkeypatch, capture_output):
 @pytest.mark.parametrize(
     ("exit_code", "stdout", "stderr"), [(0, b"", b""), (2, b"", b"bad usage"), (1, b"", b""), (1, b"{}\n", b"warning")]
 )
-@pytest.mark.parametrize("capture_output", [capture.capture_jsonl, capture.capture_concise])
+@pytest.mark.parametrize("capture_output", [capture.capture_jsonl, capture.capture_concise, capture.capture_github])
 def test_capture_rejects_unexpected_result(monkeypatch, exit_code, stdout, stderr, capture_output):
     monkeypatch.setattr(
         capture.subprocess, "run", lambda *args, **kwargs: subprocess.CompletedProcess(args, exit_code, stdout, stderr)
@@ -44,11 +44,14 @@ def test_capture_rejects_unexpected_result(monkeypatch, exit_code, stdout, stder
         capture_output()
 
 
-@pytest.mark.parametrize("artifact", ["json-lines.jsonl", "json-lines.svg", "concise.txt", "concise.svg"])
+@pytest.mark.parametrize(
+    "artifact", ["json-lines.jsonl", "json-lines.svg", "concise.txt", "concise.svg", "github.txt", "github.svg"]
+)
 def test_check_detects_drift_without_writing(monkeypatch, tmp_path, artifact):
     raw = b'{"message":"demo"}\n'
     monkeypatch.setattr(capture, "capture_jsonl", lambda: raw)
     monkeypatch.setattr(capture, "capture_concise", lambda: b"demo.md:2:1: error[FM010] name: bad name\n")
+    monkeypatch.setattr(capture, "capture_github", lambda: b"::error file=demo.md,line=2,col=1,title=FM010::bad name\n")
     monkeypatch.setattr(capture, "OUTPUT", tmp_path)
     assert capture.main(["--check"]) == 1
     assert not list(tmp_path.iterdir())
@@ -116,3 +119,30 @@ def test_committed_concise_examples_match_real_cli_twice():
     assert b"\x1b" not in first
     assert (capture.OUTPUT / "concise.txt").read_bytes() == first
     assert (capture.OUTPUT / "concise.svg").read_bytes() == capture.render_concise(first)
+
+
+def test_github_svg_is_labelled_as_commands_not_platform_screenshot():
+    raw = b"::error file=demo.md,title=FM010::A < B & [red]C[/red] :warning:\n"
+    first = capture.render_github(raw)
+    assert first == capture.render_github(raw)
+    assert all(line == line.rstrip() for line in first.splitlines())
+    root = ET.fromstring(first)
+    visible = "".join(root.itertext()).replace("\N{NO-BREAK SPACE}", " ")
+    assert "GitHub workflow-command preview" in visible
+    assert "not a GitHub UI screenshot" in visible
+    assert raw.decode().strip() in visible
+    clip_ids = {node.attrib["id"] for node in root.iter("{http://www.w3.org/2000/svg}clipPath")}
+    for node in root.iter("{http://www.w3.org/2000/svg}text"):
+        if "clip-path" in node.attrib and (node.text or "").strip():
+            assert node.attrib["clip-path"][5:-1] in clip_ids
+
+
+def test_committed_github_examples_match_real_cli_twice():
+    first = capture.capture_github()
+    assert first == capture.capture_github()
+    assert first.endswith(b"\n")
+    assert len(first.splitlines()) == 1
+    assert first.startswith(b"::error file=examples/output/fixtures/demo-skill/SKILL.md,line=2,col=1")
+    assert b"\x1b" not in first
+    assert (capture.OUTPUT / "github.txt").read_bytes() == first
+    assert (capture.OUTPUT / "github.svg").read_bytes() == capture.render_github(first)

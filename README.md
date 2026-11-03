@@ -73,9 +73,20 @@ See [output examples](examples/output/README.md) for captured reports and colour
 
 Use `bitflight-devops/skilllint` as a GitHub Action to validate skills, plugins, and agents in any repository.
 
+For direct CLI use in Actions, `skilllint check --output-format github` emits
+native workflow annotations. See the [captured commands and colour SVG preview](examples/output/README.md#github-annotations)
+and [format contract](docs/usage.md#github-annotations).
+
 Replace `X.Y.Z` in the examples with the release you intend to pin. The Action
 ref and the `version` input pin the Action and the installed package
-independently.
+independently. Packages containing the structured Action runner produce annotations
+and outputs from one scan, including `fix: true`, while keeping the requested
+human log styling. Older pinned packages use an explicitly announced legacy
+compatibility path: their historical output parsing may repeat a scan and does
+not provide the new native annotations. This keeps existing package pins working.
+`version: source` builds from a local Git checkout of this repository (including
+its Git metadata) and tests unreleased changes with `uses: ./`. It is not intended
+for GitHub's downloaded remote Action archive, which lacks version metadata.
 
 ```yaml
 - uses: bitflight-devops/skilllint@vX.Y.Z
@@ -101,7 +112,7 @@ independently.
 | `show-summary` | Show summary panel at the end | `true` |
 | `filter` | Glob pattern to restrict files within a directory | _(none)_ |
 | `filter-type` | File type filter: `skills`, `agents`, `commands` | _(all)_ |
-| `version` | skilllint version to install (`latest` or `1.2.3`) | `latest` |
+| `version` | skilllint version to install (`latest`, `1.2.3`, or `source` for local Git checkout tests) | `latest` |
 | `python-version` | Python version to use | `3.12` |
 
 ### Outputs
