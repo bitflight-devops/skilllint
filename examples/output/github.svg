@@ -1,0 +1,97 @@
+<svg class="rich-terminal" viewBox="0 0 994 294.0" xmlns="http://www.w3.org/2000/svg">
+    <!-- Generated with Rich https://www.textualize.io -->
+    <style>
+
+    @font-face {
+        font-family: "Fira Code";
+        src: local("FiraCode-Regular"),
+                url("https://cdnjs.cloudflare.com/ajax/libs/firacode/6.2.0/woff2/FiraCode-Regular.woff2") format("woff2"),
+                url("https://cdnjs.cloudflare.com/ajax/libs/firacode/6.2.0/woff/FiraCode-Regular.woff") format("woff");
+        font-style: normal;
+        font-weight: 400;
+    }
+    @font-face {
+        font-family: "Fira Code";
+        src: local("FiraCode-Bold"),
+                url("https://cdnjs.cloudflare.com/ajax/libs/firacode/6.2.0/woff2/FiraCode-Bold.woff2") format("woff2"),
+                url("https://cdnjs.cloudflare.com/ajax/libs/firacode/6.2.0/woff/FiraCode-Bold.woff") format("woff");
+        font-style: bold;
+        font-weight: 700;
+    }
+
+    .skilllint-github-matrix {
+        font-family: Fira Code, monospace;
+        font-size: 20px;
+        line-height: 24.4px;
+        font-variant-east-asian: full-width;
+    }
+
+    .skilllint-github-title {
+        font-size: 18px;
+        font-weight: bold;
+        font-family: arial;
+    }
+
+    .skilllint-github-r1 { fill: #68a0b3;font-weight: bold }
+.skilllint-github-r2 { fill: #c5c8c6 }
+.skilllint-github-r3 { fill: #868887 }
+.skilllint-github-r4 { fill: #cc555a }
+    </style>
+
+    <defs>
+    <clipPath id="skilllint-github-clip-terminal">
+      <rect x="0" y="0" width="975.0" height="243.0" />
+    </clipPath>
+    <clipPath id="skilllint-github-line-0">
+    <rect x="0" y="1.5" width="976" height="24.65"/>
+            </clipPath>
+<clipPath id="skilllint-github-line-1">
+    <rect x="0" y="25.9" width="976" height="24.65"/>
+            </clipPath>
+<clipPath id="skilllint-github-line-2">
+    <rect x="0" y="50.3" width="976" height="24.65"/>
+            </clipPath>
+<clipPath id="skilllint-github-line-3">
+    <rect x="0" y="74.7" width="976" height="24.65"/>
+            </clipPath>
+<clipPath id="skilllint-github-line-4">
+    <rect x="0" y="99.1" width="976" height="24.65"/>
+            </clipPath>
+<clipPath id="skilllint-github-line-5">
+    <rect x="0" y="123.5" width="976" height="24.65"/>
+            </clipPath>
+<clipPath id="skilllint-github-line-6">
+    <rect x="0" y="147.9" width="976" height="24.65"/>
+            </clipPath>
+<clipPath id="skilllint-github-line-7">
+    <rect x="0" y="172.3" width="976" height="24.65"/>
+            </clipPath>
+<clipPath id="skilllint-github-line-8">
+    <rect x="0" y="196.7" width="976" height="24.65"/>
+            </clipPath>
+    </defs>
+
+    <rect fill="#292929" stroke="rgba(255,255,255,0.35)" stroke-width="1" x="1" y="1" width="992" height="292" rx="8"/><text class="skilllint-github-title" fill="#c5c8c6" text-anchor="middle" x="496" y="27">skilllint&#160;·&#160;GitHub&#160;annotations</text>
+            <g transform="translate(26,22)">
+            <circle cx="0" cy="0" r="7" fill="#ff5f57"/>
+            <circle cx="22" cy="0" r="7" fill="#febc2e"/>
+            <circle cx="44" cy="0" r="7" fill="#28c840"/>
+            </g>
+
+    <g transform="translate(9, 41)" clip-path="url(#skilllint-github-clip-terminal)">
+
+    <g class="skilllint-github-matrix">
+    <text class="skilllint-github-r1" x="0" y="20" textLength="378.2" clip-path="url(#skilllint-github-line-0)">GitHub&#160;workflow-command&#160;preview</text><text class="skilllint-github-r2" x="976" y="20" textLength="12.2" clip-path="url(#skilllint-github-line-0)">
+</text><text class="skilllint-github-r3" x="0" y="44.4" textLength="780.8" clip-path="url(#skilllint-github-line-1)">Actual&#160;CLI&#160;output,&#160;visually&#160;wrapped;&#160;not&#160;a&#160;GitHub&#160;UI&#160;screenshot.</text><text class="skilllint-github-r2" x="976" y="44.4" textLength="12.2" clip-path="url(#skilllint-github-line-1)">
+</text><text class="skilllint-github-r3" x="0" y="68.8" textLength="695.4" clip-path="url(#skilllint-github-line-2)">Colour&#160;is&#160;presentation&#160;only;&#160;raw&#160;commands&#160;are&#160;plain&#160;text.</text><text class="skilllint-github-r2" x="976" y="68.8" textLength="12.2" clip-path="url(#skilllint-github-line-2)">
+</text><text class="skilllint-github-r2" x="976" y="93.2" textLength="12.2" clip-path="url(#skilllint-github-line-3)">
+</text><text class="skilllint-github-r4" x="0" y="117.6" textLength="97.6" clip-path="url(#skilllint-github-line-4)">::error&#160;</text><text class="skilllint-github-r2" x="976" y="117.6" textLength="12.2" clip-path="url(#skilllint-github-line-4)">
+</text><text class="skilllint-github-r4" x="0" y="142" textLength="976" clip-path="url(#skilllint-github-line-5)">file=examples/output/fixtures/demo-skill/SKILL.md,line=2,col=1,endColumn=4,title</text><text class="skilllint-github-r2" x="976" y="142" textLength="12.2" clip-path="url(#skilllint-github-line-5)">
+</text><text class="skilllint-github-r4" x="0" y="166.4" textLength="768.6" clip-path="url(#skilllint-github-line-6)">=FM010::name:&#160;Must&#160;use&#160;lowercase&#160;letters,&#160;numbers,&#160;and&#160;hyphens&#160;</text><text class="skilllint-github-r2" x="976" y="166.4" textLength="12.2" clip-path="url(#skilllint-github-line-6)">
+</text><text class="skilllint-github-r4" x="0" y="190.8" textLength="939.4" clip-path="url(#skilllint-github-line-7)">only%0ASuggestion:&#160;Use&#160;format:&#160;lowercase-with-hyphens%0AHelp:&#160;skilllint&#160;rule&#160;</text><text class="skilllint-github-r2" x="976" y="190.8" textLength="12.2" clip-path="url(#skilllint-github-line-7)">
+</text><text class="skilllint-github-r4" x="0" y="215.2" textLength="61" clip-path="url(#skilllint-github-line-8)">FM010</text><text class="skilllint-github-r2" x="976" y="215.2" textLength="12.2" clip-path="url(#skilllint-github-line-8)">
+</text><text class="skilllint-github-r2" x="976" y="239.6" textLength="12.2" clip-path="url(#skilllint-github-line-9)">
+</text>
+    </g>
+    </g>
+</svg>

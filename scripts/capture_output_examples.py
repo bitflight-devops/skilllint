@@ -27,6 +27,9 @@ COMMAND = (
 )
 
 CONCISE_COMMAND = (*COMMAND[:-2], "concise", "--no-color", COMMAND[-1])
+GITHUB_COMMAND = (*COMMAND[:-2], "github", COMMAND[-1])
+GITLAB_COMMAND = (*COMMAND[:-2], "gitlab", COMMAND[-1])
+JUNIT_COMMAND = (*COMMAND[:-2], "junit", COMMAND[-1])
 
 # The editable version calculation warns in a shallow checkout. Match that
 # warning's source and complete two-line form, not arbitrary stderr warnings.
@@ -84,6 +87,93 @@ def capture_concise() -> bytes:
     return _capture(CONCISE_COMMAND)
 
 
+def capture_github() -> bytes:
+    """Return unmodified stdout from the GitHub workflow-command example.
+
+    Returns:
+        Raw GitHub annotation stdout bytes from the CLI.
+    """
+    return _capture(GITHUB_COMMAND)
+
+
+def capture_gitlab() -> bytes:
+    """Return unmodified stdout from the GitLab Code Quality example.
+
+    Returns:
+        Raw JSON array stdout bytes from the CLI.
+    """
+    return _capture(GITLAB_COMMAND)
+
+
+def capture_junit() -> bytes:
+    """Return unmodified stdout from the JUnit-style XML example.
+
+    Returns:
+        Raw XML stdout bytes from the CLI.
+    """
+    return _capture(JUNIT_COMMAND)
+
+
+def render_junit(raw: bytes) -> bytes:
+    """Render actual XML with syntax colour, not a CI interface screenshot.
+
+    Args:
+        raw: Unmodified UTF-8 stdout from the example command.
+
+    Returns:
+        Deterministic SVG bytes with presentation-only syntax highlighting.
+    """
+    # Match the other previews for consistent README embedding.
+    console = Console(file=io.StringIO(), record=True, width=100, force_terminal=True, color_system="truecolor")
+    console.print("JUnit-style XML report preview", style="bold cyan")
+    console.print("Actual CLI XML with syntax colour; not a CI UI screenshot.", style="dim")
+    console.print("Visual wrapping only; the raw report is unchanged.", style="dim")
+    console.print()
+    console.print(Syntax(raw.decode("utf-8"), "xml", theme="monokai", word_wrap=True))
+    svg = console.export_svg(title="skilllint · JUnit-style XML", unique_id="skilllint-junit")
+    return "\n".join(line.rstrip() for line in svg.split("\n")).encode("utf-8")
+
+
+def render_gitlab(raw: bytes) -> bytes:
+    """Render the actual JSON report with syntax colour, not a GitLab screenshot.
+
+    Args:
+        raw: Unmodified UTF-8 stdout from the example command.
+
+    Returns:
+        Deterministic SVG bytes with presentation-only syntax highlighting.
+    """
+    # Match the other previews for consistent README embedding.
+    console = Console(file=io.StringIO(), record=True, width=100, force_terminal=True, color_system="truecolor")
+    console.print("GitLab Code Quality report preview", style="bold cyan")
+    console.print("Actual CLI JSON with syntax colour; not a GitLab UI screenshot.", style="dim")
+    console.print("Visual wrapping only; the raw report is unchanged.", style="dim")
+    console.print()
+    console.print(Syntax(raw.decode("utf-8"), "json", theme="monokai", word_wrap=True))
+    svg = console.export_svg(title="skilllint · GitLab Code Quality", unique_id="skilllint-gitlab")
+    return "\n".join(line.rstrip() for line in svg.split("\n")).encode("utf-8")
+
+
+def render_github(raw: bytes) -> bytes:
+    """Render actual annotation commands, labelled as a preview, not GitHub UI.
+
+    Args:
+        raw: Unmodified UTF-8 annotation stdout from the example command.
+
+    Returns:
+        Deterministic SVG bytes, with visual wrapping and presentation colour.
+    """
+    # Match the existing preview width for consistent README embedding.
+    console = Console(file=io.StringIO(), record=True, width=100, force_terminal=True, color_system="truecolor")
+    console.print("GitHub workflow-command preview", style="bold cyan")
+    console.print("Actual CLI output, visually wrapped; not a GitHub UI screenshot.", style="dim")
+    console.print("Colour is presentation only; raw commands are plain text.", style="dim")
+    console.print()
+    console.print(raw.decode("utf-8"), style="red", markup=False, highlight=False, emoji=False)
+    svg = console.export_svg(title="skilllint · GitHub annotations", unique_id="skilllint-github")
+    return "\n".join(line.rstrip() for line in svg.split("\n")).encode("utf-8")
+
+
 def render_jsonl(raw: bytes) -> bytes:
     """Render the exact captured text with syntax colour and visual wrapping.
 
@@ -139,11 +229,20 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     raw = capture_jsonl()
     concise = capture_concise()
+    github = capture_github()
+    gitlab = capture_gitlab()
+    junit = capture_junit()
     artifacts = {
         "json-lines.jsonl": raw,
         "json-lines.svg": render_jsonl(raw),
         "concise.txt": concise,
         "concise.svg": render_concise(concise),
+        "github.txt": github,
+        "github.svg": render_github(github),
+        "gitlab.json": gitlab,
+        "gitlab.svg": render_gitlab(gitlab),
+        "junit.xml": junit,
+        "junit.svg": render_junit(junit),
     }
     stale = []
     for name, content in artifacts.items():
