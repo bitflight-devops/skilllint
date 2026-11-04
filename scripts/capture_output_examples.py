@@ -128,7 +128,16 @@ def render_full(raw: bytes) -> bytes:
     Returns:
         A deterministic SVG capture of the full human report.
     """
-    console = Console(file=io.StringIO(), record=True, width=100, force_terminal=True, color_system="truecolor")
+    console = Console(
+        file=io.StringIO(),
+        record=True,
+        width=100,
+        height=24,
+        force_terminal=True,
+        force_jupyter=False,
+        legacy_windows=False,
+        color_system="truecolor",
+    )
     # A final preview newline gives Rich a clip path for the last captured line.
     console.print(Text.from_ansi(canonical_line_endings(raw).decode("utf-8")), soft_wrap=True)
     svg = console.export_svg(title="skilllint · Full diagnostics", unique_id="skilllint-full")
@@ -145,7 +154,16 @@ def render_junit(raw: bytes) -> bytes:
         Deterministic SVG bytes with presentation-only syntax highlighting.
     """
     # Match the other previews for consistent README embedding.
-    console = Console(file=io.StringIO(), record=True, width=100, force_terminal=True, color_system="truecolor")
+    console = Console(
+        file=io.StringIO(),
+        record=True,
+        width=100,
+        height=24,
+        force_terminal=True,
+        force_jupyter=False,
+        legacy_windows=False,
+        color_system="truecolor",
+    )
     console.print("JUnit-style XML report preview", style="bold cyan")
     console.print("Actual CLI XML with syntax colour; not a CI UI screenshot.", style="dim")
     console.print("Visual wrapping only; the raw report is unchanged.", style="dim")
@@ -165,7 +183,16 @@ def render_gitlab(raw: bytes) -> bytes:
         Deterministic SVG bytes with presentation-only syntax highlighting.
     """
     # Match the other previews for consistent README embedding.
-    console = Console(file=io.StringIO(), record=True, width=100, force_terminal=True, color_system="truecolor")
+    console = Console(
+        file=io.StringIO(),
+        record=True,
+        width=100,
+        height=24,
+        force_terminal=True,
+        force_jupyter=False,
+        legacy_windows=False,
+        color_system="truecolor",
+    )
     console.print("GitLab Code Quality report preview", style="bold cyan")
     console.print("Actual CLI JSON with syntax colour; not a GitLab UI screenshot.", style="dim")
     console.print("Visual wrapping only; the raw report is unchanged.", style="dim")
@@ -185,7 +212,16 @@ def render_github(raw: bytes) -> bytes:
         Deterministic SVG bytes, with visual wrapping and presentation colour.
     """
     # Match the existing preview width for consistent README embedding.
-    console = Console(file=io.StringIO(), record=True, width=100, force_terminal=True, color_system="truecolor")
+    console = Console(
+        file=io.StringIO(),
+        record=True,
+        width=100,
+        height=24,
+        force_terminal=True,
+        force_jupyter=False,
+        legacy_windows=False,
+        color_system="truecolor",
+    )
     console.print("GitHub workflow-command preview", style="bold cyan")
     console.print("Actual CLI output, visually wrapped; not a GitHub UI screenshot.", style="dim")
     console.print("Colour is presentation only; raw commands are plain text.", style="dim")
@@ -205,7 +241,16 @@ def render_jsonl(raw: bytes) -> bytes:
         Deterministic UTF-8 SVG bytes; wrapping affects only the preview.
     """
     # 100 columns keeps long JSON records readable when embedded in the README.
-    console = Console(file=io.StringIO(), record=True, width=100, force_terminal=True, color_system="truecolor")
+    console = Console(
+        file=io.StringIO(),
+        record=True,
+        width=100,
+        height=24,
+        force_terminal=True,
+        force_jupyter=False,
+        legacy_windows=False,
+        color_system="truecolor",
+    )
     console.print("JSONL report preview", style="bold cyan")
     console.print("Visual wrapping only; raw output has one JSON object per line.", style="dim")
     console.print()
@@ -225,7 +270,16 @@ def render_concise(raw: bytes) -> bytes:
         Deterministic UTF-8 SVG bytes; wrapping affects only the preview.
     """
     # Match the JSONL preview width for consistent README embedding.
-    console = Console(file=io.StringIO(), record=True, width=100, force_terminal=True, color_system="truecolor")
+    console = Console(
+        file=io.StringIO(),
+        record=True,
+        width=100,
+        height=24,
+        force_terminal=True,
+        force_jupyter=False,
+        legacy_windows=False,
+        color_system="truecolor",
+    )
     console.print("Concise actual-output preview", style="bold cyan")
     console.print("Visual wrapping only; raw output has one finding per line.", style="dim")
     console.print()

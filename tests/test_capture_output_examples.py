@@ -416,3 +416,33 @@ def test_full_capture_replays_real_colours_and_matches_twice():
     assert capture.canonical_line_endings((capture.OUTPUT / "full.svg").read_bytes()) == capture.canonical_line_endings(
         svg
     )
+
+
+@pytest.mark.parametrize(
+    "renderer",
+    [
+        capture.render_jsonl,
+        capture.render_concise,
+        capture.render_github,
+        capture.render_gitlab,
+        capture.render_junit,
+        capture.render_full,
+    ],
+)
+@pytest.mark.parametrize("term", [None, "dumb", "xterm-256color"])
+def test_svg_geometry_is_independent_of_terminal_environment(monkeypatch, renderer, term):
+    raw = b"error[FM010]: example & <literal>\n"
+    for name in ("TERM", "COLUMNS", "LINES", "NO_COLOR", "FORCE_COLOR", "TTY_INTERACTIVE"):
+        monkeypatch.delenv(name, raising=False)
+    expected = renderer(raw)
+    if term is not None:
+        monkeypatch.setenv("TERM", term)
+    monkeypatch.setenv("COLUMNS", "1")
+    monkeypatch.setenv("LINES", "1")
+    monkeypatch.setenv("NO_COLOR", "1")
+    monkeypatch.setenv("TTY_INTERACTIVE", "1")
+    assert renderer(raw) == expected
+    monkeypatch.setenv("COLUMNS", "240")
+    monkeypatch.setenv("LINES", "90")
+    monkeypatch.setenv("FORCE_COLOR", "1")
+    assert renderer(raw) == expected
