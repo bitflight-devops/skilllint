@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 
 from rich.cells import cell_len
 from rich.console import Console
+from rich.segment import Segment
 
 if TYPE_CHECKING:
     from typing import TextIO
@@ -109,12 +110,20 @@ def export_recording(console: Console, path: Path, *, title: str) -> None:
         # output was deliberately wider. Measure the capture before exporting
         # so the image does not clip content that survived terminal rendering.
         export_console = copy(console)
-        # Explicit dimensions bypass Rich's TERM=dumb width fallback. The copy
-        # shares the recorded segments but leaves the caller's layout intact.
+        # Own the recording list before adding SVG-only padding. Rich omits
+        # the last line's clip path, so it must be blank. Do not print padding:
+        # that would change stdout and the capture used by later exports.
+        with console._record_buffer_lock:  # noqa: SLF001 - Rich has no public segment snapshot API.
+            export_console._record_buffer = list(console._record_buffer)  # noqa: SLF001 - Preserve styles without ANSI round-tripping.
+        recorded_text = export_console.export_text(clear=False)
+        if not recorded_text.endswith("\n\n"):
+            export_console._record_buffer.append(  # noqa: SLF001 - Pad only the independent SVG snapshot.
+                Segment("\n" if recorded_text.endswith("\n") else "\n\n")
+            )
+        # Explicit dimensions bypass Rich's TERM=dumb width fallback while
+        # leaving the caller's layout intact.
         export_console.height = console.height
-        export_console.width = max(
-            (cell_len(line) for line in console.export_text(clear=False).splitlines()), default=console.width
-        )
+        export_console.width = max((cell_len(line) for line in recorded_text.splitlines()), default=console.width)
         content = export_console.export_svg(title=title, clear=False)
     content = _strip_trailing_whitespace(content)
 

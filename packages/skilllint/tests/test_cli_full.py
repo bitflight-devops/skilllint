@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from unittest.mock import Mock
+from xml.etree import ElementTree
 
 import pytest
 import typer
@@ -229,3 +230,50 @@ def test_main_action_full_collects_only_once(tmp_path, monkeypatch, capsys):
     assert len(observed) == 1
     assert observed[0][1].count("error[FM010]") == 1
     assert not capsys.readouterr().out
+
+
+def _assert_visible_svg_clip_paths(path: Path) -> None:
+    root = ElementTree.fromstring(path.read_text(encoding="utf-8"))
+    ids = {element.get("id") for element in root.iter()}
+    visible = [
+        element for element in root.iter() if element.tag.endswith("}text") and element.text and element.text.strip()
+    ]
+    assert any("docs:" in (element.text or "") for element in visible)
+    for element in visible:
+        clip = element.get("clip-path")
+        if clip:
+            assert clip.removeprefix("url(#").removesuffix(")") in ids
+
+
+def test_full_svg_recording_preserves_stdout_and_final_diagnostic(tmp_path):
+    args = ("check", "invalid-skill/SKILL.md", "--output-format", "full", "--color", "never")
+    _, plain = run_probe(tmp_path, Case("plain", args), root="plain")
+    sandbox, recorded = run_probe(tmp_path, Case("recorded", (*args, "--record", "out.svg")), root="recorded")
+    assert plain.returncode == recorded.returncode == 1
+    assert plain.stdout == recorded.stdout
+    _assert_visible_svg_clip_paths(sandbox.case / "out.svg")
+
+
+def test_action_full_svg_recording_preserves_stdout_and_final_diagnostic(tmp_path, monkeypatch, capsys):
+    path = tmp_path / "demo/SKILL.md"
+    path.parent.mkdir()
+    path.write_text("---\nname: Bad_Name\ndescription: Use when checking output.\n---\nBody.\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".git").mkdir()
+    outputs = []
+    for record in (None, tmp_path / "action.svg"):
+        callback = Mock()
+        with pytest.raises(typer.Exit) as exc:
+            plugin_validator.main(
+                ctx=Mock(invoked_subcommand=None),
+                paths=[path],
+                output_format="full",
+                color="never",
+                record=record,
+                action_report=callback,
+            )
+        assert exc.value.exit_code == 1
+        callback.assert_called_once()
+        outputs.append(capsys.readouterr().out)
+    assert outputs[0] == outputs[1]
+    _assert_visible_svg_clip_paths(tmp_path / "action.svg")
