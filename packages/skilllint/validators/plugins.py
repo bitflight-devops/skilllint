@@ -16,14 +16,15 @@ import subprocess
 import sys
 from pathlib import Path
 
-import msgspec.json
-
+from skilllint.boundary.plugin_manifest_ingest import PluginManifestDefect, ingest_plugin_manifest
 from skilllint.models import ValidationIssue, ValidationResult
 from skilllint.policy import IgnoreConfig, _is_suppressed, _resolve_ignore_config
 from skilllint.rule_registry import rule_reference
 from skilllint.rules.lk_series import check_lk004
 from skilllint.rules.pl_series import (
     _check_pl004_manifest_paths,
+    _check_plugin_manifest,
+    _plugin_manifest_defect_issue,
     check_pl001,
     check_pl002,
     check_pl003,
@@ -269,32 +270,9 @@ class PluginRegistrationValidator:
         if not plugin_json_path.exists():
             return ValidationResult(passed=True, errors=errors, warnings=warnings, info=info)
 
-        try:
-            plugin_config = msgspec.json.decode(plugin_json_path.read_bytes())
-        except msgspec.DecodeError as error:
-            errors.append(
-                ValidationIssue(
-                    field="plugin.json",
-                    severity="error",
-                    message=f"Invalid JSON: {error}",
-                    code=PL002,
-                    docs_url=rule_reference(PL002),
-                    suggestion="Fix JSON syntax errors",
-                )
-            )
-            return ValidationResult(passed=False, errors=errors, warnings=warnings, info=info)
-
-        if not isinstance(plugin_config, dict):
-            errors.append(
-                ValidationIssue(
-                    field="plugin.json",
-                    severity="error",
-                    message="Invalid JSON: plugin.json top level must be an object",
-                    code=PL002,
-                    docs_url=rule_reference(PL002),
-                    suggestion="Use a JSON object for plugin.json",
-                )
-            )
+        plugin_config = ingest_plugin_manifest(plugin_json_path)
+        if isinstance(plugin_config, PluginManifestDefect):
+            errors.append(_plugin_manifest_defect_issue(plugin_config))
             return ValidationResult(passed=False, errors=errors, warnings=warnings, info=info)
 
         # Registration checks — detection lives in skilllint.rules.pr_series.
@@ -358,18 +336,20 @@ class PluginStructureValidator:
         # tried first: a nested plugin root must resolve to itself, not to
         # an ancestor's marketplace.json.
         plugin_dir = find_plugin_dir(path) or find_marketplace_dir(path)
-        if plugin_dir is None:
-            # Neither a plugin nor a marketplace directory - skip validation
-            return ValidationResult(passed=True, errors=errors, warnings=warnings, info=info)
-
-        # Validate plugin.json JSON syntax locally before delegating to claude CLI.
-        # Catches encoding/line-ending issues that may cause claude to fail inconsistently.
-        plugin_json_path = plugin_dir / ".claude-plugin" / "plugin.json"
-        if plugin_json_path.exists():
-            json_issues = check_pl002(plugin_json_path)
-            if json_issues:
-                errors.extend(json_issues)
+        # A directly supplied manifest has the same local checks even when it
+        # has no .claude-plugin ancestor. Other JSON kinds keep their own owners.
+        plugin_json_path = (
+            path
+            if path.name == "plugin.json"
+            else (plugin_dir / ".claude-plugin" / "plugin.json" if plugin_dir is not None else None)
+        )
+        if plugin_json_path is not None and (path.name == "plugin.json" or plugin_json_path.exists()):
+            errors.extend(_check_plugin_manifest(plugin_json_path))
+            if errors:
                 return ValidationResult(passed=False, errors=errors, warnings=warnings, info=info)
+
+        if plugin_dir is None:
+            return ValidationResult(passed=True, errors=errors, warnings=warnings, info=info)
 
         mp_layout = check_pl006(plugin_dir)
         if mp_layout:

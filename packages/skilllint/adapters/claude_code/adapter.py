@@ -10,8 +10,6 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-import msgspec.json
-
 from skilllint.adapters.protocol import ALL_RULE_SERIES, PluginLayout
 from skilllint.schemas import load_provider_schema
 
@@ -96,34 +94,9 @@ class ClaudeCodeAdapter:
         return None
 
     def validate(self, path: pathlib.Path) -> list[dict]:
-        """Platform-level validation for files outside the core SK/PR/HK pipeline.
+        """Return no native findings; Claude file kinds use the core validators.
 
-        Validates JSON files (plugin.json variants) against the bundled schema's
-        fields object (required=true entries).  SKILL.md / agent .md / hooks.json are still
-        handled by the existing _validate_single_path pipeline in
-        plugin_validator.py; this method is the fallback for file types that
-        pipeline does not recognise.
-
-        Returns:
-            List of violation dicts with keys: code, severity, message.
+        PluginStructureValidator owns plugin manifests and HookValidator owns
+        hooks.json. The platform router collects their findings for this adapter.
         """
-        if path.suffix != ".json":
-            return []
-
-        try:
-            data = msgspec.json.decode(path.read_bytes())
-        except (msgspec.DecodeError, OSError) as exc:
-            return [{"code": "PL002", "severity": "error", "message": f"Invalid JSON: {exc}"}]
-
-        schema = self.get_schema("plugin")
-        if schema is None:
-            return []
-
-        fields: dict = schema.get("fields", {})
-        required: list[str] = [name for name, meta in fields.items() if meta.get("required", False)]
-        violations: list[dict] = [
-            {"code": "PL003", "severity": "error", "message": f"Missing required field '{field}' in plugin manifest"}
-            for field in required
-            if field not in data
-        ]
-        return violations
+        return []

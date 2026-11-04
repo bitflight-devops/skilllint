@@ -13,13 +13,12 @@ Detection sources per code — the PL family has two, and several codes use
 both:
 
 * **Direct inspection** of files under ``.claude-plugin/``:
-  PL002 (``plugin.json`` syntax) and PL006 (``marketplace.json`` root keys,
+  PL002 (``plugin.json`` syntax and object shape) and PL006 (``marketplace.json`` root keys,
   which also reports PL002 when the file itself cannot be parsed).
 * **Subprocess output** — regex matches against combined stdout/stderr of
   ``claude plugin validate``: PL001, PL002, PL003, PL004, PL005, and the
-  PL006 fallback in ``claude_validation_failure_issue``.  PL003, PL004 and
-  PL005 have *no* direct detector at all; they exist only as patterns
-  against that output.
+  PL006 fallback in ``claude_validation_failure_issue``. PL003 also checks
+  manifest objects directly. PL004 and PL005 remain subprocess patterns here.
 
 Signatures state the input each rule actually reads rather than a uniform
 frontmatter triple, which the PL family never had access to.
@@ -54,9 +53,12 @@ from typing import TYPE_CHECKING
 
 import msgspec
 
+from skilllint.boundary.plugin_manifest_ingest import PluginManifestDefect, ingest_plugin_manifest
 from skilllint.rule_registry import _make_issue, skilllint_rule
 
 if TYPE_CHECKING:
+    from pydantic import JsonValue
+
     from skilllint.models import ValidationIssue, YamlValue
 
 # ---------------------------------------------------------------------------
@@ -330,6 +332,34 @@ def check_pl001(claude_output: str) -> list[ValidationIssue]:
     return _claude_output_issues("PL001", claude_output)
 
 
+def _plugin_manifest_defect_issue(defect: PluginManifestDefect) -> ValidationIssue:
+    if defect.kind == "read":
+        message = f"Cannot read plugin.json: {defect.detail}"
+    elif defect.kind == "syntax":
+        message = f"Invalid JSON syntax in plugin.json: {defect.detail}"
+    else:
+        message = "Invalid JSON: plugin.json top level must be an object"
+    return _make_issue(
+        field="plugin.json",
+        severity="error",
+        message=message,
+        code="PL002",
+        suggestion=f"plugin.json must be a valid JSON object. Schema: {PLUGIN_MANIFEST_SCHEMA_URL}",
+    )
+
+
+def _check_plugin_manifest(path: Path) -> list[ValidationIssue]:
+    """Read one manifest and run its local structural checks.
+
+    Returns:
+        PL002 ingestion failures or PL003 missing-name findings.
+    """
+    manifest = ingest_plugin_manifest(path)
+    if isinstance(manifest, PluginManifestDefect):
+        return [_plugin_manifest_defect_issue(manifest)]
+    return check_pl003(manifest=manifest)
+
+
 # ---------------------------------------------------------------------------
 # PL002 — Invalid JSON syntax in plugin.json or marketplace.json
 # ---------------------------------------------------------------------------
@@ -346,13 +376,13 @@ def check_pl002(plugin_json_path: Path | None = None, claude_output: str = "") -
     """## PL002 — Invalid JSON syntax in plugin.json or marketplace.json
 
     The ``plugin.json`` or ``marketplace.json`` file contains malformed JSON
-    that cannot be parsed.  Claude Code and ``claude plugin validate`` both
-    require syntactically valid JSON.
+    that cannot be parsed, or ``plugin.json`` does not contain a JSON object.
+    Claude Code and ``claude plugin validate`` both require valid JSON objects.
 
     PL002 has two detection sources, and this function owns both:
 
-    - **Direct** — ``plugin_json_path`` is decoded with ``msgspec``; a
-      ``DecodeError`` or ``OSError`` produces the issue.
+    - **Direct** — ``plugin_json_path`` enters the strict JSON-object boundary;
+      unreadable files, invalid JSON, and non-object roots produce the issue.
     - **Subprocess** — ``claude_output`` is matched against
       ``invalid.*json|json.*syntax|parse.*error``.
 
@@ -383,23 +413,9 @@ def check_pl002(plugin_json_path: Path | None = None, claude_output: str = "") -
     issues: list[ValidationIssue] = []
 
     if plugin_json_path is not None:
-        message: str | None = None
-        try:
-            msgspec.json.decode(plugin_json_path.read_bytes())
-        except msgspec.DecodeError as e:
-            message = f"Invalid JSON syntax in plugin.json: {e}"
-        except OSError as e:
-            message = f"Cannot read plugin.json: {e}"
-        if message is not None:
-            issues.append(
-                _make_issue(
-                    field="plugin.json",
-                    severity="error",
-                    message=message,
-                    code="PL002",
-                    suggestion=f"plugin.json must be valid JSON. Schema: {PLUGIN_MANIFEST_SCHEMA_URL}",
-                )
-            )
+        manifest = ingest_plugin_manifest(plugin_json_path)
+        if isinstance(manifest, PluginManifestDefect):
+            issues.append(_plugin_manifest_defect_issue(manifest))
 
     if claude_output:
         issues.extend(_claude_output_issues("PL002", claude_output))
@@ -419,17 +435,16 @@ def check_pl002(plugin_json_path: Path | None = None, claude_output: str = "") -
     platforms=["agentskills"],
     authority={"origin": "code.claude.com", "reference": PLUGIN_MANIFEST_SCHEMA_URL},
 )
-def check_pl003(claude_output: str) -> list[ValidationIssue]:
+def check_pl003(claude_output: str = "", *, manifest: dict[str, JsonValue] | None = None) -> list[ValidationIssue]:
     """## PL003 — Missing required field 'name' in plugin.json
 
     The ``plugin.json`` file does not contain the mandatory ``name`` field.
     Claude Code requires ``name`` to identify the plugin during registration
     and display.
 
-    Detection is **subprocess-derived only**: the combined stdout/stderr of
-    ``claude plugin validate`` is matched against
-    ``missing.*required.*field.*name|name.*required``.  skilllint never reads
-    ``plugin.json`` itself for this rule.
+    Detection checks the validated manifest object for ``name`` and also
+    matches combined ``claude plugin validate`` output against
+    ``missing.*required.*field.*name|name.*required``.
 
     **Fix:** Add the ``name`` field to ``plugin.json``:
 
@@ -441,12 +456,23 @@ def check_pl003(claude_output: str) -> list[ValidationIssue]:
 
     Args:
         claude_output: Combined stdout/stderr from ``claude plugin validate``.
+        manifest: Validated manifest object, or None to skip direct detection.
 
     Returns:
-        One error issue when the name-required pattern matches, else empty.
+        One error issue when the name is missing or its CLI pattern matches.
 
     <!-- examples: PL003 -->
     """
+    if manifest is not None and "name" not in manifest:
+        return [
+            _make_issue(
+                field="plugin.json",
+                severity="error",
+                message="Missing required field 'name' in plugin.json",
+                code="PL003",
+                suggestion=_claude_error_suggestion("PL003"),
+            )
+        ]
     return _claude_output_issues("PL003", claude_output)
 
 
