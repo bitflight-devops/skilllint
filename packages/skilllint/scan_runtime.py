@@ -19,6 +19,7 @@ from git import Repo
 from git.exc import InvalidGitRepositoryError, NoSuchPathError
 
 from .adapters import PlatformAdapter, PlatformPluginDiscovery, PluginLayout, matches_file
+from .boundary.component_references import ComponentKind, ComponentReference, component_references_from_raw
 from .file_types import ScanContext
 from .plugin_manifest import _load_plugin_json
 from .reporting import CIReporter, ConsoleReporter, FileResults, Reporter
@@ -139,10 +140,8 @@ def _parse_plugin_manifest(plugin_root: Path) -> PluginManifest:
         return PluginManifest(plugin_root=plugin_root)
 
     def _extract(key: str) -> list[str] | None:
-        value = raw.get(key)
-        if isinstance(value, list) and all(isinstance(entry, str) for entry in value):
-            return value
-        return None
+        references = component_references_from_raw(raw.get(key))
+        return None if references is None else [reference.path for reference in references]
 
     return PluginManifest(
         plugin_root=plugin_root, agents=_extract("agents"), commands=_extract("commands"), skills=_extract("skills")
@@ -152,19 +151,17 @@ def _parse_plugin_manifest(plugin_root: Path) -> PluginManifest:
 def _discover_manifest_skill_paths(root: Path, paths: list[str]) -> set[Path]:
     discovered: dict[Path, Path] = {}
     for rel in paths:
-        resolved = root / rel
-        if not resolved.resolve().is_relative_to(root.resolve()):
-            continue
-        if resolved.is_dir():
-            direct_skill = resolved / "SKILL.md"
-            if direct_skill.is_file() and direct_skill.resolve().is_relative_to(root.resolve()):
-                discovered.setdefault(_ignore_path(resolved), resolved)
-            else:
-                for child_skill in _glob_excluding(resolved, "*/SKILL.md"):
-                    if child_skill.resolve().is_relative_to(root.resolve()):
-                        discovered.setdefault(_ignore_path(child_skill), child_skill)
-        elif resolved.is_file() and resolved.name == "SKILL.md":
-            discovered.setdefault(_ignore_path(resolved), resolved)
+        reference = ComponentReference(rel)
+        for target in reference.resolve(root, "skills").paths:
+            # Explicit targets remain eligible; collection discovery keeps the
+            # same excluded-directory policy as conventional glob expansion.
+            if (
+                target != root / reference.relative_path
+                and target.is_file()
+                and target.parent.name in EXCLUDED_DIR_NAMES
+            ):
+                continue
+            discovered.setdefault(_ignore_path(target), target)
     return set(discovered.values())
 
 
@@ -199,17 +196,7 @@ def _discover_plugin_paths(manifest: PluginManifest) -> list[Path]:
             discovered.update(_glob_excluding(root, f"{field}/*.md"))
             continue
         for rel in path_list:
-            resolved = root / rel
-            if not resolved.resolve().is_relative_to(root.resolve()):
-                continue
-            if resolved.is_dir():
-                discovered.update(
-                    child
-                    for child in _glob_excluding(resolved, "*.md")
-                    if child.resolve().is_relative_to(root.resolve())
-                )
-            elif resolved.is_file() and resolved.suffix == ".md":
-                discovered.add(resolved)
+            discovered.update(ComponentReference(rel).resolve(root, field).paths)
 
     discovered.add(root)
 
@@ -570,7 +557,9 @@ def _manifest_filter_type_is_malformed(raw_manifest: dict | None, filter_type: s
     if filter_type not in raw_manifest:
         return False
     declared_paths = raw_manifest[filter_type]
-    return not isinstance(declared_paths, list) or any(not isinstance(path, str) for path in declared_paths)
+    return not isinstance(declared_paths, (str, list)) or (
+        isinstance(declared_paths, list) and any(not isinstance(path, str) for path in declared_paths)
+    )
 
 
 def _manifest_filter_type_paths(
@@ -581,12 +570,16 @@ def _manifest_filter_type_paths(
     manifest = _parse_plugin_manifest(directory)
     manifest_path = directory / ".claude-plugin" / "plugin.json"
     raw_manifest = _load_plugin_json(directory)
+    kind: ComponentKind
     match filter_type:
         case "agents":
+            kind = "agents"
             declared_paths = manifest.agents
         case "commands":
+            kind = "commands"
             declared_paths = manifest.commands
         case "skills":
+            kind = "skills"
             declared_paths = manifest.skills
         case _:
             return []
@@ -601,18 +594,11 @@ def _manifest_filter_type_paths(
             continue
         if _is_foreign_provider_target(target, directory):
             continue
-        if not target.exists():
-            target = directory / ".claude-plugin" / "plugin.json"
-        if target.is_dir() and filter_type in {"agents", "commands"}:
-            targets.extend(
-                child for child in _glob_excluding(target, "*.md") if child.resolve().is_relative_to(directory_root)
-            )
-            continue
-        if filter_type == "skills" and not (
-            _is_skill_folder(target) or (target.is_file() and target.name == "SKILL.md")
-        ):
-            target = directory / ".claude-plugin" / "plugin.json"
-        targets.append(target)
+        resolved = ComponentReference(declared_path).resolve(directory, kind)
+        if resolved.valid:
+            targets.extend(resolved.paths)
+        else:
+            targets.append(manifest_path)
     return targets
 
 

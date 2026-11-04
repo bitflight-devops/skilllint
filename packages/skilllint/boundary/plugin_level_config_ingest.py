@@ -9,8 +9,9 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError
 
+from skilllint.boundary.component_references import component_references_from_raw
 from skilllint.plugin_manifest import load_plugin_json
 
 if TYPE_CHECKING:
@@ -125,8 +126,6 @@ __all__ = [
 # ``plugin.json`` fields that take component paths; ``rules/pr_series.py`` reads the same three.
 COMPONENT_PATH_FIELDS = ("skills", "commands", "agents")
 
-_COMPONENT_FIELD = TypeAdapter(str | list[JsonValue])
-
 
 def component_paths_from_plugin_document(raw: object) -> tuple[str, ...]:
     """Return every path string ``plugin.json`` lists under ``skills``, ``commands`` and ``agents``.
@@ -144,12 +143,9 @@ def component_paths_from_plugin_document(raw: object) -> tuple[str, ...]:
         return ()
     paths: list[str] = []
     for field in COMPONENT_PATH_FIELDS:
-        try:
-            value = _COMPONENT_FIELD.validate_python(raw.get(field), strict=True)
-        except ValidationError:
-            continue
-        items = [value] if isinstance(value, str) else value
-        paths.extend(item for item in items if isinstance(item, str) and "\x00" not in item)
+        references = component_references_from_raw(raw.get(field))
+        if references is not None:
+            paths.extend(reference.path for reference in references)
     return tuple(paths)
 
 

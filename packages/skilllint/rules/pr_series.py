@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from skilllint.boundary.component_references import ComponentKind, ComponentReference, component_references_from_raw
 from skilllint.frontmatter_core import FRONTMATTER_EXEMPT_FILENAMES
 from skilllint.rule_registry import _make_issue, skilllint_rule
 
@@ -87,35 +88,18 @@ def _component_paths(manifest: dict[str, YamlValue], plugin_dir: Path, field: st
     Returns:
         Set of registered paths relative to plugin_dir.
     """
-    value = manifest.get(field)
-    entries = (
-        [value]
-        if isinstance(value, str)
-        else [item for item in value if isinstance(item, str)]
-        if isinstance(value, list)
-        else []
-    )
-    return [Path(entry.removeprefix("./")) for entry in entries if "\x00" not in entry]
+    return [reference.relative_path for reference in component_references_from_raw(manifest.get(field)) or ()]
 
 
-def _registered_component_files(manifest: dict[str, YamlValue], plugin_dir: Path, field: str) -> set[Path]:
+def _registered_component_files(manifest: dict[str, YamlValue], plugin_dir: Path, field: ComponentKind) -> set[Path]:
     registered: set[Path] = set()
-    for reference in _component_paths(manifest, plugin_dir, field):
-        target = plugin_dir / reference
-        resolved = target.resolve()
-        relative = _contained_lexical_relative(target, plugin_dir)
-        if relative is None:
-            continue
-        if resolved.is_dir():
-            registered.update(
-                relative / file.name
-                for file in resolved.glob("*.md")
-                if file.is_file()
-                and file.name not in FRONTMATTER_EXEMPT_FILENAMES
-                and file.resolve().is_relative_to(plugin_dir.resolve())
-            )
-        else:
-            registered.add(relative)
+    for reference in component_references_from_raw(manifest.get(field)) or ():
+        registered.update(
+            relative
+            for file in reference.resolve(plugin_dir, field).paths
+            if file.name not in FRONTMATTER_EXEMPT_FILENAMES
+            if (relative := _contained_lexical_relative(file, plugin_dir)) is not None
+        )
     return registered
 
 
@@ -267,11 +251,7 @@ def check_pr002(manifest: dict[str, YamlValue], plugin_dir: Path) -> list[Valida
             suggestion=f"Remove from plugin.json or create {ref}/SKILL.md",
         )
         for ref in _component_paths(manifest, plugin_dir, "skills")
-        if not (
-            ((plugin_dir / ref).is_file() and ref.name == "SKILL.md")
-            or (plugin_dir / ref / "SKILL.md").is_file()
-            or any((plugin_dir / ref).glob("*/SKILL.md"))
-        )
+        if not ComponentReference(str(ref)).resolve(plugin_dir, "skills").valid
     )
 
     issues.extend(
@@ -283,7 +263,7 @@ def check_pr002(manifest: dict[str, YamlValue], plugin_dir: Path) -> list[Valida
             suggestion=f"Remove from plugin.json or create {ref}",
         )
         for ref in _component_paths(manifest, plugin_dir, "agents")
-        if not ((plugin_dir / ref).is_dir() or ((plugin_dir / ref).is_file() and ref.suffix == ".md"))
+        if not ComponentReference(str(ref)).resolve(plugin_dir, "agents").valid
     )
 
     issues.extend(
@@ -295,7 +275,7 @@ def check_pr002(manifest: dict[str, YamlValue], plugin_dir: Path) -> list[Valida
             suggestion=f"Remove from plugin.json or create {ref}",
         )
         for ref in _component_paths(manifest, plugin_dir, "commands")
-        if not ((plugin_dir / ref).is_dir() or ((plugin_dir / ref).is_file() and ref.suffix == ".md"))
+        if not ComponentReference(str(ref)).resolve(plugin_dir, "commands").valid
     )
 
     return issues

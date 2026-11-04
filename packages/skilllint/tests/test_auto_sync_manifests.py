@@ -1498,61 +1498,33 @@ class TestDiscoverSkills:
 
 
 class TestFindStaleItemsScripts:
-    """Verify _find_stale_items correctly identifies script entries as stale."""
+    """Explicit registrations are validated by target kind, not conventional discovery."""
 
-    def test_undiscovered_entries_are_stale(self) -> None:
-        """Registered entries not in the discovery list are stale.
+    def test_skill_script_and_template_files_are_stale(self, tmp_path: Path) -> None:
+        skill = tmp_path / "skills/my-skill"
+        skill.mkdir(parents=True)
+        (skill / "SKILL.md").write_text("# Skill")
+        (skill / "helper.py").write_text("pass")
+        (skill / "template.md").write_text("# Template")
 
-        Tests: Core stale detection — discovery is the sole authority
-        How: Pass entries as registered with no matching disk_items
-        Why: Anything not returned by discovery does not belong in the array
-        """
-        registered = [
-            "./skills/my-skill",
-            "./skills/my-skill/scripts/helper.py",
-            "./skills/my-skill/scripts/evaluate.py",
-        ]
-        disk_items = ["./skills/my-skill"]
+        stale = auto_sync._find_stale_items(
+            ["./skills/my-skill", "./skills/my-skill/helper.py", "./skills/my-skill/template.md"], tmp_path, "skills"
+        )
 
-        stale = auto_sync._find_stale_items(registered, disk_items, normalize=True)
+        assert stale == ["./skills/my-skill/helper.py", "./skills/my-skill/template.md"]
 
-        assert "./skills/my-skill/scripts/helper.py" in stale
-        assert "./skills/my-skill/scripts/evaluate.py" in stale
-        assert "./skills/my-skill" not in stale
+    def test_custom_skill_and_collection_references_are_valid(self, tmp_path: Path) -> None:
+        skill = tmp_path / "custom/my-skill"
+        skill.mkdir(parents=True)
+        (skill / "SKILL.md").write_text("# Skill")
 
-    def test_disk_existence_does_not_protect_undiscovered_entries(self, tmp_path: Path) -> None:
-        """Files existing on disk are stale if not in the discovery list.
+        assert (
+            auto_sync._find_stale_items(
+                ["./custom", "./custom/my-skill", "./custom/my-skill/SKILL.md"], tmp_path, "skills"
+            )
+            == []
+        )
 
-        Tests: Discovery is sole authority — filesystem existence is irrelevant
-        How: Entries that exist on disk but are not discovered are still stale
-        Why: The discovery functions define what belongs in each component
-             array. Disk existence is not a factor.
-        """
-        registered = [
-            "./skills/my-skill",
-            "./skills/my-skill/scripts/helper.py",
-            "./skills/summarizer/templates/bullets.md",
-        ]
-        disk_items = ["./skills/my-skill"]
-
-        stale = auto_sync._find_stale_items(registered, disk_items, normalize=True)
-
-        assert "./skills/my-skill" not in stale
-        assert "./skills/my-skill/scripts/helper.py" in stale
-        assert "./skills/summarizer/templates/bullets.md" in stale
-
-    def test_bare_directory_refs_are_stale(self) -> None:
-        """Bare directory references like ./skills are stale.
-
-        Tests: Redundant directory refs are detected as stale
-        How: Register ./skills (bare dir), discovery returns specific paths
-        Why: Auto-discovery already loads default directories. Bare refs
-             are redundant and should be removed by reconcile.
-        """
-        registered = ["./skills", "./skills/my-skill"]
-        disk_items = ["./skills/my-skill"]
-
-        stale = auto_sync._find_stale_items(registered, disk_items, normalize=True)
-
-        assert "./skills" in stale
-        assert "./skills/my-skill" not in stale
+    def test_empty_skill_collection_is_stale(self, tmp_path: Path) -> None:
+        (tmp_path / "skills").mkdir()
+        assert auto_sync._find_stale_items(["./skills"], tmp_path, "skills") == ["./skills"]
