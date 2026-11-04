@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793778718780,
+  "lastUpdate": 1793783188254,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -377,6 +377,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 509.614,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "stack@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "7d066df227858060823a49a1e1e0c7678d8d4a3b",
+          "message": "Merge pull request #360 from bitflight-devops/perf/index-rename-rebasing\n\nperf(scan): index collected paths for folder renames",
+          "timestamp": "2026-11-04T09:01:13Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/7d066df227858060823a49a1e1e0c7678d8d4a3b"
+        },
+        "date": 1793783187715,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 1706.501,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 1910.108,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 2314.906,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 524.054,
             "unit": "files/s"
           }
         ]
