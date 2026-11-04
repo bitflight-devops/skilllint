@@ -39,7 +39,7 @@ from skilllint.frontmatter_yaml import (
 from skilllint.models import ValidationIssue, ValidationResult, YamlValue
 from skilllint.rule_registry import rule_reference
 from skilllint.rules.ag_series import check_ag001, check_ag002, check_ag003
-from skilllint.rules.fm_series import check_fm004, check_fm007, check_fm010
+from skilllint.rules.fm_series import _fm009_recovery_warnings, check_fm004, check_fm007, check_fm010
 from skilllint.source_location import SourceLocation, source_digest
 from skilllint.validators.hooks import HookValidator
 
@@ -354,36 +354,6 @@ def _validation_result_with_error(
     """
     errors.append(issue)
     return _build_validation_result(errors=errors, warnings=warnings, info=info)
-
-
-def _fm009_recovery_warnings(colon_fields: list[str]) -> list[ValidationIssue]:
-    """Return one FM009 warning per field that only parsed after colon recovery.
-
-    ``safe_load_yaml_with_colon_fix`` quotes unquoted colon values in memory so
-    validation can continue, and returns ``yaml_err=None``. The source file is
-    unchanged and still breaks a plain YAML parse, so the recovery has to be
-    reported rather than swallowed.
-
-    Args:
-        colon_fields: Field names whose values required quoting to parse.
-
-    Returns:
-        One FM009 warning per field; empty when no recovery was needed.
-    """
-    return [
-        ValidationIssue(
-            field=field_name,
-            severity="warning",
-            message=(
-                f"Unquoted value containing a colon in field '{field_name}' breaks YAML parsing "
-                "(parsed here only after quoting it)"
-            ),
-            code=FM009,
-            docs_url=rule_reference(FM009),
-            suggestion=f"Quote the value of '{field_name}', or run with --fix",
-        )
-        for field_name in colon_fields
-    ]
 
 
 def _validate_frontmatter_yaml(

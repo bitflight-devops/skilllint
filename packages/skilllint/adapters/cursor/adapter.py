@@ -11,8 +11,12 @@ import logging
 from typing import TYPE_CHECKING
 
 from skilllint.adapters.protocol import PluginLayout
-from skilllint.frontmatter import load_frontmatter
+from skilllint.frontmatter_core import extract_frontmatter
+from skilllint.frontmatter_yaml import safe_load_yaml_with_colon_fix
+from skilllint.models import ValidationIssue
+from skilllint.rule_registry import rule_reference
 from skilllint.rules.cu_series import validate_mdc_frontmatter
+from skilllint.rules.fm_series import _fm009_recovery_warnings
 from skilllint.schemas import load_provider_schema
 
 if TYPE_CHECKING:
@@ -96,8 +100,35 @@ class CursorAdapter:
         if mdc_schema is None:
             return []
 
-        post = load_frontmatter(path)
-        fm: dict[str, object] = dict(post.metadata)
+        content = path.read_text(encoding="utf-8")
+        # Manual rules may omit frontmatter. The shared extractor expects a
+        # newline after the closing delimiter; Cursor also accepts it at EOF.
+        frontmatter_text, _start, _end = extract_frontmatter(content + "\n")
+        if frontmatter_text is None:
+            if not content.startswith("---"):
+                return []
+            return [
+                ValidationIssue(
+                    field="(file)",
+                    code="FM003",
+                    severity="error",
+                    message="YAML frontmatter block not closed with '---'",
+                    docs_url=rule_reference("FM003"),
+                ).model_dump(exclude_none=True)
+            ]
 
-        issues = validate_mdc_frontmatter(fm, mdc_schema)
+        fm, yaml_error, colon_fields, _used_text = safe_load_yaml_with_colon_fix(frontmatter_text)
+        if fm is None:
+            message = f"Invalid YAML syntax: {yaml_error}" if yaml_error else "Frontmatter must be a YAML mapping"
+            return [
+                ValidationIssue(
+                    field="(yaml)", code="FM002", severity="error", message=message, docs_url=rule_reference("FM002")
+                ).model_dump(exclude_none=True)
+            ]
+
+        issues = [
+            issue.model_copy(update={"suggestion": f"Quote the value of '{issue.field}'"})
+            for issue in _fm009_recovery_warnings(colon_fields)
+        ]
+        issues.extend(validate_mdc_frontmatter(fm, mdc_schema))
         return [i.model_dump(exclude_none=True) for i in issues]
