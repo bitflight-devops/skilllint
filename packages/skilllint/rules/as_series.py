@@ -228,6 +228,9 @@ def _check_as008(tools: list[str], path: pathlib.Path) -> list[dict]:
     Returns:
         List of violation dicts — one per tool with a case mismatch or unknown server.
     """
+    if not any(tool.startswith("mcp__") for tool in tools):
+        return []
+
     known_servers = discover_mcp_servers(path)
     # Collect plugin-name -> server names map for plugin-namespaced tool resolution
     plugin_server_map = collect_plugin_names_from_ancestry(path)

@@ -12,6 +12,11 @@ from __future__ import annotations
 import pathlib
 import textwrap
 
+import pytest
+from pytest_mock import MockerFixture
+
+from skilllint.rules import as_series
+
 # This import fails RED until plan 02-02 creates the module.
 from skilllint.rules.as_series import check_skill_md
 
@@ -308,6 +313,63 @@ def _write_mcp_json(directory: pathlib.Path, *server_names: str) -> None:
 
     mcp_config = {"mcpServers": {name: {} for name in server_names}}
     (directory / ".mcp.json").write_text(json.dumps(mcp_config))
+
+
+@pytest.mark.parametrize(
+    "tools_block",
+    [
+        "",
+        "allowed-tools: []",
+        "allowed-tools: Read Bash(*)",
+        "allowed-tools: [Read, Write, Edit]",
+        "allowed-tools: [null, 17, true]",
+        "allowed-tools: [MCP__Ref__read, mcp_Ref__read, custom_mcp__Ref__read]",
+        "allowed-tools: [unterminated",
+    ],
+)
+def test_as008_skips_discovery_without_mcp_references(
+    tmp_path: pathlib.Path, mocker: MockerFixture, tools_block: str
+) -> None:
+    """Tool lists outside AS008's scope must not read MCP configuration."""
+    discover = mocker.patch.object(as_series, "discover_mcp_servers", return_value=set())
+    namespaces = mocker.patch.object(as_series, "collect_plugin_names_from_ancestry", return_value={})
+    skill_md = _make_skill_with_tools(tmp_path, tools_block)
+
+    assert _violations_with_code(check_skill_md(skill_md), "AS008") == []
+    discover.assert_not_called()
+    namespaces.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("reference", "severity"),
+    [
+        ("mcp__Ref__read", None),
+        ("mcp__ref__read", "error"),
+        ("mcp__Missing__read", "warning"),
+        ("mcp__Ref", None),
+        ("mcp__ref", "error"),
+        ("mcp__*", "warning"),
+        ("mcp__Ref__*", None),
+        ("mcp__ref__*", "error"),
+        ("mcp__", None),
+        ("mcp____read", None),
+        ("mcp__plugin_external_Ref__read", None),
+    ],
+)
+def test_as008_mixed_tools_preserve_mcp_discovery(
+    tmp_path: pathlib.Path, mocker: MockerFixture, reference: str, severity: str | None
+) -> None:
+    """Builtin tools must not hide any MCP reference, including malformed ones."""
+    _write_mcp_json(tmp_path, "Ref")
+    discover = mocker.spy(as_series, "discover_mcp_servers")
+    namespaces = mocker.spy(as_series, "collect_plugin_names_from_ancestry")
+    skill_md = _make_skill_with_tools(tmp_path, f"allowed-tools: Read {reference} Bash(*)")
+
+    violations = _violations_with_code(check_skill_md(skill_md), "AS008")
+
+    assert [violation["severity"] for violation in violations] == ([] if severity is None else [severity])
+    discover.assert_called_once_with(skill_md)
+    namespaces.assert_called_once_with(skill_md)
 
 
 def test_as008_exact_match_discovered_server_passes(tmp_path: pathlib.Path):
