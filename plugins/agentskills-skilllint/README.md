@@ -1,77 +1,65 @@
 # agentskills-skilllint
 
-A Claude Code plugin that teaches agents a stable procedure for using the
-`skilllint` CLI without duplicating the CLI's changing rule catalog or
-configuration metadata.
+Use skilllint from Claude Code to check agent skills, plugins, agents, commands, and platform files. The plugin helps Claude explain findings, apply supported fixes, and check the result.
 
-## What it does
+## Load the plugin
 
-The `/skilllint` skill directs an agent to:
-
-- locate or invoke the current `skilllint` executable;
-- scan the requested path with `skilllint check`;
-- use emitted rule IDs rather than guessing which rule applies;
-- query `skilllint rule <ID>` for current explanation and remediation;
-- query `skilllint rules` for current catalog metadata;
-- apply `--fix` only through a currently supported CLI route;
-- re-run validation after edits.
-
-Rule IDs, severities, fixability, thresholds, and command inventory remain
-owned by the installed `skilllint` runtime rather than this plugin.
-
-## Installation
-
-Load this repository plugin for a session:
+From the root of a checkout of this repository, start a Claude Code session with the plugin:
 
 ```bash
 claude --plugin-dir ./plugins/agentskills-skilllint
 ```
 
-This repository does not publish a persistent marketplace entry. Copy or
-package the plugin through your organization's supported Claude distribution
-process when persistent installation is required.
+The plugin needs the skilllint CLI. Use an existing installation, or choose one of these options:
 
-## Usage
-
-Invoke the full workflow:
-
-```text
-/skilllint
+```bash
+uvx skilllint@latest --version     # Run with uv, without a permanent installation
+pipx run skilllint --version       # Run with pipx, without a permanent installation
+python -m pip install skilllint    # Install with pip, then use skilllint
 ```
 
-Explain a finding using the current runtime:
+The skill uses the same invocation form for subsequent commands. If you are developing skilllint itself, follow the [repository development instructions](../../AGENTS.md) and use the checkout's CLI.
+
+This repository does not include a marketplace entry. The `--plugin-dir` command loads the plugin for that session; for persistent distribution, use your organization's supported Claude plugin installation process.
+
+## Use the skill
+
+Claude Code exposes the plugin skill as `/agentskills-skilllint:skilllint`, using the [plugin name as its namespace](https://code.claude.com/docs/en/plugins/components#explore-the-plugin-directory).
+
+Check the current repository scope:
 
 ```text
-/skilllint FM004
+/agentskills-skilllint:skilllint
 ```
 
-Validate a path:
+Explain a finding:
 
 ```text
-/skilllint ./plugins/my-plugin
+/agentskills-skilllint:skilllint FM004
 ```
 
-The skill may also be selected automatically for requests to lint or validate
-agent plugins, skills, agents, commands, and related platform files.
+Check a specific path:
 
-## Runtime reference
+```text
+/agentskills-skilllint:skilllint ./plugins/my-plugin
+```
 
-Use the CLI rather than this README for changing product facts:
+You can also ask Claude to lint a path or investigate a skilllint finding in natural language. Name the target platform when you want the scan limited to that platform.
+
+The skill reads rule IDs from the scan and queries `skilllint rule <ID>` for their meaning and remediation. When fixing findings, it uses the installed CLI's current fix support, reviews the edits, and runs validation again.
+
+## Find rule and command details
+
+Query the installed CLI for the current rule catalog, severities, platform scope, and available options:
 
 ```bash
 skilllint --help
+skilllint check --help
 skilllint rules
 skilllint rule <ID>
-skilllint check --help
 ```
 
-If `skilllint` is not installed, use `uv`, `pipx`, or `pip`:
-
-```bash
-uvx skilllint@latest --version     # uv
-pipx run skilllint --version       # pipx
-python -m pip install skilllint    # pip, then run `skilllint`
-```
+See the [usage guide](../../docs/usage.md) for configuration and CI integration. The [skill instructions](skills/skilllint/SKILL.md) describe the agent workflow.
 
 ## License
 

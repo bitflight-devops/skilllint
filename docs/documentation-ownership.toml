@@ -8,6 +8,7 @@
 "docs/maintainer-extension-guide.md" = "Maintainer extension workflow"
 "docs/runtime-contracts/claude-code-agent-skills-2.1.251.md" = "Pinned Claude runtime contract"
 "docs/usage.md" = "CLI, config, Action, and hook usage"
+"docs/output-formats.md" = "Output format and serialization contracts"
 "docs/vendor-cache.md" = "Vendor documentation cache"
 "docs/architecture.md" = "Current architecture and extension flow"
 "plugins/agentskills-skilllint/README.md" = "Plugin overview and activation"

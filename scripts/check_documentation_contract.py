@@ -28,6 +28,7 @@ EXPECTED = {
     "docs/maintainer-extension-guide.md",
     "docs/runtime-contracts/claude-code-agent-skills-2.1.251.md",
     "docs/usage.md",
+    "docs/output-formats.md",
     "docs/vendor-cache.md",
     "docs/architecture.md",
     "plugins/agentskills-skilllint/README.md",
@@ -94,7 +95,7 @@ def validate_documentation_contract(root: Path = ROOT) -> list[str]:
             f"narrative inventory mismatch: extra={sorted(narrative - EXPECTED)} missing={sorted(EXPECTED - narrative)}"
         )
     if set(owners) != EXPECTED:
-        errors.append("ownership mapping must contain exactly the 13 maintained files")
+        errors.append("ownership mapping must match the maintained document inventory")
     values = list(owners.values())
     if len(values) != len(set(values)):
         errors.append("ownership topics must be unique")

@@ -3,6 +3,8 @@
 > Status: proposed design. Existing link helpers and implemented checks are
 > current; deferred rules and discovery changes below are not active contracts.
 
+Read this document as a proposal for LK003, not an implementation guide for an active rule. LK001 and LK004 are implemented in `packages/skilllint/rules/lk_series.py`; `RepoDocLinkValidator` and the LK003 discovery changes described below are proposed. See the [current architecture](architecture.md) and [maintainer extension guide](maintainer-extension-guide.md) before implementing the design.
+
 Status: revised (post-adversarial-review)
 Author: python-cli-design-spec (architecture pass)
 Depends on: `packages/skilllint/rules/lk_series.py`, `packages/skilllint/plugin_validator.py`,
@@ -113,15 +115,7 @@ mechanisms rather than introducing anything new; each row cites the actual code 
 
 ### 4.1 `packages/skilllint/rules/lk_series.py` — extend, do not replace
 
-**Reused as-is** (no signature change): `LINK_PATTERN`, `CODE_FENCE_PATTERN`,
-`INLINE_CODE_PATTERN`, `_strip_code_blocks`, `_should_ignore_link`, `_iter_links`. These
-functions never took a resolution root — they operate on raw text and yield
-`(link_text, link_url, link_url_no_fragment)` triples. Nothing about them assumed
-`SKILL.md`; `check_lk001` was the only place that hardcoded `path.parent` as the resolution
-root and attempted `${CLAUDE_*}` substitution. `check_lk003` reuses `path.parent` as its root
-too (each file's own directory), so no root parameter needs to be threaded through the shared
-helpers — only the existence-check loop itself is factored out (ADR-5 — do not generalize the
-extraction helpers further).
+**Reuse the existing extraction helpers:** `LINK_PATTERN`, `CODE_FENCE_PATTERN`, `INLINE_CODE_PATTERN`, `_strip_code_blocks`, `_should_ignore_link`, and `_iter_links`. They do not take a filesystem resolution root. `_iter_links` currently yields `(link_text, link_url, link_url_without_fragment, line, start, end)`, including the original destination offsets needed for diagnostic source locations. The proposed `check_lk003` should preserve that metadata and resolve targets against the convention file's own directory. ADR-5 proposes factoring the existence-check loop without adding a root parameter to the text-extraction helpers.
 
 **New — extracted from `check_lk001`'s body, used by both `check_lk001` and `check_lk003`:**
 
@@ -164,9 +158,7 @@ def check_lk003(content: str, path: Path) -> list[ValidationIssue]:
     """
 ```
 
-`check_lk003` calls `_resolve_link_target(url, path.parent, substitute_claude_vars=False)`
-for each `_iter_links(content)` triple and reports `LK003` when the resolved path is not
-`None` and does not exist — structurally the same loop `check_lk001` already runs (ADR-5).
+The proposed `check_lk003` calls `_resolve_link_target(url, path.parent, substitute_claude_vars=False)` for each link yielded by `_iter_links(content)` and reports `LK003` when the resolved path is not `None` and does not exist. It must retain the yielded source offsets when constructing a finding, as the current LK001 path does.
 The `<!-- examples: LK003 -->` marker is
 required — every existing rule docstring carries one, and `_render_examples_block`
 (`plugin_validator.py`) expands it in `skilllint rule LK003` output.
@@ -312,7 +304,7 @@ flow through it automatically.
 ## 5. Data Architecture
 
 No new persisted configuration and no schema changes. The single shared data model is the
-existing `ValidationIssue` Pydantic model in `plugin_validator.py`:
+existing `ValidationIssue` Pydantic model in `models.py` (re-exported by `plugin_validator.py`):
 
 ```python
 class ValidationIssue(BaseModel):

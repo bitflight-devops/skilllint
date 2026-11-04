@@ -10,7 +10,7 @@ ROOT = Path(__file__).parents[1]
 
 def test_maintained_inventory_and_links_are_valid() -> None:
     assert not validate_documentation_contract(ROOT)
-    assert len(EXPECTED) == 13
+    assert "docs/output-formats.md" in EXPECTED
 
 
 def test_external_mode_result_shape_is_machine_readable(tmp_path: Path) -> None:

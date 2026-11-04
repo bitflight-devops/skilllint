@@ -1,151 +1,97 @@
 # Output examples
 
-Choose a format for its consumer:
+Compare skilllint's reports and choose the format your terminal, script, or CI service needs:
 
 - [Full human diagnostics](#full-human-diagnostics): source excerpts, highlights, help, and colour.
 - [Concise](#concise): monochrome, one finding per line for pre-commit.
-- [JSON Lines](#json-lines): one complete finding record per line for agents.
+- [JSON Lines](#json-lines): one finding record per line for scripts and agents.
 - [GitHub annotations](#github-annotations): workflow commands interpreted by Actions.
-- [GitLab Code Quality](#gitlab-code-quality): Code Quality JSON artifacts.
+- [GitLab Code Quality](#gitlab-code-quality): Code Quality JSON reports.
 - [JUnit-style XML](#junit-style-xml): test-result XML, distinct from xUnit.net XML.
 
-All examples use the same real, deliberately invalid fixture. The full preview
-replays actual terminal colours. Machine-format previews add presentation colour
-and wrapping, and are explicitly not screenshots of GitHub, GitLab, or a test UI.
+Every example checks the same [deliberately invalid skill](fixtures/demo-skill/SKILL.md), whose name contains uppercase letters and a space. Each command exits `1` because validation fails. Run the commands from a checkout of this repository with its dependencies installed.
+
+The full preview preserves terminal colours from the CLI. The other SVGs use viewer-only colour or visual wrapping for readability and are not screenshots of GitHub, GitLab, or a test UI. Use the linked raw files, rather than SVG text, as machine-readable reports.
 
 ## Full human diagnostics
 
-This SVG replays the [actual ANSI stdout](full.ansi) captured at 100 terminal
-columns. It preserves CLI colours, source excerpts, caret highlights, and help.
-It does not add syntax highlighting to the diagnostic data.
+Read findings alongside source excerpts and caret highlights. The preview preserves the colours and layout of the [captured terminal output](full.ansi) at 100 columns.
 
-![Actual full-colour human diagnostic with source excerpt and caret highlight](full.svg)
-
-Run from the repository root:
+![Full human diagnostic with a source excerpt, caret highlight, suggestion, and rule help](full.svg)
 
 ```console
 uv run skilllint check --platform claude-code --output-format full --color always examples/output/fixtures/demo-skill/SKILL.md
 ```
 
-The command exits `1`. For interactive use, omit `--color always` to detect
-terminal colour support automatically. See the
-[full diagnostic contract](../../docs/usage.md#full-human-diagnostics).
-
-## JSON Lines
-
-This **JSONL report preview** adds syntax colour and visual wrapping to the
-[raw stdout](json-lines.jsonl) captured from the actual CLI. It is not a terminal
-screenshot or a CI interface. Each record remains one physical line in the raw
-file; the SVG does not change the report data.
-
-![JSONL report preview with syntax colour and visual wrapping](json-lines.svg)
-
-Run from the repository root:
-
-```console
-uv run skilllint check --platform claude-code --output-format json-lines examples/output/fixtures/demo-skill/SKILL.md
-```
-
-The [fixture](fixtures/demo-skill/SKILL.md) deliberately contains an invalid name.
-The command exits `1` because validation fails. See the
-[JSONL contract](../../docs/usage.md#json-lines) for fields and exit semantics.
+For interactive use, omit `--color always` to detect terminal colour support automatically. See [full human diagnostics](../../docs/output-formats.md#full-human-diagnostics) for source-location and recording behaviour.
 
 ## Concise
 
-This **concise actual-output preview** renders the [raw stdout](concise.txt)
-captured from the CLI. Findings remain monochrome; the coloured frame and label
-are presentation only. This is not a platform screenshot or a CI interface.
-Visual wrapping keeps the preview readable; each finding remains one physical
-line in the raw file.
+Use one plain line per finding in hooks and logs. The [raw output](concise.txt) is monochrome, without headings, fix suggestions, or a summary. The preview adds a frame and wraps the line visually.
 
-![Concise actual-output preview with monochrome findings and visual wrapping](concise.svg)
-
-Run from the repository root:
+![Concise output with one monochrome finding, visually wrapped in the preview](concise.svg)
 
 ```console
 uv run skilllint check --platform claude-code --output-format concise --no-color examples/output/fixtures/demo-skill/SKILL.md
 ```
 
-The same deliberately invalid fixture exits `1`. Concise output contains only
-findings, with no headings, fix suggestions, or summary.
+See [concise output](../../docs/output-formats.md#concise) for fields and [pre-commit setup](../../docs/usage.md#pre-commit) to use this format in a hook.
+
+## JSON Lines
+
+Use a flat stream of findings in scripts and agents. Each record occupies one physical line in the [raw JSONL](json-lines.jsonl); the preview adds syntax colour and visual wrapping.
+
+![JSON Lines report with syntax colour and visual wrapping](json-lines.svg)
+
+```console
+uv run skilllint check --platform claude-code --output-format json-lines examples/output/fixtures/demo-skill/SKILL.md
+```
+
+See the [JSON Lines reference](../../docs/output-formats.md#json-lines) for fields, source ranges, and exit semantics.
 
 ## GitHub annotations
 
-This **GitHub workflow-command preview** renders the [actual CLI stdout](github.txt)
-with colour and visual wrapping for readability. It is not a GitHub interface
-screenshot. The raw file contains plain workflow commands which GitHub Actions
-interprets as error, warning, or notice annotations.
+Emit annotations from a GitHub Actions `run` step. The [raw workflow command](github.txt) includes the rule code, source range, message, suggestion, and help reference. GitHub interprets the command when it runs in Actions; the preview below shows the command itself.
 
-![GitHub workflow-command preview, not a GitHub UI screenshot](github.svg)
-
-Run from the repository root:
+![GitHub workflow command with escaped newlines and source coordinates](github.svg)
 
 ```console
 uv run skilllint check --platform claude-code --output-format github examples/output/fixtures/demo-skill/SKILL.md
 ```
 
-The deliberately invalid fixture exits `1`. The command uses the real source
-range, includes a suggestion, and percent-escapes embedded newlines. See the
-[GitHub annotations contract](../../docs/usage.md#github-annotations).
+See the [GitHub annotations reference](../../docs/output-formats.md#github-annotations) or use the [skilllint Action](../../docs/usage.md#github-action).
 
 ## GitLab Code Quality
 
-This **GitLab Code Quality report preview** adds syntax colour and visual
-wrapping to the [actual CLI JSON report](gitlab.json). It is not a GitLab
-interface screenshot, and it does not demonstrate live GitLab ingestion.
-The raw file is an unchanged, BOM-free JSON array.
+Publish findings as a GitLab Code Quality report. The [raw JSON array](gitlab.json) contains the description, rule code, fingerprint, severity, and repository-relative location.
 
-![GitLab Code Quality report preview, not a GitLab UI screenshot](gitlab.svg)
-
-Run from the repository root:
+![GitLab Code Quality JSON report with syntax colour and visual wrapping](gitlab.svg)
 
 ```console
 uv run skilllint check --platform claude-code --output-format gitlab examples/output/fixtures/demo-skill/SKILL.md
 ```
 
-The deliberately invalid fixture exits `1`. See the
-[GitLab report contract and CI example](../../docs/usage.md#gitlab-code-quality)
-for fingerprint identity, severity mapping, and explicitly disclosed limitations
-for findings without a repository file or source position.
+See [GitLab CI setup](../../docs/usage.md#gitlab-code-quality) to publish the report. The [GitLab Code Quality reference](../../docs/output-formats.md#gitlab-code-quality) covers fingerprint behaviour, severity mapping, and findings that this format cannot represent.
 
 ## JUnit-style XML
 
-This **JUnit-style XML report preview** adds syntax colour and visual wrapping to
-the [actual CLI XML report](junit.xml). It is not a CI interface screenshot or a
-live ingestion test. The raw XML remains unchanged; this format is distinct
-from xUnit.net's assemblies-based XML dialect.
+Publish validation results to a JUnit report consumer. In the [raw XML](junit.xml), the fixture's single validator result becomes one failed testcase containing the finding and help text.
 
-![JUnit-style XML report preview, not a CI UI screenshot](junit.svg)
-
-Run from the repository root:
+![JUnit-style XML report showing one failed validation testcase](junit.svg)
 
 ```console
 uv run skilllint check --platform claude-code --output-format junit examples/output/fixtures/demo-skill/SKILL.md
 ```
 
-The deliberately invalid fixture exits `1`. Its single collected validator
-result becomes one failed testcase, with the full finding and help text. See
-[JUnit result semantics and CI configuration](../../docs/usage.md#junit-style-xml).
+See [JUnit-style XML](../../docs/output-formats.md#junit-style-xml) for result semantics and [JUnit CI setup](../../docs/usage.md#junit-style-xml) to publish the report.
 
 ## Reproduce the examples
 
-Regenerate all artifacts, or verify they match without modifying them:
+From the repository root, use its locked dependencies to regenerate the reports and previews, or check for differences without changing files:
 
 ```console
 uv run python scripts/capture_output_examples.py
 uv run python scripts/capture_output_examples.py --check
 ```
 
-The script preserves stdout bytes and uses a fixed SVG identifier and width.
-Artifact comparisons and the SVG viewer normalize CRLF to LF so native Windows
-output and checkout newline conversion do not create false drift. The raw report
-files retain the captured bytes. Only the known `vcs_versioning` shallow-checkout
-warning is ignored during capture; other stderr diagnostics still fail the check.
-The capture process pins `PYTHONIOENCODING=utf-8` for startup diagnostics as well
-as the report, without changing the caller's environment.
-Use the repository's locked dependencies to reproduce the preview. The full
-capture pins `COLUMNS=100`, `LINES=24`, and `TERM=xterm-256color`; `--color always`
-ensures that its raw file contains the same terminal styles when redirected.
-The concise findings remain monochrome. JSONL, GitHub, GitLab, and JUnit SVGs add
-viewer-only colour; do not use their SVG text as a machine report. Consume the
-linked raw files, or run the corresponding CLI command directly.
+The capture script keeps raw stdout bytes and uses fixed SVG identifiers and dimensions. It sets UTF-8 output encoding; the full capture also sets `COLUMNS=100`, `LINES=24`, and `TERM=xterm-256color`. Comparisons normalize CRLF to LF to account for Windows line endings. The known `vcs_versioning` shallow-checkout warning is ignored; other stderr diagnostics fail the check.

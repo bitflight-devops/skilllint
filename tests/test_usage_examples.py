@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import json
+import shlex
 import subprocess
+import xml.etree.ElementTree as ET
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).parents[1]
 GUIDE = ROOT / "docs/usage.md"
@@ -95,3 +99,91 @@ def test_documented_policy_shape_reports_invalid_input(tmp_path: Path) -> None:
     assert result.returncode == 0
     assert "SK006" in output
     assert "invalid" in output.lower() or "must" in output.lower()
+
+
+def test_output_reference_retains_format_contracts_and_links() -> None:
+    reference = ROOT / "docs/output-formats.md"
+    text = reference.read_text(encoding="utf-8")
+    guide = GUIDE.read_text(encoding="utf-8")
+    required = {
+        "JSON envelope": ["--json", "record_path", "file_exists"],
+        "Full human diagnostics": ["--output-format full", "Unicode code points", "changed"],
+        "Concise": ["--output-format concise", "one physical line", "duplicates"],
+        "JSON Lines": ["--output-format json-lines", "schema_version", "source_location", "exclusive"],
+        "GitHub annotations": ["--output-format github", "GITHUB_WORKSPACE", "inclusive"],
+        "GitLab Code Quality": ["--output-format gitlab", "fingerprint", "display anchor", "stderr"],
+        "JUnit-style XML": ["--output-format junit", "testcase", "system-out", "xUnit.net"],
+    }
+    for heading, snippets in required.items():
+        start = text.index(f"## {heading}")
+        end = text.find("\n## ", start + 1)
+        section = text[start:] if end == -1 else text[start:end]
+        assert all(snippet in section for snippet in snippets), heading
+
+    # Existing README and gallery destinations remain valid after the reference split.
+    for heading in list(required)[1:]:
+        assert f"### {heading}" in guide
+    assert "output-formats.md" in guide
+    assert '"schema_version"' not in guide
+
+
+def test_documented_policy_example_uses_supported_overrides(tmp_path: Path) -> None:
+    from skilllint.policy import _load_policy
+
+    guide = GUIDE.read_text(encoding="utf-8")
+    section = guide.split("## Rules, thresholds, and severity\n", 1)[1].split("\n## ", 1)[0]
+    example = section.split("```json\n", 1)[1].split("\n```", 1)[0]
+    config = tmp_path / ".skilllint.json"
+    config.write_text(example, encoding="utf-8")
+    policy, diagnostics = _load_policy(config)
+
+    assert diagnostics == []
+    assert policy.thresholds == {"SK006": 4400, "SK007": 8800}
+    assert policy.severity == {"SK006": "warning"}
+    assert policy.ignore == {"": ["AS008"], "skills/legacy": ["FM007"]}
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize(
+    ("heading", "output_format"),
+    [
+        ("Full human diagnostics", "full"),
+        ("Concise", "concise"),
+        ("JSON Lines", "json-lines"),
+        ("GitHub annotations", "github"),
+        ("GitLab Code Quality", "gitlab"),
+        ("JUnit-style XML", "junit"),
+    ],
+)
+def test_output_reference_commands_execute(heading: str, output_format: str, tmp_path: Path) -> None:
+    text = (ROOT / "docs/output-formats.md").read_text(encoding="utf-8")
+    section = text.split(f"## {heading}\n", 1)[1].split("\n## ", 1)[0]
+    command = section.split("```console\n", 1)[1].splitlines()[0]
+    args = shlex.split(command)
+    assert args[:3] == ["skilllint", "check", "--output-format"]
+    assert args[3] == output_format
+    if ">" in args:
+        args = args[: args.index(">")]
+    skill_dir = tmp_path / "demo-skill"
+    skill_dir.mkdir()
+    skill = skill_dir / "SKILL.md"
+    skill.write_text(
+        "---\nname: INVALID_NAME\ndescription: Use this skill when testing report formats.\n---\n\n# Demo\n",
+        encoding="utf-8",
+    )
+    args[args.index("plugins/my-plugin")] = str(skill)
+
+    result = _run(*args[1:], cwd=tmp_path)
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "FM010" in result.stdout
+    if output_format == "json-lines":
+        assert all(json.loads(line)["schema_version"] == 1 for line in result.stdout.splitlines())
+    elif output_format == "gitlab":
+        assert isinstance(json.loads(result.stdout), list)
+    elif output_format == "junit":
+        assert ET.fromstring(result.stdout).tag == "testsuites"
+    elif output_format == "github":
+        assert "::error " in result.stdout
+    elif output_format == "concise":
+        assert "error[FM010]" in result.stdout
