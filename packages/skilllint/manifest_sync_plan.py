@@ -20,31 +20,40 @@ class ManifestUpdate:
     version: str
 
 
-def _replace_bytes(path: Path, content: bytes) -> None:
-    """Replace one manifest atomically, retaining its original permission bits."""
-    path = path.resolve()
-    mode = stat.S_IMODE(path.stat().st_mode)
-    descriptor, filename = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
+def _replace_bytes(path: Path, content: bytes, *, expected: bytes) -> None:
+    """Prepare replacement bytes, then recheck the target immediately before replacing."""
+    target = path.resolve()
+    original_stat = target.stat()
+    identity = (original_stat.st_dev, original_stat.st_ino)
+    mode = stat.S_IMODE(original_stat.st_mode)
+    descriptor, filename = tempfile.mkstemp(dir=target.parent, prefix=f".{target.name}.")
     replacement = Path(filename)
     try:
         with os.fdopen(descriptor, "wb") as temporary:
             temporary.write(content)
         replacement.chmod(mode)
-        replacement.replace(path)
+        _check_expected_target(path, target, identity, expected)
+        replacement.replace(target)
     finally:
         replacement.unlink(missing_ok=True)
 
 
+def _check_expected_target(path: Path, target: Path, identity: tuple[int, int], expected: bytes) -> None:
+    current_stat = path.stat()
+    if (
+        path.resolve() != target
+        or (current_stat.st_dev, current_stat.st_ino) != identity
+        or path.read_bytes() != expected
+    ):
+        raise OSError(f"Manifest changed before replacement: {path}")
+
+
 def _apply_update(update: ManifestUpdate) -> None:
-    if update.path.read_bytes() != update.before:
-        raise OSError(f"Manifest changed during preparation: {update.path}")
-    _replace_bytes(update.path, update.after.encode("utf-8"))
+    _replace_bytes(update.path, update.after.encode("utf-8"), expected=update.before)
 
 
 def _restore_update(update: ManifestUpdate) -> None:
-    if update.path.read_bytes() != update.after.encode("utf-8"):
-        raise OSError(f"Manifest changed after application: {update.path}")
-    _replace_bytes(update.path, update.before)
+    _replace_bytes(update.path, update.before, expected=update.after.encode("utf-8"))
 
 
 def apply_manifest_updates(updates: Sequence[ManifestUpdate], stage: Callable[[], None] | None = None) -> None:
@@ -53,7 +62,9 @@ def apply_manifest_updates(updates: Sequence[ManifestUpdate], stage: Callable[[]
     Staging runs only after every file is written. The caller must stage the
     entire batch in one atomic index update. An interrupted process can leave
     complete individual files, so callers must still reconcile on retry even
-    when an earlier attempt already advanced a version.
+    when an earlier attempt already advanced a version. Expected bytes and target
+    identity are checked immediately before replacement. This is optimistic
+    conflict detection, not coordination with arbitrary external file writers.
     """
     applied: list[ManifestUpdate] = []
     try:

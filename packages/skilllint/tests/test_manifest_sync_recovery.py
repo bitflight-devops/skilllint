@@ -100,10 +100,10 @@ def test_later_write_failure_rolls_back_earlier_manifest_and_retry_succeeds(
     before = (_plugin().read_bytes(), _marketplace().read_bytes())
     replace = plan._replace_bytes
 
-    def fail_marketplace(path: Path, content: bytes) -> None:
+    def fail_marketplace(path: Path, content: bytes, *, expected: bytes) -> None:
         if path == _marketplace():
             raise OSError("injected write failure")
-        replace(path, content)
+        replace(path, content, expected=expected)
 
     with monkeypatch.context() as fault:
         fault.setattr(plan, "_replace_bytes", fail_marketplace)
@@ -170,3 +170,56 @@ def test_rollback_reports_conflict_without_overwriting_external_edit(tmp_path: P
         plan.apply_manifest_updates([plan.ManifestUpdate(target, b"before", "after", "1.0.1")], concurrent_edit)
     assert target.read_text() == "external change"
     assert any("rollback failed" in note and "plugin.json" in note for note in error.value.__notes__)
+
+
+@pytest.mark.parametrize("during_rollback", [False, True])
+def test_edit_during_temporary_preparation_is_preserved(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, during_rollback: bool
+) -> None:
+    target = tmp_path / "plugin.json"
+    target.write_text("before")
+    create_temporary = plan.tempfile.mkstemp
+    preparations = 0
+
+    def edit_during_preparation(*, dir: Path, prefix: str) -> tuple[int, str]:  # noqa: A002 - tempfile keyword API
+        nonlocal preparations
+        result = create_temporary(dir=dir, prefix=prefix)
+        preparations += 1
+        # The first preparation applies the update; the second restores it.
+        if preparations == (2 if during_rollback else 1):
+            target.write_text("external change")
+        return result
+
+    def fail_staging() -> None:
+        raise OSError("staging failed")
+
+    monkeypatch.setattr(plan.tempfile, "mkstemp", edit_during_preparation)
+    with pytest.raises(OSError, match="staging failed" if during_rollback else "changed before replacement") as error:
+        plan.apply_manifest_updates(
+            [plan.ManifestUpdate(target, b"before", "after", "1.0.1")], fail_staging if during_rollback else None
+        )
+    assert target.read_text() == "external change"
+    assert list(tmp_path.iterdir()) == [target]
+    if during_rollback:
+        assert any("rollback failed" in note for note in error.value.__notes__)
+
+
+def test_replacement_with_same_bytes_during_preparation_is_detected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "plugin.json"
+    target.write_text("before")
+    create_temporary = plan.tempfile.mkstemp
+
+    def replace_during_preparation(*, dir: Path, prefix: str) -> tuple[int, str]:  # noqa: A002 - tempfile keyword API
+        result = create_temporary(dir=dir, prefix=prefix)
+        external = tmp_path / "external.json"
+        external.write_text("before")
+        external.replace(target)
+        return result
+
+    monkeypatch.setattr(plan.tempfile, "mkstemp", replace_during_preparation)
+    with pytest.raises(OSError, match="changed before replacement"):
+        plan.apply_manifest_updates([plan.ManifestUpdate(target, b"before", "after", "1.0.1")])
+    assert target.read_text() == "before"
+    assert list(tmp_path.iterdir()) == [target]
