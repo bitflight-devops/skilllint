@@ -54,7 +54,16 @@ def test_valid_cursor_frontmatter_at_eof(tmp_path: Path, ending: str) -> None:
     assert CursorAdapter().validate(rule) == []
 
 
-@pytest.mark.parametrize("content", ["# Manual rule\nBody.\n", "---\n---\nBody.\n"])
+@pytest.mark.parametrize(
+    "content",
+    [
+        "# Manual rule\nBody.\n",
+        "----\n# Manual rule\nBody.\n",
+        "-----\n---\nBody.\n",
+        "---not-a-delimiter\nBody.\n",
+        "---\n---\nBody.\n",
+    ],
+)
 def test_cursor_optional_frontmatter_remains_valid(tmp_path: Path, content: str) -> None:
     """Headerless manual rules and empty mappings retain existing behavior."""
     rule = tmp_path / "valid.mdc"
