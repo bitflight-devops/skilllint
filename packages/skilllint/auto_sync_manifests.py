@@ -1086,7 +1086,8 @@ def _reconcile_component_array(
         for reference in references
         for path in reference.resolve(plugin_dir, field_name).paths
     ]
-    missing = _find_missing_items(disk_items, covered, normalize=field_name == "skills")
+    valid_disk_items = [item for item in disk_items if ComponentReference(item).resolve(plugin_dir, field_name).valid]
+    missing = _find_missing_items(valid_disk_items, covered, normalize=field_name == "skills")
     stale = _find_stale_items(registered, plugin_dir, field_name)
 
     if missing or stale:

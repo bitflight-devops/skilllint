@@ -156,7 +156,7 @@ def _discover_manifest_skill_paths(root: Path, paths: list[str]) -> set[Path]:
             # Explicit targets remain eligible; collection discovery keeps the
             # same excluded-directory policy as conventional glob expansion.
             if (
-                target != root / reference.relative_path
+                target != reference.resolve_target(root)
                 and target.is_file()
                 and target.parent.name in EXCLUDED_DIR_NAMES
             ):
@@ -596,7 +596,12 @@ def _manifest_filter_type_paths(
             continue
         resolved = ComponentReference(declared_path).resolve(directory, kind)
         if resolved.valid:
-            targets.extend(resolved.paths)
+            paths = (
+                sorted(_discover_manifest_skill_paths(directory, [declared_path]))
+                if kind == "skills"
+                else resolved.paths
+            )
+            targets.extend(paths)
         else:
             targets.append(manifest_path)
     return targets

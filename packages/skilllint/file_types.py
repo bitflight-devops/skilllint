@@ -10,6 +10,7 @@ from __future__ import annotations
 from enum import StrEnum
 from pathlib import Path
 
+from skilllint.boundary.component_references import component_references_from_raw
 from skilllint.frontmatter_core import FRONTMATTER_EXEMPT_FILENAMES
 from skilllint.plugin_manifest import load_plugin_json
 
@@ -53,14 +54,9 @@ class FileType(StrEnum):
             if manifest is None:
                 continue
             for field_name, file_type in (("agents", FileType.AGENT), ("commands", FileType.COMMAND)):
-                declarations = manifest.get(field_name)
-                if not isinstance(declarations, list):
-                    continue
-                for declaration in declarations:
-                    if not isinstance(declaration, str):
-                        continue
-                    target = plugin_root / declaration
-                    if path == target or (target.is_dir() and path.parent == target):
+                for reference in component_references_from_raw(manifest.get(field_name)) or ():
+                    target = reference.resolve_target(plugin_root)
+                    if target is not None and (path == target or (target.is_dir() and path.parent == target)):
                         return file_type
         return None
 

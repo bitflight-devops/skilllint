@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -32,16 +31,34 @@ class ComponentReference:
         """The lexical path used in registration diagnostics."""
         return Path(self.path.removeprefix("./"))
 
+    def resolve_target(self, plugin_dir: Path) -> Path | None:
+        """Resolve parent traversals without losing subsequent lexical aliases.
+
+        Returns:
+            A contained target path, or None for an out-of-plugin reference.
+        """
+        target = plugin_dir / self.relative_path
+        root = plugin_dir.resolve()
+        if not target.resolve().is_relative_to(root):
+            return None
+        parts = self.relative_path.parts
+        if ".." in parts:
+            prefix_length = len(parts) - parts[::-1].index("..")
+            prefix = (plugin_dir / Path(*parts[:prefix_length])).resolve()
+            if prefix.is_relative_to(root):
+                target = plugin_dir / prefix.relative_to(root) / Path(*parts[prefix_length:])
+        return target
+
     def resolve(self, plugin_dir: Path, kind: ComponentKind) -> ResolvedComponent:
         """Resolve only valid capability targets contained inside the plugin.
 
         Returns:
             Target validity and lexical scan paths for this component kind.
         """
-        target = Path(os.path.normpath(str(plugin_dir / self.relative_path)))
-        root = plugin_dir.resolve()
-        if not target.resolve().is_relative_to(root):
+        target = self.resolve_target(plugin_dir)
+        if target is None:
             return ResolvedComponent(False)
+        root = plugin_dir.resolve()
         if target.is_file():
             valid = target.name == "SKILL.md" if kind == "skills" else target.suffix == ".md"
             return ResolvedComponent(valid, (target,) if valid else ())
