@@ -42,6 +42,7 @@ from skilllint.scan_runtime import (
     find_marketplace_dir,
     find_plugin_dir,
 )
+from skilllint.source_location import SourceLocation
 
 FM002 = "FM002"
 PL001 = "PL001"
@@ -198,6 +199,7 @@ class PluginLinkEscapeValidator:
                     errors.append(
                         ValidationIssue(
                             field=md_file.relative_to(plugin_dir).as_posix(),
+                            source_location=SourceLocation(path=md_file),
                             severity="error",
                             message=f"Could not read file: {e}",
                             code=FM002,

@@ -33,12 +33,14 @@ from skilllint.frontmatter_yaml import (
     _is_losslessly_scalar_tool_list,
     _replace_list_valued_tool_fields,
     _safe_load_yaml,
+    frontmatter_source_locations,
     safe_load_yaml_with_colon_fix,
 )
 from skilllint.models import ValidationIssue, ValidationResult, YamlValue
 from skilllint.rule_registry import rule_reference
 from skilllint.rules.ag_series import check_ag001, check_ag002, check_ag003
 from skilllint.rules.fm_series import check_fm004, check_fm007, check_fm010
+from skilllint.source_location import SourceLocation, source_digest
 from skilllint.validators.hooks import HookValidator
 
 if TYPE_CHECKING:
@@ -308,7 +310,7 @@ def _coerce_validation_issues(issues: list[ValidationIssue]) -> list[ValidationI
     Returns:
         Equivalent issues re-instantiated on the canonical ``ValidationIssue`` model.
     """
-    return [ValidationIssue.model_validate(i.model_dump()) for i in issues]
+    return [ValidationIssue.model_validate({**i.model_dump(), "source_location": i.source_location}) for i in issues]
 
 
 def _build_validation_result(
@@ -442,6 +444,44 @@ def _validate_frontmatter_yaml(
     return data, None
 
 
+def _with_frontmatter_locations(
+    result: ValidationResult, path: Path, text: str, *, line_offset: int | None, content: str
+) -> ValidationResult:
+    """Attach original source locations without changing legacy diagnostic fields.
+
+    Returns:
+        Result with source identities for frontmatter-owned findings.
+    """
+    issues = [*result.errors, *result.warnings, *result.info]
+    if not any(issue.code.startswith("FM") for issue in issues):
+        return result
+    fields, syntax_error = (
+        frontmatter_source_locations(text, path, line_offset=line_offset) if line_offset is not None else ({}, None)
+    )
+
+    digest = source_digest(content)
+
+    def locate(issue: ValidationIssue) -> ValidationIssue:
+        # Other validators may refer to paths outside this file (e.g. hooks).
+        if not issue.code.startswith("FM") or issue.source_location is not None:
+            return issue
+        # Pydantic flattens nested/union loc tuples with dots. A literal YAML
+        # key that happens to match that display label is not its source.
+        location = fields.get(issue.field) if "." not in issue.field else None
+        if issue.code == FM002 and issue.field == "(yaml)":
+            location = syntax_error
+        if location is not None:
+            location = location.model_copy(update={"content_digest": digest})
+        return issue.model_copy(update={"source_location": location or SourceLocation(path=path)})
+
+    return ValidationResult(
+        passed=result.passed,
+        errors=[locate(issue) for issue in result.errors],
+        warnings=[locate(issue) for issue in result.warnings],
+        info=[locate(issue) for issue in result.info],
+    )
+
+
 class FrontmatterValidator:
     """Validates and auto-fixes YAML frontmatter in capability files.
 
@@ -479,13 +519,14 @@ class FrontmatterValidator:
 
         try:
             content = path.read_text(encoding="utf-8")
-        except OSError as e:
+        except (OSError, UnicodeDecodeError) as e:
             return _validation_result_with_error(
                 errors=errors,
                 warnings=warnings,
                 info=info,
                 issue=ValidationIssue(
                     field="(file)",
+                    source_location=SourceLocation(path=path),
                     severity="error",
                     message=f"Could not read file: {e}",
                     code=FM002,
@@ -493,7 +534,7 @@ class FrontmatterValidator:
                 ),
             )
 
-        frontmatter_text, _start_line, _end_line = self._extract_frontmatter(content)
+        frontmatter_text, start_line, _end_line = self._extract_frontmatter(content)
         if frontmatter_text is None:
             return _validation_result_with_error(
                 errors=errors,
@@ -501,6 +542,7 @@ class FrontmatterValidator:
                 info=info,
                 issue=ValidationIssue(
                     field="(file)",
+                    source_location=SourceLocation(path=path),
                     severity="error",
                     message="No YAML frontmatter found",
                     code=FM003,
@@ -509,24 +551,41 @@ class FrontmatterValidator:
                 ),
             )
 
+        # The legacy extractor tolerates nonstandard opening delimiters. Only
+        # a normal delimiter establishes the offset into the original file.
+        line_offset = start_line if content.startswith("---\n") else None
         file_type = FileType.detect_file_type(path)
         if file_type == FileType.UNKNOWN:
             file_type = FileType.SKILL
 
         data, yaml_result = _validate_frontmatter_yaml(frontmatter_text, errors=errors, warnings=warnings, info=info)
         if yaml_result is not None:
-            return yaml_result
+            return _with_frontmatter_locations(
+                yaml_result, path, frontmatter_text, line_offset=line_offset, content=content
+            )
 
         model_class = self._get_model_class(file_type)
         if model_class is None:
-            return _build_validation_result(errors=errors, warnings=warnings, info=info)
+            return _with_frontmatter_locations(
+                _build_validation_result(errors=errors, warnings=warnings, info=info),
+                path,
+                frontmatter_text,
+                line_offset=line_offset,
+                content=content,
+            )
 
         validated_data = cast("dict[str, YamlValue]", data)
         self._validate_pydantic_model(
             model_class, validated_data, file_type, path, frontmatter_text, errors=errors, warnings=warnings
         )
 
-        return _build_validation_result(errors=errors, warnings=warnings, info=info)
+        return _with_frontmatter_locations(
+            _build_validation_result(errors=errors, warnings=warnings, info=info),
+            path,
+            frontmatter_text,
+            line_offset=line_offset,
+            content=content,
+        )
 
     def _validate_pydantic_model(
         self,

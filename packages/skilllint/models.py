@@ -11,6 +11,9 @@ from pathlib import Path
 from typing import Annotated, Literal, Protocol, TypeAlias, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field
+from pydantic.json_schema import SkipJsonSchema
+
+from skilllint.source_location import SourceLocation
 
 YamlValue: TypeAlias = dict[str, "YamlValue"] | list["YamlValue"] | str | int | float | bool | None
 
@@ -27,6 +30,9 @@ class ValidationIssue(BaseModel):
     line: int | None = None
     suggestion: str | None = None
     docs_url: str | None = None
+    # Keep the established --json response and schema unchanged. New reporters
+    # consume this metadata explicitly rather than changing legacy issue dumps.
+    source_location: SkipJsonSchema[SourceLocation | None] = Field(default=None, exclude=True)
 
     def format(self) -> str:
         """Format issue for display.

@@ -6,7 +6,7 @@ LK001 and LK004 detection lives here. ``InternalLinkValidator`` (LK001) in
 
 ``_iter_links`` strips fenced code blocks and inline code spans, applies the
 external/anchor/absolute skip list, and yields
-``(text, url, url_without_fragment, line)`` tuples.
+``(text, url, url_without_fragment, line, start, end)`` tuples.
 
 ``check_lk001`` takes the markdown body plus the ``SKILL.md`` path it resolves
 links against. ``check_lk004`` additionally takes the plugin root the links
@@ -38,11 +38,14 @@ from __future__ import annotations
 import html
 import os
 import re
+from bisect import bisect_right
+from itertools import accumulate
 from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import unquote
 
 from skilllint.rule_registry import _make_issue, skilllint_rule
+from skilllint.source_location import SourceLocation, source_digest
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -79,7 +82,7 @@ HTML_LINK_ATTRIBUTE_PATTERN = r"\s(href|src)\s*=\s*(?:\"([^\"]*)\"|'([^']*)'|([^
 # A ``[^label]:`` footnote definition is not a link and is excluded.
 REFERENCE_DEFINITION_PATTERN = (
     r"^ {0,3}\[(?!\^)([^\]]+)\]:[ \t]*(?:<([^>\n]+)>|([^\s<]\S*))"
-    r"(?:[ \t]+(?:\"[^\"\n]*\"|'[^'\n]*'|\([^)\n]*\)))?[ \t]*$"
+    r"(?:[ \t]+(?:\"[^\"\n]*\"|'[^'\n]*'|\([^)\n]*\)))?[ \t]*\r?$"
 )
 
 # CommonMark 0.31.2 section 2.4 (backslash escapes: any ASCII punctuation) and
@@ -141,17 +144,35 @@ def _strip_code_blocks(content: str) -> str:
 
     Returns:
         Content with code blocks, inline code spans and comments removed. A
-        fenced block or comment is replaced by its own newlines so every
-        remaining character keeps its original line number.
+        masked region retains its length and line endings so every remaining
+        character keeps its original source offset.
     """
+
     # Strip fenced code blocks first (handles nested fences via greedy
     # backreference matching: a 4-backtick fence won't close on 3 backticks)
-    stripped = re.sub(
-        CODE_FENCE_PATTERN, lambda m: "\n" * m.group(0).count("\n"), content, flags=re.MULTILINE | re.DOTALL
+    def mask(match: re.Match[str]) -> str:
+        return re.sub(r"[^\r\n]", " ", match.group(0))
+
+    stripped = re.sub(CODE_FENCE_PATTERN, mask, content, flags=re.MULTILINE | re.DOTALL)
+    # Backticks and comment delimiters in a destination are literal filename
+    # characters, not Markdown code/comments.
+    # A code span surrounding a whole link is still masked because it extends
+    # beyond that destination. Parse candidate spans before masking inline code.
+    destinations = sorted(
+        (start, end) for _offset, _label, _url, _html, start, end in _iter_raw_links(stripped, stripped)
     )
-    # Strip inline code spans, then comments (a `<!--` inside code is code)
-    stripped = re.sub(INLINE_CODE_PATTERN, "", stripped)
-    return re.sub(HTML_COMMENT_PATTERN, lambda m: "\n" * m.group(0).count("\n"), stripped, flags=re.DOTALL)
+    destination_starts = [start for start, _end in destinations]
+    destination_ends = list(accumulate((end for _start, end in destinations), max))
+
+    def mask_non_destination(match: re.Match[str]) -> str:
+        index = bisect_right(destination_starts, match.start()) - 1
+        if index >= 0 and match.end() <= destination_ends[index]:
+            return match.group(0)
+        return mask(match)
+
+    # Strip inline code spans, then comments (a `<!--` inside code is code).
+    stripped = re.sub(INLINE_CODE_PATTERN, mask_non_destination, stripped)
+    return re.sub(HTML_COMMENT_PATTERN, mask_non_destination, stripped, flags=re.DOTALL)
 
 
 # CommonMark 0.31.2 section 6.9 (autolinks: spec.commonmark.org/0.31.2/#absolute-uri):
@@ -184,17 +205,81 @@ def _should_ignore_link(url: str) -> bool:
     return bool(url.startswith("/"))
 
 
-def _iter_html_links(stripped: str) -> Iterator[tuple[int, str, str, bool]]:
-    """Yield ``(offset, label, value, True)`` for each ``href``/``src`` attribute."""
+def _preserves_original_link_syntax(match: re.Match[str], original: str, pattern: str) -> bool:
+    """Check authored destination syntax without unmasking the link's label.
+
+    Returns:
+        Whether the original delimiters retain exactly the matched destination.
+    """
+    candidate = original[match.start() : match.start(1)] + match.group(1) + original[match.end(1) : match.end()]
+    authored = re.fullmatch(pattern, candidate)
+    if authored is None:
+        return False
+    group = 2 if match.group(2) is not None else 3
+    authored_group = 2 if authored.group(2) is not None else 3
+    return authored.span(authored_group) == (match.start(group) - match.start(), match.end(group) - match.start())
+
+
+def _iter_html_links(stripped: str, original: str) -> Iterator[tuple[int, str, str, bool, int, int]]:
+    """Yield links with original destination offsets for each HTML attribute."""
     for tag in re.finditer(HTML_TAG_PATTERN, stripped):
         attributes_start = tag.start(2)
+        if not original[attributes_start].isspace():
+            continue
         for attribute in re.finditer(HTML_LINK_ATTRIBUTE_PATTERN, tag.group(2), flags=re.IGNORECASE):
-            value = next(group for group in attribute.groups()[1:] if group is not None)
+            value_group = next(index for index in (2, 3, 4) if attribute.group(index) is not None)
+            authored = re.fullmatch(
+                HTML_LINK_ATTRIBUTE_PATTERN,
+                original[attributes_start + attribute.start() : attributes_start + attribute.end()],
+                flags=re.IGNORECASE,
+            )
+            if authored is None or authored.span(value_group) != (
+                attribute.start(value_group) - attribute.start(),
+                attribute.end(value_group) - attribute.start(),
+            ):
+                continue
+            value = attribute.group(value_group)
             label = f"<{tag.group(1)} {attribute.group(1).lower()}>"
-            yield attributes_start + attribute.start(), label, value, True
+            yield (
+                attributes_start + attribute.start(),
+                label,
+                value,
+                True,
+                attributes_start + attribute.start(value_group),
+                attributes_start + attribute.end(value_group),
+            )
 
 
-def _iter_links(content: str, *, keep_root_absolute: bool = False) -> Iterator[tuple[str, str, str, int]]:
+def _iter_raw_links(stripped: str, original: str) -> Iterator[tuple[int, str, str, bool, int, int]]:
+    """Yield candidate links while retaining their original labels and offsets."""
+    inline = (
+        (
+            m.start(),
+            original[m.start(1) : m.end(1)],
+            original[m.start(2) : m.end(2)] if m.group(2) is not None else original[m.start(3) : m.end(3)],
+            False,
+            m.start(2) if m.group(2) is not None else m.start(3),
+            m.end(2) if m.group(2) is not None else m.end(3),
+        )
+        for m in re.finditer(LINK_PATTERN, stripped)
+        if stripped is original or _preserves_original_link_syntax(m, original, LINK_PATTERN)
+    )
+    definitions = (
+        (
+            m.start(),
+            original[m.start(1) : m.end(1)],
+            original[m.start(2) : m.end(2)] if m.group(2) is not None else original[m.start(3) : m.end(3)],
+            False,
+            m.start(2) if m.group(2) is not None else m.start(3),
+            m.end(2) if m.group(2) is not None else m.end(3),
+        )
+        for m in re.finditer(REFERENCE_DEFINITION_PATTERN, stripped, flags=re.MULTILINE)
+        if stripped is original or _preserves_original_link_syntax(m, original, REFERENCE_DEFINITION_PATTERN)
+    )
+    yield from sorted([*inline, *definitions, *_iter_html_links(stripped, original)])
+
+
+def _iter_links(content: str, *, keep_root_absolute: bool = False) -> Iterator[tuple[str, str, str, int, int, int]]:
     r"""Yield every relative markdown link in *content*, in document order.
 
     Inline links (``[text](dest "title")``), link reference definitions
@@ -209,25 +294,19 @@ def _iter_links(content: str, *, keep_root_absolute: bool = False) -> Iterator[t
             protocol-relative ``//host/path`` URL is still skipped.
 
     Yields:
-        ``(link_text, link_url, link_url_without_fragment, line)`` for each
+        ``(link_text, link_url, link_url_without_fragment, line, start, end)`` for each
         relative link. ``link_url`` is the destination as written, without
         any title. The third element is the filesystem path it names:
         character references decoded (outside HTML, backslash escapes too;
         inside HTML, ``\`` read as ``/``), any ``#anchor`` suffix removed, then
         percent-decoded (e.g. ``./references/my%20file.md#heading`` becomes
         ``./references/my file.md``). ``line`` is the 1-based line of the
-        link's opening ``[``, or of its HTML attribute, in *content*.
+        link's opening ``[``, or of its HTML attribute, in *content*. The last
+        two entries are the original destination's half-open string offsets.
     """
     stripped = _strip_code_blocks(content)
-    inline = (
-        (m.start(), m.group(1), m.group(2) if m.group(2) is not None else m.group(3), False)
-        for m in re.finditer(LINK_PATTERN, stripped)
-    )
-    definitions = (
-        (m.start(), m.group(1), m.group(2) or m.group(3), False)
-        for m in re.finditer(REFERENCE_DEFINITION_PATTERN, stripped, flags=re.MULTILINE)
-    )
-    for start, link_text, link_url, is_html in sorted([*inline, *definitions, *_iter_html_links(stripped)]):
+    for start, link_text, _url, is_html, destination_start, destination_end in _iter_raw_links(stripped, content):
+        link_url = content[destination_start:destination_end]
         if not link_url:
             continue
         # Filter to relative file links only, judged on the decoded
@@ -255,7 +334,7 @@ def _iter_links(content: str, *, keep_root_absolute: bool = False) -> Iterator[t
             continue
 
         line = stripped.count("\n", 0, start) + 1
-        yield link_text, link_url, decoded_destination, line
+        yield link_text, link_url, decoded_destination, line, destination_start, destination_end
 
 
 # Regex pattern for any ${...} substitution-style token. Matches both
@@ -400,7 +479,8 @@ def check_lk001(content: str, path: Path) -> list[ValidationIssue]:
     # only discards the left operand when the right operand is absolute).
     skill_dir = path.parent.resolve()
 
-    for link_text, link_url, link_url_no_fragment, _line in _iter_links(content):
+    digest = source_digest(content)
+    for link_text, link_url, link_url_no_fragment, _line, start, end in _iter_links(content):
         # Resolve documented ${CLAUDE_*} substitution variables before the
         # existence check. None means the link must be skipped because a
         # variable's target cannot be determined statically.
@@ -418,6 +498,7 @@ def check_lk001(content: str, path: Path) -> list[ValidationIssue]:
                     severity="error",
                     message=f"Broken link: [{link_text}]({link_url}) (file not found)",
                     code="LK001",
+                    source_location=SourceLocation.from_offsets(path, content, start, end, digest=digest),
                     suggestion=f"Create missing file or fix link path: {link_url}",
                 )
             )
@@ -551,7 +632,8 @@ def check_lk004(content: str, path: Path, plugin_root: Path) -> list[ValidationI
     relative_file = Path(os.path.normpath(path.absolute())).relative_to(root).as_posix()
     is_prompt_file = relative_file.split("/", 1)[0] in {"agents", "commands"}
 
-    for link_text, link_url, link_url_no_fragment, line in _iter_links(content, keep_root_absolute=True):
+    digest = source_digest(content)
+    for link_text, link_url, link_url_no_fragment, line, start, end in _iter_links(content, keep_root_absolute=True):
         resolved_url = _resolve_claude_variables(link_url_no_fragment, base_dir, root)
         if resolved_url is None:
             continue
@@ -573,7 +655,13 @@ def check_lk004(content: str, path: Path, plugin_root: Path) -> list[ValidationI
             suggestion = "If it must work once installed, move the target into the plugin or link to a URL"
         issues.append(
             _make_issue(
-                field=relative_file, severity="info", message=message, code="LK004", suggestion=suggestion, line=line
+                field=relative_file,
+                severity="info",
+                message=message,
+                code="LK004",
+                suggestion=suggestion,
+                line=line,
+                source_location=SourceLocation.from_offsets(path, content, start, end, digest=digest),
             )
         )
 

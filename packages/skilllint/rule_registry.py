@@ -36,6 +36,8 @@ from skilllint.models import ValidationIssue
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from skilllint.source_location import SourceLocation
+
 
 _logger = logging.getLogger(__name__)
 
@@ -65,6 +67,7 @@ def _make_issue(
     code: str,
     suggestion: str | None = None,
     line: int | None = None,
+    source_location: SourceLocation | None = None,
 ) -> ValidationIssue:
     """Construct a ValidationIssue for a rule.
 
@@ -78,6 +81,7 @@ def _make_issue(
         code: Rule code (e.g. "FM001").
         suggestion: Optional repair hint.
         line: Optional 1-based line number the issue refers to.
+        source_location: Actual source identity and optional precise coordinates.
 
     Returns:
         A frozen ValidationIssue instance.
@@ -88,6 +92,7 @@ def _make_issue(
         message=message,
         code=code,
         line=line,
+        source_location=source_location,
         docs_url=rule_reference(code),
         suggestion=suggestion,
     )

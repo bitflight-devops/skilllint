@@ -18,11 +18,13 @@ from typing import TYPE_CHECKING
 
 from ruamel.yaml import YAML, YAMLError
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
-from ruamel.yaml.nodes import MappingNode, SequenceNode
+from ruamel.yaml.error import MarkedYAMLError
+from ruamel.yaml.nodes import MappingNode, ScalarNode, SequenceNode
 from ruamel.yaml.scalarstring import DoubleQuotedScalarString
 from ruamel.yaml.tokens import CommentToken
 
 from skilllint.frontmatter_core import extract_frontmatter
+from skilllint.source_location import SourceLocation, SourcePosition
 
 if TYPE_CHECKING:
     from skilllint.models import YamlValue
@@ -78,6 +80,60 @@ def _safe_load_yaml(text: str) -> YamlValue:
     if text not in shared:
         shared[text] = _yaml_safe.load(text)
     return copy.deepcopy(shared[text])
+
+
+def frontmatter_source_locations(
+    text: str, path: Path, *, line_offset: int
+) -> tuple[dict[str, SourceLocation], SourceLocation | None]:
+    """Locate authored top-level YAML keys and an original syntax error.
+
+    Only the original text is composed. Recovered or normalized YAML must not
+    supply positions in the authored file. Duplicate keys are ambiguous and
+    omitted; inherited keys have no local span.
+
+    Args:
+        text: Original YAML block without delimiters.
+        path: The file containing the block.
+        line_offset: Number of source lines before the YAML block.
+
+    Returns:
+        Unique key spans and an optional syntax-error point.
+    """
+    try:
+        document = _rt_yaml.compose(text)
+    except MarkedYAMLError as exc:
+        mark = exc.problem_mark
+        if mark is None:
+            return {}, None
+        return {}, SourceLocation(
+            path=path, start=SourcePosition(line=mark.line + line_offset + 1, column=mark.column + 1)
+        )
+    except YAMLError:
+        return {}, None
+    if not isinstance(document, MappingNode):
+        return {}, None
+    locations: dict[str, SourceLocation] = {}
+    seen: set[str] = set()
+    previous_end = document.start_mark.index
+    for key, value in document.value:
+        # Aliased keys reuse the anchor node's earlier marks, not the alias
+        # token in this mapping. They have no trustworthy local key span.
+        is_local = key.start_mark.index >= previous_end
+        previous_end = max(previous_end, value.end_mark.index)
+        if not isinstance(key, ScalarNode) or key.tag != "tag:yaml.org,2002:str":
+            continue
+        if key.value in seen:
+            locations.pop(key.value, None)
+            continue
+        seen.add(key.value)
+        if not is_local:
+            continue
+        locations[key.value] = SourceLocation(
+            path=path,
+            start=SourcePosition(line=key.start_mark.line + line_offset + 1, column=key.start_mark.column + 1),
+            end=SourcePosition(line=key.end_mark.line + line_offset + 1, column=key.end_mark.column + 1),
+        )
+    return locations, None
 
 
 def _dump_yaml(data: dict[str, YamlValue]) -> str:

@@ -1,0 +1,1 @@
+examples/output/fixtures/demo-skill/SKILL.md:2:1: error[FM010] name: Must use lowercase letters, numbers, and hyphens only

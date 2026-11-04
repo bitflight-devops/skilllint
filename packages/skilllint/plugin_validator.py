@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 import re
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from io import StringIO, TextIOWrapper
@@ -29,7 +30,8 @@ from git.exc import InvalidGitRepositoryError, NoSuchPathError
 import skilllint.rules  # ruff: ignore[unused-import] — ensures all 15 series modules register into RULE_REGISTRY
 from skilllint.adapters import ALL_RULE_SERIES, PlatformAdapter, load_adapters, matches_file
 from skilllint.cli_docs import docs_app
-from skilllint.cli_help import CompleteHelpCommand, CompleteHelpGroup
+from skilllint.cli_github_boundary import GitHubDiagnosticGroup
+from skilllint.cli_help import CompleteHelpCommand
 from skilllint.cli_json import JsonOption, emit_and_exit, fail_missing_argument
 from skilllint.file_types import (
     NAME_BEARING_FILE_TYPES as _NAME_BEARING_FILE_TYPES,
@@ -87,6 +89,12 @@ from skilllint.record_export import (
     export_recording as _export_recording,
     make_recording_console as _make_recording_console,
 )
+from skilllint.reporting import emit_concise
+from skilllint.reporting_full import ColorMode, FullReporter, human_console
+from skilllint.reporting_github import emit_github
+from skilllint.reporting_gitlab import emit_gitlab
+from skilllint.reporting_json_lines import emit_json_lines
+from skilllint.reporting_junit import emit_junit
 from skilllint.responses import (
     build_check_response,
     build_rule_response,
@@ -634,6 +642,7 @@ def _collect_validator_results(
                     message=issue.message,
                     code=issue.code,
                     line=issue.line,
+                    source_location=issue.source_location,
                     docs_url=issue.docs_url,
                     suggestion=issue.suggestion,
                 )
@@ -793,7 +802,12 @@ def _count_body_tokens(paths: list[Path]) -> list[tuple[int, Path]]:
     return entries
 
 
-def _handle_tokens_only(paths: list[Path], *, batch: bool = False) -> None:
+def _handle_tokens_only(
+    paths: list[Path],
+    *,
+    batch: bool = False,
+    action_report: Callable[[CheckRun | list[tuple[int, Path]]], None] | None = None,
+) -> None:
     """Print token counts using the existing text contract and exit."""
     entries = _count_body_tokens(paths)
     if batch:
@@ -802,6 +816,8 @@ def _handle_tokens_only(paths: list[Path], *, batch: bool = False) -> None:
     else:
         for count, _path in entries:
             print(count)
+    if action_report is not None:
+        action_report(entries)
     raise typer.Exit(0) from None
 
 
@@ -846,6 +862,10 @@ def _issue_to_violation(issue: ValidationIssue) -> dict:
         Compatibility violation dictionary retaining diagnostic identity.
     """
     violation = issue.model_dump(exclude_none=True)
+    if issue.source_location is not None:
+        violation["source_location"] = issue.source_location.model_dump(mode="json")
+        if issue.source_location.content_digest is not None:
+            violation["source_location"]["content_digest"] = issue.source_location.content_digest
     violation["code"] = str(issue.code)
     violation["severity"] = str(issue.severity)
     violation["message"] = str(issue.message)
@@ -1079,6 +1099,7 @@ def violations_to_result(violations: list[dict]) -> ValidationResult:
                 message=str(violation.get("message", "")),
                 code=code,
                 line=line if isinstance(line, int) else None,
+                source_location=violation.get("source_location"),
                 suggestion=(str(violation["suggestion"]) if violation.get("suggestion") is not None else None),
                 docs_url=(str(violation["docs_url"]) if violation.get("docs_url") is not None else None),
             )
@@ -1089,7 +1110,9 @@ def violations_to_result(violations: list[dict]) -> ValidationResult:
     return ValidationResult(passed=not errors, errors=errors, warnings=warnings, info=info)
 
 
-def _open_record_console(record: Path | None, *, no_color: bool, json_output: bool) -> _Console | None:
+def _open_record_console(
+    record: Path | None, *, no_color: bool, json_output: bool, color: ColorMode | None = None, full: bool = False
+) -> _Console | None:
     """Return the console ``--record`` renders into, or ``None`` when no recording was asked for.
 
     Under ``--json`` the console writes to an in-memory buffer, so the recording is made without
@@ -1098,11 +1121,20 @@ def _open_record_console(record: Path | None, *, no_color: bool, json_output: bo
     Args:
         record: The ``--record`` destination, if any.
         no_color: Whether ``--no-color`` was given.
-        json_output: Whether ``--json`` was given.
+        json_output: Whether an explicit format was selected.
+        color: Explicit human colour policy, preserving legacy defaults when omitted.
+        full: Whether to render full diagnostics on stdout.
 
     Returns:
         A recording console, or ``None``.
     """
+    if full or (color is not None and not no_color):
+        return human_console(
+            color=color or "auto",
+            no_color=no_color,
+            record=record is not None,
+            file=StringIO() if json_output and not full else None,
+        )
     if record is None:
         return None
     return _make_recording_console(no_color=no_color, file=StringIO() if json_output else None)
@@ -1119,7 +1151,7 @@ def _export_recording_on_exit(record_console: _Console | None, record: Path | No
     _maybe_export_recording(record_console, record)
 
 
-def _finish_check_json(
+def _finish_check_formatted_output(
     outcome: CheckRun | list[tuple[int, Path]],
     *,
     record: Path | None,
@@ -1128,11 +1160,12 @@ def _finish_check_json(
     no_color: bool,
     show_progress: bool,
     show_summary: bool,
+    output_format: Literal["full", "json-lines", "concise", "github", "gitlab", "junit"] | None,
 ) -> NoReturn:
-    """End a ``check --json`` run: record the usual rendering when asked, then print the response.
+    """Record the usual human rendering when asked, then emit the selected format.
 
     The ``--record`` file is rendered by the same ``report_results`` the text path calls, with the
-    same ``no_color`` and ``show_summary``, and is written before the response names it.
+    same ``no_color`` and ``show_summary``, and is written before the selected format.
 
     Args:
         outcome: The scan, or the token counts of ``--tokens-only``.
@@ -1142,10 +1175,23 @@ def _finish_check_json(
         no_color: Whether ``--no-color`` was given.
         show_progress: Whether ``--show-progress`` was given.
         show_summary: Whether ``--show-summary`` was given.
+        output_format: Explicit finding format, or None for legacy ``--json``.
 
     Raises:
         typer.Exit: Always: 0 for a pass, 1 for a failed scan, 2 when the ``--record`` file cannot be written.
     """
+    if output_format == "full" and isinstance(outcome, CheckRun):
+        console = record_console or human_console(no_color=no_color)
+        failed = report_results(
+            outcome,
+            verbose=verbose,
+            no_color=no_color,
+            show_progress=show_progress,
+            show_summary=show_summary,
+            reporter=FullReporter(console),
+        )
+        _export_recording_on_exit(console, record)
+        raise typer.Exit(1 if failed else 0) from None
     record_path = None
     if record is not None and record_console is not None:
         if isinstance(outcome, CheckRun):
@@ -1160,10 +1206,59 @@ def _finish_check_json(
         record_path = _write_recording(record_console, record)
     if not isinstance(outcome, CheckRun):
         emit_and_exit(build_tokens_response(outcome, record_path=record_path))
+    if output_format is not None:
+        if output_format == "json-lines":
+            emit_json_lines(outcome.results, verbose=verbose)
+        elif output_format == "junit":
+            emit_junit(outcome.results, verbose=verbose)
+        elif output_format == "gitlab":
+            emit_gitlab(outcome.results, verbose=verbose)
+        elif output_format == "github":
+            emit_github(outcome.results, verbose=verbose)
+        else:
+            emit_concise(outcome.results, verbose=verbose)
+        failed = any(not result.passed for results in outcome.results.values() for _, result in results)
+        raise typer.Exit(1 if failed else 0) from None
     response = build_check_response(
         outcome.results, verbose=verbose, show_progress=show_progress, fixes=outcome.fixes, record_path=record_path
     )
     emit_and_exit(response, code=1 if response.status == "failed" else 0)
+
+
+def _finish_check_action_output(
+    outcome: CheckRun | list[tuple[int, Path]],
+    action_report: Callable[[CheckRun | list[tuple[int, Path]]], None] | None,
+    *,
+    formatted_output: bool,
+    full_output: bool = False,
+    verbose: bool,
+    no_color: bool,
+    show_progress: bool,
+    show_summary: bool,
+    record_console: _Console | None,
+    record: Path | None,
+) -> None:
+    """Observe the same scan after human rendering, without a second scan.
+
+    Raises:
+        typer.Exit: The ordinary human scan's validation status.
+    """
+    if action_report is None:
+        return
+    if (not formatted_output or full_output) and isinstance(outcome, CheckRun):
+        failed = report_results(
+            outcome,
+            verbose=verbose,
+            no_color=no_color,
+            show_progress=show_progress,
+            show_summary=show_summary,
+            record_console=record_console,
+            reporter=FullReporter(record_console or human_console(no_color=no_color)) if full_output else None,
+        )
+        action_report(outcome)
+        _export_recording_on_exit(record_console, record)
+        raise typer.Exit(1 if failed else 0) from None
+    action_report(outcome)
 
 
 def _require_usable_paths(
@@ -1273,17 +1368,27 @@ def main(
     record: Path | None = None,
     include_gitignore: bool = False,
     json_output: bool = False,
+    output_format: Literal["full", "json-lines", "concise", "github", "gitlab", "junit"] | None = None,
+    color: ColorMode | None = None,
+    action_report: Callable[[CheckRun | list[tuple[int, Path]]], None] | None = None,
 ) -> None:
     """Validate Claude Code plugins, skills, agents, and commands."""
     # If a subcommand was invoked, don't run validation
     if ctx.invoked_subcommand is not None:
         return
 
-    paths = _require_usable_paths(ctx, paths, check=check, fix=fix, platform=platform, json_output=json_output)
+    if output_format is not None and (json_output or tokens_only):
+        typer.echo("Error: --output-format cannot be combined with --json or --tokens-only", err=True)
+        raise typer.Exit(2) from None
+
+    formatted_output = json_output or output_format is not None
+    paths = _require_usable_paths(ctx, paths, check=check, fix=fix, platform=platform, json_output=formatted_output)
 
     platform_override = _resolve_platform_override(platform)
 
-    record_console = _open_record_console(record, no_color=no_color, json_output=json_output)
+    record_console = _open_record_console(
+        record, no_color=no_color, json_output=formatted_output, color=color, full=output_format == "full"
+    )
 
     def _run_validation_command() -> CheckRun | list[tuple[int, Path]] | None:
         expanded_paths, is_batch = _resolve_filter_and_expand_paths(
@@ -1299,7 +1404,7 @@ def main(
         if tokens_only:
             if json_output:
                 return _count_body_tokens(expanded_paths)
-            _handle_tokens_only(expanded_paths, batch=is_batch)
+            _handle_tokens_only(expanded_paths, batch=is_batch, action_report=action_report)
 
         # One shared cache per scan run — prevents re-walking the directory
         # tree for every file when many files share the same config root.
@@ -1321,7 +1426,7 @@ def main(
                     fixes_out=fixes_out,
                 )
 
-        if json_output:
+        if formatted_output or action_report is not None:
             return collect_validation_results(
                 expanded_paths=expanded_paths,
                 check=check,
@@ -1362,9 +1467,22 @@ def main(
         typer.echo("\nInterrupted by user", err=True)
         raise typer.Exit(130) from None
 
-    # Only a --json run returns here; every other run ends in an exit above.
+    # The Action observes the same collected scan after ordinary human rendering.
+    # Its private callback is not a CLI option and does not cause another scan.
     if outcome is not None:
-        _finish_check_json(
+        _finish_check_action_output(
+            outcome,
+            action_report,
+            formatted_output=formatted_output,
+            full_output=output_format == "full",
+            verbose=verbose,
+            no_color=no_color,
+            show_progress=show_progress,
+            show_summary=show_summary,
+            record_console=record_console,
+            record=record,
+        )
+        _finish_check_formatted_output(
             outcome,
             record=record,
             record_console=record_console,
@@ -1372,6 +1490,7 @@ def main(
             no_color=no_color,
             show_progress=show_progress,
             show_summary=show_summary,
+            output_format=output_format,
         )
 
 
@@ -1383,7 +1502,7 @@ def main(
 app = typer.Typer(
     help="Validate Claude Code plugins and skills",
     add_completion=False,
-    cls=CompleteHelpGroup,
+    cls=GitHubDiagnosticGroup,
     rich_markup_mode=None,
     pretty_exceptions_enable=False,
 )
@@ -1582,6 +1701,10 @@ def check_cmd(
     fix: Annotated[bool, typer.Option("--fix", help="Auto-fix issues where possible")] = False,
     verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Show detailed output")] = False,
     no_color: Annotated[bool, typer.Option("--no-color", help="Disable color")] = False,
+    color: Annotated[
+        ColorMode | None,
+        typer.Option("--color", metavar="WHEN", help="Human colour: auto, always, or never. --no-color wins."),
+    ] = None,
     tokens_only: Annotated[bool, typer.Option("--tokens-only", help="Output token count only")] = False,
     show_progress: Annotated[bool, typer.Option("--show-progress", help="Show per-file status")] = False,
     show_summary: Annotated[bool, typer.Option("--show-summary", help="Show summary panel")] = False,
@@ -1599,6 +1722,14 @@ def check_cmd(
         ),
     ] = False,
     json_output: JsonOption = False,
+    output_format: Annotated[
+        Literal["full", "json-lines", "concise", "github", "gitlab", "junit"] | None,
+        typer.Option(
+            "--output-format",
+            metavar="FORMAT",
+            help="Report format: full (human), json-lines, concise, github (annotations), gitlab (Code Quality JSON), or junit (XML).",
+        ),
+    ] = None,
 ) -> None:
     """Validate Claude Code plugins, skills, agents, and commands."""
     main(
@@ -1617,6 +1748,8 @@ def check_cmd(
         record=record,
         include_gitignore=include_gitignore,
         json_output=json_output,
+        output_format=output_format,
+        color=color,
     )
 
 

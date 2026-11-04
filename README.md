@@ -65,15 +65,62 @@ skilllint check --tokens-only .claude/CLAUDE.md
 
 Exit codes: `0` = all checks passed · `1` = validation errors · `2` = usage error
 
+See [output examples](examples/output/README.md) for captured reports and colour SVG previews.
+
+---
+
+## Output formats
+
+Choose a format for the reader or CI consumer. Every example below is captured
+from the same deliberately invalid skill; the command exits `1`.
+
+| Format | Use | Preview | Raw output |
+| --- | --- | --- | --- |
+| `full` | Human-readable source excerpts, highlights, and help | [Actual terminal colours](examples/output/full.svg) | [ANSI](examples/output/full.ansi) |
+| `concise` | One monochrome finding per line for pre-commit | [Monochrome findings](examples/output/concise.svg) | [Text](examples/output/concise.txt) |
+| `json-lines` | One parseable finding per line for agents | [JSONL preview](examples/output/json-lines.svg) | [JSONL](examples/output/json-lines.jsonl) |
+| `github` | Native GitHub Actions annotations | [Command preview](examples/output/github.svg) | [Workflow commands](examples/output/github.txt) |
+| `gitlab` | GitLab Code Quality artifacts | [Report preview](examples/output/gitlab.svg) | [JSON](examples/output/gitlab.json) |
+| `junit` | JUnit-style test-report consumers | [Report preview](examples/output/junit.svg) | [XML](examples/output/junit.xml) |
+
+For source-aware human diagnostics, use `skilllint check --output-format full`.
+Colour defaults to terminal detection; choose `--color always` or `--color never`
+independently of the format. Existing defaults and `--no-color` are preserved.
+
+![Actual full-colour skilllint diagnostic](examples/output/full.svg)
+
+See the [complete six-format output gallery](examples/output/README.md) for
+reproducible captures, raw reports, commands, and consumer-specific examples.
+The machine-format SVGs are labelled report previews, not CI interface screenshots.
+
 ---
 
 ## GitHub Action
 
 Use `bitflight-devops/skilllint` as a GitHub Action to validate skills, plugins, and agents in any repository.
 
+For direct CLI use in Actions, `skilllint check --output-format github` emits
+native workflow annotations. See the [captured commands and colour SVG preview](examples/output/README.md#github-annotations)
+and [format contract](docs/usage.md#github-annotations).
+
+For GitLab CI, `skilllint check --output-format gitlab` emits a Code Quality
+JSON report. See the [raw report and colour SVG preview](examples/output/README.md#gitlab-code-quality)
+and [CI configuration](docs/usage.md#gitlab-code-quality).
+
+For test-report consumers, `skilllint check --output-format junit` emits
+JUnit-style XML. See the [raw XML and colour SVG preview](examples/output/README.md#junit-style-xml)
+and [result semantics and CI configuration](docs/usage.md#junit-style-xml).
+
 Replace `X.Y.Z` in the examples with the release you intend to pin. The Action
 ref and the `version` input pin the Action and the installed package
-independently.
+independently. Packages containing the structured Action runner produce annotations
+and outputs from one scan, including `fix: true`, while keeping the requested
+human log styling. Older pinned packages use an explicitly announced legacy
+compatibility path: their historical output parsing may repeat a scan and does
+not provide the new native annotations. This keeps existing package pins working.
+`version: source` builds from a local Git checkout of this repository (including
+its Git metadata) and tests unreleased changes with `uses: ./`. It is not intended
+for GitHub's downloaded remote Action archive, which lacks version metadata.
 
 ```yaml
 - uses: bitflight-devops/skilllint@vX.Y.Z
@@ -99,7 +146,7 @@ independently.
 | `show-summary` | Show summary panel at the end | `true` |
 | `filter` | Glob pattern to restrict files within a directory | _(none)_ |
 | `filter-type` | File type filter: `skills`, `agents`, `commands` | _(all)_ |
-| `version` | skilllint version to install (`latest` or `1.2.3`) | `latest` |
+| `version` | skilllint version to install (`latest`, `1.2.3`, or `source` for local Git checkout tests) | `latest` |
 | `python-version` | Python version to use | `3.12` |
 
 ### Outputs
@@ -155,7 +202,15 @@ jobs:
 
 ## Pre-commit hook
 
-Add to `.pre-commit-config.yaml`, replacing `X.Y.Z` with the release you intend to pin:
+Install pre-commit, using Python 3.11–3.14 for the skilllint hook:
+
+```console
+python -m pip install pre-commit
+```
+
+Add to `.pre-commit-config.yaml`. Replace `X.Y.Z` with a release version that
+includes the hooks and output format you need, or replace the entire `vX.Y.Z`
+with a commit SHA. `vX.Y.Z` is a placeholder, not a published tag.
 
 ```yaml
 repos:
@@ -164,6 +219,26 @@ repos:
     hooks:
       - id: skilllint
 ```
+
+Install the Git hook, then check all matching tracked files once:
+
+```console
+pre-commit install
+pre-commit run skilllint --all-files
+```
+
+Later commits check matching staged files automatically. Pre-commit installs
+skilllint in its own hook environment; a separate skilllint installation is not
+needed for this configuration.
+
+Both `skilllint` and `skilllint-fix` use `--output-format concise --no-color`:
+one plain line per finding, with no progress or summary. To opt into fixes,
+replace `id: skilllint` with `id: skilllint-fix`, then run
+`pre-commit run skilllint-fix --all-files`. Review and re-stage changed files.
+The fix hook keeps the same file selection and applies supported fixes in place.
+See [pre-commit usage](docs/usage.md#pre-commit) for selected-file checks,
+custom arguments, exclusions, and prek commands.
+See the [captured concise output and SVG preview](examples/output/README.md#concise).
 
 ### Contributor quality checks (local)
 
