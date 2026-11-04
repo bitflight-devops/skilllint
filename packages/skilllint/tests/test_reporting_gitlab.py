@@ -41,6 +41,9 @@ def _results(*issues: ValidationIssue, path: Path = Path("SKILL.md"), validator:
 
 @pytest.fixture
 def repository(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    # Keep external-file fixtures inside this test's own temporary directory.
+    tmp_path = tmp_path / "repository"
+    tmp_path.mkdir()
     (tmp_path / ".git").mkdir()
     (tmp_path / "SKILL.md").touch()
     (tmp_path / "sub").mkdir()

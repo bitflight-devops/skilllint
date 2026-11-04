@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import json
+from io import BytesIO, StringIO, TextIOWrapper
 from pathlib import Path
 
 import pytest
 
+from skilllint import reporting_json_lines
 from skilllint.models import FileResults, ValidationIssue, ValidationResult
 from skilllint.reporting_json_lines import emit_json_lines, json_lines_records
 from skilllint.source_location import SourceLocation, SourcePosition
@@ -150,3 +152,31 @@ def test_information_requires_verbose_and_empty_output_is_truly_empty(capsys: py
     assert output.endswith("\n")
     assert output.count("\n") == 1
     assert json.loads(output)["severity"] == "info"
+
+
+@pytest.mark.parametrize("encoding", ["utf-16", "utf-32", "cp1252"])
+@pytest.mark.parametrize("newline", ["\n", "\r\n"])
+def test_binary_stdout_is_utf8_independent_of_text_encoding(
+    encoding: str, newline: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Encoding redirects cannot introduce a BOM or change the JSONL byte encoding."""
+    raw = BytesIO()
+    stream = TextIOWrapper(raw, encoding=encoding, newline="\r\n")
+    results = _results(_issue(message="café"))
+    with monkeypatch.context() as patch:
+        patch.setattr(reporting_json_lines.sys, "stdout", stream)
+        patch.setattr(reporting_json_lines.os, "linesep", newline)
+        emit_json_lines(results)
+    expected = (json_lines_records(results)[0] + newline).encode("utf-8")
+    assert raw.getvalue() == expected
+    assert stream.encoding == encoding
+
+
+def test_text_only_stdout_redirect_remains_supported(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Embedding callers can still capture JSONL in StringIO without a binary buffer."""
+    stream = StringIO()
+    results = _results(_issue())
+    with monkeypatch.context() as patch:
+        patch.setattr(reporting_json_lines.sys, "stdout", stream)
+        emit_json_lines(results)
+    assert stream.getvalue() == json_lines_records(results)[0] + "\n"

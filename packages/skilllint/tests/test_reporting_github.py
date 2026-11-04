@@ -117,6 +117,7 @@ def test_hostile_filename_multiline_message_and_help_are_preserved() -> None:
 
 
 def test_order_duplicates_and_path_identity(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("GITHUB_WORKSPACE", raising=False)
     monkeypatch.chdir(tmp_path)
     issue = _issue()
     first = _results(issue, issue, path=Path("b.md")) | _results(issue, path=Path("a.md"))
@@ -128,6 +129,31 @@ def test_order_duplicates_and_path_identity(tmp_path: Path, monkeypatch: pytest.
     assert github_lines(_results(issue, path=path)) == github_lines(_results(issue, path=tmp_path / path))
     outside = tmp_path.parent / "outside.md"
     assert f"file={outside.as_posix()}" in github_lines(_results(issue, path=outside))[0]
+
+
+@pytest.mark.parametrize("absolute", [False, True])
+@pytest.mark.parametrize("source_location", [False, True])
+def test_nested_working_directory_paths_are_workspace_relative(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, absolute: bool, source_location: bool
+) -> None:
+    directory = tmp_path / "plugins/demo"
+    directory.mkdir(parents=True)
+    monkeypatch.chdir(directory)
+    monkeypatch.setenv("GITHUB_WORKSPACE", str(tmp_path))
+    path = directory / "SKILL.md" if absolute else Path("SKILL.md")
+    issue = _issue(source_location=SourceLocation(path=path) if source_location else None)
+    target = Path("checked-directory") if source_location else path
+    assert github_lines(_results(issue, path=target)) == ["::error file=plugins/demo/SKILL.md,title=FM010::name: bad"]
+
+
+def test_paths_outside_workspace_remain_absolute(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    workspace = tmp_path / "checkout"
+    workspace.mkdir()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("GITHUB_WORKSPACE", str(workspace))
+    expected = workflow_command("error", {"file": (tmp_path / "SKILL.md").as_posix(), "title": "FM010"}, "name: bad")
+    assert github_lines(_results(_issue(), path=Path("SKILL.md"))) == [expected]
+    assert github_lines(_results(_issue(), path=tmp_path / "SKILL.md")) == [expected]
 
 
 def test_info_is_notice_only_with_verbose_and_clean_is_empty(capsys: pytest.CaptureFixture[str]) -> None:

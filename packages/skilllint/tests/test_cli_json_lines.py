@@ -8,8 +8,8 @@ from typing import Literal
 from unittest.mock import Mock
 
 import pytest
-from cli_probe import CliRun, Endpoints, Sandbox
-from default_output_cases import CORE_VARIANTS, Case
+from cli_probe import CliRun, Endpoints, Sandbox, run_cli
+from default_output_cases import CORE_VARIANTS, NO_ENDPOINTS, Case, workspace
 from json_probe_support import CheckResponse, Strict, assert_plain, parse, run_probe
 from typer.testing import CliRunner
 
@@ -186,6 +186,20 @@ def test_unknown_output_format_is_plain_usage_error(tmp_path: Path) -> None:
     assert run.stdout == b""
     assert b"Invalid value" in run.stderr
     assert_plain(run)
+
+
+@pytest.mark.parametrize("encoding", ["utf-16", "utf-32", "ascii"])
+def test_cli_ignores_pythonioencoding_for_jsonl_stdout(encoding: str, tmp_path: Path) -> None:
+    """The real process emits parseable UTF-8 even under a non-UTF-8 environment."""
+    sandbox = Sandbox.create(tmp_path)
+    workspace(sandbox, NO_ENDPOINTS)
+    run = run_cli(
+        ("check", "invalid-skill/SKILL.md", "--output-format", "json-lines"),
+        sandbox,
+        extra_env={"PYTHONIOENCODING": encoding},
+    )
+    assert run.returncode == 1
+    assert _records(run)
 
 
 def test_warning_only_and_info_keep_existing_exit_and_visibility(tmp_path: Path) -> None:

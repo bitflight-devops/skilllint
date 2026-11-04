@@ -7,6 +7,9 @@ source positions from legacy field labels, or change the legacy JSON response.
 from __future__ import annotations
 
 import json
+import os
+import sys
+from io import TextIOWrapper
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
@@ -104,6 +107,18 @@ def json_lines_records(file_results: FileResults, *, verbose: bool = False) -> l
 
 
 def emit_json_lines(file_results: FileResults, *, verbose: bool = False) -> None:
-    """Write findings only: no headings, progress, fix records, summary or ANSI."""
-    for record in json_lines_records(file_results, verbose=verbose):
-        print(record)
+    """Write UTF-8 findings, retaining native newlines and text-only redirects."""
+    records = json_lines_records(file_results, verbose=verbose)
+    stream = sys.stdout
+    if isinstance(stream, TextIOWrapper):
+        # Bypass arbitrary text encodings without reconfiguring the caller's
+        # stream. Flush any existing text before writing its binary buffer.
+        stream.flush()
+        for record in records:
+            stream.buffer.write((record + os.linesep).encode("utf-8"))
+        stream.buffer.flush()
+    else:
+        # StringIO and other text-only redirects have no byte encoding.
+        for record in records:
+            stream.write(record + "\n")
+        stream.flush()
