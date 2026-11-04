@@ -27,4 +27,10 @@ uv run python scripts/capture_output_examples.py --check
 ```
 
 The script preserves stdout bytes and uses a fixed SVG identifier and width.
+Artifact comparisons and the SVG viewer normalize CRLF to LF so native Windows
+output and checkout newline conversion do not create false drift. The raw JSONL
+file retains the captured bytes. Only the known `vcs_versioning` shallow-checkout
+warning is ignored during capture; other stderr diagnostics still fail the check.
+The capture process pins `PYTHONIOENCODING=utf-8` for startup diagnostics as well
+as the report, without changing the caller's environment.
 Use the repository's locked dependencies to reproduce the preview.
