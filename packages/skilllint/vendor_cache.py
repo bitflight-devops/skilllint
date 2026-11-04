@@ -60,6 +60,8 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
 
+    from skilllint.boundary.vendor_sidecar_ingest import SidecarMetadata
+
 # ---------------------------------------------------------------------------
 # Enumerations
 # ---------------------------------------------------------------------------
@@ -200,6 +202,7 @@ _SAFE_CHAR_RE = re.compile(r"[^a-zA-Z0-9-]+")
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.+)$")
 _SLUG_STRIP_RE = re.compile(r"[^\w\s-]")
 _SLUG_COLLAPSE_RE = re.compile(r"[-\s]+")
+_CACHE_FILENAME_RE = re.compile(r".*-(?P<timestamp>\d{4}-\d{2}-\d{2}-\d{4})(?:-(?P<source_key>[0-9a-f]{64}))?\.md")
 
 
 def _heading_to_slug(heading: str) -> str:
@@ -299,7 +302,7 @@ def find_latest(page_name: str, *, sources_dir: Path | None = None) -> Path | No
 
     Scans *sources_dir* (defaults to :data:`~skilllint.vendor_io.SOURCES_DIR`)
     for files matching ``{page_name}-*.md`` (excluding ``*.meta.json`` files).
-    Returns the path whose filename sorts lexicographically last (timestamps
+    Returns the path whose filename stem sorts lexicographically last (timestamps
     in ``YYYY-MM-DD-HHMM`` format sort correctly by lexicographic order), or
     ``None`` if no matches exist.
 
@@ -316,7 +319,49 @@ def find_latest(page_name: str, *, sources_dir: Path | None = None) -> Path | No
     candidates = [p for p in directory.glob(f"{page_name}-*.md") if not p.name.endswith(".meta.json")]
     if not candidates:
         return None
-    return max(candidates, key=lambda p: p.name)
+    return max(candidates, key=lambda p: p.stem)
+
+
+def _source_identity(url: str) -> str:
+    """Use the HTTP client's URL normalization, excluding unsent fragments.
+
+    Scheme/host case and default ports follow HTTPX, as do request-path
+    normalization and escaping. Queries, credentials, non-default ports,
+    and HTTP versus HTTPS remain part of the identity.
+
+    Returns:
+        The normalized request URL, without a fragment.
+    """
+    return str(httpx.URL(url).copy_with(fragment=None))
+
+
+def _find_source_cache(url: str, source_key: str) -> tuple[Path, SidecarMetadata] | None:
+    """Find an identity-checked entry, including legacy path-only filenames.
+
+    Returns:
+        The newest matching file and its validated provenance, if present.
+    """
+    identity = _source_identity(url)
+    # New filenames carry the full source hash. Legacy path-only filenames
+    # need a compatibility lookup: a readable name never proves identity.
+    # Sort by timestamp, not slug; normalized aliases can have different slugs.
+    # Prefer a migrated entry when its timestamp matches the legacy original.
+    candidates: list[tuple[str, bool, Path]] = []
+    for path in SOURCES_DIR.glob("*.md"):
+        match = _CACHE_FILENAME_RE.fullmatch(path.name)
+        if match is not None and match["source_key"] in {None, source_key}:
+            candidates.append((match["timestamp"], match["source_key"] is not None, path))
+    for _, _, path in sorted(candidates, reverse=True):
+        sidecar = load_sidecar(path)
+        if sidecar is None:
+            continue
+        try:
+            matches = _source_identity(sidecar.url) == identity
+        except httpx.InvalidURL:
+            continue
+        if matches:
+            return path, sidecar
+    return None
 
 
 def fetch_or_cached(url: str, *, ttl_hours: float = 4.0, force: bool = False) -> CacheResult:
@@ -324,8 +369,9 @@ def fetch_or_cached(url: str, *, ttl_hours: float = 4.0, force: bool = False) ->
 
     Flow:
 
-    1. Derive a filesystem-safe *page_name* from *url*.
-    2. Look up the most recent cached file for *page_name*.
+    1. Derive a readable *page_name* and a normalized source URL hash.
+    2. Look up the most recent cache entry with matching sidecar provenance,
+       including compatible legacy path-only filenames.
     3. If a cached file exists:
 
        a. Load its sidecar and check age against *ttl_hours*.
@@ -348,7 +394,7 @@ def fetch_or_cached(url: str, *, ttl_hours: float = 4.0, force: bool = False) ->
             :attr:`CacheStatus.NEW`.
           - Network failure → raise :exc:`NoCacheError`.
 
-    File naming convention: ``{page_name}-{YYYY-MM-DD-HHMM}.md`` inside
+    File naming convention: ``{page_name}-{YYYY-MM-DD-HHMM}-{source_hash}.md`` inside
     :data:`~skilllint.vendor_io.SOURCES_DIR`.
 
     Args:
@@ -364,8 +410,10 @@ def fetch_or_cached(url: str, *, ttl_hours: float = 4.0, force: bool = False) ->
     Raises:
         NoCacheError: If no cached copy exists and the network is unavailable.
     """
-    page_name = derive_page_name(url)
-    cached_path = find_latest(page_name)
+    identity = _source_identity(url)
+    page_name = derive_page_name(identity)
+    source_key = sha256_hex(identity)
+    cached = _find_source_cache(url, source_key)
 
     SOURCES_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -373,12 +421,11 @@ def fetch_or_cached(url: str, *, ttl_hours: float = 4.0, force: bool = False) ->
         return datetime.now(UTC).strftime("%Y-%m-%d-%H%M")
 
     def _new_path() -> Path:
-        return SOURCES_DIR / f"{page_name}-{_timestamp()}.md"
+        return SOURCES_DIR / f"{page_name}-{_timestamp()}-{source_key}.md"
 
-    if cached_path is not None:
-        sidecar = load_sidecar(cached_path)
-        fetched_at = sidecar.fetched_at if sidecar else None
-        age = _age_hours(fetched_at)
+    if cached is not None:
+        cached_path, sidecar = cached
+        age = _age_hours(sidecar.fetched_at)
         if not force and age < ttl_hours:
             return CacheResult(path=cached_path, status=CacheStatus.FRESH, page_name=page_name, url=url)
 
@@ -392,11 +439,7 @@ def fetch_or_cached(url: str, *, ttl_hours: float = 4.0, force: bool = False) ->
             raise
 
         if cached_path.read_bytes() == new_content.encode():
-            if (
-                sidecar is not None
-                and sidecar.url == url
-                and verify_integrity(cached_path).status is IntegrityStatus.INTACT
-            ):
+            if verify_integrity(cached_path).status is IntegrityStatus.INTACT:
                 write_sidecar(
                     cached_path, url=url, content=new_content, fetched_at=datetime.fromisoformat(utc_now_iso())
                 )
@@ -415,9 +458,6 @@ def fetch_or_cached(url: str, *, ttl_hours: float = 4.0, force: bool = False) ->
         new_content = fetch_url_text(url)
     except Exception as exc:
         if _is_network_error(exc) or isinstance(exc, EmptyResponseError):
-            if cached_path is not None:
-                # force=True but network down; serve stale.
-                return CacheResult(path=cached_path, status=CacheStatus.STALE, page_name=page_name, url=url)
             raise NoCacheError(url, str(exc)) from exc
         raise
 

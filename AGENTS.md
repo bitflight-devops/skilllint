@@ -205,13 +205,14 @@ uv run --script scripts/fetch_doc_source.py latest PAGE_NAME
 
 ### File locations
 
-- Cached pages: `.claude/vendor/sources/{page-name}-{YYYY-MM-DD-HHMM}.md`
-- Sidecar metadata: `.claude/vendor/sources/{page-name}-{YYYY-MM-DD-HHMM}.meta.json`
-- Page names are derived from the URL path (e.g. `https://docs.anthropic.com/en/docs/claude-code/settings.md` → `claude-code--settings`)
+- Cached pages: `.claude/vendor/sources/{page-name}-{YYYY-MM-DD-HHMM}-{source-hash}.md`
+- Sidecar metadata: `.claude/vendor/sources/{page-name}-{YYYY-MM-DD-HHMM}-{source-hash}.meta.json`
+- The full normalized source URL hash separates sources; legacy path-only filenames are reused only with matching validated sidecar provenance.
+- Page names are display labels derived from the URL path (e.g. `https://docs.anthropic.com/en/docs/claude-code/settings.md` → `claude-code--settings`)
 
 ### Offline-first behaviour
 
-Stale cache is served when the network is unavailable (`STALE` status, warning to stderr). The command only fails when **no cache exists AND the network is down**.
+Stale cache with matching validated source provenance is served when the network is unavailable (`STALE` status, warning to stderr). The command only fails when **no identifiable cache exists AND the network is down**.
 
 ### Agent instructions
 

@@ -394,10 +394,12 @@ class TestFetchOrCachedFresh:
 
         # Then
         mock_fetch.assert_called_once_with(url)
-        assert result.status == CacheStatus.UNCHANGED
-        assert result.path == md_path
+        assert result.status == CacheStatus.NEW
+        assert result.path != md_path
         assert (
-            datetime.fromisoformat(json.loads(sidecar_path.read_text(encoding="utf-8"))["fetched_at"]).tzinfo
+            datetime.fromisoformat(
+                json.loads(result.path.with_suffix(".meta.json").read_text(encoding="utf-8"))["fetched_at"]
+            ).tzinfo
             is not None
         )
 
@@ -424,12 +426,10 @@ class TestFetchOrCachedFresh:
 
         # Then
         mock_fetch.assert_called_once_with(url)
-        assert result.status == CacheStatus.UNCHANGED
-        assert result.path == md_path
+        assert result.status == CacheStatus.NEW
+        assert result.path != md_path
 
-    def test_fetch_or_cached_repairs_list_sidecar_when_content_is_unchanged(
-        self, tmp_path: Path, mocker: MockerFixture
-    ) -> None:
+    def test_fetch_or_cached_does_not_relabel_list_sidecar(self, tmp_path: Path, mocker: MockerFixture) -> None:
         # Given
         mocker.patch("skilllint.vendor_cache.SOURCES_DIR", tmp_path)
         url = "https://example.com/docs/list-sidecar.md"
@@ -444,12 +444,13 @@ class TestFetchOrCachedFresh:
 
         # Then
         mock_fetch.assert_called_once_with(url)
-        assert result.status == CacheStatus.UNCHANGED
-        repaired = json.loads(sidecar_path.read_text(encoding="utf-8"))
+        assert result.status == CacheStatus.NEW
+        repaired = json.loads(result.path.with_suffix(".meta.json").read_text(encoding="utf-8"))
+        assert sidecar_path.read_text(encoding="utf-8") == "[]"
         assert repaired["url"] == url
         assert datetime.fromisoformat(repaired["fetched_at"]).tzinfo is not None
 
-    def test_fetch_or_cached_repairs_incomplete_sidecar_to_an_intact_pair(
+    def test_fetch_or_cached_replaces_incomplete_sidecar_with_an_intact_pair(
         self, tmp_path: Path, mocker: MockerFixture
     ) -> None:
         # Given
@@ -465,13 +466,13 @@ class TestFetchOrCachedFresh:
 
         # Then
         mock_fetch.assert_called_once_with(url)
-        assert result.status == CacheStatus.UNCHANGED
-        assert verify_integrity(md_path).status == IntegrityStatus.INTACT
+        assert result.status == CacheStatus.NEW
+        assert verify_integrity(result.path).status == IntegrityStatus.INTACT
 
     @pytest.mark.parametrize(
         "stored_url", ["", "https://example.com/docs/different-source.md"], ids=["empty", "mismatched"]
     )
-    def test_fetch_or_cached_repairs_wrong_sidecar_url_to_an_intact_pair(
+    def test_fetch_or_cached_does_not_relabel_wrong_sidecar_url(
         self, tmp_path: Path, mocker: MockerFixture, stored_url: str
     ) -> None:
         # Given
@@ -493,9 +494,10 @@ class TestFetchOrCachedFresh:
 
         # Then
         mock_fetch.assert_called_once_with(url)
-        assert result.status == CacheStatus.UNCHANGED
-        assert json.loads(sidecar_path.read_text(encoding="utf-8"))["url"] == url
-        assert verify_integrity(md_path).status == IntegrityStatus.INTACT
+        assert result.status == CacheStatus.NEW
+        assert json.loads(result.path.with_suffix(".meta.json").read_text(encoding="utf-8"))["url"] == url
+        assert json.loads(sidecar_path.read_text(encoding="utf-8"))["url"] == stored_url
+        assert verify_integrity(result.path).status == IntegrityStatus.INTACT
 
 
 class TestFetchOrCachedStale:
@@ -569,7 +571,7 @@ class TestFetchOrCachedStale:
         assert result.status == CacheStatus.UNCHANGED
         assert result.path == md_path  # same path, no new file
 
-    def test_fetch_or_cached_unchanged_rebuilds_sidecar(self, tmp_path: Path, mocker: MockerFixture) -> None:
+    def test_fetch_or_cached_creates_new_pair_for_invalid_sidecar(self, tmp_path: Path, mocker: MockerFixture) -> None:
         # Arrange
         mocker.patch("skilllint.vendor_cache.SOURCES_DIR", tmp_path)
         url = "https://example.com/docs/touchpage.md"
@@ -588,10 +590,11 @@ class TestFetchOrCachedStale:
         mocker.patch("skilllint.vendor_cache.fetch_url_text", return_value=content)
 
         # Act
-        fetch_or_cached(url, ttl_hours=4.0)
+        result = fetch_or_cached(url, ttl_hours=4.0)
 
         # Assert
-        updated = json.loads(sidecar_path.read_text(encoding="utf-8"))
+        updated = json.loads(result.path.with_suffix(".meta.json").read_text(encoding="utf-8"))
+        assert json.loads(sidecar_path.read_text(encoding="utf-8"))["fetched_at"] == old_fetched_at
         assert updated["fetched_at"] != old_fetched_at
         assert updated["url"] == url
         assert updated["sha256"] == hashlib.sha256(content.encode()).hexdigest()
@@ -847,7 +850,7 @@ class TestFetchOrCachedForce:
 
         # Then
         mock_fetch.assert_called_once_with(url)
-        assert result.status == CacheStatus.REFRESHED
+        assert result.status == CacheStatus.NEW
 
     def test_fetch_or_cached_force_keeps_identical_content_at_existing_path(
         self, tmp_path: Path, mocker: MockerFixture
@@ -898,7 +901,7 @@ class TestFetchOrCachedForce:
         result = fetch_or_cached(url, force=True)
 
         # Then
-        assert result.status == CacheStatus.REFRESHED
+        assert result.status == CacheStatus.NEW
         assert result.path.read_text(encoding="utf-8") == "# Repaired\n"
 
     def test_fetch_or_cached_force_bypasses_naive_sidecar_timestamp(
@@ -923,7 +926,7 @@ class TestFetchOrCachedForce:
 
         # Then
         mock_fetch.assert_called_once_with(url)
-        assert result.status == CacheStatus.UNCHANGED
+        assert result.status == CacheStatus.NEW
 
     def test_fetch_or_cached_force_repairs_integrity_metadata_for_identical_content(
         self, tmp_path: Path, mocker: MockerFixture
@@ -937,10 +940,10 @@ class TestFetchOrCachedForce:
         mocker.patch("skilllint.vendor_cache.fetch_url_text", return_value=content)
 
         # When
-        fetch_or_cached(url, force=True)
+        result = fetch_or_cached(url, force=True)
 
         # Then
-        assert verify_integrity(md_path).status == IntegrityStatus.INTACT
+        assert verify_integrity(result.path).status == IntegrityStatus.INTACT
 
     def test_fetch_or_cached_force_serves_stale_when_network_fails(self, tmp_path: Path, mocker: MockerFixture) -> None:
         """fetch_or_cached with force=True falls back to STALE when network fails.
