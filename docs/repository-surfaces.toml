@@ -59,6 +59,18 @@ architecture_evidence = "task-only"
 description = "Synthetic benchmark and integration inputs."
 
 [[surface]]
+path = "examples/output"
+kind = "project-tooling"
+architecture_evidence = "supporting"
+description = "Reproducible CLI report captures and visual previews for documentation."
+
+[[surface]]
+path = "examples/output/fixtures"
+kind = "test-fixture"
+architecture_evidence = "task-only"
+description = "Deliberately invalid inputs used to capture real lint findings."
+
+[[surface]]
 path = "packages/skilllint/tests/fixtures"
 kind = "test-fixture"
 architecture_evidence = "task-only"

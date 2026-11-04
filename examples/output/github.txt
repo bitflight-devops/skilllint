@@ -1,0 +1,1 @@
+::error file=examples/output/fixtures/demo-skill/SKILL.md,line=2,col=1,endColumn=4,title=FM010::name: Must use lowercase letters, numbers, and hyphens only%0ASuggestion: Use format: lowercase-with-hyphens%0AHelp: skilllint rule FM010
