@@ -70,6 +70,13 @@ def test_cursor_optional_frontmatter_remains_valid(tmp_path: Path, content: str)
     rule.write_text(content)
     assert CursorAdapter().validate(rule) == []
 
+    result = CliRunner().invoke(app, ["check", str(rule), "--platform", "cursor", "--json"])
+    assert result.exit_code == 0, result.output
+    response = CheckResponse.model_validate_json(result.stdout)
+    assert response.status == "passed"
+    assert response.summary.failed == 0
+    assert rule.read_text() == content
+
 
 def test_cursor_colon_recovery_continues_schema_validation(tmp_path: Path) -> None:
     """Recoverable syntax identifies the field and does not hide CU findings."""
