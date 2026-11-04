@@ -6,6 +6,7 @@ import os
 import re
 import subprocess
 import sys
+from contextlib import redirect_stderr
 from pathlib import Path
 
 import pytest
@@ -76,6 +77,20 @@ def test_validation_failure_keeps_outputs_and_annotations(action_env, monkeypatc
     assert values["inspected-count"] == "1"
     assert {"FM010", "SK005"} <= set(values["findings"].split())
     assert "::error " in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("absolute", [False, True])
+def test_action_annotations_use_workspace_from_nested_cwd(action_env, monkeypatch, capsys, tmp_path, absolute):
+    directory = tmp_path / "plugins/demo"
+    directory.mkdir(parents=True)
+    path = directory / "SKILL.md"
+    path.write_text((FIXTURES / "invalid-skill/SKILL.md").read_text(encoding="utf-8"), encoding="utf-8")
+    monkeypatch.chdir(directory)
+    monkeypatch.setenv("GITHUB_WORKSPACE", str(tmp_path))
+    monkeypatch.setenv("INPUT_PATHS", str(path) if absolute else "SKILL.md")
+    assert action_runner.run() == 1
+    assert read_outputs(action_env)["inspected-count"] == "1"
+    assert "::error file=plugins/demo/SKILL.md," in capsys.readouterr().out
 
 
 def test_usage_failure_has_empty_counts_and_no_scan(action_env, monkeypatch, mocker):
@@ -195,3 +210,21 @@ def test_invalid_utf8_publishes_failure_outputs_and_suspends_traceback(action_en
     match = re.search(r"::stop-commands::([a-f0-9]+)", result.stdout)
     assert match is not None
     assert result.stdout.index("UnicodeDecodeError") < result.stdout.index(f"::{match.group(1)}::")
+
+
+def test_input_validation_failure_preserves_outputs_and_command_protection(action_env, monkeypatch, capsys):
+    from skilllint.boundary.action_inputs_ingest import ActionInputs
+
+    def invalid_inputs(environment):
+        return ActionInputs.model_validate({"INPUT_PATHS": ["\n::error::injected"]})
+
+    monkeypatch.setattr(action_runner, "parse_action_inputs", invalid_inputs)
+    with redirect_stderr(sys.stdout):
+        assert action_runner.run() == 1
+    values = read_outputs(action_env)
+    assert values["result"] == "failed"
+    assert values["inspected-count"] == values["findings"] == ""
+    log = capsys.readouterr().out
+    match = re.search(r"::stop-commands::([a-f0-9]+)", log)
+    assert match is not None
+    assert log.index(match.group(0)) < log.index("ValidationError") < log.index(f"::{match.group(1)}::")

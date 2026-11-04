@@ -470,3 +470,61 @@ def test_unrelated_fix_keeps_existing_result_models(
     assert results[tmp_path][0][1] is result
     assert results[tmp_path][1][1] is empty
     assert issue.source_location == location
+
+
+def test_many_destinations_and_code_spans_preserve_offsets(tmp_path: Path) -> None:
+    """A large reference document does not require a destination scan per span."""
+    from skilllint.rules.lk_series import _strip_code_blocks
+
+    # The review's 12,000-link input exposed quadratic containment work.
+    line = "[x](https://example.org) `sample` <!-- [hidden](ignored.md) -->\r\n"
+    content = line * 12_000
+    masked = "[x](https://example.org) " + " " * len("`sample` <!-- [hidden](ignored.md) -->") + "\r\n"
+    assert _strip_code_blocks(content) == masked * 12_000
+    assert check_lk001(content, tmp_path / "SKILL.md") == []
+    assert check_lk004(content, tmp_path / "SKILL.md", tmp_path) == []
+
+
+@pytest.mark.parametrize(
+    "content",
+    ['<a href="[inner](short)`literal`">', "[x]: [inner](short)`literal`\n", '[<a href="`literal`">](target.md)'],
+)
+def test_destination_index_preserves_nested_literal_delimiters(content: str) -> None:
+    """The last-started destination need not have the largest containing end."""
+    from skilllint.rules.lk_series import _strip_code_blocks
+
+    assert _strip_code_blocks(content) == content
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "`x`[r]: missing.md",
+        '[x](missing.md`code`"a title")',
+        '[x](<missing.md>`code`"a title")',
+        '[x]: <missing.md>`code`"a title"\n',
+        '<a`code` href="missing.md">',
+        '<a href`code`="missing.md">',
+        '<a `code`href="missing.md">',
+    ],
+)
+def test_masking_does_not_invent_link_separators(tmp_path: Path, content: str) -> None:
+    """Padding cannot turn malformed original syntax into a real destination."""
+    assert check_lk001(content, tmp_path / "SKILL.md") == []
+    assert check_lk004(content, tmp_path / "SKILL.md", tmp_path) == []
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "[label `]` text](missing.md)",
+        '[x](missing.md "a `code` title")',
+        '<img alt="<!-- comment -->" src="missing.md">',
+    ],
+)
+def test_authored_link_syntax_keeps_masked_label_and_unrelated_attributes(tmp_path: Path, content: str) -> None:
+    """Checking syntax must not unmask labels or reject unrelated HTML content."""
+    path = tmp_path / "SKILL.md"
+    (issue,) = check_lk001(content, path)
+    start = content.index("missing.md")
+    assert issue.source_location == SourceLocation.from_offsets(path, content, start, start + len("missing.md"))
