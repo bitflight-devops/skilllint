@@ -24,6 +24,8 @@ Rule IDs and default severities:
 
 from __future__ import annotations
 
+from pydantic import TypeAdapter, ValidationError
+
 from skilllint.frontmatter_core import extract_frontmatter
 from skilllint.frontmatter_yaml import safe_load_yaml_with_colon_fix
 from skilllint.models import ValidationIssue
@@ -35,6 +37,7 @@ from skilllint.rules.fm_series import _fm009_recovery_warnings
 # ---------------------------------------------------------------------------
 
 _CURSOR_DOCS_URL = "https://docs.cursor.com/context/rules-for-ai"
+_MDC_FRONTMATTER = TypeAdapter(dict[str, object])
 
 
 # ---------------------------------------------------------------------------
@@ -208,19 +211,27 @@ def validate_mdc_source(content: str, mdc_schema: dict[str, object]) -> list[Val
         ]
 
     fm, yaml_error, colon_fields, _used_text = safe_load_yaml_with_colon_fix(frontmatter_text)
-    if fm is None:
-        message = f"Invalid YAML syntax: {yaml_error}" if yaml_error else "Frontmatter must be a YAML mapping"
-        return [
-            ValidationIssue(
-                field="(yaml)", code="FM002", severity="error", message=message, docs_url=rule_reference("FM002")
-            )
-        ]
-
     issues = [
         issue.model_copy(update={"suggestion": f"Quote the value of '{issue.field}'"})
         for issue in _fm009_recovery_warnings(colon_fields)
     ]
-    issues.extend(validate_mdc_frontmatter(fm, mdc_schema))
+    try:
+        frontmatter = _MDC_FRONTMATTER.validate_python(fm, strict=True)
+    except ValidationError as exc:
+        if yaml_error:
+            message = f"Invalid YAML syntax: {yaml_error}"
+        elif fm is None:
+            message = "Frontmatter must be a YAML mapping"
+        else:
+            message = f"Frontmatter keys must be strings: {exc}"
+        return [
+            *issues,
+            ValidationIssue(
+                field="(yaml)", code="FM002", severity="error", message=message, docs_url=rule_reference("FM002")
+            ),
+        ]
+
+    issues.extend(validate_mdc_frontmatter(frontmatter, mdc_schema))
     return issues
 
 
