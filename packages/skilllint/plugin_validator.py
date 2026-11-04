@@ -91,7 +91,9 @@ from skilllint.record_export import (
 )
 from skilllint.reporting import emit_concise
 from skilllint.reporting_github import emit_github
+from skilllint.reporting_gitlab import emit_gitlab
 from skilllint.reporting_json_lines import emit_json_lines
+from skilllint.reporting_junit import emit_junit
 from skilllint.responses import (
     build_check_response,
     build_rule_response,
@@ -1144,7 +1146,7 @@ def _finish_check_formatted_output(
     no_color: bool,
     show_progress: bool,
     show_summary: bool,
-    output_format: Literal["json-lines", "concise", "github"] | None,
+    output_format: Literal["json-lines", "concise", "github", "gitlab", "junit"] | None,
 ) -> NoReturn:
     """Record the usual human rendering when asked, then emit the selected format.
 
@@ -1181,6 +1183,10 @@ def _finish_check_formatted_output(
     if output_format is not None:
         if output_format == "json-lines":
             emit_json_lines(outcome.results, verbose=verbose)
+        elif output_format == "junit":
+            emit_junit(outcome.results, verbose=verbose)
+        elif output_format == "gitlab":
+            emit_gitlab(outcome.results, verbose=verbose)
         elif output_format == "github":
             emit_github(outcome.results, verbose=verbose)
         else:
@@ -1334,7 +1340,7 @@ def main(
     record: Path | None = None,
     include_gitignore: bool = False,
     json_output: bool = False,
-    output_format: Literal["json-lines", "concise", "github"] | None = None,
+    output_format: Literal["json-lines", "concise", "github", "gitlab", "junit"] | None = None,
     action_report: Callable[[CheckRun | list[tuple[int, Path]]], None] | None = None,
 ) -> None:
     """Validate Claude Code plugins, skills, agents, and commands."""
@@ -1681,11 +1687,11 @@ def check_cmd(
     ] = False,
     json_output: JsonOption = False,
     output_format: Annotated[
-        Literal["json-lines", "concise", "github"] | None,
+        Literal["json-lines", "concise", "github", "gitlab", "junit"] | None,
         typer.Option(
             "--output-format",
             metavar="FORMAT",
-            help="Finding output format: json-lines, concise (one plain line), or github (workflow annotations).",
+            help="Report format: json-lines, concise, github (annotations), gitlab (Code Quality JSON), or junit (XML).",
         ),
     ] = None,
 ) -> None:
