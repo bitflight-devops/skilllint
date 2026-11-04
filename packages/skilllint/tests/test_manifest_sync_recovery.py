@@ -7,9 +7,11 @@ from pathlib import Path
 
 import git
 import pytest
+from hypothesis import given, strategies as st
 from pydantic import ValidationError
 
 from skilllint import auto_sync_manifests as sync, manifest_sync_plan as plan
+from skilllint.boundary.manifest_sync_ingest import decode_marketplace_sync_document, decode_plugin_sync_document
 
 
 @pytest.fixture
@@ -223,3 +225,55 @@ def test_replacement_with_same_bytes_during_preparation_is_detected(
         plan.apply_manifest_updates([plan.ManifestUpdate(target, b"before", "after", "1.0.1")])
     assert target.read_text() == "before"
     assert list(tmp_path.iterdir()) == [target]
+
+
+@given(declaration=st.one_of(st.from_type(str), st.lists(st.from_type(str)), st.none()))
+def test_plugin_boundary_preserves_authored_fields(declaration: str | list[str] | None) -> None:
+    payload = {"skills": declaration, "extension": {"nested": [None, True, 42, declaration]}}
+    document = decode_plugin_sync_document(json.dumps(payload).encode())
+    assert document.skills == declaration
+    assert document.version == "0.0.0"
+    assert json.loads(document.model_dump_json(exclude_unset=True)) == payload
+
+
+@given(extension=st.one_of(st.from_type(str), st.lists(st.from_type(str)), st.none()))
+def test_marketplace_boundary_preserves_nested_extensions(extension: str | list[str] | None) -> None:
+    payload = {
+        "metadata": {"extension": extension},
+        "plugins": [{"name": "demo", "extension": extension}, {"name": "other", "source": None}],
+        "extension": extension,
+    }
+    document = decode_marketplace_sync_document(json.dumps(payload).encode())
+    assert document.plugins[0].name == "demo"
+    assert document.metadata.version == "0.0.0"
+    assert json.loads(document.model_dump_json(exclude_unset=True)) == payload
+
+
+@pytest.mark.parametrize("content", [b"null", b"[]", b'{"agents":[42]}', b'{"version":null}'])
+def test_plugin_boundary_rejects_invalid_sync_shapes(content: bytes) -> None:
+    with pytest.raises(ValidationError):
+        decode_plugin_sync_document(content)
+
+
+def test_sync_preserves_extras_nulls_and_absent_defaults(repository: git.Repo) -> None:
+    plugin = {"version": "1.0.0", "skills": None, "extension": {"nested": [None, True, 42]}}
+    marketplace = {
+        "metadata": {"version": "1.0.0", "extension": None},
+        "plugins": [{"name": "demo", "extension": {"flag": False}}],
+        "extension": [None],
+    }
+    _plugin().write_text(json.dumps(plugin))
+    _marketplace().write_text(json.dumps(marketplace))
+    assert sync._precommit_sync() == 0
+    plugin["version"] = "1.0.1"
+    marketplace["metadata"] = {"version": "1.0.1", "extension": None}
+    assert json.loads(_plugin().read_bytes()) == plugin
+    assert json.loads(_marketplace().read_bytes()) == marketplace
+    for path in (_plugin(), _marketplace()):
+        assert json.loads(repository.git.show(f":{path}")) == json.loads(path.read_bytes())
+
+
+def test_sync_materializes_missing_metadata_without_other_defaults(repository: git.Repo) -> None:
+    _marketplace().write_text('{"extension":null}')
+    assert sync._precommit_sync() == 0
+    assert json.loads(_marketplace().read_bytes()) == {"extension": None, "metadata": {"version": "0.0.1"}}

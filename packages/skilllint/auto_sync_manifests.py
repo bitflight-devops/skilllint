@@ -34,9 +34,13 @@ from io import TextIOWrapper
 import git
 import msgspec.json
 from git.exc import InvalidGitRepositoryError
-from pydantic import JsonValue
 
-from skilllint.boundary.manifest_sync_ingest import decode_marketplace_sync_document, decode_plugin_sync_document
+from skilllint.boundary.manifest_sync_ingest import (
+    MarketplaceSyncDocument,
+    MarketplaceSyncPlugin,
+    decode_marketplace_sync_document,
+    decode_plugin_sync_document,
+)
 from skilllint.manifest_sync_plan import ManifestUpdate, apply_manifest_updates
 
 # Ensure UTF-8 output on Windows (cp1252 default cannot encode emoji/spinner chars).
@@ -375,7 +379,7 @@ def _is_standard_path_skill(field_name: str, comp_path: str) -> bool:
     return field_name == "skills" and comp_path.startswith("skills/") and not comp_path.endswith("/SKILL.md")
 
 
-def _remove_component_from_array(data: dict[str, JsonValue], field_name: str, comp_path: str) -> bool:
+def _remove_component_from_array(data: dict[str, str | list[str] | None], field_name: str, comp_path: str) -> bool:
     """Remove a component path from a plugin.json array field.
 
     Args:
@@ -398,7 +402,7 @@ def _remove_component_from_array(data: dict[str, JsonValue], field_name: str, co
     return True
 
 
-def _update_component_arrays(data: dict[str, JsonValue], changes: ComponentChanges) -> bool:
+def _update_component_arrays(data: dict[str, str | list[str] | None], changes: ComponentChanges) -> bool:
     """Update component arrays in plugin.json.
 
     Args:
@@ -470,7 +474,7 @@ def _prepare_plugin_json(plugin_name: str, changes: ComponentChanges) -> tuple[M
     original_bytes = plugin_json_path.read_bytes()
     data = decode_plugin_sync_document(original_bytes)
 
-    current_version = cast("str", data.get("version", "0.0.0"))
+    current_version = data.version
 
     already_bumped = _version_already_bumped(str(plugin_json_path), ["version"])
     bump_type: Literal["major", "minor", "patch"] = "patch"
@@ -483,15 +487,17 @@ def _prepare_plugin_json(plugin_name: str, changes: ComponentChanges) -> tuple[M
         bump_type = "minor"  # New feature
 
     # Update component arrays
-    modified = _update_component_arrays(data, changes)
+    components = data.component_declarations()
+    modified = _update_component_arrays(components, changes)
+    data.apply_component_declarations(components)
 
     # Bump version if changes were made
     if modified or (changes["modified"] and not already_bumped):
         new_version = current_version if already_bumped else bump_version(current_version, bump_type)
         existing_content = original_bytes.decode("utf-8")
 
-        data["version"] = new_version
-        new_content = msgspec.json.format(msgspec.json.encode(data), indent=2).decode() + "\n"
+        data.version = new_version
+        new_content = data.model_dump_json(exclude_unset=True, indent=2) + "\n"
 
         # Version idempotency does not suppress unfinished registration work.
         if new_content == existing_content:
@@ -539,14 +545,14 @@ def _read_plugin_name(plugin_dir_name: str) -> str:
     return plugin_dir_name
 
 
-def _update_marketplace_plugins(data: dict[str, JsonValue], plugin_changes: MarketplaceChanges) -> bool:
+def _update_marketplace_plugins(data: MarketplaceSyncDocument, plugin_changes: MarketplaceChanges) -> bool:
     """Add and remove plugins in the marketplace data structure.
 
     The ``"name"`` field in each marketplace entry is derived from plugin.json
     (authoritative), not from the directory name.
 
     Args:
-        data: Marketplace JSON data dictionary (mutated in place).
+        data: Validated marketplace document (mutated in place).
         plugin_changes: Changes describing added/deleted plugins.
 
     Returns:
@@ -556,22 +562,15 @@ def _update_marketplace_plugins(data: dict[str, JsonValue], plugin_changes: Mark
 
     for plugin_dir_name in plugin_changes["added"]:
         canonical_name = _read_plugin_name(plugin_dir_name)
-        plugin_entry = {"name": canonical_name, "source": f"./plugins/{plugin_dir_name}"}
-
-        if "plugins" not in data:
-            data["plugins"] = []
-
-        plugins_list = cast("list[dict[str, str]]", data["plugins"])
-
-        if not any(p["name"] == canonical_name for p in plugins_list):
-            plugins_list.append(plugin_entry)
+        plugin_entry = MarketplaceSyncPlugin(name=canonical_name, source=f"./plugins/{plugin_dir_name}")
+        if not any(plugin.name == canonical_name for plugin in data.plugins):
+            data.plugins = [*data.plugins, plugin_entry]
             modified = True
 
     for plugin_dir_name in plugin_changes["deleted"]:
-        if "plugins" in data:
+        if "plugins" in data.model_fields_set:
             canonical_name = _read_plugin_name(plugin_dir_name)
-            plugins_list = cast("list[dict[str, str]]", data["plugins"])
-            plugins_list[:] = [p for p in plugins_list if p["name"] != canonical_name]
+            data.plugins = [plugin for plugin in data.plugins if plugin.name != canonical_name]
             modified = True
 
     return modified
@@ -604,8 +603,7 @@ def _prepare_marketplace_json(plugin_changes: MarketplaceChanges) -> ManifestUpd
         if plugin_path.exists():
             decode_plugin_sync_document(plugin_path.read_bytes())
 
-    metadata = cast("dict[str, str]", data.get("metadata", {}))
-    current_version = metadata.get("version", "0.0.0")
+    current_version = data.metadata.version
 
     already_bumped = _version_already_bumped(str(marketplace_json_path), ["metadata", "version"])
     bump_type: Literal["major", "minor", "patch"] = "patch"
@@ -624,13 +622,10 @@ def _prepare_marketplace_json(plugin_changes: MarketplaceChanges) -> ManifestUpd
         existing_content = original_bytes.decode("utf-8")
         new_version = current_version if already_bumped else bump_version(current_version, bump_type)
 
-        if "metadata" not in data:
-            data["metadata"] = {}
-
-        metadata = cast("dict[str, str]", data["metadata"])
-        metadata["version"] = new_version
-
-        new_content = msgspec.json.format(msgspec.json.encode(data), indent=2).decode() + "\n"
+        metadata = data.metadata
+        metadata.version = new_version
+        data.metadata = metadata
+        new_content = data.model_dump_json(exclude_unset=True, indent=2) + "\n"
 
         if new_content == existing_content:
             return None

@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter
-
-_JSON_OBJECT = TypeAdapter(dict[str, JsonValue])
+from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 
-class _PluginDocument(BaseModel):
+class PluginSyncDocument(BaseModel):
+    """Plugin fields used by sync, with unrelated authored JSON retained."""
+
     model_config = ConfigDict(extra="allow", strict=True)
 
     name: str | None = None
@@ -16,43 +16,52 @@ class _PluginDocument(BaseModel):
     agents: str | list[str] | None = None
     commands: str | list[str] | None = None
 
+    def component_declarations(self) -> dict[str, str | list[str] | None]:
+        """Return only authored component fields for registration updates."""
+        fields = {"skills": self.skills, "agents": self.agents, "commands": self.commands}
+        return {name: value for name, value in fields.items() if name in self.model_fields_set}
 
-class _MarketplaceMetadata(BaseModel):
+    def apply_component_declarations(self, fields: dict[str, str | list[str] | None]) -> None:
+        """Apply component changes without materializing absent defaults."""
+        if "skills" in fields:
+            self.skills = fields["skills"]
+        if "agents" in fields:
+            self.agents = fields["agents"]
+        if "commands" in fields:
+            self.commands = fields["commands"]
+
+
+class MarketplaceSyncMetadata(BaseModel):
+    """Marketplace version and unrelated authored metadata."""
+
     model_config = ConfigDict(extra="allow", strict=True)
 
     version: str = "0.0.0"
 
 
-class _MarketplacePlugin(BaseModel):
+class MarketplaceSyncPlugin(BaseModel):
+    """A named marketplace registration with its authored extension fields."""
+
     model_config = ConfigDict(extra="allow", strict=True)
 
     name: str
+    source: JsonValue = None
 
 
-class _MarketplaceDocument(BaseModel):
+class MarketplaceSyncDocument(BaseModel):
+    """Validated marketplace fields used when preparing a synchronization."""
+
     model_config = ConfigDict(extra="allow", strict=True)
 
-    metadata: _MarketplaceMetadata = Field(default_factory=_MarketplaceMetadata)
-    plugins: list[_MarketplacePlugin] = Field(default_factory=list)
+    metadata: MarketplaceSyncMetadata = Field(default_factory=MarketplaceSyncMetadata)
+    plugins: list[MarketplaceSyncPlugin] = Field(default_factory=list)
 
 
-def decode_plugin_sync_document(content: bytes) -> dict[str, JsonValue]:
-    """Validate sync fields while preserving every authored JSON field and value.
-
-    Returns:
-        The original decoded object, after validation of fields used by sync.
-    """
-    data = _JSON_OBJECT.validate_json(content, strict=True)
-    _PluginDocument.model_validate(data)
-    return data
+def decode_plugin_sync_document(content: bytes) -> PluginSyncDocument:
+    """Return validated plugin fields, extras, and authored field presence."""
+    return PluginSyncDocument.model_validate_json(content)
 
 
-def decode_marketplace_sync_document(content: bytes) -> dict[str, JsonValue]:
-    """Validate marketplace structure without rewriting unrelated metadata.
-
-    Returns:
-        The original decoded object, after validation of fields used by sync.
-    """
-    data = _JSON_OBJECT.validate_json(content, strict=True)
-    _MarketplaceDocument.model_validate(data)
-    return data
+def decode_marketplace_sync_document(content: bytes) -> MarketplaceSyncDocument:
+    """Return validated marketplace fields without exposing a raw payload."""
+    return MarketplaceSyncDocument.model_validate_json(content)
