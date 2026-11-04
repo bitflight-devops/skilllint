@@ -75,7 +75,7 @@ Use the narrowest owner that matches the change before searching broadly.
 | provider behavior | `packages/skilllint/adapters/` |
 | untrusted external structures | `packages/skilllint/boundary/` |
 | provider schemas | `packages/skilllint/schemas/` |
-| output and reporting | `packages/skilllint/reporting.py` |
+| output and reporting | `packages/skilllint/reporting.py`, `packages/skilllint/reporting_*.py` |
 | repository maintenance tooling | `scripts/` |
 | package unit/integration tests | `packages/skilllint/tests/` |
 | project/tooling tests and benchmarks | `tests/` |
@@ -261,20 +261,20 @@ This applies to: data processing, conditional logic, multi-step setup, JSON mani
 The project has two test locations — this is intentional, not accidental.
 
 ### `packages/skilllint/tests/`
-Unit and integration tests for the `skilllint` package itself: validators, CLI, adapters, reporters, frontmatter utilities. These tests import directly from the package and run entirely in-process.
+Unit and integration tests for the `skilllint` package itself: validators, CLI, adapters, reporters, and frontmatter utilities. They include direct imports, in-process CLI tests, and subprocess tests of the installed package.
 
 ### `tests/` (root)
 Project-level tests that are not owned by any package:
 - `test_fetch_platform_docs.py` — tests `scripts/fetch_platform_docs.py`, a root-level project script
-- `tests/benchmarks/` — performance benchmarks that invoke `skilllint` as an installed CLI via subprocess (black-box tests); cannot live inside the package tests because they treat `skilllint` as an external process
+- `tests/benchmarks/` — project-level performance benchmarks, including installed-CLI subprocess measurements
 - `tests/fixtures/` — shared zip archives used by the benchmark suite
 
 ### Rule: where does a new test go?
-- Tests that `import` from `skilllint` → `packages/skilllint/tests/`
+- Tests of package behavior → `packages/skilllint/tests/`, whether in-process or through the CLI
 - Tests for root-level scripts (`scripts/*.py`) → `tests/`
-- Benchmarks (subprocess/CLI invocation) → `tests/benchmarks/`
+- Project-level performance benchmarks → `tests/benchmarks/`
 
-Both locations are discovered by `pytest` via `testpaths = ["**/tests"]` in `pyproject.toml`.
+The `testpaths` setting in `pyproject.toml` collects both test trees through `**/tests` and also collects colocated agent-tooling tests through `.agents/skills/*/scripts`.
 
 ## Python typing policy
 
@@ -282,7 +282,7 @@ External input is ingested only through explicit boundaries (`packages/skilllint
 
 **Typed core (non-boundary code):** no `typing.Any`, no treating raw external payloads as domain data, and **no `cast()`** — `cast()` is not validation. The only `cast()` permitted is **at a typed boundary**, immediately after a proof step (runtime narrowing, Pydantic output, or a documented library guarantee), per `docs/TYPING_POLICY.md` §2–§4. Tests that must violate static rules for coverage (e.g. Protocol `...` stubs, frozen-dataclass mutation assertions) isolate that in a **named helper or method** marked `@no_type_check` with a one-line rationale — not `cast()` lies or blanket `# ty: ignore`.
 
-**Type checking:** `uv run ty check packages/` only (CI / pre-commit). `pyproject.toml` keeps **mypy** and **basedpyright** effectively off so they do not overlap or conflict with `ty` or duplicate config. Full standard: `docs/TYPING_POLICY.md`.
+**Type checking:** `ty` is the single enforced checker. The dedicated CI type job runs `uv run ty check packages/`; the prek hook checks the Python filenames passed to it, including repository tooling and tests. Run the full prek gate rather than treating the package-only command as its replacement. `pyproject.toml` keeps **mypy** and **basedpyright** effectively off to avoid overlapping type checks. Full standard: `docs/TYPING_POLICY.md`.
 
 ## No invented constraints
 

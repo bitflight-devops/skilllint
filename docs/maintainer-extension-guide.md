@@ -1,7 +1,6 @@
 # Maintainer extension guide
 
-This guide describes the current extension seams. Read the interface and its
-tests before adding an adapter, schema claim, or rule.
+Use this guide to add an adapter, schema constraint, or lint rule. Start with the owning interface and its tests; the [architecture guide](architecture.md) maps the validation pipeline and module responsibilities.
 
 ## Choose the seam
 
@@ -51,12 +50,11 @@ Register the class in the package that owns it:
 example = "example_skilllint.adapter:ExampleAdapter"
 ```
 
-`load_adapters()` discovers and instantiates these entry points. A tiny sample
-distribution is retained in the architecture example test so installation,
-loading, and one passing/failing CLI result remain executable. Keep third-party
-validation output to dictionaries with `code`, `severity`, and `message`; the
-core converts them to `ValidationIssue` objects. The core still owns severity
-semantics, fixing, revalidation, and reporting.
+`load_adapters()` discovers and instantiates these entry points. The example above is exercised by `packages/skilllint/tests/test_architecture_examples.py`, including building and loading a sample distribution and checking passing/failing CLI results.
+
+Return finding dictionaries with `code`, `severity`, and `message`. Supported diagnostic fields also include `field`, `line`, `suggestion`, `docs_url`, and `source_location`; the core preserves them when converting to `ValidationIssue`. `applicable_rules()` allows rule-series prefixes, while registered rules are also filtered by their platform metadata. Explicit `--platform` validation does not apply fixes.
+
+An adapter that needs to identify plugin roots can also implement the optional `PlatformPluginDiscovery.plugin_layouts()` protocol. It is separate from the five required methods so existing adapters remain compatible. See [adapter discovery](architecture.md#adapters-and-the-extension-seam) for the ownership rules.
 
 ## Add a rule
 
@@ -66,28 +64,15 @@ metadata for `skilllint rules` and `skilllint rule CODE`; the check function is
 the emitter. Keep registration, emission, severity, validator ownership, and
 provenance as separate facts.
 
-Current registration rules include PR001, PR002, and PR005. PR001 is a warning
-for replacing unregistered agents/commands, not for additive skills. PR002 is
-skilllint's error for a registered component whose accepted file/directory/root
-target is absent. PR005 is a valid configuration with an optional informational
-recommendation when a command path is a skill directory. PR003, PR004, and
-SK009 are retired and must not be restored to help, catalog, or examples.
+Check `uv run skilllint rules` and `uv run skilllint rule CODE` before adding or changing a rule. The registration series includes PR001, PR002, and PR005; their behavior is covered by `test_plugin_registration_validator.py`. PR003, PR004, and SK009 are retired and must not be restored to help, catalog, or examples.
 
 ## Schema and provenance
 
-Version schema changes under `packages/skilllint/schemas/<provider>/vN.json`.
-Preserve `constraint_scope`: `shared` means the core can apply it across
-providers; `provider_specific` requires the matching adapter. The old
-Registry claims remain source-coupled to the design and validation tests.
+Version schema changes under `packages/skilllint/schemas/<provider>/vN.json`. Preserve `constraint_scope`: `shared` means the core can apply it across providers; `provider_specific` requires the matching adapter.
 
-A provenance claim must identify its rule, authority file/URL and heading (when
-applicable), extraction shape, assertion locator, expected value, and audit
-date. The current locator test proves the supported Python-constant locators;
-schema JSON field/enum locators have separate schema validation coverage and
-must not be inferred from that test alone. The current refresher has two claims:
-the source changed, and the extracted claim matches the maintained value. #146
-is the schema-locator and refresh-outcome boundary. Future LLM or generalized
-provenance stages are proposed design, not shipped behavior.
+A provenance claim must identify its rule, authority file/URL and heading (when applicable), extraction shape, assertion locator, expected value, and audit date. `test_provenance_registry_locators.py` resolves Python constants, schema JSON fields, and schema JSON enums and compares them with the recorded expected values. Add coverage for the locator and value used by a new claim.
+
+`scripts/refresh_claim_values.py` currently re-extracts two vendor-backed claims: HK002 event names and HK003 hook types. It updates their registry values and audit metadata when they change; it does not update rule code. `scripts/refresh_schemas.py` versions schema files and preserves constraint scopes. Neither script implements the generalized LLM pipeline described in the [provenance proposal](design-rule-provenance-registry.md).
 
 ## Verification checklist
 
@@ -95,20 +80,9 @@ provenance stages are proposed design, not shipped behavior.
    block. Missing source or heading must fail.
 2. Install/load any retained adapter sample and run both its passing and
    failing public CLI probes with `PYTHONPATH` cleared.
-3. Run `uv run skilllint rules` and `uv run skilllint rule CODE`. The eight
-   retained stub-backed emitter claims are exercised by
-   `packages/skilllint/tests/test_public_rule_emitters.py` (run it with
-   `uv run pytest packages/skilllint/tests/test_public_rule_emitters.py`), and
-   the PR001/PR002/PR005 public-route cases are in
-   `packages/skilllint/tests/test_plugin_registration_validator.py` (run it
-   with `uv run pytest packages/skilllint/tests/test_plugin_registration_validator.py`).
+3. Run `uv run skilllint rules` and `uv run skilllint rule CODE`, then exercise the affected public CLI path. For targeted feedback, use `uv run python scripts/run_fast_tests.py packages/skilllint/tests/test_public_rule_emitters.py` or the affected test file, such as `packages/skilllint/tests/test_plugin_registration_validator.py`. The fast profile excludes slow tests and does not replace the full gate.
 4. Run `uv run prek run --all-files` and `uv run pytest`.
 
 ## Typing boundary
 
-Python 3.11 is the supported baseline. The repository's single enforced type
-checker is `ty`; its scope is `packages/` (`uv run ty check packages/`). The
-repository gates are broader: `uv run prek run --all-files` also runs formatting,
-lint, shell, Markdown, and workflow checks, while `uv run pytest` runs tests.
-Keep untrusted adapter/file payloads at explicit boundary modules and validate
-them before passing concrete values inward; see [TYPING_POLICY.md](TYPING_POLICY.md).
+Python 3.11 is the supported baseline. The single enforced type checker is `ty`: the dedicated CI type job checks `packages/`, while the prek hook checks the Python filenames passed to it, including tooling and tests. Run `uv run prek run --all-files` and `uv run pytest` for the full gates. Keep untrusted adapter/file payloads at explicit boundary modules and validate them before passing concrete values inward; see the [typing policy](TYPING_POLICY.md).

@@ -1,4 +1,4 @@
-# AI Engineering Policy: Strict Typing and Typed Boundaries in Python
+# Python typing policy
 
 Version: 1.0
 Applies to: Python 3.11+ (3.11 is the repository baseline)
@@ -111,11 +111,11 @@ Everywhere else:
 
 ### skilllint repository
 
-CI and the pre-commit configuration run Astral **`ty check`** on `packages/` (configured in `pyproject.toml`). Use `uv run ty check packages/` locally. This is the package-only type scope; repository gates are broader and include formatting, lint, shell, Markdown, workflow, and pytest checks. **`[tool.mypy]`** (effectively excluded) and **`[tool.basedpyright]`** (`typeCheckingMode = "off"`) stay that way on purpose: **ty** is the single type gate.
+Astral **`ty`** is the single enforced type checker. The dedicated CI type job runs `uv run ty check packages/`. The prek hook runs `ty check` on the Python filenames passed to it, so it also covers repository tooling and tests. The package-only command is useful for targeted feedback but does not replace `uv run prek run --all-files` and `uv run pytest`, the repository completion gates. **`[tool.mypy]`** is effectively excluded and **`[tool.basedpyright]`** has `typeCheckingMode = "off"` to avoid overlapping type checks.
 
 ## 8. Pydantic Addendum
 
-When Pydantic is available, improve the boundary process as follows:
+Pydantic is a required dependency. Apply these practices at ingestion boundaries:
 
 ### 8.1 Use Pydantic models as the default ingress contract
 
@@ -139,7 +139,7 @@ Once a payload has been validated, pass the model or a typed domain object, not 
 
 ## 9. Hypothesis Addendum
 
-When Hypothesis is available, improve the process as follows:
+Hypothesis is included in the development dependencies. Use it to exercise boundary behavior:
 
 ### 9.1 Property-test every boundary validator
 
@@ -157,31 +157,22 @@ Type composite strategies with `SearchStrategy[T]` so test helpers participate i
 
 Hypothesis Ghostwriter can generate starter tests. It should be used as a starting point for human-authored tests, especially when adding new boundary adapters.
 
-## 10. Python-Version Addendum
+## 10. Python compatibility
 
-### 10.1 Python 3.11
+Python 3.11 is the minimum supported version in `pyproject.toml`, and Ruff targets `py311`. Package syntax and imports must work on that baseline, even when the development interpreter is newer.
 
-1. Use `Self` for fluent APIs, alternate constructors, and methods that return the current class. Python 3.11 added `Self` for exactly this use case.
-2. Use `typing.assert_type()` in tests or type-check-only assertions to lock expected inferred types at critical boundaries. Python 3.11 added `assert_type()` for confirming a type checker's inferred type.
-3. Use `typing.reveal_type()` during development when refactoring validators or removing `cast()` calls. Python 3.11 added `reveal_type()` to inspect inferred types.
+### 10.1 Available on the baseline
 
-### 10.2 Python 3.12
+- Use `Self` for fluent APIs, alternate constructors, and methods that return the current class.
+- Use `typing.assert_type()` in tests or type-check-only assertions to check inferred types at important boundaries.
+- Use `typing.reveal_type()` during development to inspect inferred types.
+- Use `TypeAlias` and the Python 3.11-compatible generic syntax for shared types. `packages/skilllint/models.py` contains examples.
 
-1. Use PEP 695 generic parameter syntax for new generic validators, adapters, and helper functions. Python 3.12 introduced a more compact syntax for generic classes and functions.
-2. Use the `type` statement for explicit type aliases instead of informal alias patterns. Python 3.12 added the `type` statement and `TypeAliasType` support for clearer alias declarations.
-3. Standardize shared alias definitions for raw-vs-validated shapes using the `type` statement and generic syntax introduced in Python 3.12.
+### 10.2 Features introduced after Python 3.11
 
-### 10.3 Python 3.13
+Python 3.12's `type` statement and generic parameter syntax cannot be parsed by Python 3.11. They are not suitable for package code while the current baseline remains supported.
 
-1. Use `TypeIs` for custom narrowing helpers where you previously relied on weaker boolean checks or overused `cast()`. Python 3.13 added `typing.TypeIs` as a more intuitive narrowing mechanism than `TypeGuard` in many cases.
-2. Use `ReadOnly` in `TypedDict` definitions for payload fields that should never be mutated after validation. Python 3.13 added `typing.ReadOnly` for `TypedDict` items.
-3. Replace ad hoc mutation of structured payload dictionaries with immutable or read-only typed representations where possible. The new `ReadOnly` support gives static checkers a direct way to enforce post-validation invariants.
-
-### 10.4 Python 3.14
-
-1. Stop reading `__annotations__` directly in framework, validator, or metaprogramming code. Python 3.14 changed annotation evaluation semantics and recommends using `annotationlib` APIs instead.
-2. Use `annotationlib.get_annotations()` when you need runtime access to annotations in cross-version-aware infrastructure code. Python 3.14 introduced `annotationlib` specifically to inspect deferred annotations safely.
-3. Audit any library glue, decorators, or code generation that depends on eager annotation evaluation. Python 3.14 adopted deferred evaluation of annotations under PEP 649 and PEP 749, so annotation-reading code needs to be explicit and future-safe.
+Likewise, `typing.TypeIs`, `typing.ReadOnly`, and `annotationlib` are not available in the Python 3.11 standard library. If a change needs newer typing or annotation behavior, use a baseline-compatible approach and verify it on the supported Python versions. A newer development interpreter alone is not a reason to change the package's compatibility contract.
 
 ## 11. Allowed and Disallowed Examples
 
@@ -211,7 +202,7 @@ Before merging code, reviewers should ask:
 5. Is every `cast()` justified by a prior proof step?
 6. Could Pydantic `BaseModel` or `TypeAdapter` replace custom parsing?
 7. Does Hypothesis cover malformed, partial, and edge-case inputs?
-8. Are Python-version-specific typing improvements being used where available?
+8. Do the syntax and imports work on the supported Python 3.11 baseline?
 
 ## 13. Non-Negotiable Standard
 

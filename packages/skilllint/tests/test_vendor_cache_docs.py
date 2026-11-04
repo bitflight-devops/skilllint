@@ -43,13 +43,13 @@ def test_source_first_policy_has_network_sentinel_contract() -> None:
 
 
 def test_adversarial_cache_outcomes_are_documented() -> None:
-    text = _guide()
+    text = " ".join(_guide().split())
     for phrase in (
         "missing or partial pairs",
         "malformed, or incomplete metadata",
         "fenced",
-        "No Cache\nAvailable",
+        "No Cache Available",
         "empty successful HTTP response",
-        "decoded response text encoded as\nUTF-8",
+        "decoded response text encoded as UTF-8",
     ):
         assert phrase in text

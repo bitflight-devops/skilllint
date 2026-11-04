@@ -1,5 +1,7 @@
 # Current architecture
 
+Use this guide to find the code that owns a behavior before changing it. For extension steps, see the [maintainer extension guide](maintainer-extension-guide.md). For command and configuration choices, see the [usage guide](usage.md).
+
 `skilllint` is a command-line validation pipeline. The public seam is the
 `skilllint check` command; the implementation is split into discovery,
 validation, rule registration, fixing, and reporting modules. Dependency-light
@@ -13,8 +15,7 @@ plugin manifest decoding. `frontmatter_yaml.py` owns YAML parsing/repair
 and SKILL.md document parsing. `scan_runtime.py` owns path discovery and
 plugin/marketplace root ancestry. `fixing.py` owns fail-closed fixer
 authorization and generic ordered execution.
-`plugin_validator.py` re-exports migrated names for compatibility while its
-remaining responsibilities are decomposed incrementally under #283.
+`plugin_validator.py` owns CLI and validation orchestration and re-exports migrated names for compatibility. New code should import shared contracts from their owning modules rather than the compatibility facade.
 
 ## Runtime flow
 
@@ -27,7 +28,8 @@ CLI (plugin_validator.main)
   -> schema validators and registered rules
   -> fixing.apply_authorized_fixes
   -> optional revalidation
-  -> reporting.ConsoleReporter or CIReporter
+  -> scan_runtime.CheckRun (results and applied fixes)
+  -> selected reporter or structured-output projection
 ```
 
 `file_types.ScanContext` and `FileType` are the dependency-light classification
@@ -89,7 +91,7 @@ category, platform, severity, fixability, and optional authority metadata.
 Product rule modules depend on these domain owners and must not import the
 legacy `plugin_validator.py` validation/CLI facade. The facade may import
 rules to assemble the runtime pipeline; reversing that dependency recreates
-the central-module cycle #283 is removing.
+a dependency cycle between rule implementation and orchestration.
 
 `validators/rule_series.py` owns the read-only protocol adapters for rule series
 whose detection already lives in `rules/`: AS, LK001, NR, and PD. Keeping
@@ -123,10 +125,7 @@ directory, root, and `./` shapes, and PR005 is an informational recommendation
 for a command path that is also a skill directory. PR003, PR004, and SK009 are
 retired and must not appear in the active catalog/help.
 
-The maintained provenance chain is rule claim -> authority -> recorded
-extraction/locator -> comparison. The refresher currently has two claims: the
-fetched source changed, and the extracted claim matches the maintained value.
-A future LLM/general provenance pipeline is proposed only; it is not shipped.
+The maintained provenance chain is rule claim -> authority -> recorded extraction/locator -> comparison. `schemas/provenance-registry.json` records claims and expected values; `test_provenance_registry_locators.py` checks Python constants and supported schema JSON locators against those values. `scripts/refresh_claim_values.py` mechanically extracts the HK002 event names and HK003 hook types from vendor documentation and updates the registry when they differ. It does not update the corresponding rule implementations. The generalized LLM pipeline remains a [proposal](design-rule-provenance-registry.md).
 
 ## Fixing and reporting
 
@@ -148,12 +147,24 @@ rules can resolve structural context without reaching upward into the legacy
 validator. HK005 owns its Git execute-bit observation beside the hook rule;
 `validators/hooks.py::HookValidator` owns the filesystem mutation.
 
-`plugin_validator._get_fixers_for_path` still owns fixer selection and ordering
-for this migration slice, while `plugin_validator.validate_single_path` owns
-per-path validation and revalidation. `scan_runtime.run_validation_loop`
-orchestrates file iteration and sends resulting `FileResults` to the selected
-reporter. Exit status is derived from resulting errors and usage/validation
-contracts, not adapter registration.
+`plugin_validator._get_fixers_for_path` selects and orders fixers; `plugin_validator.validate_single_path` owns per-path validation and revalidation. `scan_runtime.collect_validation_results` gathers the results and applied fixes into a `CheckRun`. `scan_runtime.run_validation_loop` combines collection and reporting for the legacy CLI path. Exit status reflects the validation results or an invocation failure, not adapter registration.
+
+### Output ownership
+
+Reporters consume the collected scan instead of running validators again. `plugin_validator.py` selects the requested output, and `scan_runtime.report_results` applies the human reporter to the same `CheckRun`.
+
+| Output | Owner |
+| --- | --- |
+| Legacy human output and concise lines | `reporting.py` |
+| Source-aware human diagnostics (`full`) | `reporting_full.py` |
+| One finding per JSON line (`json-lines`) | `reporting_json_lines.py` |
+| GitHub workflow annotations (`github`) | `reporting_github.py` |
+| GitLab Code Quality JSON (`gitlab`) | `reporting_gitlab.py` |
+| JUnit XML (`junit`) | `reporting_junit.py` |
+| Legacy JSON response (`--json`) | `responses.py` |
+| SVG/HTML recording | `record_export.py` |
+
+The output formats have different consumer contracts. Keep their escaping, path handling, severity mapping, and coordinate conversion in the corresponding reporter. See [output formats](output-formats.md) for CLI examples.
 
 ### Diagnostic source locations
 
@@ -178,11 +189,7 @@ Source metadata survives adapter conversion and severity remapping. When `--fix`
 renames a folder, collected locations follow the move, including source paths
 inside aggregated plugin findings and saved symlink identities. Earlier findings
 for files rewritten by a later fix retain file identity but lose obsolete
-coordinates; freshly revalidated findings keep their new spans. Metadata is
-intentionally excluded from existing issue serialization and JSON schemas:
-`--json`, legacy terminal formats, and the Action's output contract remain
-unchanged. Future output formats must explicitly consume these locations and
-convert code-point coordinates when a target protocol uses another unit.
+coordinates; freshly revalidated findings keep their new spans. Metadata is intentionally excluded from legacy issue serialization and JSON schemas, preserving the `--json` contract. The explicit output formats consume source locations where their consumer supports them. Reporters must convert code-point coordinates when a target protocol uses another unit rather than changing the shared location model.
 
 ## Maintainer map
 
@@ -206,11 +213,6 @@ convert code-point coordinates when a target protocol uses another unit.
 | plugin-tree/subprocess validators | `validators/plugins.py` | plugin-link/registration/structure/external-tool tests |
 | fix authorization/execution | `fixing.py` | fixer-gating and compatibility tests |
 | fix selection/revalidation | `plugin_validator.py` | fixer ordering/revalidation tests |
-| output | `reporting.py` | reporter/CLI tests |
+| output | `reporting.py`, `reporting_*.py`, `responses.py`, `record_export.py` | reporter/CLI and serialization tests |
 
-The versioned Claude runtime contract remains evidence for the version named
-by its filename; it is not rewritten by this guide. Historical issue states are
-recorded as follows: #112 closes only at its accepted PR #187 boundary, #124
-remains the registration/emitter boundary until both proofs land, and #146
-supplies the schema locator and refresh outcomes. None implies a general
-enrollment system.
+The [versioned Claude runtime contract](runtime-contracts/claude-code-agent-skills-2.1.251.md) records behavior for its named version. Design proposals and historical issue discussions provide context; this guide describes the maintained implementation.

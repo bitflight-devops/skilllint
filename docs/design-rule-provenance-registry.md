@@ -4,6 +4,14 @@
 > explicitly identified below. The multi-stage LLM pipeline in this document
 > is not shipped runtime behavior.
 
+## Implemented behavior and proposal scope
+
+For current extension instructions, use the [maintainer extension guide](maintainer-extension-guide.md). This document records the broader design, including stages and files that have not been implemented.
+
+The maintained subset consists of `packages/skilllint/schemas/provenance-registry.json`, `opinion-catalog.json`, and their locator/value tests in `test_provenance_registry_locators.py`. The tests resolve Python constants and supported schema JSON field/enum locators and compare their values with the recorded claims.
+
+`scripts/refresh_claim_values.py` mechanically re-extracts HK002 event names and HK003 hook types from vendor documentation. It writes changed expected values and audit metadata to the registry, not to the rule implementations. The LLM extraction, generated-constant pipeline, and automatic update policies below remain proposals.
+
 ## 1. Problem Statement
 
 skilllint's rule catalogue is not fixed to the FM, HK, AS, and PA families -- run `skilllint rules` for the current set. Many rules assert constraints derived from upstream vendor documentation -- event type enumerations, hook type sets, field constraints, and naming rules. These constraints are hardcoded as Python literals disconnected from their upstream sources.
@@ -18,7 +26,7 @@ This disconnection causes staleness. Concrete examples from the provenance audit
 
 - **AS001 naming constraints**: `_MAX_NAME_LENGTH = 64` is backed by schema JSON (`maxLength: 64` in four schema files), but the regex pattern and consecutive-hyphen rule have no vendor source.
 
-When vendor documentation changes (events added, fields renamed, types expanded), there is no mechanism to detect the drift or propagate updates. The fix is manual: someone notices a false positive/negative, traces it to a stale constant, and updates the code.
+The implemented refresher covers the two hook claims described above. Other claims still need maintained locators and explicit review when vendor documentation changes; there is no general pipeline that detects and propagates every upstream change into rule code.
 
 ### Goal
 
@@ -26,7 +34,7 @@ Create a provenance chain: **Rule -> Claim -> Authority -> Extraction -> Compari
 
 ## 2. Pipeline Architecture
 
-The system is a 5-stage pipeline. Stages 2-5 run only when Stage 1 detects vendor doc changes. No change = no LLM cost.
+The proposed system is a five-stage pipeline. In this design, stages 2-5 would run only when Stage 1 detects vendor documentation changes, avoiding LLM calls when the source is unchanged.
 
 ```mermaid
 flowchart TD
@@ -58,7 +66,7 @@ flowchart TD
 - **Trigger**: SessionStart hook via `.claude/hooks/vendor-drift-check.cjs`
 - **Input**: Remote vendor documentation URLs
 - **Output**: Raw markdown files in `.claude/vendor/`, `.drift-pending.json` listing changed files
-- **Signal**: Exit code 0 = no changes, exit code 2 = changes detected (triggers stages 2-5)
+- **Signal**: Exit code 0 = no changes, exit code 2 = changes detected (the proposed trigger for stages 2-5)
 
 ### Stage 2: Reduce (new, mechanical, no LLM)
 
@@ -372,7 +380,7 @@ No changes to the script itself. The pipeline depends on its existing behavior:
 - Writes `.drift-pending.json` listing changed files
 - Returns exit code 2 when changes are detected
 
-The SessionStart hook (`vendor-drift-check.cjs`) already triggers this script. Stages 2-5 are triggered by the same hook when exit code 2 is returned, or by a separate orchestration script that checks for `.drift-pending.json`.
+The SessionStart hook (`vendor-drift-check.cjs`) triggers the fetch script. This proposal would add orchestration for stages 2-5 after exit code 2, either in that hook or in a separate script that checks `.drift-pending.json`. Those stages are not part of the current hook workflow.
 
 ### .drift-pending.json
 
