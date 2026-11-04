@@ -7,23 +7,21 @@
 
 Static analysis linter for AI agent plugins, skills, and agents — for Claude Code, Cursor, Codex, and any [agentskills.io](https://agentskills.io)-compatible platform.
 
+![skilllint highlighting an invalid skill name and showing how to fix it](examples/output/full.svg)
+
+See the failing line and how to fix it:
+
+```bash
+skilllint check --output-format full path/to/SKILL.md
+```
+
+[See more output examples](examples/output/README.md).
+
 ---
 
 ## What it does
 
 `skilllint` validates the structure and content of AI agent files: plugins, skills, agents, and commands. It catches broken references, missing frontmatter, oversized skills, invalid hook configurations, and more — before they cause silent failures at runtime.
-
-```
-$ skilllint check plugins/my-plugin
-
-plugins/my-plugin/skills/my-skill/SKILL.md
-  SK006  Token count 14823 exceeds recommended limit of 8192
-
-plugins/my-plugin/agents/my-agent.md
-  NR001  Namespace reference 'other-plugin:some-skill' — plugin directory not found
-
-2 errors in 2 files
-```
 
 ---
 
@@ -65,33 +63,29 @@ skilllint check --tokens-only .claude/CLAUDE.md
 
 Exit codes: `0` = all checks passed · `1` = validation errors · `2` = usage error
 
-See [output examples](examples/output/README.md) for captured reports and colour SVG previews.
+See [output examples](examples/output/README.md) to compare the available formats.
 
 ---
 
 ## Output formats
 
-Choose a format for the reader or CI consumer. Every example below is captured
-from the same deliberately invalid skill; the command exits `1`.
+Use `full` to investigate issues locally, `concise` for pre-commit checks,
+or a structured format to integrate with automation.
 
-| Format | Use | Preview | Raw output |
+| Format | Use it to | Example | Output file |
 | --- | --- | --- | --- |
-| `full` | Human-readable source excerpts, highlights, and help | [Actual terminal colours](examples/output/full.svg) | [ANSI](examples/output/full.ansi) |
-| `concise` | One monochrome finding per line for pre-commit | [Monochrome findings](examples/output/concise.svg) | [Text](examples/output/concise.txt) |
-| `json-lines` | One parseable finding per line for agents | [JSONL preview](examples/output/json-lines.svg) | [JSONL](examples/output/json-lines.jsonl) |
-| `github` | Native GitHub Actions annotations | [Command preview](examples/output/github.svg) | [Workflow commands](examples/output/github.txt) |
-| `gitlab` | GitLab Code Quality artifacts | [Report preview](examples/output/gitlab.svg) | [JSON](examples/output/gitlab.json) |
-| `junit` | JUnit-style test-report consumers | [Report preview](examples/output/junit.svg) | [XML](examples/output/junit.xml) |
+| `full` | Find the source of an issue and how to fix it | [Terminal output](examples/output/full.svg) | [ANSI](examples/output/full.ansi) |
+| `concise` | Run pre-commit checks with one finding per line | [Plain-text findings](examples/output/concise.svg) | [Text](examples/output/concise.txt) |
+| `json-lines` | Process findings in scripts or agents | [JSON Lines](examples/output/json-lines.svg) | [JSONL](examples/output/json-lines.jsonl) |
+| `github` | Show annotations in GitHub Actions | [Annotation commands](examples/output/github.svg) | [Workflow commands](examples/output/github.txt) |
+| `gitlab` | Report Code Quality findings in GitLab | [Code Quality report](examples/output/gitlab.svg) | [JSON](examples/output/gitlab.json) |
+| `junit` | Send findings to tools that read JUnit test reports | [JUnit report](examples/output/junit.svg) | [XML](examples/output/junit.xml) |
 
-For source-aware human diagnostics, use `skilllint check --output-format full`.
-Colour defaults to terminal detection; choose `--color always` or `--color never`
-independently of the format. Existing defaults and `--no-color` are preserved.
+Select a format with `skilllint check --output-format FORMAT path/to/SKILL.md`.
+For `full` output, colour is detected automatically. Use `--color always` to
+force it or `--color never` (also `--no-color`) to turn it off.
 
-![Actual full-colour skilllint diagnostic](examples/output/full.svg)
-
-See the [complete six-format output gallery](examples/output/README.md) for
-reproducible captures, raw reports, commands, and consumer-specific examples.
-The machine-format SVGs are labelled report previews, not CI interface screenshots.
+See [output examples](examples/output/README.md) for commands and reports in each format.
 
 ---
 
@@ -100,15 +94,15 @@ The machine-format SVGs are labelled report previews, not CI interface screensho
 Use `bitflight-devops/skilllint` as a GitHub Action to validate skills, plugins, and agents in any repository.
 
 For direct CLI use in Actions, `skilllint check --output-format github` emits
-native workflow annotations. See the [captured commands and colour SVG preview](examples/output/README.md#github-annotations)
-and [format contract](docs/usage.md#github-annotations).
+native workflow annotations. See the [example annotation commands](examples/output/README.md#github-annotations)
+and [GitHub annotations reference](docs/usage.md#github-annotations).
 
 For GitLab CI, `skilllint check --output-format gitlab` emits a Code Quality
-JSON report. See the [raw report and colour SVG preview](examples/output/README.md#gitlab-code-quality)
+JSON report. See the [example Code Quality report](examples/output/README.md#gitlab-code-quality)
 and [CI configuration](docs/usage.md#gitlab-code-quality).
 
-For test-report consumers, `skilllint check --output-format junit` emits
-JUnit-style XML. See the [raw XML and colour SVG preview](examples/output/README.md#junit-style-xml)
+For tools that accept test reports, `skilllint check --output-format junit` emits
+JUnit-style XML. See the [example JUnit report](examples/output/README.md#junit-style-xml)
 and [result semantics and CI configuration](docs/usage.md#junit-style-xml).
 
 Replace `X.Y.Z` in the examples with the release you intend to pin. The Action
@@ -238,7 +232,7 @@ replace `id: skilllint` with `id: skilllint-fix`, then run
 The fix hook keeps the same file selection and applies supported fixes in place.
 See [pre-commit usage](docs/usage.md#pre-commit) for selected-file checks,
 custom arguments, exclusions, and prek commands.
-See the [captured concise output and SVG preview](examples/output/README.md#concise).
+See [example pre-commit output](examples/output/README.md#concise).
 
 ### Contributor quality checks (local)
 
