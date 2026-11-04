@@ -202,7 +202,9 @@ _SAFE_CHAR_RE = re.compile(r"[^a-zA-Z0-9-]+")
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.+)$")
 _SLUG_STRIP_RE = re.compile(r"[^\w\s-]")
 _SLUG_COLLAPSE_RE = re.compile(r"[-\s]+")
-_CACHE_FILENAME_RE = re.compile(r".*-(?P<timestamp>\d{4}-\d{2}-\d{2}-\d{4})(?:-(?P<source_key>[0-9a-f]{64}))?\.md")
+_CACHE_FILENAME_RE = re.compile(
+    r"(?P<page_name>.*)-(?P<timestamp>\d{4}-\d{2}-\d{2}-\d{4})(?:-(?P<source_key>[0-9a-f]{64}))?\.md"
+)
 
 # Keep both files within a portable 255-byte filename component budget.
 # Slugs are ASCII; reserve the minute timestamp, full SHA-256 hex, and the
@@ -332,7 +334,7 @@ def find_latest(page_name: str, *, sources_dir: Path | None = None) -> Path | No
             sidecar = load_sidecar(path)
             if sidecar is None or derive_page_name(sidecar.url) != page_name:
                 continue
-        elif not path.name.startswith(f"{page_name}-"):
+        elif (match is not None and match["page_name"] != page_name) or not path.name.startswith(f"{page_name}-"):
             continue
         matches.append(path)
     return max(matches, key=_cache_order) if matches else None

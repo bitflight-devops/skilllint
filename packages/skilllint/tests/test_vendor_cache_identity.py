@@ -399,3 +399,28 @@ def test_complete_short_label_does_not_match_truncated_long_label(tmp_path: Path
 
     assert find_latest(short_name, sources_dir=tmp_path) == short_result.path
     assert find_latest(long_name, sources_dir=tmp_path) == long_result.path
+
+
+@pytest.mark.parametrize("keyed", [False, True])
+@pytest.mark.parametrize("longer_label", ["settings--advanced", "settings-advanced"])
+def test_latest_excludes_newer_pages_with_shared_label_prefix(
+    tmp_path: Path, mocker: MockerFixture, keyed: bool, longer_label: str
+) -> None:
+    mocker.patch("skilllint.vendor_cache.SOURCES_DIR", tmp_path)
+    if keyed:
+        clock = mocker.patch("skilllint.vendor_cache.datetime", wraps=datetime)
+        clock.now.return_value = datetime(2026, 1, 1, tzinfo=UTC)
+        mocker.patch("skilllint.vendor_cache.fetch_url_text", return_value="content")
+        exact = fetch_or_cached("https://a.example/docs/settings.md").path
+        clock.now.return_value = datetime(2026, 1, 2, tzinfo=UTC)
+        longer = fetch_or_cached(f"https://a.example/docs/{longer_label}.md").path
+    else:
+        exact = tmp_path / "settings-2026-01-01-0000.md"
+        exact.write_text("exact")
+        longer = tmp_path / f"{longer_label}-2026-01-02-0000.md"
+        longer.write_text("longer")
+
+    assert find_latest("settings", sources_dir=tmp_path) == exact
+    assert find_latest(longer_label, sources_dir=tmp_path) == longer
+    exact.unlink()
+    assert find_latest("settings", sources_dir=tmp_path) is None
