@@ -40,7 +40,7 @@ from skilllint.models import ValidationIssue, ValidationResult, YamlValue
 from skilllint.rule_registry import rule_reference
 from skilllint.rules.ag_series import check_ag001, check_ag002, check_ag003
 from skilllint.rules.fm_series import check_fm004, check_fm007, check_fm010
-from skilllint.source_location import SourceLocation
+from skilllint.source_location import SourceLocation, source_digest
 from skilllint.validators.hooks import HookValidator
 
 if TYPE_CHECKING:
@@ -445,7 +445,7 @@ def _validate_frontmatter_yaml(
 
 
 def _with_frontmatter_locations(
-    result: ValidationResult, path: Path, text: str, *, line_offset: int | None
+    result: ValidationResult, path: Path, text: str, *, line_offset: int | None, content: str
 ) -> ValidationResult:
     """Attach original source locations without changing legacy diagnostic fields.
 
@@ -459,6 +459,8 @@ def _with_frontmatter_locations(
         frontmatter_source_locations(text, path, line_offset=line_offset) if line_offset is not None else ({}, None)
     )
 
+    digest = source_digest(content)
+
     def locate(issue: ValidationIssue) -> ValidationIssue:
         # Other validators may refer to paths outside this file (e.g. hooks).
         if not issue.code.startswith("FM") or issue.source_location is not None:
@@ -468,6 +470,8 @@ def _with_frontmatter_locations(
         location = fields.get(issue.field) if "." not in issue.field else None
         if issue.code == FM002 and issue.field == "(yaml)":
             location = syntax_error
+        if location is not None:
+            location = location.model_copy(update={"content_digest": digest})
         return issue.model_copy(update={"source_location": location or SourceLocation(path=path)})
 
     return ValidationResult(
@@ -556,7 +560,9 @@ class FrontmatterValidator:
 
         data, yaml_result = _validate_frontmatter_yaml(frontmatter_text, errors=errors, warnings=warnings, info=info)
         if yaml_result is not None:
-            return _with_frontmatter_locations(yaml_result, path, frontmatter_text, line_offset=line_offset)
+            return _with_frontmatter_locations(
+                yaml_result, path, frontmatter_text, line_offset=line_offset, content=content
+            )
 
         model_class = self._get_model_class(file_type)
         if model_class is None:
@@ -565,6 +571,7 @@ class FrontmatterValidator:
                 path,
                 frontmatter_text,
                 line_offset=line_offset,
+                content=content,
             )
 
         validated_data = cast("dict[str, YamlValue]", data)
@@ -577,6 +584,7 @@ class FrontmatterValidator:
             path,
             frontmatter_text,
             line_offset=line_offset,
+            content=content,
         )
 
     def _validate_pydantic_model(

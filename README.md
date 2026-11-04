@@ -73,6 +73,16 @@ See [output examples](examples/output/README.md) for captured reports and colour
 
 Use `bitflight-devops/skilllint` as a GitHub Action to validate skills, plugins, and agents in any repository.
 
+For source-aware human diagnostics, use `skilllint check --output-format full`.
+Colour defaults to terminal detection; choose `--color always` or `--color never`
+independently of the format. Existing defaults and `--no-color` are preserved.
+
+![Actual full-colour skilllint diagnostic](examples/output/full.svg)
+
+See the [complete six-format output gallery](examples/output/README.md) for
+reproducible captures, raw reports, commands, and consumer-specific examples.
+The machine-format SVGs are labelled report previews, not CI interface screenshots.
+
 For direct CLI use in Actions, `skilllint check --output-format github` emits
 native workflow annotations. See the [captured commands and colour SVG preview](examples/output/README.md#github-annotations)
 and [format contract](docs/usage.md#github-annotations).

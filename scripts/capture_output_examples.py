@@ -11,6 +11,7 @@ from pathlib import Path
 
 from rich.console import Console
 from rich.syntax import Syntax
+from rich.text import Text
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "examples/output"
@@ -30,6 +31,7 @@ CONCISE_COMMAND = (*COMMAND[:-2], "concise", "--no-color", COMMAND[-1])
 GITHUB_COMMAND = (*COMMAND[:-2], "github", COMMAND[-1])
 GITLAB_COMMAND = (*COMMAND[:-2], "gitlab", COMMAND[-1])
 JUNIT_COMMAND = (*COMMAND[:-2], "junit", COMMAND[-1])
+FULL_COMMAND = (*COMMAND[:-2], "full", "--color", "always", COMMAND[-1])
 
 # The editable version calculation warns in a shallow checkout. Match that
 # warning's source and complete two-line form, not arbitrary stderr warnings.
@@ -45,11 +47,12 @@ def canonical_line_endings(data: bytes) -> bytes:
     return data.replace(b"\r\n", b"\n")
 
 
-def _capture(command: tuple[str, ...]) -> bytes:
+def _capture(command: tuple[str, ...], *, env: dict[str, str] | None = None) -> bytes:
     """Run the documented failing fixture and return its unmodified stdout.
 
     Args:
         command: Documented CLI invocation to capture.
+        env: Additional child environment settings for reproducible terminal geometry.
 
     Returns:
         Raw stdout bytes from the CLI.
@@ -59,7 +62,7 @@ def _capture(command: tuple[str, ...]) -> bytes:
     """
     # Version discovery can warn before the CLI configures its UTF-8 streams.
     # Pin the child encoding so the targeted stderr filter also works there.
-    environment = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+    environment = {**os.environ, **(env or {}), "PYTHONIOENCODING": "utf-8"}
     result = subprocess.run(command, cwd=ROOT, env=environment, capture_output=True, check=False)
     diagnostics = _SHALLOW_CLONE_WARNING.sub(b"", result.stderr)
     if result.returncode != 1 or diagnostics:
@@ -112,6 +115,24 @@ def capture_junit() -> bytes:
         Raw XML stdout bytes from the CLI.
     """
     return _capture(JUNIT_COMMAND)
+
+
+def capture_full() -> bytes:
+    """Return actual ANSI stdout at the gallery's fixed 100-column width."""
+    return _capture(FULL_COMMAND, env={"COLUMNS": "100", "LINES": "24", "TERM": "xterm-256color"})
+
+
+def render_full(raw: bytes) -> bytes:
+    """Replay actual terminal styles without adding diagnostic syntax colour.
+
+    Returns:
+        A deterministic SVG capture of the full human report.
+    """
+    console = Console(file=io.StringIO(), record=True, width=100, force_terminal=True, color_system="truecolor")
+    # A final preview newline gives Rich a clip path for the last captured line.
+    console.print(Text.from_ansi(canonical_line_endings(raw).decode("utf-8")), soft_wrap=True)
+    svg = console.export_svg(title="skilllint · Full diagnostics", unique_id="skilllint-full")
+    return "\n".join(line.rstrip() for line in svg.split("\n")).encode("utf-8")
 
 
 def render_junit(raw: bytes) -> bytes:
@@ -232,6 +253,7 @@ def main(argv: list[str] | None = None) -> int:
     github = capture_github()
     gitlab = capture_gitlab()
     junit = capture_junit()
+    full = capture_full()
     artifacts = {
         "json-lines.jsonl": raw,
         "json-lines.svg": render_jsonl(raw),
@@ -243,6 +265,8 @@ def main(argv: list[str] | None = None) -> int:
         "gitlab.svg": render_gitlab(gitlab),
         "junit.xml": junit,
         "junit.svg": render_junit(junit),
+        "full.ansi": full,
+        "full.svg": render_full(full),
     }
     stale = []
     for name, content in artifacts.items():

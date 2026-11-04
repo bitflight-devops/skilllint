@@ -90,6 +90,7 @@ from skilllint.record_export import (
     make_recording_console as _make_recording_console,
 )
 from skilllint.reporting import emit_concise
+from skilllint.reporting_full import ColorMode, FullReporter, human_console
 from skilllint.reporting_github import emit_github
 from skilllint.reporting_gitlab import emit_gitlab
 from skilllint.reporting_json_lines import emit_json_lines
@@ -863,6 +864,8 @@ def _issue_to_violation(issue: ValidationIssue) -> dict:
     violation = issue.model_dump(exclude_none=True)
     if issue.source_location is not None:
         violation["source_location"] = issue.source_location.model_dump(mode="json")
+        if issue.source_location.content_digest is not None:
+            violation["source_location"]["content_digest"] = issue.source_location.content_digest
     violation["code"] = str(issue.code)
     violation["severity"] = str(issue.severity)
     violation["message"] = str(issue.message)
@@ -1107,7 +1110,9 @@ def violations_to_result(violations: list[dict]) -> ValidationResult:
     return ValidationResult(passed=not errors, errors=errors, warnings=warnings, info=info)
 
 
-def _open_record_console(record: Path | None, *, no_color: bool, json_output: bool) -> _Console | None:
+def _open_record_console(
+    record: Path | None, *, no_color: bool, json_output: bool, color: ColorMode | None = None, full: bool = False
+) -> _Console | None:
     """Return the console ``--record`` renders into, or ``None`` when no recording was asked for.
 
     Under ``--json`` the console writes to an in-memory buffer, so the recording is made without
@@ -1116,11 +1121,20 @@ def _open_record_console(record: Path | None, *, no_color: bool, json_output: bo
     Args:
         record: The ``--record`` destination, if any.
         no_color: Whether ``--no-color`` was given.
-        json_output: Whether ``--json`` was given.
+        json_output: Whether an explicit format was selected.
+        color: Explicit human colour policy, preserving legacy defaults when omitted.
+        full: Whether to render full diagnostics on stdout.
 
     Returns:
         A recording console, or ``None``.
     """
+    if full or (color is not None and not no_color):
+        return human_console(
+            color=color or "auto",
+            no_color=no_color,
+            record=record is not None,
+            file=StringIO() if json_output and not full else None,
+        )
     if record is None:
         return None
     return _make_recording_console(no_color=no_color, file=StringIO() if json_output else None)
@@ -1146,7 +1160,7 @@ def _finish_check_formatted_output(
     no_color: bool,
     show_progress: bool,
     show_summary: bool,
-    output_format: Literal["json-lines", "concise", "github", "gitlab", "junit"] | None,
+    output_format: Literal["full", "json-lines", "concise", "github", "gitlab", "junit"] | None,
 ) -> NoReturn:
     """Record the usual human rendering when asked, then emit the selected format.
 
@@ -1166,6 +1180,18 @@ def _finish_check_formatted_output(
     Raises:
         typer.Exit: Always: 0 for a pass, 1 for a failed scan, 2 when the ``--record`` file cannot be written.
     """
+    if output_format == "full" and isinstance(outcome, CheckRun):
+        console = record_console or human_console(no_color=no_color)
+        failed = report_results(
+            outcome,
+            verbose=verbose,
+            no_color=no_color,
+            show_progress=show_progress,
+            show_summary=show_summary,
+            reporter=FullReporter(console),
+        )
+        _export_recording_on_exit(console, record)
+        raise typer.Exit(1 if failed else 0) from None
     record_path = None
     if record is not None and record_console is not None:
         if isinstance(outcome, CheckRun):
@@ -1204,6 +1230,7 @@ def _finish_check_action_output(
     action_report: Callable[[CheckRun | list[tuple[int, Path]]], None] | None,
     *,
     formatted_output: bool,
+    full_output: bool = False,
     verbose: bool,
     no_color: bool,
     show_progress: bool,
@@ -1218,7 +1245,7 @@ def _finish_check_action_output(
     """
     if action_report is None:
         return
-    if not formatted_output and isinstance(outcome, CheckRun):
+    if (not formatted_output or full_output) and isinstance(outcome, CheckRun):
         failed = report_results(
             outcome,
             verbose=verbose,
@@ -1226,6 +1253,7 @@ def _finish_check_action_output(
             show_progress=show_progress,
             show_summary=show_summary,
             record_console=record_console,
+            reporter=FullReporter(record_console or human_console(no_color=no_color)) if full_output else None,
         )
         action_report(outcome)
         _export_recording_on_exit(record_console, record)
@@ -1340,7 +1368,8 @@ def main(
     record: Path | None = None,
     include_gitignore: bool = False,
     json_output: bool = False,
-    output_format: Literal["json-lines", "concise", "github", "gitlab", "junit"] | None = None,
+    output_format: Literal["full", "json-lines", "concise", "github", "gitlab", "junit"] | None = None,
+    color: ColorMode | None = None,
     action_report: Callable[[CheckRun | list[tuple[int, Path]]], None] | None = None,
 ) -> None:
     """Validate Claude Code plugins, skills, agents, and commands."""
@@ -1357,7 +1386,9 @@ def main(
 
     platform_override = _resolve_platform_override(platform)
 
-    record_console = _open_record_console(record, no_color=no_color, json_output=formatted_output)
+    record_console = _open_record_console(
+        record, no_color=no_color, json_output=formatted_output, color=color, full=output_format == "full"
+    )
 
     def _run_validation_command() -> CheckRun | list[tuple[int, Path]] | None:
         expanded_paths, is_batch = _resolve_filter_and_expand_paths(
@@ -1443,6 +1474,7 @@ def main(
             outcome,
             action_report,
             formatted_output=formatted_output,
+            full_output=output_format == "full",
             verbose=verbose,
             no_color=no_color,
             show_progress=show_progress,
@@ -1669,6 +1701,10 @@ def check_cmd(
     fix: Annotated[bool, typer.Option("--fix", help="Auto-fix issues where possible")] = False,
     verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Show detailed output")] = False,
     no_color: Annotated[bool, typer.Option("--no-color", help="Disable color")] = False,
+    color: Annotated[
+        ColorMode | None,
+        typer.Option("--color", metavar="WHEN", help="Human colour: auto, always, or never. --no-color wins."),
+    ] = None,
     tokens_only: Annotated[bool, typer.Option("--tokens-only", help="Output token count only")] = False,
     show_progress: Annotated[bool, typer.Option("--show-progress", help="Show per-file status")] = False,
     show_summary: Annotated[bool, typer.Option("--show-summary", help="Show summary panel")] = False,
@@ -1687,11 +1723,11 @@ def check_cmd(
     ] = False,
     json_output: JsonOption = False,
     output_format: Annotated[
-        Literal["json-lines", "concise", "github", "gitlab", "junit"] | None,
+        Literal["full", "json-lines", "concise", "github", "gitlab", "junit"] | None,
         typer.Option(
             "--output-format",
             metavar="FORMAT",
-            help="Report format: json-lines, concise, github (annotations), gitlab (Code Quality JSON), or junit (XML).",
+            help="Report format: full (human), json-lines, concise, github (annotations), gitlab (Code Quality JSON), or junit (XML).",
         ),
     ] = None,
 ) -> None:
@@ -1713,6 +1749,7 @@ def check_cmd(
         include_gitignore=include_gitignore,
         json_output=json_output,
         output_format=output_format,
+        color=color,
     )
 
 

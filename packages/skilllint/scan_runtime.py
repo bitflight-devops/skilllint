@@ -1182,7 +1182,9 @@ def _clear_changed_source_spans(
             )
         ):
             return issue
-        return issue.model_copy(update={"source_location": location.model_copy(update={"start": None, "end": None})})
+        return issue.model_copy(
+            update={"source_location": location.model_copy(update={"start": None, "end": None, "content_digest": None})}
+        )
 
     if located_results is None:
         located_results = {path: _located_result_sources(values) for path, values in results.items()}
@@ -1412,6 +1414,7 @@ def report_results(
     show_progress: bool,
     show_summary: bool,
     record_console: Console | None = None,
+    reporter: Reporter | None = None,
 ) -> int:
     """Render a scan with the selected reporter, as ``check`` prints it.
 
@@ -1423,11 +1426,12 @@ def report_results(
         show_summary: Show summary panel.
         record_console: When provided, pass this Rich Console to ConsoleReporter
             so its output is captured for export (e.g. SVG/HTML recording).
+        reporter: Explicit human reporter, otherwise preserve legacy selection.
 
     Returns:
         The number of files that failed.
     """
-    reporter = _select_reporter(no_color=no_color, record_console=record_console)
+    reporter = reporter or _select_reporter(no_color=no_color, record_console=record_console)
     reporter.report(run.results, verbose=verbose, show_progress=show_progress)
     if run.fixes:
         # Printed before summarize(): ConsoleReporter.summarize() mutates
