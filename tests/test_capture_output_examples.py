@@ -9,6 +9,11 @@ import xml.etree.ElementTree as ET
 import pytest
 from scripts import capture_output_examples as capture
 
+_SHALLOW_WARNING = (
+    b'/venv/lib/vcs_versioning/_backends/_git.py:530: UserWarning: "/checkout" is shallow and may cause errors\n'
+    b"  pre_parse(wd)\n"
+)
+
 
 def test_svg_is_deterministic_and_labels_visual_wrapping():
     raw = b'{"schema_version":1,"message":"A < B & C","severity":"error"}\n'
@@ -25,11 +30,55 @@ def test_svg_is_deterministic_and_labels_visual_wrapping():
 
 @pytest.mark.parametrize("capture_output", [capture.capture_jsonl, capture.capture_concise, capture.capture_github])
 def test_capture_preserves_raw_stdout(monkeypatch, capture_output):
-    raw = b'{"message":"demo"}\n'
+    raw = b'{"message":"demo"}\r\n'
     monkeypatch.setattr(
         capture.subprocess, "run", lambda *args, **kwargs: subprocess.CompletedProcess(args, 1, raw, b"")
     )
     assert capture_output() == raw
+
+
+@pytest.mark.parametrize("capture_output", [capture.capture_jsonl, capture.capture_concise, capture.capture_github])
+def test_capture_pins_child_encoding_without_changing_parent(monkeypatch, capture_output):
+    monkeypatch.setenv("PYTHONIOENCODING", "utf-16")
+    calls = []
+
+    def run(*args, **kwargs):
+        calls.append(kwargs)
+        return subprocess.CompletedProcess(args, 1, b"{}\n", b"")
+
+    monkeypatch.setattr(capture.subprocess, "run", run)
+    assert capture_output() == b"{}\n"
+    assert calls[0]["env"]["PYTHONIOENCODING"] == "utf-8"
+    assert capture.os.environ["PYTHONIOENCODING"] == "utf-16"
+
+
+@pytest.mark.parametrize("newline", [b"\n", b"\r\n"])
+@pytest.mark.parametrize("capture_output", [capture.capture_jsonl, capture.capture_concise, capture.capture_github])
+def test_capture_ignores_only_the_known_shallow_checkout_warning(monkeypatch, newline, capture_output):
+    raw = b'{"message":"demo"}\n'
+    warning = _SHALLOW_WARNING.replace(b"\n", newline)
+    monkeypatch.setattr(
+        capture.subprocess, "run", lambda *args, **kwargs: subprocess.CompletedProcess(args, 1, raw, warning)
+    )
+    assert capture_output() == raw
+
+
+@pytest.mark.parametrize(
+    "stderr",
+    [
+        _SHALLOW_WARNING + b"genuine diagnostic\n",
+        b"genuine diagnostic\n" + _SHALLOW_WARNING,
+        _SHALLOW_WARNING.replace(b"vcs_versioning", b"unrelated_module"),
+        _SHALLOW_WARNING.replace(b"pre_parse(wd)", b"different_source()"),
+    ],
+)
+@pytest.mark.parametrize("capture_output", [capture.capture_jsonl, capture.capture_concise, capture.capture_github])
+def test_capture_does_not_hide_other_stderr(monkeypatch, stderr, capture_output):
+    monkeypatch.setattr(
+        capture.subprocess, "run", lambda *args, **kwargs: subprocess.CompletedProcess(args, 1, b"{}\n", stderr)
+    )
+    with pytest.raises(RuntimeError):
+        capture_output()
 
 
 @pytest.mark.parametrize(
@@ -63,6 +112,45 @@ def test_check_detects_drift_without_writing(monkeypatch, tmp_path, artifact):
     assert path.read_bytes() == b"stale"
 
 
+@pytest.mark.parametrize(("captured_newline", "checkout_newline"), [(b"\r\n", b"\n"), (b"\n", b"\r\n")])
+def test_check_accepts_native_and_checkout_newlines_without_rewriting(
+    monkeypatch, tmp_path, captured_newline, checkout_newline
+):
+    raw = b'{"message":"demo"}' + captured_newline
+    concise = b"demo.md:2:1: error[FM010] name: bad name" + captured_newline
+    monkeypatch.setattr(capture, "capture_jsonl", lambda: raw)
+    github = b"::error file=demo.md,line=2,col=1,title=FM010::bad name" + captured_newline
+    monkeypatch.setattr(capture, "capture_concise", lambda: concise)
+    monkeypatch.setattr(capture, "capture_github", lambda: github)
+    monkeypatch.setattr(capture, "OUTPUT", tmp_path)
+    assert capture.main([]) == 0
+    raw_path = tmp_path / "json-lines.jsonl"
+    assert raw_path.read_bytes() == raw
+    assert (tmp_path / "concise.txt").read_bytes() == concise
+    paths = [
+        tmp_path / name
+        for name in ("json-lines.jsonl", "json-lines.svg", "concise.txt", "concise.svg", "github.txt", "github.svg")
+    ]
+    for path in paths:
+        path.write_bytes(capture.canonical_line_endings(path.read_bytes()).replace(b"\n", checkout_newline))
+    before = {path: path.read_bytes() for path in paths}
+    assert capture.main(["--check"]) == 0
+    assert {path: path.read_bytes() for path in before} == before
+    assert capture.render_jsonl(raw) == capture.render_jsonl(capture.canonical_line_endings(raw))
+    assert capture.render_concise(concise) == capture.render_concise(capture.canonical_line_endings(concise))
+    assert (tmp_path / "github.txt").read_bytes() == capture.canonical_line_endings(github).replace(
+        b"\n", checkout_newline
+    )
+    assert capture.render_github(github) == capture.render_github(capture.canonical_line_endings(github))
+    raw_path.write_bytes(b'{"message":"changed"}\n')
+    assert capture.main(["--check"]) == 1
+
+
+def test_newline_normalization_preserves_escaped_content_and_standalone_cr():
+    data = b'{"message":"literal \\r\\n"}\r\nstandalone\r'
+    assert capture.canonical_line_endings(data) == b'{"message":"literal \\r\\n"}\nstandalone\r'
+
+
 def test_committed_examples_match_real_cli_twice():
     first = capture.capture_jsonl()
     assert first == capture.capture_jsonl()
@@ -70,8 +158,12 @@ def test_committed_examples_match_real_cli_twice():
     records = [json.loads(line) for line in first.splitlines()]
     assert records
     assert all(record["schema_version"] == 1 for record in records)
-    assert (capture.OUTPUT / "json-lines.jsonl").read_bytes() == first
-    assert (capture.OUTPUT / "json-lines.svg").read_bytes() == capture.render_jsonl(first)
+    assert capture.canonical_line_endings((capture.OUTPUT / "json-lines.jsonl").read_bytes()) == (
+        capture.canonical_line_endings(first)
+    )
+    assert capture.canonical_line_endings((capture.OUTPUT / "json-lines.svg").read_bytes()) == (
+        capture.canonical_line_endings(capture.render_jsonl(first))
+    )
 
 
 def test_concise_svg_preserves_literal_monochrome_findings():
@@ -117,8 +209,12 @@ def test_committed_concise_examples_match_real_cli_twice():
     assert len(first.splitlines()) == 1
     assert b"examples/output/fixtures/demo-skill/SKILL.md:2:1: error[FM010] name:" in first
     assert b"\x1b" not in first
-    assert (capture.OUTPUT / "concise.txt").read_bytes() == first
-    assert (capture.OUTPUT / "concise.svg").read_bytes() == capture.render_concise(first)
+    assert capture.canonical_line_endings((capture.OUTPUT / "concise.txt").read_bytes()) == (
+        capture.canonical_line_endings(first)
+    )
+    assert capture.canonical_line_endings((capture.OUTPUT / "concise.svg").read_bytes()) == (
+        capture.canonical_line_endings(capture.render_concise(first))
+    )
 
 
 def test_github_svg_is_labelled_as_commands_not_platform_screenshot():
@@ -144,5 +240,9 @@ def test_committed_github_examples_match_real_cli_twice():
     assert len(first.splitlines()) == 1
     assert first.startswith(b"::error file=examples/output/fixtures/demo-skill/SKILL.md,line=2,col=1")
     assert b"\x1b" not in first
-    assert (capture.OUTPUT / "github.txt").read_bytes() == first
-    assert (capture.OUTPUT / "github.svg").read_bytes() == capture.render_github(first)
+    assert capture.canonical_line_endings((capture.OUTPUT / "github.txt").read_bytes()) == (
+        capture.canonical_line_endings(first)
+    )
+    assert capture.canonical_line_endings((capture.OUTPUT / "github.svg").read_bytes()) == (
+        capture.canonical_line_endings(capture.render_github(first))
+    )

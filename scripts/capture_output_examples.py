@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import io
+import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -27,6 +29,19 @@ COMMAND = (
 CONCISE_COMMAND = (*COMMAND[:-2], "concise", "--no-color", COMMAND[-1])
 GITHUB_COMMAND = (*COMMAND[:-2], "github", COMMAND[-1])
 
+# The editable version calculation warns in a shallow checkout. Match that
+# warning's source and complete two-line form, not arbitrary stderr warnings.
+_SHALLOW_CLONE_WARNING = re.compile(
+    rb'^[^\r\n]*vcs_versioning[\\/][^\r\n]*:\d+: UserWarning: "[^\r\n]*"'
+    rb" is shallow and may cause errors\r?\n  pre_parse\(wd\)\r?\n",
+    re.MULTILINE,
+)
+
+
+def canonical_line_endings(data: bytes) -> bytes:
+    """Return comparison/viewer bytes with CRLF normalized, preserving all other data."""
+    return data.replace(b"\r\n", b"\n")
+
 
 def _capture(command: tuple[str, ...]) -> bytes:
     """Run the documented failing fixture and return its unmodified stdout.
@@ -40,9 +55,13 @@ def _capture(command: tuple[str, ...]) -> bytes:
     Raises:
         RuntimeError: The fixture did not fail validation or emitted diagnostics.
     """
-    result = subprocess.run(command, cwd=ROOT, capture_output=True, check=False)
-    if result.returncode != 1 or result.stderr:
-        raise RuntimeError(f"Example capture failed: exit={result.returncode}, stderr={result.stderr.decode('utf-8')}")
+    # Version discovery can warn before the CLI configures its UTF-8 streams.
+    # Pin the child encoding so the targeted stderr filter also works there.
+    environment = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+    result = subprocess.run(command, cwd=ROOT, env=environment, capture_output=True, check=False)
+    diagnostics = _SHALLOW_CLONE_WARNING.sub(b"", result.stderr)
+    if result.returncode != 1 or diagnostics:
+        raise RuntimeError(f"Example capture failed: exit={result.returncode}, stderr={diagnostics.decode('utf-8')}")
     if not result.stdout:
         raise RuntimeError("Example fixture produced no findings")
     return result.stdout
@@ -109,7 +128,7 @@ def render_jsonl(raw: bytes) -> bytes:
     console.print("JSONL report preview", style="bold cyan")
     console.print("Visual wrapping only; raw output has one JSON object per line.", style="dim")
     console.print()
-    console.print(Syntax(raw.decode("utf-8"), "json", theme="monokai", word_wrap=True))
+    console.print(Syntax(canonical_line_endings(raw).decode("utf-8"), "json", theme="monokai", word_wrap=True))
     svg = console.export_svg(title="skilllint · JSON Lines", unique_id="skilllint-json-lines")
     # Match the repository whitespace hook without changing rendered content.
     return "\n".join(line.rstrip() for line in svg.split("\n")).encode("utf-8")
@@ -163,7 +182,7 @@ def main(argv: list[str] | None = None) -> int:
     for name, content in artifacts.items():
         path = OUTPUT / name
         if args.check:
-            if not path.is_file() or path.read_bytes() != content:
+            if not path.is_file() or canonical_line_endings(path.read_bytes()) != canonical_line_endings(content):
                 stale.append(name)
         else:
             path.write_bytes(content)
