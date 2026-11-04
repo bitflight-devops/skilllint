@@ -734,6 +734,34 @@ def validate_single_path(
             raise typer.Exit(2) from None
         return {path: []}
 
+    return _validate_selected_path(
+        path,
+        validators,
+        fix=fix,
+        per_run_cache=per_run_cache,
+        per_run_policy_cache=per_run_policy_cache,
+        fixes_out=fixes_out,
+    )
+
+
+def _validate_selected_path(
+    path: Path,
+    validators: list[Validator],
+    *,
+    fix: bool,
+    per_run_cache: dict[str, tuple[IgnoreConfig, Path | None]] | None = None,
+    per_run_policy_cache: dict[str, tuple[ValidationPolicy, Path | None]] | None = None,
+    fixes_out: list[AppliedFix] | None = None,
+) -> FileResults:
+    """Execute selected validators through the shared policy and fixing owner.
+
+    The caller owns path normalization and validator selection. Platform
+    dispatch selects non-AS validators before execution, while the ordinary
+    core route retains its AS validator and stateful fix/revalidation flow.
+
+    Returns:
+        Results grouped under the final path after any authorized fixes.
+    """
     cache: dict[str, tuple[IgnoreConfig, Path | None]] = per_run_cache if per_run_cache is not None else {}
     ignore_config, config_root = _resolve_ignore_config(path, cache)
     policy_cache: dict[str, tuple[ValidationPolicy, Path | None]] = (
@@ -909,32 +937,52 @@ def _filter_platform_violations(violations: list[dict], adapter: PlatformAdapter
     return [violation for violation in violations if _violation_applies_to_adapter(violation, adapter)]
 
 
+def _platform_core_issues(
+    path: Path, *, policy_cache: dict[str, tuple[ValidationPolicy, Path | None]] | None = None
+) -> list[ValidationIssue]:
+    """Collect non-AS core findings once for projection through adapters.
+
+    AS has a separate once-per-file compatibility owner in validate_file.
+    Select it out before execution rather than discarding its finished work.
+
+    Returns:
+        Core findings retaining their ordering and diagnostic identity.
+
+    Raises:
+        typer.Exit: If a core-supported path does not exist.
+    """
+    validators = _get_validators_for_path(path)
+    if not validators:
+        return []
+    if not path.exists():
+        typer.echo(f"Error: Path does not exist: {path}", err=True)
+        raise typer.Exit(2) from None
+    normalized_path = _normalize_skill_folder(path)
+    if normalized_path != path:
+        validators = _get_validators_for_path(normalized_path)
+    validators = [validator for validator in validators if not isinstance(validator, AsSeriesValidator)]
+    file_results = _validate_selected_path(normalized_path, validators, fix=False, per_run_policy_cache=policy_cache)
+    return [
+        issue
+        for validator_results in file_results.values()
+        for _name, result in validator_results
+        for issue in (*result.errors, *result.warnings, *result.info)
+    ]
+
+
 def run_platform_checks(
     path: Path, adapter: PlatformAdapter, *, policy_cache: dict[str, tuple[ValidationPolicy, Path | None]] | None = None
 ) -> list[dict]:
-    """Run adapter-native and core validation through one routing contract.
+    """Run standalone adapter-native and non-AS core validation.
 
-    Adapter-native findings and core-pipeline findings are collected first,
-    then both pass through the same applicable_rules()/rule-metadata filter.
-    AS-series is skipped in the nested core result because validate_file runs
-    it once per SKILL.md before adapter dispatch.
+    This compatibility entry point continues to omit shared AS findings.
+    validate_file owns AS and shares one core collection across its adapters.
 
     Returns:
         Adapter-native and core findings permitted by the routing contract.
     """
     violations = list(adapter.validate(path))
-
-    if _get_validators_for_path(path):
-        file_results = validate_single_path(
-            path, check=True, fix=False, verbose=False, per_run_policy_cache=policy_cache
-        )
-        for validator_results in file_results.values():
-            for name, vr_result in validator_results:
-                if name == "AsSeriesValidator":
-                    continue
-                all_issues = [*vr_result.errors, *vr_result.warnings, *vr_result.info]
-                violations.extend(_issue_to_violation(issue) for issue in all_issues)
-
+    violations.extend(_issue_to_violation(issue) for issue in _platform_core_issues(path, policy_cache=policy_cache))
     return _filter_platform_violations(violations, adapter)
 
 
@@ -1045,9 +1093,14 @@ def validate_file(
         if any(_violation_applies_to_adapter(violation, adapter) for adapter in matching)
     ]
 
+    core_issues = _platform_core_issues(path, policy_cache=resolved_policy_cache)
     for adapter in matching:
         _logger.debug("Validating %s with adapter %s", path, adapter.id())
-        violations.extend(run_platform_checks(path, adapter, policy_cache=resolved_policy_cache))
+        # Preserve the existing per-adapter output multiplicity and native-first
+        # ordering while sharing the already-collected core findings.
+        adapter_violations = list(adapter.validate(path))
+        adapter_violations.extend(_issue_to_violation(issue) for issue in core_issues)
+        violations.extend(_filter_platform_violations(adapter_violations, adapter))
 
     return violations
 
