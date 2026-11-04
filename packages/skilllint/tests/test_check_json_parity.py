@@ -338,7 +338,8 @@ def test_the_matrix_exercises_every_visibility_edge() -> None:
 
 # --- generated matrices -------------------------------------------------------------------------
 
-_CODES: Final = st.from_regex(r"[A-Z]{2}\d{3}", fullmatch=True)
+# Rule IDs use ASCII digits; Python and Pydantic can have different Unicode digit tables.
+_CODES: Final = st.from_regex(r"[A-Z]{2}[0-9]{3}", fullmatch=True)
 _WORDS: Final = st.from_regex(r"[A-Za-z0-9][A-Za-z0-9 .,_-]{0,30}[A-Za-z0-9]", fullmatch=True)
 """Messages the text format can round-trip: no ``:`` (Rich emoji codes), no brackets (markup), no edge spaces."""
 

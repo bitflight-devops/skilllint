@@ -4,6 +4,7 @@ import json
 import os
 import subprocess
 import sys
+import tomllib
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 from types import ModuleType
@@ -31,6 +32,15 @@ def test_offline_proxy_environment_uses_named_endpoint(tmp_path: Path) -> None:
     assert environment["ALL_PROXY"] == module.OFFLINE_PROXY_URL
     assert environment["HTTP_PROXY"] == module.OFFLINE_PROXY_URL
     assert environment["HTTPS_PROXY"] == module.OFFLINE_PROXY_URL
+
+
+def test_wheel_matrix_covers_supported_python_classifiers() -> None:
+    module = _assertion_module()
+    project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+    prefix = "Programming Language :: Python :: "
+    versions = {value.removeprefix(prefix) for value in project["classifiers"] if value.startswith(prefix + "3.")}
+
+    assert set(module.WHEEL_PYTHONS) == versions
 
 
 @pytest.fixture(scope="module")

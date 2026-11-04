@@ -20,7 +20,7 @@ from typing import Final
 from pydantic import BaseModel, ConfigDict
 
 ALIASES: Final = ("agentlint", "pluginlint", "skillint", "skilllint")
-WHEEL_PYTHONS: Final = ("3.11", "3.12", "3.13", "3.14")
+WHEEL_PYTHONS: Final = ("3.11", "3.12", "3.13", "3.14", "3.15")
 # IANA Service Name and Transport Protocol Port Number Registry assigns TCP port
 # 1 to tcpmux: https://www.iana.org/assignments/service-names-port-numbers.
 # Artifact verification starts no proxy, so this named loopback endpoint makes
