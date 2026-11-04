@@ -14,7 +14,7 @@ import pytest
 from typer.testing import CliRunner
 
 from skilllint.plugin_validator import app
-from skilllint.vendor_cache import CacheStatus, NoCacheError, fetch_or_cached, find_latest
+from skilllint.vendor_cache import CacheStatus, NoCacheError, derive_page_name, fetch_or_cached, find_latest
 from skilllint.vendor_io import load_sidecar, write_sidecar
 
 if TYPE_CHECKING:
@@ -278,4 +278,109 @@ def test_query_values_and_order_are_not_discarded(tmp_path: Path, mocker: Mocker
 
     assert first.path != second.path
     assert first.status is second.status is CacheStatus.NEW
+    assert fetch.call_count == 2
+
+
+@pytest.mark.parametrize("mode", ["new", "fresh", "stale"])
+def test_unrelated_invalid_utf8_sidecar_does_not_block_lookup(tmp_path: Path, mocker: MockerFixture, mode: str) -> None:
+    mocker.patch("skilllint.vendor_cache.SOURCES_DIR", tmp_path)
+    url = "https://a.example/docs/settings.md"
+    fetch = mocker.patch("skilllint.vendor_cache.fetch_url_text", return_value="valid source")
+    existing = None if mode == "new" else fetch_or_cached(url).path
+    unrelated = tmp_path / "unrelated-2099-01-01-0000.md"
+    unrelated.write_text("unrelated")
+    unrelated.with_suffix(".meta.json").write_bytes(b"\xff")
+    if mode == "stale":
+        fetch.side_effect = httpx.ConnectError("offline")
+
+    result = fetch_or_cached(url, force=mode == "stale")
+
+    assert result.status.value == mode
+    assert result.path.read_text() == "valid source"
+    if existing is not None:
+        assert result.path == existing
+
+
+def test_long_display_names_do_not_overflow_filenames_or_merge_sources(tmp_path: Path, mocker: MockerFixture) -> None:
+    mocker.patch("skilllint.vendor_cache.SOURCES_DIR", tmp_path)
+    # This prefix fitted the legacy filename but overflowed after adding a hash.
+    page_name = "long-page-" * 19
+    first_url = f"https://a.example/docs/{page_name}.md"
+    second_name = f"{page_name}other"
+    fetch = mocker.patch("skilllint.vendor_cache.fetch_url_text", side_effect=["A", "B"])
+    legacy = tmp_path / f"{page_name}-2026-01-01-0000.md"
+    legacy.write_text("old A")
+    write_sidecar(legacy, url=first_url, content="old A")
+
+    first = fetch_or_cached(first_url, force=True)
+    second = fetch_or_cached(f"https://a.example/docs/{second_name}.md")
+
+    assert first.page_name == page_name
+    assert second.page_name == second_name
+    assert first.path != second.path
+    assert first.path.read_text() == "A"
+    assert second.path.read_text() == "B"
+    assert first.path.with_suffix(".meta.json").is_file()
+    assert second.path.with_suffix(".meta.json").is_file()
+    assert find_latest(page_name, sources_dir=tmp_path) == first.path
+    assert find_latest(second_name, sources_dir=tmp_path) == second.path
+    assert fetch_or_cached(first_url).path == first.path
+    assert fetch.call_count == 2
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://a.example/docs/café.md",
+        "https://a.example/docs/%73ettings.md",
+        "https://a.example/z/../docs/settings.md",
+    ],
+)
+def test_display_name_contract_is_independent_of_source_normalization(
+    tmp_path: Path, mocker: MockerFixture, url: str
+) -> None:
+    mocker.patch("skilllint.vendor_cache.SOURCES_DIR", tmp_path)
+    mocker.patch("skilllint.vendor_cache.fetch_url_text", return_value="content")
+
+    result = fetch_or_cached(url)
+
+    assert result.page_name == derive_page_name(url)
+    assert find_latest(result.page_name, sources_dir=tmp_path) == result.path
+
+
+def test_unchanged_alias_refresh_preserves_long_display_name_lookup(tmp_path: Path, mocker: MockerFixture) -> None:
+    mocker.patch("skilllint.vendor_cache.SOURCES_DIR", tmp_path)
+    path = "/".join(["x"] * 60 + [".."] * 60 + ["docs", "settings.md"])
+    original_url = f"https://a.example/{path}"
+    mocker.patch("skilllint.vendor_cache.fetch_url_text", return_value="unchanged")
+    first = fetch_or_cached(original_url)
+
+    second = fetch_or_cached("https://a.example/docs/settings.md", force=True)
+
+    assert second.status is CacheStatus.UNCHANGED
+    assert second.path == first.path
+    assert find_latest(derive_page_name(original_url), sources_dir=tmp_path) == first.path
+    sidecar = load_sidecar(first.path)
+    assert sidecar is not None
+    assert sidecar.url == original_url
+
+
+def test_changed_alias_refresh_cannot_select_older_slug_in_same_minute(tmp_path: Path, mocker: MockerFixture) -> None:
+    mocker.patch("skilllint.vendor_cache.SOURCES_DIR", tmp_path)
+    clock = mocker.patch("skilllint.vendor_cache.datetime", wraps=datetime)
+    clock.now.return_value = datetime(2026, 11, 4, 11, 37, tzinfo=UTC)
+    alias = "https://a.example/z/../docs/settings.md"
+    canonical = "https://a.example/docs/settings.md"
+    fetch = mocker.patch("skilllint.vendor_cache.fetch_url_text", side_effect=["old", "new"])
+    fetch_or_cached(alias)
+
+    refreshed = fetch_or_cached(canonical, force=True)
+    cached = fetch_or_cached(canonical)
+
+    assert refreshed.status is CacheStatus.REFRESHED
+    assert cached.status is CacheStatus.FRESH
+    assert cached.path == refreshed.path
+    assert cached.path.read_text() == "new"
+    assert find_latest(derive_page_name(alias), sources_dir=tmp_path) == refreshed.path
+    fetch.assert_has_calls([mocker.call(alias), mocker.call(canonical)])
     assert fetch.call_count == 2

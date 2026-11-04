@@ -204,6 +204,11 @@ _SLUG_STRIP_RE = re.compile(r"[^\w\s-]")
 _SLUG_COLLAPSE_RE = re.compile(r"[-\s]+")
 _CACHE_FILENAME_RE = re.compile(r".*-(?P<timestamp>\d{4}-\d{2}-\d{2}-\d{4})(?:-(?P<source_key>[0-9a-f]{64}))?\.md")
 
+# Keep both files within a portable 255-byte filename component budget.
+# Slugs are ASCII; reserve the minute timestamp, full SHA-256 hex, and the
+# longer metadata suffix. Only the presentation prefix may be shortened.
+_CACHE_SLUG_BUDGET = 255 - len("-YYYY-MM-DD-HHMM-") - 64 - len(".meta.json")
+
 
 def _heading_to_slug(heading: str) -> str:
     """Convert a heading to a markdown anchor slug.
@@ -302,9 +307,9 @@ def find_latest(page_name: str, *, sources_dir: Path | None = None) -> Path | No
 
     Scans *sources_dir* (defaults to :data:`~skilllint.vendor_io.SOURCES_DIR`)
     for files matching ``{page_name}-*.md`` (excluding ``*.meta.json`` files).
-    Returns the path whose filename stem sorts lexicographically last (timestamps
-    in ``YYYY-MM-DD-HHMM`` format sort correctly by lexicographic order), or
-    ``None`` if no matches exist.
+    Returns the path with the latest filename timestamp, preferring keyed files
+    over legacy files captured in the same minute, or ``None`` if no matches
+    exist. Shortened filename prefixes are resolved through source metadata.
 
     Args:
         page_name: Filesystem-safe page name, as returned by
@@ -317,9 +322,28 @@ def find_latest(page_name: str, *, sources_dir: Path | None = None) -> Path | No
     """
     directory = sources_dir if sources_dir is not None else SOURCES_DIR
     candidates = [p for p in directory.glob(f"{page_name}-*.md") if not p.name.endswith(".meta.json")]
+    if len(page_name) > _CACHE_SLUG_BUDGET:
+        for path in directory.glob(f"{page_name[:_CACHE_SLUG_BUDGET]}-*.md"):
+            sidecar = load_sidecar(path)
+            if sidecar is None:
+                continue
+            if derive_page_name(sidecar.url) == page_name:
+                candidates.append(path)
     if not candidates:
         return None
-    return max(candidates, key=lambda p: p.stem)
+    return max(candidates, key=_cache_order)
+
+
+def _cache_order(path: Path) -> tuple[str, bool, str]:
+    """Order legacy and keyed entries by capture time, preferring migration ties.
+
+    Returns:
+        Timestamp, keyed-entry preference, and a deterministic filename tie-break.
+    """
+    match = _CACHE_FILENAME_RE.fullmatch(path.name)
+    if match is None:
+        return path.stem, False, path.name
+    return match["timestamp"], match["source_key"] is not None, path.name
 
 
 def _source_identity(url: str) -> str:
@@ -346,12 +370,12 @@ def _find_source_cache(url: str, source_key: str) -> tuple[Path, SidecarMetadata
     # need a compatibility lookup: a readable name never proves identity.
     # Sort by timestamp, not slug; normalized aliases can have different slugs.
     # Prefer a migrated entry when its timestamp matches the legacy original.
-    candidates: list[tuple[str, bool, Path]] = []
+    candidates: list[Path] = []
     for path in SOURCES_DIR.glob("*.md"):
         match = _CACHE_FILENAME_RE.fullmatch(path.name)
         if match is not None and match["source_key"] in {None, source_key}:
-            candidates.append((match["timestamp"], match["source_key"] is not None, path))
-    for _, _, path in sorted(candidates, reverse=True):
+            candidates.append(path)
+    for path in sorted(candidates, key=_cache_order, reverse=True):
         sidecar = load_sidecar(path)
         if sidecar is None:
             continue
@@ -411,7 +435,7 @@ def fetch_or_cached(url: str, *, ttl_hours: float = 4.0, force: bool = False) ->
         NoCacheError: If no cached copy exists and the network is unavailable.
     """
     identity = _source_identity(url)
-    page_name = derive_page_name(identity)
+    page_name = derive_page_name(url)
     source_key = sha256_hex(identity)
     cached = _find_source_cache(url, source_key)
 
@@ -420,8 +444,8 @@ def fetch_or_cached(url: str, *, ttl_hours: float = 4.0, force: bool = False) ->
     def _timestamp() -> str:
         return datetime.now(UTC).strftime("%Y-%m-%d-%H%M")
 
-    def _new_path() -> Path:
-        return SOURCES_DIR / f"{page_name}-{_timestamp()}-{source_key}.md"
+    def _new_path(capture_name: str) -> Path:
+        return SOURCES_DIR / f"{capture_name[:_CACHE_SLUG_BUDGET]}-{_timestamp()}-{source_key}.md"
 
     if cached is not None:
         cached_path, sidecar = cached
@@ -439,18 +463,22 @@ def fetch_or_cached(url: str, *, ttl_hours: float = 4.0, force: bool = False) ->
             raise
 
         if cached_path.read_bytes() == new_content.encode():
+            # Keep the capture URL spelling so shortened display names remain
+            # discoverable after an equivalent alias refreshes this same file.
             if verify_integrity(cached_path).status is IntegrityStatus.INTACT:
                 write_sidecar(
-                    cached_path, url=url, content=new_content, fetched_at=datetime.fromisoformat(utc_now_iso())
+                    cached_path, url=sidecar.url, content=new_content, fetched_at=datetime.fromisoformat(utc_now_iso())
                 )
             else:
-                write_sidecar(cached_path, url=url, content=new_content)
+                write_sidecar(cached_path, url=sidecar.url, content=new_content)
             return CacheResult(path=cached_path, status=CacheStatus.UNCHANGED, page_name=page_name, url=url)
 
-        # Content changed — write new file.
-        new_path = _new_path()
+        # Keep the source's capture spelling across aliases. Otherwise an alias
+        # can create a different slug in the same minute and sort behind the
+        # older content, even though both filenames have the same source key.
+        new_path = _new_path(derive_page_name(sidecar.url))
         new_path.write_bytes(new_content.encode())
-        write_sidecar(new_path, url=url, content=new_content)
+        write_sidecar(new_path, url=sidecar.url, content=new_content)
         return CacheResult(path=new_path, status=CacheStatus.REFRESHED, page_name=page_name, url=url)
 
     # Catch broadly; re-raise anything that isn't a network error.
@@ -461,7 +489,7 @@ def fetch_or_cached(url: str, *, ttl_hours: float = 4.0, force: bool = False) ->
             raise NoCacheError(url, str(exc)) from exc
         raise
 
-    new_path = _new_path()
+    new_path = _new_path(page_name)
     new_path.write_bytes(new_content.encode())
     write_sidecar(new_path, url=url, content=new_content)
     return CacheResult(path=new_path, status=CacheStatus.NEW, page_name=page_name, url=url)

@@ -71,7 +71,7 @@ The command prints one cached path per successful URL. It continues after a fail
 
 ## Cache location
 
-New pages are saved under `.claude/vendor/sources/` as `{page-name}-{YYYY-MM-DD-HHMM}-{source-hash}.md`, alongside their metadata files. The source hash is the full SHA-256 of the request URL normalized by HTTPX, with its fragment removed. Scheme and host case, default ports, and HTTPX request-path normalization are equivalent; HTTP versus HTTPS, non-default ports, credentials, and query strings remain distinct.
+New pages are saved under `.claude/vendor/sources/` as `{page-name}-{YYYY-MM-DD-HHMM}-{source-hash}.md`, alongside their metadata files. Long filename prefixes are shortened to keep the Markdown and metadata names within a 255-byte component budget; the full display name is retained in results and remains searchable with `latest`. The source hash is the full SHA-256 of the request URL normalized by HTTPX, with its fragment removed. Scheme and host case, default ports, and HTTPX request-path normalization are equivalent; HTTP versus HTTPS, non-default ports, credentials, and query strings remain distinct.
 
 Existing `{page-name}-{YYYY-MM-DD-HHMM}.md` files remain usable when their validated sidecars identify the same normalized source URL. Changed content is saved with the new filename format; unchanged content can keep its legacy path. No cache entry is reused solely because its filename matches. Missing, malformed, incomplete, or mismatched sidecars are treated as cache misses and require a successful fetch to write a source-identified pair. Legacy files are not relabeled. Without a successful fetch or an identifiable cached copy, `fetch` reports `No Cache Available`.
 
