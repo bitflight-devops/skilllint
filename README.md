@@ -69,9 +69,19 @@ See [output examples](examples/output/README.md) for captured reports and colour
 
 ---
 
-## GitHub Action
+## Output formats
 
-Use `bitflight-devops/skilllint` as a GitHub Action to validate skills, plugins, and agents in any repository.
+Choose a format for the reader or CI consumer. Every example below is captured
+from the same deliberately invalid skill; the command exits `1`.
+
+| Format | Use | Preview | Raw output |
+| --- | --- | --- | --- |
+| `full` | Human-readable source excerpts, highlights, and help | [Actual terminal colours](examples/output/full.svg) | [ANSI](examples/output/full.ansi) |
+| `concise` | One monochrome finding per line for pre-commit | [Monochrome findings](examples/output/concise.svg) | [Text](examples/output/concise.txt) |
+| `json-lines` | One parseable finding per line for agents | [JSONL preview](examples/output/json-lines.svg) | [JSONL](examples/output/json-lines.jsonl) |
+| `github` | Native GitHub Actions annotations | [Command preview](examples/output/github.svg) | [Workflow commands](examples/output/github.txt) |
+| `gitlab` | GitLab Code Quality artifacts | [Report preview](examples/output/gitlab.svg) | [JSON](examples/output/gitlab.json) |
+| `junit` | JUnit-style test-report consumers | [Report preview](examples/output/junit.svg) | [XML](examples/output/junit.xml) |
 
 For source-aware human diagnostics, use `skilllint check --output-format full`.
 Colour defaults to terminal detection; choose `--color always` or `--color never`
@@ -82,6 +92,12 @@ independently of the format. Existing defaults and `--no-color` are preserved.
 See the [complete six-format output gallery](examples/output/README.md) for
 reproducible captures, raw reports, commands, and consumer-specific examples.
 The machine-format SVGs are labelled report previews, not CI interface screenshots.
+
+---
+
+## GitHub Action
+
+Use `bitflight-devops/skilllint` as a GitHub Action to validate skills, plugins, and agents in any repository.
 
 For direct CLI use in Actions, `skilllint check --output-format github` emits
 native workflow annotations. See the [captured commands and colour SVG preview](examples/output/README.md#github-annotations)
