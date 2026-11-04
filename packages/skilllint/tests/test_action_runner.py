@@ -6,6 +6,7 @@ import os
 import re
 import subprocess
 import sys
+from contextlib import redirect_stderr
 from pathlib import Path
 
 import pytest
@@ -209,3 +210,21 @@ def test_invalid_utf8_publishes_failure_outputs_and_suspends_traceback(action_en
     match = re.search(r"::stop-commands::([a-f0-9]+)", result.stdout)
     assert match is not None
     assert result.stdout.index("UnicodeDecodeError") < result.stdout.index(f"::{match.group(1)}::")
+
+
+def test_input_validation_failure_preserves_outputs_and_command_protection(action_env, monkeypatch, capsys):
+    from skilllint.boundary.action_inputs_ingest import ActionInputs
+
+    def invalid_inputs(environment):
+        return ActionInputs.model_validate({"INPUT_PATHS": ["\n::error::injected"]})
+
+    monkeypatch.setattr(action_runner, "parse_action_inputs", invalid_inputs)
+    with redirect_stderr(sys.stdout):
+        assert action_runner.run() == 1
+    values = read_outputs(action_env)
+    assert values["result"] == "failed"
+    assert values["inspected-count"] == values["findings"] == ""
+    log = capsys.readouterr().out
+    match = re.search(r"::stop-commands::([a-f0-9]+)", log)
+    assert match is not None
+    assert log.index(match.group(0)) < log.index("ValidationError") < log.index(f"::{match.group(1)}::")

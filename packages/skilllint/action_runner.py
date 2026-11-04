@@ -12,6 +12,7 @@ import typer
 from typer.main import get_group
 
 from skilllint import __version__
+from skilllint.boundary.action_inputs_ingest import parse_action_inputs
 from skilllint.plugin_validator import app, main as check
 from skilllint.reporting_github import emit_github
 from skilllint.scan_runtime import CheckRun
@@ -43,7 +44,7 @@ def run() -> int:
     inspected = ""
     scan: CheckRun | None = None
     codes: set[str] = set()
-    verbose = os.environ.get("INPUT_VERBOSE") == "true"
+    verbose = False
 
     def report(outcome: CheckRun | list[tuple[int, Path]]) -> None:
         nonlocal inspected, scan
@@ -64,19 +65,21 @@ def run() -> int:
     command_token = uuid4().hex
     typer.echo(f"::stop-commands::{command_token}")
     try:
+        inputs = parse_action_inputs(os.environ)
+        verbose = inputs.verbose
         check(
             ctx=_check_context(),
-            paths=[Path(path) for path in os.environ.get("INPUT_PATHS", ".").split()],
-            check=os.environ.get("INPUT_CHECK_ONLY") == "true",
-            fix=os.environ.get("INPUT_FIX") == "true",
+            paths=inputs.paths,
+            check=inputs.check_only,
+            fix=inputs.fix,
             verbose=verbose,
-            no_color=os.environ.get("INPUT_NO_COLOR", "true") == "true",
-            tokens_only=os.environ.get("INPUT_TOKENS_ONLY") == "true",
-            show_progress=os.environ.get("INPUT_SHOW_PROGRESS") == "true",
-            show_summary=os.environ.get("INPUT_SHOW_SUMMARY", "true") == "true",
-            platform=os.environ.get("INPUT_PLATFORM") or None,
-            filter_glob=os.environ.get("INPUT_FILTER") or None,
-            filter_type=os.environ.get("INPUT_FILTER_TYPE") or None,
+            no_color=inputs.no_color,
+            tokens_only=inputs.tokens_only,
+            show_progress=inputs.show_progress,
+            show_summary=inputs.show_summary,
+            platform=inputs.platform,
+            filter_glob=inputs.filter_glob,
+            filter_type=inputs.filter_type,
             action_report=report,
         )
     except (typer.Exit, SystemExit) as exc:
