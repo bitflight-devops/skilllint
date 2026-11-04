@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793098665270,
+  "lastUpdate": 1793778718780,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -335,6 +335,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 334.218,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "stack@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "97e4b21487bf68e6fb534e7621162e26a9a96da4",
+          "message": "Merge pull request #350 from bitflight-devops/feat/diagnostic-source-locations\n\nfeat(output): add source-aware human and CI reports",
+          "timestamp": "2026-11-04T07:47:52Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/97e4b21487bf68e6fb534e7621162e26a9a96da4"
+        },
+        "date": 1793778718066,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 1736.869,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 1964.232,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 2418.398,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 509.614,
             "unit": "files/s"
           }
         ]
