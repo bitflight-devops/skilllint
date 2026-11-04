@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
+from cli_probe import strip_shallow_clone_warning
 from default_output_cases import CORE_VARIANTS, Case
 from json_probe_support import CheckResponse, assert_plain, parse, run_probe
 from typer.testing import CliRunner
@@ -45,7 +46,7 @@ def test_subprocess_annotations_use_workspace_not_nested_cwd(tmp_path: Path, abs
         check=False,
     )
     assert result.returncode == 1
-    assert result.stderr == ""
+    assert strip_shallow_clone_warning(result.stderr.encode("utf-8")) == b""
     assert "file=plugins/demo/SKILL.md,line=2,col=1" in result.stdout
     assert "file=SKILL.md" not in result.stdout
 

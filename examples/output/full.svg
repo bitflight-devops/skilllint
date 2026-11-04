@@ -1,4 +1,4 @@
-<svg class="rich-terminal" viewBox="0 0 994 269.6" xmlns="http://www.w3.org/2000/svg">
+<svg class="rich-terminal" viewBox="0 0 1238 269.6" xmlns="http://www.w3.org/2000/svg">
     <!-- Generated with Rich https://www.textualize.io -->
     <style>
 
@@ -42,35 +42,35 @@
 
     <defs>
     <clipPath id="skilllint-full-clip-terminal">
-      <rect x="0" y="0" width="975.0" height="218.6" />
+      <rect x="0" y="0" width="1219.0" height="218.6" />
     </clipPath>
     <clipPath id="skilllint-full-line-0">
-    <rect x="0" y="1.5" width="976" height="24.65"/>
+    <rect x="0" y="1.5" width="1220" height="24.65"/>
             </clipPath>
 <clipPath id="skilllint-full-line-1">
-    <rect x="0" y="25.9" width="976" height="24.65"/>
+    <rect x="0" y="25.9" width="1220" height="24.65"/>
             </clipPath>
 <clipPath id="skilllint-full-line-2">
-    <rect x="0" y="50.3" width="976" height="24.65"/>
+    <rect x="0" y="50.3" width="1220" height="24.65"/>
             </clipPath>
 <clipPath id="skilllint-full-line-3">
-    <rect x="0" y="74.7" width="976" height="24.65"/>
+    <rect x="0" y="74.7" width="1220" height="24.65"/>
             </clipPath>
 <clipPath id="skilllint-full-line-4">
-    <rect x="0" y="99.1" width="976" height="24.65"/>
+    <rect x="0" y="99.1" width="1220" height="24.65"/>
             </clipPath>
 <clipPath id="skilllint-full-line-5">
-    <rect x="0" y="123.5" width="976" height="24.65"/>
+    <rect x="0" y="123.5" width="1220" height="24.65"/>
             </clipPath>
 <clipPath id="skilllint-full-line-6">
-    <rect x="0" y="147.9" width="976" height="24.65"/>
+    <rect x="0" y="147.9" width="1220" height="24.65"/>
             </clipPath>
 <clipPath id="skilllint-full-line-7">
-    <rect x="0" y="172.3" width="976" height="24.65"/>
+    <rect x="0" y="172.3" width="1220" height="24.65"/>
             </clipPath>
     </defs>
 
-    <rect fill="#292929" stroke="rgba(255,255,255,0.35)" stroke-width="1" x="1" y="1" width="992" height="267.6" rx="8"/><text class="skilllint-full-title" fill="#c5c8c6" text-anchor="middle" x="496" y="27">skilllint&#160;·&#160;Full&#160;diagnostics</text>
+    <rect fill="#292929" stroke="rgba(255,255,255,0.35)" stroke-width="1" x="1" y="1" width="1236" height="267.6" rx="8"/><text class="skilllint-full-title" fill="#c5c8c6" text-anchor="middle" x="618" y="27">skilllint&#160;·&#160;Full&#160;diagnostics</text>
             <g transform="translate(26,22)">
             <circle cx="0" cy="0" r="7" fill="#ff5f57"/>
             <circle cx="22" cy="0" r="7" fill="#febc2e"/>
@@ -80,15 +80,15 @@
     <g transform="translate(9, 41)" clip-path="url(#skilllint-full-clip-terminal)">
 
     <g class="skilllint-full-matrix">
-    <text class="skilllint-full-r1" x="0" y="20" textLength="146.4" clip-path="url(#skilllint-full-line-0)">error[FM010]</text><text class="skilllint-full-r2" x="146.4" y="20" textLength="24.4" clip-path="url(#skilllint-full-line-0)">:&#160;</text><text class="skilllint-full-r1" x="170.8" y="20" textLength="73.2" clip-path="url(#skilllint-full-line-0)">name:&#160;</text><text class="skilllint-full-r2" x="244" y="20" textLength="646.6" clip-path="url(#skilllint-full-line-0)">Must&#160;use&#160;lowercase&#160;letters,&#160;numbers,&#160;and&#160;hyphens&#160;only</text><text class="skilllint-full-r3" x="976" y="20" textLength="12.2" clip-path="url(#skilllint-full-line-0)">
-</text><text class="skilllint-full-r4" x="0" y="44.4" textLength="646.6" clip-path="url(#skilllint-full-line-1)">&#160;--&gt;&#160;examples/output/fixtures/demo-skill/SKILL.md:2:1</text><text class="skilllint-full-r3" x="976" y="44.4" textLength="12.2" clip-path="url(#skilllint-full-line-1)">
-</text><text class="skilllint-full-r4" x="0" y="68.8" textLength="36.6" clip-path="url(#skilllint-full-line-2)">&#160;&#160;|</text><text class="skilllint-full-r3" x="976" y="68.8" textLength="12.2" clip-path="url(#skilllint-full-line-2)">
-</text><text class="skilllint-full-r4" x="0" y="93.2" textLength="48.8" clip-path="url(#skilllint-full-line-3)">2&#160;|&#160;</text><text class="skilllint-full-r3" x="48.8" y="93.2" textLength="170.8" clip-path="url(#skilllint-full-line-3)">name:&#160;Bad&#160;Name</text><text class="skilllint-full-r3" x="976" y="93.2" textLength="12.2" clip-path="url(#skilllint-full-line-3)">
-</text><text class="skilllint-full-r4" x="0" y="117.6" textLength="48.8" clip-path="url(#skilllint-full-line-4)">&#160;&#160;|&#160;</text><text class="skilllint-full-r1" x="48.8" y="117.6" textLength="48.8" clip-path="url(#skilllint-full-line-4)">^^^^</text><text class="skilllint-full-r3" x="976" y="117.6" textLength="12.2" clip-path="url(#skilllint-full-line-4)">
-</text><text class="skilllint-full-r4" x="0" y="142" textLength="36.6" clip-path="url(#skilllint-full-line-5)">&#160;&#160;|</text><text class="skilllint-full-r3" x="976" y="142" textLength="12.2" clip-path="url(#skilllint-full-line-5)">
-</text><text class="skilllint-full-r5" x="0" y="166.4" textLength="73.2" clip-path="url(#skilllint-full-line-6)">help:&#160;</text><text class="skilllint-full-r2" x="73.2" y="166.4" textLength="414.8" clip-path="url(#skilllint-full-line-6)">Use&#160;format:&#160;lowercase-with-hyphens</text><text class="skilllint-full-r3" x="976" y="166.4" textLength="12.2" clip-path="url(#skilllint-full-line-6)">
-</text><text class="skilllint-full-r6" x="0" y="190.8" textLength="317.2" clip-path="url(#skilllint-full-line-7)">docs:&#160;skilllint&#160;rule&#160;FM010</text><text class="skilllint-full-r3" x="976" y="190.8" textLength="12.2" clip-path="url(#skilllint-full-line-7)">
-</text><text class="skilllint-full-r3" x="976" y="215.2" textLength="12.2" clip-path="url(#skilllint-full-line-8)">
+    <text class="skilllint-full-r1" x="0" y="20" textLength="146.4" clip-path="url(#skilllint-full-line-0)">error[FM010]</text><text class="skilllint-full-r2" x="146.4" y="20" textLength="24.4" clip-path="url(#skilllint-full-line-0)">:&#160;</text><text class="skilllint-full-r1" x="170.8" y="20" textLength="73.2" clip-path="url(#skilllint-full-line-0)">name:&#160;</text><text class="skilllint-full-r2" x="244" y="20" textLength="646.6" clip-path="url(#skilllint-full-line-0)">Must&#160;use&#160;lowercase&#160;letters,&#160;numbers,&#160;and&#160;hyphens&#160;only</text><text class="skilllint-full-r3" x="1220" y="20" textLength="12.2" clip-path="url(#skilllint-full-line-0)">
+</text><text class="skilllint-full-r4" x="0" y="44.4" textLength="646.6" clip-path="url(#skilllint-full-line-1)">&#160;--&gt;&#160;examples/output/fixtures/demo-skill/SKILL.md:2:1</text><text class="skilllint-full-r3" x="1220" y="44.4" textLength="12.2" clip-path="url(#skilllint-full-line-1)">
+</text><text class="skilllint-full-r4" x="0" y="68.8" textLength="36.6" clip-path="url(#skilllint-full-line-2)">&#160;&#160;|</text><text class="skilllint-full-r3" x="1220" y="68.8" textLength="12.2" clip-path="url(#skilllint-full-line-2)">
+</text><text class="skilllint-full-r4" x="0" y="93.2" textLength="48.8" clip-path="url(#skilllint-full-line-3)">2&#160;|&#160;</text><text class="skilllint-full-r3" x="48.8" y="93.2" textLength="170.8" clip-path="url(#skilllint-full-line-3)">name:&#160;Bad&#160;Name</text><text class="skilllint-full-r3" x="1220" y="93.2" textLength="12.2" clip-path="url(#skilllint-full-line-3)">
+</text><text class="skilllint-full-r4" x="0" y="117.6" textLength="48.8" clip-path="url(#skilllint-full-line-4)">&#160;&#160;|&#160;</text><text class="skilllint-full-r1" x="48.8" y="117.6" textLength="48.8" clip-path="url(#skilllint-full-line-4)">^^^^</text><text class="skilllint-full-r3" x="1220" y="117.6" textLength="12.2" clip-path="url(#skilllint-full-line-4)">
+</text><text class="skilllint-full-r4" x="0" y="142" textLength="36.6" clip-path="url(#skilllint-full-line-5)">&#160;&#160;|</text><text class="skilllint-full-r3" x="1220" y="142" textLength="12.2" clip-path="url(#skilllint-full-line-5)">
+</text><text class="skilllint-full-r5" x="0" y="166.4" textLength="73.2" clip-path="url(#skilllint-full-line-6)">help:&#160;</text><text class="skilllint-full-r2" x="73.2" y="166.4" textLength="414.8" clip-path="url(#skilllint-full-line-6)">Use&#160;format:&#160;lowercase-with-hyphens</text><text class="skilllint-full-r3" x="1220" y="166.4" textLength="12.2" clip-path="url(#skilllint-full-line-6)">
+</text><text class="skilllint-full-r6" x="0" y="190.8" textLength="317.2" clip-path="url(#skilllint-full-line-7)">docs:&#160;skilllint&#160;rule&#160;FM010</text><text class="skilllint-full-r3" x="1220" y="190.8" textLength="12.2" clip-path="url(#skilllint-full-line-7)">
+</text><text class="skilllint-full-r3" x="1220" y="215.2" textLength="12.2" clip-path="url(#skilllint-full-line-8)">
 </text>
     </g>
     </g>
