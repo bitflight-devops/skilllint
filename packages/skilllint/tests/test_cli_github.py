@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -13,6 +16,38 @@ from typer.testing import CliRunner
 from skilllint import plugin_validator
 from skilllint.models import ValidationIssue, ValidationResult
 from skilllint.scan_runtime import CheckRun
+
+
+@pytest.mark.parametrize("absolute", [False, True])
+def test_subprocess_annotations_use_workspace_not_nested_cwd(tmp_path: Path, absolute: bool) -> None:
+    directory = tmp_path / "plugins/demo"
+    directory.mkdir(parents=True)
+    path = directory / "SKILL.md"
+    path.write_text(
+        "---\nname: Bad_Name\ndescription: Use when testing GitHub workspace paths.\n---\nBody.\n", encoding="utf-8"
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "skilllint",
+            "check",
+            str(path) if absolute else "SKILL.md",
+            "--platform",
+            "claude-code",
+            "--output-format",
+            "github",
+        ],
+        cwd=directory,
+        env={**os.environ, "GITHUB_WORKSPACE": str(tmp_path)},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 1
+    assert result.stderr == ""
+    assert "file=plugins/demo/SKILL.md,line=2,col=1" in result.stdout
+    assert "file=SKILL.md" not in result.stdout
 
 
 @pytest.mark.parametrize(
