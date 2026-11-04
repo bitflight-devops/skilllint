@@ -186,7 +186,8 @@ Messages escape percent signs and CR/LF; other controls are shown as visible
 escapes so hostile filenames or multiline messages cannot inject commands.
 Ordinary diagnostics remain on stderr. In this format, their modern `::` and
 legacy `##[` command markers are neutralized so invalid paths and policy
-warnings cannot masquerade as runner commands.
+warnings, parser errors, and uncaught command tracebacks cannot masquerade as
+runner commands.
 
 Actual source paths take precedence over checked targets. Known one-based
 positions are included; legacy field labels and line values are not guessed.
