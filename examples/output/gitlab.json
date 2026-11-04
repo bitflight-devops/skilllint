@@ -1,0 +1,14 @@
+[
+  {
+    "description": "name: Must use lowercase letters, numbers, and hyphens only\nSuggestion: Use format: lowercase-with-hyphens\nHelp: skilllint rule FM010",
+    "check_name": "FM010",
+    "fingerprint": "f89eacb55aa9a93d863c400b15ca43beb7a363bf37cdda180f6a5f4909b10cad",
+    "severity": "major",
+    "location": {
+      "path": "examples/output/fixtures/demo-skill/SKILL.md",
+      "lines": {
+        "begin": 2
+      }
+    }
+  }
+]

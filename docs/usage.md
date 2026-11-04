@@ -92,6 +92,39 @@ uv run skilllint rule FM007 --json
 uv run skilllint --version --json
 ```
 
+### Concise
+
+Use `check --output-format concise --no-color` for lightweight pre-commit output:
+
+```console
+uv run skilllint check --output-format concise --no-color plugins/my-plugin
+```
+
+Each visible finding occupies one physical line:
+`path:line:column: severity[CODE] field: message`. The actual source path and
+one-based start position are used when known. Otherwise the checked target is
+shown, with no invented line or column. The semantic field is omitted when empty.
+Absolute paths beneath the working directory become relative; other path
+spellings retain their identity without resolving symlinks.
+
+Concise output is always monochrome, including without `--no-color`. Control
+characters and line separators are escaped, while readable Unicode is retained.
+Lines are sorted lexicographically and duplicates are preserved. Info findings
+require `--verbose`. There are no headings, fix notices, progress, or summaries,
+even with `--show-progress` or `--show-summary`. A clean scan emits no bytes.
+
+`--fix` still applies the same supported changes and reports remaining findings;
+pre-commit itself reports modified files. Exit status remains `0` for success,
+`1` for failed validation, and `2` for invalid usage. An empty output does not
+prove success if a validator failed without a finding. Usage and policy
+diagnostics remain on stderr. `--json` and `--tokens-only` conflict with explicit
+`--output-format`; legacy human output and `--json` remain unchanged.
+With `--record`, the sidecar remains the existing detailed human report rather
+than a capture of concise stdout.
+
+Both published pre-commit hooks select concise output by default. See the
+[raw capture and monochrome SVG preview](../examples/output/README.md#concise).
+
 ### JSON Lines
 
 Use `check --output-format json-lines` for a flat stream of findings:
@@ -135,6 +168,191 @@ With `--record`, the sidecar remains a human-rendered report, not JSONL.
 
 See the [captured raw output and colour SVG preview](../examples/output/README.md).
 
+### GitHub annotations
+
+Use `check --output-format github` in a GitHub Actions `run` step:
+
+```console
+uv run skilllint check --output-format github plugins/my-plugin
+```
+
+The CLI emits plain [workflow commands](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#setting-an-error-message)
+which GitHub interprets as annotations. Errors use `error`, warnings use
+`warning`, and info findings use `notice` only with `--verbose`. Each annotation
+includes its rule code as a title, message, and available suggestion/help.
+Properties escape percent signs, CR/LF, colons, and commas according to the
+[official Actions toolkit](https://github.com/actions/toolkit/blob/main/packages/core/src/command.ts).
+Messages escape percent signs and CR/LF; other controls are shown as visible
+escapes so hostile filenames or multiline messages cannot inject commands.
+Ordinary diagnostics remain on stderr. In this format, their modern `::` and
+legacy `##[` command markers are neutralized so invalid paths and policy
+warnings, parser errors, and uncaught command tracebacks cannot masquerade as
+runner commands.
+
+Actual source paths take precedence over checked targets. Known one-based
+positions are included; legacy field labels and line values are not guessed.
+Half-open source ranges become inclusive GitHub end coordinates. Multiline
+ranges omit columns, as required by GitHub. A range ending at column one excludes
+that final line. Unknown line/column properties are omitted. GitHub itself may
+present a file-only annotation at its default line one; that is not a position
+reported by skilllint.
+
+Relative source paths are anchored to the current directory before formatting.
+The `GITHUB_WORKSPACE` prefix is removed when set, so steps running in a
+subdirectory still identify the correct repository file. Without that variable,
+the current-directory prefix is removed. Other absolute paths remain absolute,
+and paths are never resolved through symlinks.
+
+Commands are sorted and duplicate findings are retained. There are no headings,
+progress, fix notices, summaries, or ANSI escapes, even with forced terminal
+colour. A clean scan emits nothing. `--fix` applies the existing fixes and
+reports remaining findings. Exit codes stay `0` for success, `1` for validation
+failure, and `2` for usage errors. Check exit status even when output is empty.
+`--json` and `--tokens-only` cannot be combined with `--output-format`.
+`--record` remains a detailed human-report sidecar, not the workflow protocol.
+
+See the [real output and labelled SVG preview](../examples/output/README.md#github-annotations).
+
+### GitLab Code Quality
+
+Use `check --output-format gitlab` to produce a
+[GitLab Code Quality report](https://docs.gitlab.com/ci/testing/code_quality/#code-quality-report-format):
+
+```console
+uv run skilllint check --output-format gitlab plugins/my-plugin > gl-code-quality-report.json
+```
+
+Stdout is one BOM-free JSON array containing `description`, `check_name` (rule
+code), `fingerprint`, `severity`, and `location.path` / `location.lines.begin`.
+The description includes the field, message, and available suggestion/help.
+Skilllint errors map to `major`, warnings to `minor`, and verbose info to `info`.
+These are presentation mappings, not a change to rule severity or exit status.
+
+Paths are relative to the nearest enclosing `.git` checkout root (including
+worktrees). Run from that repository; for a source export without `.git`, run
+from its root because the current directory becomes the report root. Actual
+source paths take precedence over checked targets. Paths use `/` without `./`.
+In-tree symlink spellings are retained; parent traversals are resolved to their
+actual file before relativizing, so a symlink plus `..` is not misinterpreted.
+
+GitLab requires a line. Known source starts use their actual one-based line.
+For a known file with no source position, line `1` is only a **display anchor**,
+and the description explicitly says it is file-level, not a source position.
+Legacy line values and semantic field names are never used to invent positions.
+Directory/global findings, missing files, and sources outside the repository
+(including symlinks to external files) cannot be represented faithfully. Each
+is omitted from the array **with its complete finding details on stderr**.
+Keep the job log and exit status; use `json-lines` when every finding must be in
+one machine-readable artifact. An empty array alone does not prove success.
+
+Fingerprints are SHA-256 hashes of the repository-relative path, validator,
+rule, field, message, and duplicate occurrence number. Source coordinates,
+severity, and help text do not enter the hash. The structured source path is
+repository-relative; text embedded in a message remains part of its identity.
+Occurrences are ordered by source position and report content so input iteration order does
+not change the result. Identical findings have distinct fingerprints, because
+GitLab collapses identical fingerprints. Moving a finding's lines alone keeps
+its fingerprint; adding/removing indistinguishable occurrences can reassign
+occurrence numbers, and changes to the path or message change identity.
+
+A clean scan emits `[]`. No human headings, progress, fix notices, summaries,
+or ANSI escapes appear on stdout. `--fix` reports remaining findings and normal
+exit codes remain `0` (pass), `1` (validation failure), and `2` (usage error).
+Usage errors leave stdout empty. `--json` and `--tokens-only` are incompatible;
+`--record` remains a separate human-rendered SVG/HTML report.
+
+In an existing GitLab job with the repository's environment installed, add:
+
+```yaml
+skilllint:
+  script:
+    - uv run skilllint check --output-format gitlab plugins/my-plugin > gl-code-quality-report.json
+  artifacts:
+    when: always
+    paths:
+      - gl-code-quality-report.json
+    reports:
+      codequality: gl-code-quality-report.json
+```
+
+The command retains its failure status; do not append `|| true`. Uploading the
+artifact does not require making the job pass. Run the job on the target branch
+as well: GitLab needs a target-branch baseline to compare new/resolved findings.
+This integration is checked against the published report contract and actual
+CLI output, not a live GitLab ingestion test. See the
+[raw report and syntax-coloured SVG preview](../examples/output/README.md#gitlab-code-quality).
+
+### JUnit-style XML
+
+Use `check --output-format junit` to export executed validation results:
+
+```console
+uv run skilllint check --output-format junit plugins/my-plugin > skilllint-junit.xml
+```
+
+This is the JUnit-style `testsuites` / `testsuite` / `testcase` dialect used by
+[GitLab unit test reports](https://docs.gitlab.com/ci/testing/unit_test_reports/#junit-xml-format-specification)
+and other JUnit consumers. It is **not** the distinct
+[xUnit.net XML v2 dialect](https://xunit.net/docs/format-xml-v2), which uses
+`assemblies` / `assembly` / `collection` / `test`. There is no `xunit` alias.
+
+One testcase represents one collected target/validator result, including clean
+results. It does not claim that every known rule ran. The checked target is the
+`classname`; the validator plus a deterministic occurrence suffix is the `name`.
+Paths under the current working directory are relative, and other paths are
+retained. Duplicate results remain separate with unique classname/name pairs,
+including after XML sanitization. Stable sorting makes reordering the same
+results produce identical XML; use the same working directory across runs.
+
+A failed validation result produces one `failure` containing all its error
+findings, or an explicit explanation if no error diagnostic was supplied.
+Warnings and `--verbose` info findings go in that testcase's `system-out` and do
+not create failures. The collected pass/fail flag, not diagnostic counts,
+controls both the report's failure status and CLI exit status. If a validator
+marks a result passed while supplying errors, those diagnostics remain visible
+in `system-out` without overriding its status.
+
+Each diagnostic retains severity, code, field, message, source coordinates when
+known, suggestion, and help reference. Missing positions are not invented.
+Directory, external, and missing-file targets remain representable. XML markup
+is escaped; XML 1.0-prohibited characters, including NUL, ESC, and lone
+surrogates, become visible Python-style escapes. Valid carriage returns use XML
+character references so parsing does not silently normalize them to newlines.
+Non-ASCII text also uses character references, preserving its value without
+depending on the terminal encoding.
+
+Suite and aggregate `tests`/`failures` counters count actual result testcases;
+`errors` and `skipped` are zero because lint failures are validation failures,
+not test-runner errors or skipped tests. A scan with no collected results emits
+a valid zero-test report. No durations or timestamps are invented.
+
+Stdout contains only XML, regardless of colour, progress, or summary flags.
+Usage and policy diagnostics remain on stderr. `--fix` reports the resulting
+validation state without a second scan. `--record out.svg` still saves the human
+report separately. Exit status remains `0` for passed validation, `1` for failed
+validation, and `2` for invalid usage. `--json` and `--tokens-only` conflict with
+explicit `--output-format`. Existing formats and GitHub Action outputs are unchanged.
+
+In an existing GitLab job with skilllint installed:
+
+```yaml
+skilllint:
+  script:
+    - uv run skilllint check --output-format junit plugins/my-plugin > skilllint-junit.xml
+  artifacts:
+    when: always
+    paths:
+      - skilllint-junit.xml
+    reports:
+      junit: skilllint-junit.xml
+```
+
+Keep the command's exit status; do not add `|| true`. GitLab's report upload does
+not itself determine whether a job fails. The report uses GitLab's documented
+subset, with diagnostic output inside testcases. Compatibility is checked with
+XML parsers and this field contract, not a live CI interface ingestion test.
+See the [actual XML and syntax-coloured preview](../examples/output/README.md#junit-style-xml).
+
 ## Rules, thresholds, and severity
 
 `skilllint rules` is the compact catalog; `skilllint rule FM007` explains one
@@ -160,6 +378,23 @@ and the documented defaults are used; fix the config rather than relying on a
 fallback.
 
 ## GitHub Action
+
+The Action and package version can be pinned independently. Packages containing
+the structured Action runner publish annotations and all existing outputs from
+one scan, retaining human rendering options and fix behavior. `inspected-count`
+comes from collected results (or token-count entries), and `findings` includes
+visible finding codes plus applied-fix codes. An invalid invocation leaves both
+empty, as before. Human logs are printed with workflow-command interpretation
+suspended; only the explicitly escaped annotations are interpreted.
+
+For older pins without that runner, the Action explicitly announces its legacy
+compatibility path. Historical output parsing and possible counting rescans are
+preserved there; new native annotations are not guaranteed. Use a package with
+the structured runner for the new behavior. `version: source` installs from the
+local Git checkout of this repository and is intended for unreleased-source
+integration tests with `uses: ./`. The checkout must include Git metadata;
+GitHub's downloaded remote Action archive does not include it.
+
 
 Pin the Action ref and the package version independently. Replace `X.Y.Z` in the examples with the release you intend to pin. The Action exposes
 `result` (`passed` or `failed`) and `exit-code` (`0`, `1`, or `2`).

@@ -9,11 +9,13 @@ permissions:
 
 jobs:
   action-contract:
-    name: action-contract (${{ matrix.case }})
+    name: action-contract (${{ matrix.case }}, ${{ matrix.version }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
+        version: ["source", "1.19.2"]
+        case: [clean, warning, zero-files, validation-error, usage-error, continue-on-error, tokens-only]
         include:
           - case: clean
             paths: packages/skilllint/tests/fixtures/claude_code/valid_skill.md packages/skilllint/tests/fixtures/claude_code/invalid_skill.md
@@ -88,16 +90,31 @@ jobs:
             expected_inspected_count: "1"
             expected_finding: FM010 SK005
             allow_failure: true
+          - case: tokens-only
+            paths: packages/skilllint/tests/fixtures/claude_code/valid_skill.md
+            platform: ""
+            filter: ""
+            check_only: "false"
+            fix: "false"
+            tokens_only: "true"
+            expected_result: passed
+            expected_exit_code: "0"
+            expected_inspected_count: "1"
+            expected_finding: ""
+            allow_failure: false
     steps:
       - name: Checkout code
         uses: actions/checkout@v7.0.1
+
+      - name: Copy fix fixture outside checkout
+        run: cp -R tests/fixtures/action "${RUNNER_TEMP}/skilllint-action"
 
       - name: Run composite Action
         id: action
         continue-on-error: ${{ matrix.allow_failure }}
         uses: ./
         with:
-          paths: ${{ matrix.paths }}
+          paths: ${{ matrix.case == 'warning' && format('{0}/skilllint-action/skills/fixable-skill', runner.temp) || matrix.paths }}
           platform: ${{ matrix.platform }}
           filter: ${{ matrix.filter }}
           check-only: ${{ matrix.check_only }}
@@ -107,7 +124,7 @@ jobs:
           tokens-only: ${{ matrix.tokens_only || 'false' }}
           show-summary: ${{ matrix.show_summary || 'true' }}
           python-version: "3.11"
-          version: "1.19.2"
+          version: ${{ matrix.version }}
 
       - name: Assert composite Action outcome
         env:
@@ -123,5 +140,5 @@ jobs:
           EXPECTED_INSPECTED_COUNT: ${{ matrix.expected_inspected_count }}
           EXPECTED_FINDING: ${{ matrix.expected_finding }}
           EXPECTED_PYTHON_VERSION: "3.11"
-          EXPECTED_PACKAGE_VERSION: "1.19.2"
+          EXPECTED_PACKAGE_VERSION: ${{ matrix.version }}
         run: python scripts/assert_action_contract.py
