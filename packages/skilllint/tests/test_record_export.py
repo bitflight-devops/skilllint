@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import html
+from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
+from xml.etree import ElementTree
 
 import pytest
 from rich.console import Console
@@ -172,3 +174,33 @@ class TestExportRecording:
         with pytest.raises(ValueError, match="Unsupported file extension"):
             export_recording(console, dest, title="test")
         assert not dest.exists(), "No file should be created when extension is invalid"
+
+
+@pytest.mark.parametrize("ending", ["", "\n", "\n\n"])
+def test_svg_export_preserves_capture_and_visible_last_line(tmp_path: Path, ending: str) -> None:
+    output = StringIO()
+    console = make_recording_console(file=output)
+    console.print("[red]Final diagnostic[/red]", end=ending)
+    stdout = output.getvalue()
+    text = console.export_text(clear=False)
+    html_before = console.export_html(clear=False)
+    size = console.size
+    path = tmp_path / "record.svg"
+    export_recording(console, path, title="test")
+    first = path.read_text(encoding="utf-8")
+    root = ElementTree.fromstring(first)
+    ids = {element.get("id") for element in root.iter()}
+    visible = [
+        element for element in root.iter() if element.tag.endswith("}text") and element.text and element.text.strip()
+    ]
+    assert any("Final" in (element.text or "") for element in visible)
+    for element in visible:
+        clip = element.get("clip-path")
+        if clip:
+            assert clip.removeprefix("url(#").removesuffix(")") in ids
+    export_recording(console, path, title="test")
+    assert path.read_text(encoding="utf-8") == first
+    assert output.getvalue() == stdout
+    assert console.export_text(clear=False) == text
+    assert console.export_html(clear=False) == html_before
+    assert console.size == size

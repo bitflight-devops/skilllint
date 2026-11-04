@@ -14,7 +14,7 @@ from skilllint.models import ValidationIssue
 from skilllint.plugin_validator import _collect_validator_results, _issue_to_violation, violations_to_result
 from skilllint.policy import IgnoreConfig, ValidationPolicy
 from skilllint.rules.lk_series import check_lk001, check_lk004
-from skilllint.source_location import SourceLocation, SourcePosition
+from skilllint.source_location import SourceLocation, SourcePosition, source_digest
 from skilllint.validators.frontmatter import FrontmatterValidator, _coerce_validation_issues
 from skilllint.validators.rule_series import InternalLinkValidator
 
@@ -91,7 +91,10 @@ def test_frontmatter_points_to_original_key_with_unicode_and_tabs(tmp_path: Path
     )
     issue = next(issue for issue in FrontmatterValidator().validate(path).errors if issue.code == "FM010")
     assert issue.source_location == SourceLocation(
-        path=path, start=SourcePosition(line=2, column=19), end=SourcePosition(line=2, column=23)
+        path=path,
+        start=SourcePosition(line=2, column=19),
+        end=SourcePosition(line=2, column=23),
+        content_digest=source_digest(path.read_text(encoding="utf-8")),
     )
     assert issue.line is None
 
@@ -120,7 +123,11 @@ def test_yaml_syntax_error_has_original_parser_point(tmp_path: Path) -> None:
     path.write_text("---\nname: demo\ndescription: ]\n---\nbody\n", encoding="utf-8")
     issue = FrontmatterValidator().validate(path).errors[0]
     assert issue.code == "FM002"
-    assert issue.source_location == SourceLocation(path=path, start=SourcePosition(line=3, column=14))
+    assert issue.source_location == SourceLocation(
+        path=path,
+        start=SourcePosition(line=3, column=14),
+        content_digest=source_digest(path.read_text(encoding="utf-8")),
+    )
 
 
 def test_recovered_yaml_does_not_claim_transformed_coordinates(tmp_path: Path) -> None:

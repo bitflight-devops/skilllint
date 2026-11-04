@@ -45,7 +45,7 @@ from typing import TYPE_CHECKING
 from urllib.parse import unquote
 
 from skilllint.rule_registry import _make_issue, skilllint_rule
-from skilllint.source_location import SourceLocation
+from skilllint.source_location import SourceLocation, source_digest
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -479,6 +479,7 @@ def check_lk001(content: str, path: Path) -> list[ValidationIssue]:
     # only discards the left operand when the right operand is absolute).
     skill_dir = path.parent.resolve()
 
+    digest = source_digest(content)
     for link_text, link_url, link_url_no_fragment, _line, start, end in _iter_links(content):
         # Resolve documented ${CLAUDE_*} substitution variables before the
         # existence check. None means the link must be skipped because a
@@ -497,7 +498,7 @@ def check_lk001(content: str, path: Path) -> list[ValidationIssue]:
                     severity="error",
                     message=f"Broken link: [{link_text}]({link_url}) (file not found)",
                     code="LK001",
-                    source_location=SourceLocation.from_offsets(path, content, start, end),
+                    source_location=SourceLocation.from_offsets(path, content, start, end, digest=digest),
                     suggestion=f"Create missing file or fix link path: {link_url}",
                 )
             )
@@ -631,6 +632,7 @@ def check_lk004(content: str, path: Path, plugin_root: Path) -> list[ValidationI
     relative_file = Path(os.path.normpath(path.absolute())).relative_to(root).as_posix()
     is_prompt_file = relative_file.split("/", 1)[0] in {"agents", "commands"}
 
+    digest = source_digest(content)
     for link_text, link_url, link_url_no_fragment, line, start, end in _iter_links(content, keep_root_absolute=True):
         resolved_url = _resolve_claude_variables(link_url_no_fragment, base_dir, root)
         if resolved_url is None:
@@ -659,7 +661,7 @@ def check_lk004(content: str, path: Path, plugin_root: Path) -> list[ValidationI
                 code="LK004",
                 suggestion=suggestion,
                 line=line,
-                source_location=SourceLocation.from_offsets(path, content, start, end),
+                source_location=SourceLocation.from_offsets(path, content, start, end, digest=digest),
             )
         )
 

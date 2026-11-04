@@ -33,6 +33,7 @@ dependencies = [
     "marko>=2.2.4",
     "msgspec>=0.22.0",
     "pydantic>=2.13.5",
+    "regex",
     "ruamel-yaml>=0.19.1",
     "tiktoken>=0.14.0",
     "typer>=0.27.2",

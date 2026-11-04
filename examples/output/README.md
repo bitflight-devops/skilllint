@@ -1,5 +1,36 @@
 # Output examples
 
+Choose a format for its consumer:
+
+- [Full human diagnostics](#full-human-diagnostics): source excerpts, highlights, help, and colour.
+- [Concise](#concise): monochrome, one finding per line for pre-commit.
+- [JSON Lines](#json-lines): one complete finding record per line for agents.
+- [GitHub annotations](#github-annotations): workflow commands interpreted by Actions.
+- [GitLab Code Quality](#gitlab-code-quality): Code Quality JSON artifacts.
+- [JUnit-style XML](#junit-style-xml): test-result XML, distinct from xUnit.net XML.
+
+All examples use the same real, deliberately invalid fixture. The full preview
+replays actual terminal colours. Machine-format previews add presentation colour
+and wrapping, and are explicitly not screenshots of GitHub, GitLab, or a test UI.
+
+## Full human diagnostics
+
+This SVG replays the [actual ANSI stdout](full.ansi) captured at 100 terminal
+columns. It preserves CLI colours, source excerpts, caret highlights, and help.
+It does not add syntax highlighting to the diagnostic data.
+
+![Actual full-colour human diagnostic with source excerpt and caret highlight](full.svg)
+
+Run from the repository root:
+
+```console
+uv run skilllint check --platform claude-code --output-format full --color always examples/output/fixtures/demo-skill/SKILL.md
+```
+
+The command exits `1`. For interactive use, omit `--color always` to detect
+terminal colour support automatically. See the
+[full diagnostic contract](../../docs/usage.md#full-human-diagnostics).
+
 ## JSON Lines
 
 This **JSONL report preview** adds syntax colour and visual wrapping to the
@@ -107,9 +138,14 @@ uv run python scripts/capture_output_examples.py --check
 
 The script preserves stdout bytes and uses a fixed SVG identifier and width.
 Artifact comparisons and the SVG viewer normalize CRLF to LF so native Windows
-output and checkout newline conversion do not create false drift. The raw JSONL
-file retains the captured bytes. Only the known `vcs_versioning` shallow-checkout
+output and checkout newline conversion do not create false drift. The raw report
+files retain the captured bytes. Only the known `vcs_versioning` shallow-checkout
 warning is ignored during capture; other stderr diagnostics still fail the check.
 The capture process pins `PYTHONIOENCODING=utf-8` for startup diagnostics as well
 as the report, without changing the caller's environment.
-Use the repository's locked dependencies to reproduce the preview.
+Use the repository's locked dependencies to reproduce the preview. The full
+capture pins `COLUMNS=100`, `LINES=24`, and `TERM=xterm-256color`; `--color always`
+ensures that its raw file contains the same terminal styles when redirected.
+The concise findings remain monochrome. JSONL, GitHub, GitLab, and JUnit SVGs add
+viewer-only colour; do not use their SVG text as a machine report. Consume the
+linked raw files, or run the corresponding CLI command directly.

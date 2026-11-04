@@ -92,6 +92,41 @@ uv run skilllint rule FM007 --json
 uv run skilllint --version --json
 ```
 
+### Full human diagnostics
+
+Use `check --output-format full` for source-aware human reports:
+
+```console
+uv run skilllint check --output-format full --color auto plugins/my-plugin
+uv run skilllint check --output-format full --color always --record findings.svg plugins/my-plugin
+```
+
+Each finding shows severity, rule code, message, actual source path, help, and
+rule documentation. Verified source ranges include an excerpt and caret marks.
+Columns in the location count Unicode code points; caret positions account for
+tabs and terminal display widths. Long lines are cropped around the highlighted
+range, and multiline ranges show their first and last affected lines.
+
+The renderer checks that the source still matches the text that produced the
+finding. Missing, changed, unreadable, or unverified sources fall back to the
+file path without a guessed line, column, or excerpt. Legacy line labels are
+not used to invent a location. Control characters are displayed as escapes.
+
+`--color auto|always|never` controls human colour independently of the selected
+format. Full defaults to terminal-aware `auto`; `always` also colours redirected
+output and `never` disables ANSI. `--no-color` takes precedence. The five machine
+formats remain plain regardless of colour settings. Omitting both the format
+and colour options preserves the legacy reporter and its defaults.
+
+`--verbose`, `--show-progress`, `--show-summary`, and `--fix` keep their usual
+meaning. Full `--record` exports the same human report from the same scan;
+machine formats and legacy `--json` retain their existing human sidecars.
+Recording preserves the report's styles even when terminal ANSI is disabled.
+Exit status remains based on validation results, not visible findings. Explicit
+`--output-format` cannot be combined with `--json` or `--tokens-only`.
+
+See the [actual full-colour capture](../examples/output/README.md#full-human-diagnostics).
+
 ### Concise
 
 Use `check --output-format concise --no-color` for lightweight pre-commit output:

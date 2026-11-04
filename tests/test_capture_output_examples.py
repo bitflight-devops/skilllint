@@ -36,6 +36,7 @@ def test_svg_is_deterministic_and_labels_visual_wrapping():
         capture.capture_github,
         capture.capture_gitlab,
         capture.capture_junit,
+        capture.capture_full,
     ],
 )
 def test_capture_preserves_raw_stdout(monkeypatch, capture_output):
@@ -54,6 +55,7 @@ def test_capture_preserves_raw_stdout(monkeypatch, capture_output):
         capture.capture_github,
         capture.capture_gitlab,
         capture.capture_junit,
+        capture.capture_full,
     ],
 )
 def test_capture_pins_child_encoding_without_changing_parent(monkeypatch, capture_output):
@@ -79,6 +81,7 @@ def test_capture_pins_child_encoding_without_changing_parent(monkeypatch, captur
         capture.capture_github,
         capture.capture_gitlab,
         capture.capture_junit,
+        capture.capture_full,
     ],
 )
 def test_capture_ignores_only_the_known_shallow_checkout_warning(monkeypatch, newline, capture_output):
@@ -107,6 +110,7 @@ def test_capture_ignores_only_the_known_shallow_checkout_warning(monkeypatch, ne
         capture.capture_github,
         capture.capture_gitlab,
         capture.capture_junit,
+        capture.capture_full,
     ],
 )
 def test_capture_does_not_hide_other_stderr(monkeypatch, stderr, capture_output):
@@ -128,6 +132,7 @@ def test_capture_does_not_hide_other_stderr(monkeypatch, stderr, capture_output)
         capture.capture_github,
         capture.capture_gitlab,
         capture.capture_junit,
+        capture.capture_full,
     ],
 )
 def test_capture_rejects_unexpected_result(monkeypatch, exit_code, stdout, stderr, capture_output):
@@ -151,6 +156,8 @@ def test_capture_rejects_unexpected_result(monkeypatch, exit_code, stdout, stder
         "gitlab.svg",
         "junit.xml",
         "junit.svg",
+        "full.ansi",
+        "full.svg",
     ],
 )
 def test_check_detects_drift_without_writing(monkeypatch, tmp_path, artifact):
@@ -160,6 +167,7 @@ def test_check_detects_drift_without_writing(monkeypatch, tmp_path, artifact):
     monkeypatch.setattr(capture, "capture_github", lambda: b"::error file=demo.md,line=2,col=1,title=FM010::bad name\n")
     monkeypatch.setattr(capture, "capture_gitlab", lambda: b'[\n  {"description": "bad name"}\n]\n')
     monkeypatch.setattr(capture, "capture_junit", lambda: b'<testsuites><testsuite name="demo" /></testsuites>\n')
+    monkeypatch.setattr(capture, "capture_full", lambda: b"\x1b[31merror[FM010]\x1b[0m\n")
     monkeypatch.setattr(capture, "OUTPUT", tmp_path)
     assert capture.main(["--check"]) == 1
     assert not list(tmp_path.iterdir())
@@ -185,6 +193,7 @@ def test_check_accepts_native_and_checkout_newlines_without_rewriting(
     monkeypatch.setattr(capture, "capture_gitlab", lambda: gitlab)
     junit = b'<testsuites tests="1"/>' + captured_newline
     monkeypatch.setattr(capture, "capture_junit", lambda: junit)
+    monkeypatch.setattr(capture, "capture_full", lambda: b"\x1b[31merror[FM010]\x1b[0m\n")
     monkeypatch.setattr(capture, "OUTPUT", tmp_path)
     assert capture.main([]) == 0
     raw_path = tmp_path / "json-lines.jsonl"
@@ -203,6 +212,8 @@ def test_check_accepts_native_and_checkout_newlines_without_rewriting(
             "gitlab.svg",
             "junit.xml",
             "junit.svg",
+            "full.ansi",
+            "full.svg",
         )
     ]
     for path in paths:
@@ -378,3 +389,60 @@ def test_junit_preview_and_raw_report_match_real_cli_twice():
     assert capture.canonical_line_endings(
         (capture.OUTPUT / "junit.svg").read_bytes()
     ) == capture.canonical_line_endings(svg)
+
+
+def test_full_capture_replays_real_colours_and_matches_twice():
+    raw = capture.capture_full()
+    assert raw == capture.capture_full()
+    assert b"\x1b[" in raw
+    assert b"error[FM010]" in raw
+    assert b"name: Bad Name" in raw
+    assert b"^^^^" in raw
+    svg = capture.render_full(raw)
+    assert svg == capture.render_full(raw)
+    visible = "".join(ET.fromstring(svg).itertext()).replace("\N{NO-BREAK SPACE}", " ")
+    assert "error[FM010]" in visible
+    assert "help:" in visible
+    assert "docs:" in visible
+    root = ET.fromstring(svg)
+    ids = {node.attrib["id"] for node in root.iter() if "id" in node.attrib}
+    for node in root.iter("{http://www.w3.org/2000/svg}text"):
+        clip = node.attrib.get("clip-path")
+        if clip and (node.text or "").strip():
+            assert clip[5:-1] in ids
+    assert capture.canonical_line_endings(
+        (capture.OUTPUT / "full.ansi").read_bytes()
+    ) == capture.canonical_line_endings(raw)
+    assert capture.canonical_line_endings((capture.OUTPUT / "full.svg").read_bytes()) == capture.canonical_line_endings(
+        svg
+    )
+
+
+@pytest.mark.parametrize(
+    "renderer",
+    [
+        capture.render_jsonl,
+        capture.render_concise,
+        capture.render_github,
+        capture.render_gitlab,
+        capture.render_junit,
+        capture.render_full,
+    ],
+)
+@pytest.mark.parametrize("term", [None, "dumb", "xterm-256color"])
+def test_svg_geometry_is_independent_of_terminal_environment(monkeypatch, renderer, term):
+    raw = b"error[FM010]: example & <literal>\n"
+    for name in ("TERM", "COLUMNS", "LINES", "NO_COLOR", "FORCE_COLOR", "TTY_INTERACTIVE"):
+        monkeypatch.delenv(name, raising=False)
+    expected = renderer(raw)
+    if term is not None:
+        monkeypatch.setenv("TERM", term)
+    monkeypatch.setenv("COLUMNS", "1")
+    monkeypatch.setenv("LINES", "1")
+    monkeypatch.setenv("NO_COLOR", "1")
+    monkeypatch.setenv("TTY_INTERACTIVE", "1")
+    assert renderer(raw) == expected
+    monkeypatch.setenv("COLUMNS", "240")
+    monkeypatch.setenv("LINES", "90")
+    monkeypatch.setenv("FORCE_COLOR", "1")
+    assert renderer(raw) == expected

@@ -1,0 +1,8 @@
+[1;31merror[FM010][0m[1;39m: [0m[1;31mname: [0m[1;39mMust use lowercase letters, numbers, and hyphens only[0m
+[34m --> examples/output/fixtures/demo-skill/SKILL.md:2:1[0m
+[34m  |[0m
+[34m2 | [0m[39mname: Bad Name[0m
+[34m  | [0m[1;31m^^^^[0m
+[34m  |[0m
+[1;36mhelp: [0m[1;39mUse format: lowercase-with-hyphens[0m
+[2;36mdocs: skilllint rule FM010[0m

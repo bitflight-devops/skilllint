@@ -7,10 +7,17 @@ exclusive. A path without a start is a file-level finding, not line one.
 
 from __future__ import annotations
 
+from hashlib import sha256
 from pathlib import Path
 from typing import Annotated, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic.json_schema import SkipJsonSchema
+
+
+def source_digest(content: str) -> str:
+    """Return an identity for decoded source, treating CRLF like text-mode reads."""
+    return sha256(content.replace("\r\n", "\n").encode("utf-8")).hexdigest()
 
 
 class SourcePosition(BaseModel):
@@ -49,6 +56,7 @@ class SourceLocation(BaseModel):
     path: Path
     start: SourcePosition | None = None
     end: SourcePosition | None = None
+    content_digest: SkipJsonSchema[str | None] = Field(default=None, exclude=True, repr=False)
 
     @model_validator(mode="after")
     def validate_range(self) -> Self:
@@ -68,8 +76,11 @@ class SourceLocation(BaseModel):
         return self
 
     @classmethod
-    def from_offsets(cls, path: Path, content: str, start: int, end: int) -> Self:
+    def from_offsets(cls, path: Path, content: str, start: int, end: int, *, digest: str | None = None) -> Self:
         """Return a location for an observed span in decoded source text."""
         return cls(
-            path=path, start=SourcePosition.from_offset(content, start), end=SourcePosition.from_offset(content, end)
+            path=path,
+            start=SourcePosition.from_offset(content, start),
+            end=SourcePosition.from_offset(content, end),
+            content_digest=source_digest(content) if digest is None else digest,
         )
