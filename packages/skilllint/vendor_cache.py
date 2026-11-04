@@ -321,17 +321,21 @@ def find_latest(page_name: str, *, sources_dir: Path | None = None) -> Path | No
         Path to the latest cached file, or None.
     """
     directory = sources_dir if sources_dir is not None else SOURCES_DIR
-    candidates = [p for p in directory.glob(f"{page_name}-*.md") if not p.name.endswith(".meta.json")]
-    if len(page_name) > _CACHE_SLUG_BUDGET:
-        for path in directory.glob(f"{page_name[:_CACHE_SLUG_BUDGET]}-*.md"):
+    prefixes = {page_name, page_name[:_CACHE_SLUG_BUDGET]}
+    candidates = {path for prefix in prefixes for path in directory.glob(f"{prefix}-*.md")}
+    matches: list[Path] = []
+    for path in candidates:
+        match = _CACHE_FILENAME_RE.fullmatch(path.name)
+        if match is not None and match["source_key"] is not None:
+            # A shortened prefix can equal another page's complete name.
+            # Keyed files need the full label from provenance in both cases.
             sidecar = load_sidecar(path)
-            if sidecar is None:
+            if sidecar is None or derive_page_name(sidecar.url) != page_name:
                 continue
-            if derive_page_name(sidecar.url) == page_name:
-                candidates.append(path)
-    if not candidates:
-        return None
-    return max(candidates, key=_cache_order)
+        elif not path.name.startswith(f"{page_name}-"):
+            continue
+        matches.append(path)
+    return max(matches, key=_cache_order) if matches else None
 
 
 def _cache_order(path: Path) -> tuple[str, bool, str]:

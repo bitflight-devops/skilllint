@@ -384,3 +384,18 @@ def test_changed_alias_refresh_cannot_select_older_slug_in_same_minute(tmp_path:
     assert find_latest(derive_page_name(alias), sources_dir=tmp_path) == refreshed.path
     fetch.assert_has_calls([mocker.call(alias), mocker.call(canonical)])
     assert fetch.call_count == 2
+
+
+def test_complete_short_label_does_not_match_truncated_long_label(tmp_path: Path, mocker: MockerFixture) -> None:
+    mocker.patch("skilllint.vendor_cache.SOURCES_DIR", tmp_path)
+    mocker.patch("skilllint.vendor_cache.fetch_url_text", return_value="content")
+    long_name = "a" * 200
+    long_result = fetch_or_cached(f"https://a.example/docs/{long_name}.md")
+    # Derive the actual shortened prefix without coupling the test to its budget.
+    short_name = long_result.path.name.split("-", 1)[0]
+
+    assert find_latest(short_name, sources_dir=tmp_path) is None
+    short_result = fetch_or_cached(f"https://a.example/docs/{short_name}.md")
+
+    assert find_latest(short_name, sources_dir=tmp_path) == short_result.path
+    assert find_latest(long_name, sources_dir=tmp_path) == long_result.path
