@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING
@@ -15,8 +16,10 @@ from skilllint.adapters.claude_code import ClaudeCodeAdapter
 from skilllint.boundary.plugin_manifest_ingest import PluginManifestDefect, ingest_plugin_manifest
 from skilllint.plugin_validator import app, validate_file
 from skilllint.rules.pl_series import check_pl002, check_pl003
+from skilllint.validators.plugins import PluginStructureValidator
 
 if TYPE_CHECKING:
+    from pytest_mock import MockerFixture
     from typer.testing import CliRunner
 
 
@@ -118,3 +121,31 @@ def test_manifest_boundary_accepts_only_objects(payload: JsonValue) -> None:
         assert result == payload
     else:
         assert result == PluginManifestDefect("shape")
+
+
+@pytest.mark.parametrize(
+    ("output", "expected"),
+    [
+        ("referenced file does not exist", ["PL003", "PL005"]),
+        ("missing required field name", ["PL003"]),
+        ("unexpected validation failure", ["PL003", "PL002"]),
+    ],
+)
+def test_local_name_check_preserves_claude_findings(
+    tmp_path: Path, mocker: MockerFixture, output: str, expected: list[str]
+) -> None:
+    """A missing name neither skips upstream validation nor duplicates its PL003."""
+    manifest = tmp_path / ".claude-plugin" / "plugin.json"
+    manifest.parent.mkdir()
+    manifest.write_text("{}", encoding="utf-8")
+    mocker.patch.object(PluginStructureValidator, "_get_claude_path", return_value="/claude")
+    mocker.patch("skilllint.validators.plugins._should_skip_claude_validate", return_value=False)
+    mocker.patch(
+        "skilllint.validators.plugins._run_claude_plugin_validate",
+        return_value=subprocess.CompletedProcess(args=[], returncode=1, stdout=output, stderr=""),
+    )
+
+    result = PluginStructureValidator().validate(tmp_path)
+
+    assert not result.passed
+    assert [issue.code for issue in result.errors] == expected

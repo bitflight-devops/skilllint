@@ -901,14 +901,17 @@ class TestPlatformFlag:
         assert cli_ids["collision-name"] == "collision-name"
         assert "acme-cloud-beta" not in cli_ids
 
-    def test_platform_claude_code_valid_exits_0(self, cli_runner: CliRunner, no_color_env: None) -> None:
+    def test_platform_claude_code_valid_exits_0(
+        self, cli_runner: CliRunner, no_color_env: None, tmp_path: Path
+    ) -> None:
         """--platform claude-code with a valid plugin.json exits 0.
 
         Tests: ClaudeCodeAdapter dispatch with valid file
-        How: Pass valid_plugin.json with --platform claude-code
+        How: Copy the valid fixture to plugin.json and use --platform claude-code
         Why: Valid platform files must produce exit 0
         """
-        fixture = _FIXTURES / "claude_code" / "valid_plugin.json"
+        fixture = tmp_path / "plugin.json"
+        fixture.write_bytes((_FIXTURES / "claude_code" / "valid_plugin.json").read_bytes())
         result = cli_runner.invoke(
             plugin_validator.app, ["check", "--no-color", "--platform", "claude-code", str(fixture)]
         )
@@ -917,14 +920,17 @@ class TestPlatformFlag:
             f"Expected exit 0 for valid plugin.json, got {result.exit_code}. Output: {result.stdout}"
         )
 
-    def test_platform_claude_code_invalid_exits_1(self, cli_runner: CliRunner, no_color_env: None) -> None:
+    def test_platform_claude_code_invalid_exits_1(
+        self, cli_runner: CliRunner, no_color_env: None, tmp_path: Path
+    ) -> None:
         """--platform claude-code with an invalid plugin.json exits 1 with violations.
 
         Tests: ClaudeCodeAdapter dispatch with invalid file
-        How: Pass invalid_plugin.json (missing required fields) with --platform claude-code
+        How: Copy the invalid fixture to plugin.json and use --platform claude-code
         Why: Invalid platform files must produce exit 1
         """
-        fixture = _FIXTURES / "claude_code" / "invalid_plugin.json"
+        fixture = tmp_path / "plugin.json"
+        fixture.write_bytes((_FIXTURES / "claude_code" / "invalid_plugin.json").read_bytes())
         result = cli_runner.invoke(
             plugin_validator.app, ["check", "--no-color", "--platform", "claude-code", str(fixture)]
         )

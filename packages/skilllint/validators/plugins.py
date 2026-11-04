@@ -345,11 +345,11 @@ class PluginStructureValidator:
         )
         if plugin_json_path is not None and (path.name == "plugin.json" or plugin_json_path.exists()):
             errors.extend(_check_plugin_manifest(plugin_json_path))
-            if errors:
+            if any(issue.code == PL002 for issue in errors):
                 return ValidationResult(passed=False, errors=errors, warnings=warnings, info=info)
 
         if plugin_dir is None:
-            return ValidationResult(passed=True, errors=errors, warnings=warnings, info=info)
+            return ValidationResult(passed=not errors, errors=errors, warnings=warnings, info=info)
 
         mp_layout = check_pl006(plugin_dir)
         if mp_layout:
@@ -369,7 +369,7 @@ class PluginStructureValidator:
                     docs_url=rule_reference(PL001),
                 )
             )
-            return ValidationResult(passed=True, errors=errors, warnings=warnings, info=info)
+            return ValidationResult(passed=not errors, errors=errors, warnings=warnings, info=info)
 
         # Check if claude CLI is available and get full path
         claude_path = self._get_claude_path()
@@ -385,7 +385,7 @@ class PluginStructureValidator:
                     suggestion="Install Claude Code to enable plugin validation",
                 )
             )
-            return ValidationResult(passed=True, errors=errors, warnings=warnings, info=info)
+            return ValidationResult(passed=not errors, errors=errors, warnings=warnings, info=info)
 
         # On Windows, ensure CLAUDE_CODE_GIT_BASH_PATH is set if git-bash can be found
         _git_bash_path()
@@ -396,7 +396,13 @@ class PluginStructureValidator:
             # Parse output for errors
             if result.returncode != 0:
                 # Validation failed - parse errors from output
-                self._parse_claude_errors(result.stdout, result.stderr, errors, warnings, info)
+                cli_errors: list[ValidationIssue] = []
+                self._parse_claude_errors(result.stdout, result.stderr, cli_errors, warnings, info)
+                errors.extend(
+                    issue
+                    for issue in cli_errors
+                    if issue.code != "PL003" or not any(existing.code == "PL003" for existing in errors)
+                )
 
         except subprocess.TimeoutExpired as error:
             errors.append(
