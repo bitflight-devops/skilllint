@@ -1051,6 +1051,7 @@ def collect_validation_results(
             path_run = _validate_path_with_fix_record(validate_single_path, path, check=check, fix=fix, verbose=verbose)
             all_fixes.extend(path_run.fixes)
             if fix:
+                collected_sources.add_fixes(all_fixes, len(all_fixes) - len(path_run.fixes))
                 for file_path in path_run.results:
                     if (move := _folder_move(path, file_path, was_dir=was_dir)) is not None:
                         _record_folder_move(
@@ -1061,9 +1062,14 @@ def collect_validation_results(
                             move,
                             folder_identities=folder_identities,
                             located_results=collected_sources.results,
+                            collected_sources=collected_sources,
                         )
                 _clear_changed_source_spans(
-                    all_results, path_run.fixes, collected_sources.identities, located_results=collected_sources.results
+                    all_results,
+                    path_run.fixes,
+                    collected_sources.identities,
+                    located_results=collected_sources.results,
+                    collected_sources=collected_sources,
                 )
                 collected_sources.add(all_results, path_run.results)
             for file_path, validator_results in path_run.results.items():
@@ -1108,12 +1114,125 @@ def _result_source_identities(results: FileResults) -> dict[Path, Path]:
 _LocatedResults = dict[Path, dict[int, frozenset[Path]]]
 
 
+def _route_prefixes(path: Path) -> set[str]:
+    """Return raw and normalized ancestor spellings without resolving the filesystem."""
+    prefixes: set[str] = set()
+    for spelling in (str(path), os.path.normpath(path)):
+        route = os.path.normcase(spelling)
+        while route not in prefixes:
+            prefixes.add(route)
+            parent = os.path.dirname(route)  # noqa: PTH120 -- Keep platform-normalized string keys, including raw .. routes.
+            if parent == route:
+                break
+            route = parent
+    return prefixes
+
+
 @dataclass
 class _CollectedSources:
     """Track source identities and the result groups that contain them."""
 
     identities: dict[Path, Path] = dataclass_field(default_factory=dict)
     results: _LocatedResults = dataclass_field(default_factory=dict)
+    prefixes: dict[str, set[Path]] = dataclass_field(default_factory=dict)
+    routes: dict[Path, set[str]] = dataclass_field(default_factory=dict)
+    owners: dict[Path, set[Path]] = dataclass_field(default_factory=dict)
+    owner_sources: dict[Path, set[Path]] = dataclass_field(default_factory=dict)
+    fix_indices: dict[Path, set[int]] = dataclass_field(default_factory=dict)
+    # Store the original key as well as its rank: equal Windows inputs can have different spelling.
+    owner_order: dict[Path, tuple[int, Path]] = dataclass_field(default_factory=dict)
+    next_order: int = 0
+
+    def _index_route(self, path: Path) -> None:
+        identity = self.identities.get(path, path)
+        absolute = os.path.abspath(identity)  # noqa: PTH100 -- Saved identities must never resolve through a changed symlink.
+        prefixes = _route_prefixes(path) | _route_prefixes(identity) | _route_prefixes(Path(absolute))
+        previous = self.routes.get(path, set())
+        for prefix in previous - prefixes:
+            self.prefixes[prefix].remove(path)
+            if not self.prefixes[prefix]:
+                del self.prefixes[prefix]
+        for prefix in prefixes - previous:
+            self.prefixes.setdefault(prefix, set()).add(path)
+        self.routes[path] = prefixes
+
+    def _discard_route(self, path: Path) -> None:
+        if path in self.owners or path in self.fix_indices:
+            return
+        for prefix in self.routes.pop(path, set()):
+            self.prefixes[prefix].remove(path)
+            if not self.prefixes[prefix]:
+                del self.prefixes[prefix]
+
+    def affected_paths(self, *roots: Path) -> set[Path]:
+        """Select candidate routes; existing rebase helpers decide exact matches.
+
+        Returns:
+            Paths below any supplied spelled or canonical root.
+        """
+        return {
+            path
+            for root in roots
+            for spelling in (str(root), os.path.normpath(root))
+            for path in self.prefixes.get(os.path.normcase(spelling), ())
+        }
+
+    def affected_owners(self, paths: set[Path]) -> list[Path]:
+        """Keep the original dictionary processing order for affected owners.
+
+        Returns:
+            Candidate result owners in their insertion order.
+        """
+        owners = {owner for path in paths for owner in self.owners.get(path, ())}
+        return sorted(owners, key=self.owner_order.__getitem__)
+
+    def refresh_owner(self, owner: Path) -> None:
+        """Refresh reverse dependencies after source relocation or an owner collision."""
+        if (existing := self.owner_order.get(owner)) is not None:
+            owner = existing[1]
+        previous = self.owner_sources.pop(owner, set())
+        for source in previous:
+            self.owners[source].remove(owner)
+            if not self.owners[source]:
+                del self.owners[source]
+        sources = {owner}
+        for group_sources in self.results.get(owner, {}).values():
+            sources.update(group_sources)
+        self.owner_sources[owner] = sources
+        for source in sources:
+            self.owners.setdefault(source, set()).add(owner)
+            self._index_route(source)
+        for source in previous - sources:
+            self._discard_route(source)
+        if owner not in self.owner_order:
+            self.owner_order[owner] = self.next_order, owner
+            self.next_order += 1
+
+    def move_owner(self, old: Path, new: Path) -> None:
+        """Drop the previous owner before refreshing the merged destination."""
+        for source in self.owner_sources.pop(old, set()):
+            self.owners[source].remove(old)
+            if not self.owners[source]:
+                del self.owners[source]
+            self._discard_route(source)
+        self.owner_order.pop(old, None)
+        self.refresh_owner(new)
+
+    def add_fixes(self, fixes: list[AppliedFix], start: int) -> None:
+        """Register new fix records before this validation's folder moves."""
+        for index in range(start, len(fixes)):
+            path = fixes[index].path
+            self.fix_indices.setdefault(path, set()).add(index)
+            self._index_route(path)
+
+    def move_fix(self, index: int, old: Path, new: Path) -> None:
+        """Keep fix positions stable while their path dependencies change."""
+        self.fix_indices[old].remove(index)
+        if not self.fix_indices[old]:
+            del self.fix_indices[old]
+        self.fix_indices.setdefault(new, set()).add(index)
+        self._index_route(new)
+        self._discard_route(old)
 
     def add(self, collected: FileResults, fresh: FileResults) -> None:
         """Index freshly validated groups before they are appended to prior results."""
@@ -1125,6 +1244,7 @@ class _CollectedSources:
                 self.results.setdefault(path, {}).update({
                     offset + index: sources for index, sources in indices.items()
                 })
+            self.refresh_owner(path)
 
 
 def _result_sources(result: ValidationResult) -> frozenset[Path]:
@@ -1151,6 +1271,7 @@ def _clear_changed_source_spans(
     identities: dict[Path, Path],
     *,
     located_results: _LocatedResults | None = None,
+    collected_sources: _CollectedSources | None = None,
 ) -> None:
     """Drop obsolete coordinates in earlier findings for newly modified files.
 
@@ -1188,7 +1309,13 @@ def _clear_changed_source_spans(
 
     if located_results is None:
         located_results = {path: _located_result_sources(values) for path, values in results.items()}
-    for path, indices in located_results.items():
+    owners = (
+        collected_sources.affected_owners(collected_sources.affected_paths(*changed) | retargeted)
+        if collected_sources is not None
+        else located_results
+    )
+    for path in owners:
+        indices = located_results.get(path, {})
         for index, sources in indices.items():
             if not any(
                 source in retargeted or identities.get(source, source).absolute() in changed for source in sources
@@ -1248,6 +1375,7 @@ def _record_folder_move(
     *,
     folder_identities: dict[Path, Path],
     located_results: _LocatedResults | None = None,
+    collected_sources: _CollectedSources | None = None,
 ) -> None:
     """Track a rename under its supplied and canonical-parent spellings."""
     old, new = move
@@ -1256,7 +1384,14 @@ def _record_folder_move(
     moved_folders[old] = new
     folder_identities[old] = canonical_old
     _rebase_collected(
-        results, fixes, identities, old, new, canonical_old=canonical_old, located_results=located_results
+        results,
+        fixes,
+        identities,
+        old,
+        new,
+        canonical_old=canonical_old,
+        located_results=located_results,
+        collected_sources=collected_sources,
     )
 
 
@@ -1283,6 +1418,7 @@ def _rebase_collected(
     *,
     canonical_old: Path,
     located_results: _LocatedResults | None = None,
+    collected_sources: _CollectedSources | None = None,
 ) -> None:
     """Move results and fixes already collected under *old* to *new*, in place.
 
@@ -1290,7 +1426,19 @@ def _rebase_collected(
     """
     if located_results is None:
         located_results = {path: _located_result_sources(values) for path, values in results.items()}
-    for key in list(results):
+    canonical_absolute = os.path.abspath(canonical_old)  # noqa: PTH100 -- Do not resolve after the folder has moved.
+    candidates = (
+        collected_sources.affected_paths(old, canonical_old, Path(canonical_absolute))
+        if collected_sources is not None
+        else set()
+    )
+    keys = collected_sources.affected_owners(candidates) if collected_sources is not None else list(results)
+    fix_indices = (
+        sorted({index for path in candidates for index in collected_sources.fix_indices.get(path, ())})
+        if collected_sources is not None
+        else range(len(fixes))
+    )
+    for key in keys:
         moved, identity = _rebase_path_identity(key, identities.get(key, key), old, new, canonical_old)
         identities[moved] = identity
         validator_results = results[key]
@@ -1315,11 +1463,18 @@ def _rebase_collected(
                     len(destination) + index: sources for index, sources in indices.items()
                 })
             destination.extend(validator_results)
-    for index, fix in enumerate(fixes):
+            if collected_sources is not None:
+                collected_sources.move_owner(key, moved)
+        elif collected_sources is not None:
+            collected_sources.refresh_owner(key)
+    for index in fix_indices:
+        fix = fixes[index]
         moved, identity = _rebase_path_identity(fix.path, identities.get(fix.path, fix.path), old, new, canonical_old)
         identities[moved] = identity
         if str(moved) != str(fix.path):
             fixes[index] = replace(fix, path=moved)
+        if collected_sources is not None:
+            collected_sources.move_fix(index, fix.path, moved)
 
 
 def _rebase_result_locations(
@@ -1367,8 +1522,7 @@ def _rebase_path_identity(path: Path, identity: Path, old: Path, new: Path, cano
     Returns:
         The current path and identity, retaining a working spelled route when possible.
     """
-    # Every rename is checked against every collected and queued path, so plain string tests skip
-    # the paths this move cannot touch before any Path is built: a path under *old* starts with its
+    # Skip unrelated candidates before constructing paths. A path under *old* starts with its
     # spelling or its identity's, unless a ``..`` segment (pathlib drops ``.``) spells it otherwise.
     text, old_text = os.path.normcase(str(path)), os.path.normcase(str(old))
     if not (
