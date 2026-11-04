@@ -20,6 +20,9 @@ from skilllint.plugin_validator import app, validate_file
         ("---\n- description\n---\n", "FM002", "must be a YAML mapping"),
         ("---\nnull\n---\n", "FM002", "must be a YAML mapping"),
         ("---\n42\n---\n", "FM002", "must be a YAML mapping"),
+        ("---\n1: value\n---\n", "FM002", "keys must be strings"),
+        ("---\ntrue: value\n---\n", "FM002", "keys must be strings"),
+        ("---\nnull: value\n---\n", "FM002", "keys must be strings"),
         ("---\ndescription: valid\n", "FM003", "not closed"),
         ("---\ndescription: valid\n---not-a-delimiter\n", "FM003", "not closed"),
     ],
@@ -78,9 +81,10 @@ def test_cursor_optional_frontmatter_remains_valid(tmp_path: Path, content: str)
     assert rule.read_text() == content
 
 
-def test_cursor_colon_recovery_continues_schema_validation(tmp_path: Path) -> None:
-    """Recoverable syntax identifies the field and does not hide CU findings."""
-    content = "---\ndescription: Use this: when needed\nunknown_field: value\n---\nBody.\n"
+@pytest.mark.parametrize(("key", "code"), [("unknown_field", "CU002"), ("1", "FM002")])
+def test_cursor_colon_recovery_continues_validation(tmp_path: Path, key: str, code: str) -> None:
+    """Recovery is reported alongside later key-shape or provider findings."""
+    content = f"---\ndescription: Use this: when needed\n{key}: value\n---\nBody.\n"
     rule = tmp_path / "recovered.mdc"
     rule.write_text(content)
 
@@ -89,7 +93,7 @@ def test_cursor_colon_recovery_continues_schema_validation(tmp_path: Path) -> No
     assert result.exit_code == 1, result.output
     response = CheckResponse.model_validate_json(result.stdout)
     issues = [issue for file in response.files for validator in file.validators for issue in validator.issues]
-    assert {issue.code for issue in issues} == {"FM009", "CU002"}
+    assert {issue.code for issue in issues} == {"FM009", code}
     recovery = next(issue for issue in issues if issue.code == "FM009")
     assert recovery.field == "description"
     assert recovery.severity == "warning"
@@ -140,3 +144,16 @@ def test_skill_colon_recovery_keeps_field_validation(tmp_path: Path, platform: s
     assert ("FM009", "description") in {(issue.code, issue.field) for issue in issues}
     assert ("FM006", "context") in {(issue.code, issue.field) for issue in issues}
     assert skill.read_text() == content
+
+
+def test_cursor_quoted_numeric_key_remains_an_unknown_field(tmp_path: Path) -> None:
+    """A string key is checked by the provider schema without numeric coercion."""
+    rule = tmp_path / "unknown.mdc"
+    rule.write_text('---\n"1": value\n---\n')
+
+    result = CliRunner().invoke(app, ["check", str(rule), "--platform", "cursor", "--json"])
+
+    assert result.exit_code == 1, result.output
+    response = CheckResponse.model_validate_json(result.stdout)
+    issues = [issue for file in response.files for validator in file.validators for issue in validator.issues]
+    assert [(issue.code, issue.field) for issue in issues] == [("CU002", "1")]
