@@ -1051,7 +1051,6 @@ def collect_validation_results(
             path_run = _validate_path_with_fix_record(validate_single_path, path, check=check, fix=fix, verbose=verbose)
             all_fixes.extend(path_run.fixes)
             if fix:
-                collected_identities.update(_result_source_identities(path_run.results))
                 for file_path in path_run.results:
                     if (move := _folder_move(path, file_path, was_dir=was_dir)) is not None:
                         _record_folder_move(
@@ -1063,6 +1062,7 @@ def collect_validation_results(
                             folder_identities=folder_identities,
                         )
                 _clear_changed_source_spans(all_results, path_run.fixes, collected_identities)
+                collected_identities.update(_result_source_identities(path_run.results))
             for file_path, validator_results in path_run.results.items():
                 if file_path in all_results:
                     all_results[file_path].extend(validator_results)
@@ -1110,14 +1110,26 @@ def _clear_changed_source_spans(results: FileResults, fixes: list[AppliedFix], i
     """
     if not fixes:
         return
-    changed = {identities.get(fix.path, fix.path).absolute() for fix in fixes}
+    changed = {_path_identity(fix.path, follow_file_symlinks=True).absolute() for fix in fixes}
+    # A directory-level fix can repair a descendant symlink without naming it
+    # in AppliedFix. Compare saved routes before fresh findings replace them.
+    retargeted: set[Path] = set()
+    if any(fix.path.is_dir() or fix.path.is_symlink() for fix in fixes):
+        retargeted = {
+            path
+            for path, identity in identities.items()
+            if _path_identity(path, follow_file_symlinks=True).absolute() != identity.absolute()
+        }
 
     def clear(issue: ValidationIssue) -> ValidationIssue:
         location = issue.source_location
         if (
             location is None
             or location.start is None
-            or identities.get(location.path, location.path).absolute() not in changed
+            or (
+                identities.get(location.path, location.path).absolute() not in changed
+                and location.path not in retargeted
+            )
         ):
             return issue
         return issue.model_copy(update={"source_location": location.model_copy(update={"start": None, "end": None})})
