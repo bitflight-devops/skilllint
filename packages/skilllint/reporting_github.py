@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from collections.abc import Generator
 from contextlib import contextmanager, redirect_stderr, suppress
@@ -96,7 +97,10 @@ def github_lines(file_results: FileResults, *, verbose: bool = False) -> list[st
         with verbose enabled. Unknown positions are omitted, never inferred
         from semantic fields or the legacy line number.
     """
-    base = Path.cwd()
+    cwd = Path.cwd()
+    # The runner interprets annotation paths from its workspace, not the step's
+    # working directory. Preserve lexical paths rather than resolving symlinks.
+    base = Path(os.environ.get("GITHUB_WORKSPACE") or cwd)
     lines: list[str] = []
     for target, validator_results in file_results.items():
         for _validator, result in validator_results:
@@ -104,6 +108,8 @@ def github_lines(file_results: FileResults, *, verbose: bool = False) -> list[st
             for issue in issues:
                 source = issue.source_location
                 path = source.path if source is not None else target
+                if not path.is_absolute():
+                    path = cwd / path
                 with suppress(ValueError):
                     path = path.relative_to(base)
                 properties = {"file": path.as_posix(), **_positions(source), "title": issue.code}

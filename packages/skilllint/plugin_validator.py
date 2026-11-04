@@ -17,7 +17,6 @@ import logging
 import re
 import sys
 from collections.abc import Callable
-from contextlib import nullcontext
 from dataclasses import dataclass
 from enum import StrEnum
 from io import StringIO, TextIOWrapper
@@ -31,7 +30,8 @@ from git.exc import InvalidGitRepositoryError, NoSuchPathError
 import skilllint.rules  # ruff: ignore[unused-import] — ensures all 15 series modules register into RULE_REGISTRY
 from skilllint.adapters import ALL_RULE_SERIES, PlatformAdapter, load_adapters, matches_file
 from skilllint.cli_docs import docs_app
-from skilllint.cli_help import CompleteHelpCommand, CompleteHelpGroup
+from skilllint.cli_github_boundary import GitHubDiagnosticGroup
+from skilllint.cli_help import CompleteHelpCommand
 from skilllint.cli_json import JsonOption, emit_and_exit, fail_missing_argument
 from skilllint.file_types import (
     NAME_BEARING_FILE_TYPES as _NAME_BEARING_FILE_TYPES,
@@ -90,7 +90,7 @@ from skilllint.record_export import (
     make_recording_console as _make_recording_console,
 )
 from skilllint.reporting import emit_concise
-from skilllint.reporting_github import emit_github, github_diagnostics
+from skilllint.reporting_github import emit_github
 from skilllint.reporting_gitlab import emit_gitlab
 from skilllint.reporting_json_lines import emit_json_lines
 from skilllint.responses import (
@@ -1467,7 +1467,7 @@ def main(
 app = typer.Typer(
     help="Validate Claude Code plugins and skills",
     add_completion=False,
-    cls=CompleteHelpGroup,
+    cls=GitHubDiagnosticGroup,
     rich_markup_mode=None,
     pretty_exceptions_enable=False,
 )
@@ -1693,25 +1693,24 @@ def check_cmd(
     ] = None,
 ) -> None:
     """Validate Claude Code plugins, skills, agents, and commands."""
-    with github_diagnostics() if output_format == "github" else nullcontext():
-        main(
-            ctx=ctx,
-            paths=paths,
-            check=check,
-            fix=fix,
-            verbose=verbose,
-            no_color=no_color,
-            tokens_only=tokens_only,
-            show_progress=show_progress,
-            show_summary=show_summary,
-            filter_glob=filter_glob,
-            filter_type=filter_type,
-            platform=platform,
-            record=record,
-            include_gitignore=include_gitignore,
-            json_output=json_output,
-            output_format=output_format,
-        )
+    main(
+        ctx=ctx,
+        paths=paths,
+        check=check,
+        fix=fix,
+        verbose=verbose,
+        no_color=no_color,
+        tokens_only=tokens_only,
+        show_progress=show_progress,
+        show_summary=show_summary,
+        filter_glob=filter_glob,
+        filter_type=filter_type,
+        platform=platform,
+        record=record,
+        include_gitignore=include_gitignore,
+        json_output=json_output,
+        output_format=output_format,
+    )
 
 
 # =============================================================================

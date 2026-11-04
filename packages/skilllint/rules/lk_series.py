@@ -38,6 +38,8 @@ from __future__ import annotations
 import html
 import os
 import re
+from bisect import bisect_right
+from itertools import accumulate
 from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import unquote
@@ -156,10 +158,15 @@ def _strip_code_blocks(content: str) -> str:
     # characters, not Markdown code/comments.
     # A code span surrounding a whole link is still masked because it extends
     # beyond that destination. Parse candidate spans before masking inline code.
-    destinations = [(start, end) for _offset, _label, _url, _html, start, end in _iter_raw_links(stripped, stripped)]
+    destinations = sorted(
+        (start, end) for _offset, _label, _url, _html, start, end in _iter_raw_links(stripped, stripped)
+    )
+    destination_starts = [start for start, _end in destinations]
+    destination_ends = list(accumulate((end for _start, end in destinations), max))
 
     def mask_non_destination(match: re.Match[str]) -> str:
-        if any(start <= match.start() and match.end() <= end for start, end in destinations):
+        index = bisect_right(destination_starts, match.start()) - 1
+        if index >= 0 and match.end() <= destination_ends[index]:
             return match.group(0)
         return mask(match)
 
@@ -198,12 +205,39 @@ def _should_ignore_link(url: str) -> bool:
     return bool(url.startswith("/"))
 
 
-def _iter_html_links(stripped: str) -> Iterator[tuple[int, str, str, bool, int, int]]:
+def _preserves_original_link_syntax(match: re.Match[str], original: str, pattern: str) -> bool:
+    """Check authored destination syntax without unmasking the link's label.
+
+    Returns:
+        Whether the original delimiters retain exactly the matched destination.
+    """
+    candidate = original[match.start() : match.start(1)] + match.group(1) + original[match.end(1) : match.end()]
+    authored = re.fullmatch(pattern, candidate)
+    if authored is None:
+        return False
+    group = 2 if match.group(2) is not None else 3
+    authored_group = 2 if authored.group(2) is not None else 3
+    return authored.span(authored_group) == (match.start(group) - match.start(), match.end(group) - match.start())
+
+
+def _iter_html_links(stripped: str, original: str) -> Iterator[tuple[int, str, str, bool, int, int]]:
     """Yield links with original destination offsets for each HTML attribute."""
     for tag in re.finditer(HTML_TAG_PATTERN, stripped):
         attributes_start = tag.start(2)
+        if not original[attributes_start].isspace():
+            continue
         for attribute in re.finditer(HTML_LINK_ATTRIBUTE_PATTERN, tag.group(2), flags=re.IGNORECASE):
             value_group = next(index for index in (2, 3, 4) if attribute.group(index) is not None)
+            authored = re.fullmatch(
+                HTML_LINK_ATTRIBUTE_PATTERN,
+                original[attributes_start + attribute.start() : attributes_start + attribute.end()],
+                flags=re.IGNORECASE,
+            )
+            if authored is None or authored.span(value_group) != (
+                attribute.start(value_group) - attribute.start(),
+                attribute.end(value_group) - attribute.start(),
+            ):
+                continue
             value = attribute.group(value_group)
             label = f"<{tag.group(1)} {attribute.group(1).lower()}>"
             yield (
@@ -228,6 +262,7 @@ def _iter_raw_links(stripped: str, original: str) -> Iterator[tuple[int, str, st
             m.end(2) if m.group(2) is not None else m.end(3),
         )
         for m in re.finditer(LINK_PATTERN, stripped)
+        if stripped is original or _preserves_original_link_syntax(m, original, LINK_PATTERN)
     )
     definitions = (
         (
@@ -239,8 +274,9 @@ def _iter_raw_links(stripped: str, original: str) -> Iterator[tuple[int, str, st
             m.end(2) if m.group(2) is not None else m.end(3),
         )
         for m in re.finditer(REFERENCE_DEFINITION_PATTERN, stripped, flags=re.MULTILINE)
+        if stripped is original or _preserves_original_link_syntax(m, original, REFERENCE_DEFINITION_PATTERN)
     )
-    yield from sorted([*inline, *definitions, *_iter_html_links(stripped)])
+    yield from sorted([*inline, *definitions, *_iter_html_links(stripped, original)])
 
 
 def _iter_links(content: str, *, keep_root_absolute: bool = False) -> Iterator[tuple[str, str, str, int, int, int]]:

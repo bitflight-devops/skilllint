@@ -133,7 +133,7 @@ Use `check --output-format json-lines` for a flat stream of findings:
 uv run skilllint check --output-format json-lines plugins/my-plugin
 ```
 
-Stdout contains one compact JSON object per line (LF, or CRLF on Windows), with no ANSI
+Stdout contains one compact UTF-8 JSON object per line (LF, or CRLF on Windows), with no ANSI
 colour, progress, summary, or envelope. `--show-progress` and `--show-summary`
 never add text to this stream. Info findings require `--verbose`, just as in
 human output. Records are ordered lexicographically by their serialized JSON;
@@ -186,7 +186,8 @@ Messages escape percent signs and CR/LF; other controls are shown as visible
 escapes so hostile filenames or multiline messages cannot inject commands.
 Ordinary diagnostics remain on stderr. In this format, their modern `::` and
 legacy `##[` command markers are neutralized so invalid paths and policy
-warnings cannot masquerade as runner commands.
+warnings, parser errors, and uncaught command tracebacks cannot masquerade as
+runner commands.
 
 Actual source paths take precedence over checked targets. Known one-based
 positions are included; legacy field labels and line values are not guessed.
@@ -194,8 +195,13 @@ Half-open source ranges become inclusive GitHub end coordinates. Multiline
 ranges omit columns, as required by GitHub. A range ending at column one excludes
 that final line. Unknown line/column properties are omitted. GitHub itself may
 present a file-only annotation at its default line one; that is not a position
-reported by skilllint. Paths beneath the current directory become relative
-without resolving symlinks, while other spellings remain unchanged.
+reported by skilllint.
+
+Relative source paths are anchored to the current directory before formatting.
+The `GITHUB_WORKSPACE` prefix is removed when set, so steps running in a
+subdirectory still identify the correct repository file. Without that variable,
+the current-directory prefix is removed. Other absolute paths remain absolute,
+and paths are never resolved through symlinks.
 
 Commands are sorted and duplicate findings are retained. There are no headings,
 progress, fix notices, summaries, or ANSI escapes, even with forced terminal
