@@ -102,6 +102,43 @@ def test_unrelated_block_scalar_is_not_a_fix(tmp_path: Path) -> None:
     assert path.read_text(encoding="utf-8") == original
 
 
+@pytest.mark.parametrize("key", ["description", '"description"', "'description'"])
+@pytest.mark.parametrize("indicator", [">-", ">2-", ">-2", "|2-", "|-2"])
+def test_quoted_and_explicitly_indented_descriptions_are_detected_and_fixed(
+    tmp_path: Path, key: str, indicator: str
+) -> None:
+    path = tmp_path / "sample" / "SKILL.md"
+    path.parent.mkdir()
+    path.write_text(
+        f"---\n{key}: {indicator}\n  Use this when testing.\n"
+        "tools: [Read, Grep]\nextension: null\nnotes: |-\n  Keep this.\n---\n\nBody.\n",
+        encoding="utf-8",
+    )
+    validator = FrontmatterValidator()
+
+    assert any(issue.code == "FM004" for issue in validator.validate(path).warnings)
+    fixes = validator.fix(path)
+
+    fixed = path.read_text(encoding="utf-8")
+    assert "Normalized multiline description to single line" in fixes
+    assert not any(issue.code == "FM004" for issue in validator.validate(path).warnings)
+    assert "description: Use this when testing." in fixed.replace('"description"', "description").replace(
+        "'description'", "description"
+    )
+    assert "notes: |-\n  Keep this." in fixed
+    text, *_ = extract_frontmatter(fixed)
+    assert text is not None
+    assert _safe_load_yaml(text) == {
+        "name": "sample",
+        "description": "Use this when testing.",
+        "tools": "Read, Grep",
+        "extension": None,
+        "notes": "Keep this.",
+    }
+    assert validator.fix(path) == []
+    assert path.read_text(encoding="utf-8") == fixed
+
+
 @pytest.mark.parametrize("name", ["", "name: wrong\n", "name: null\n"])
 def test_name_and_tool_fixes_preserve_unrelated_nulls_and_body(tmp_path: Path, name: str) -> None:
     path = tmp_path / "sample" / "SKILL.md"

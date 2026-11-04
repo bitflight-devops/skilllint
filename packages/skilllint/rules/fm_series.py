@@ -253,7 +253,11 @@ def check_fm003(frontmatter: dict, path: Path, file_type: str) -> list[Validatio
 
 # Block-style description (`>-`, `|`, etc.): YAML parsers fold content to a single-line
 # string, so we also inspect raw frontmatter text to preserve FM004 coverage.
-_FM004_DESCRIPTION_BLOCK_SCALAR = re.compile(r"(?m)^description\s*:\s*(?:\|[-+]?|>[-+]?)(?:\s+#.*)?\s*$")
+# YAML's indentation indicator is one digit from 1-9, before or after the
+# chomping indicator (ruamel.yaml.scanner.Scanner.scan_block_scalar_indicators).
+_FM004_DESCRIPTION_BLOCK_SCALAR = re.compile(
+    r"""(?m)^(?:description|'description'|"description")\s*:\s*[|>](?:[1-9][-+]?|[-+][1-9]?)?(?:\s+#.*)?\s*$"""
+)
 
 
 @skilllint_rule(
