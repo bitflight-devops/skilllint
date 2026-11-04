@@ -20,7 +20,7 @@ from ruamel.yaml import YAML, YAMLError
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
 from ruamel.yaml.error import MarkedYAMLError
 from ruamel.yaml.nodes import MappingNode, ScalarNode, SequenceNode
-from ruamel.yaml.scalarstring import DoubleQuotedScalarString
+from ruamel.yaml.scalarstring import DoubleQuotedScalarString, PlainScalarString
 from ruamel.yaml.tokens import CommentToken
 
 from skilllint.frontmatter_core import extract_frontmatter
@@ -215,6 +215,8 @@ def _is_losslessly_scalar_tool_list(values: YamlValue) -> bool:
 def _comment_lines(comment_data: object) -> list[str]:
     if isinstance(comment_data, CommentToken):
         return [line.removeprefix("#").removeprefix(" ") for line in comment_data.value.splitlines()]
+    if isinstance(comment_data, str):
+        return [comment_data.lstrip().removeprefix("#").removeprefix(" ")]
     if isinstance(comment_data, list):
         return [line for item in comment_data for line in _comment_lines(item)]
     if isinstance(comment_data, tuple):
@@ -224,23 +226,49 @@ def _comment_lines(comment_data: object) -> list[str]:
     return []
 
 
-def _dump_tool_list_fixes(frontmatter_text: str, tool_values: dict[str, str]) -> str | None:
-    data = _rt_yaml.load(frontmatter_text)
+def _dump_frontmatter_fixes(frontmatter_text: str, field_values: dict[str, str]) -> str | None:
+    """Apply explicit field edits to authored YAML, retaining unrelated data.
+
+    Returns:
+        Round-trip YAML text, or None when the document is not a mapping.
+    """
+    yaml = YAML(typ="rt")
+    yaml.preserve_quotes = True
+    yaml.width = _rt_yaml.width
+    data = yaml.load(frontmatter_text)
     if not isinstance(data, CommentedMap):
         return None
-    for field_name, value in tool_values.items():
+    for field_name, value in field_values.items():
         original_value = data.get(field_name)
-        comment_lines = _comment_lines(data.ca.items.get(field_name))
+        comment_lines: list[str] = []
         if isinstance(original_value, CommentedSeq) and original_value.anchor.value is not None:
             original_value.yaml_set_anchor(original_value.anchor.value, always_dump=True)
         if isinstance(original_value, CommentedSeq):
+            comment_lines.extend(_comment_lines(data.ca.items.get(field_name)))
             comment_lines.extend(_comment_lines(original_value.ca.items))
+        else:
+            comment_lines.extend(_comment_lines(getattr(original_value, "comment", None)))
         if comment_lines:
             data.yaml_set_comment_before_after_key(field_name, before="\n".join(comment_lines))
-        data[field_name] = value
+        # An explicit scalar type prevents CommentedMap from retaining the
+        # replaced description's block-scalar style on assignment.
+        scalar = DoubleQuotedScalarString(value) if ": " in value else PlainScalarString(value)
+        if field_name == "name" and field_name not in data:
+            data.insert(0, field_name, scalar)
+        else:
+            data[field_name] = scalar
     buffer = StringIO()
-    _rt_yaml.dump(data, buffer)
+    yaml.dump(data, buffer)
     return buffer.getvalue()
+
+
+def _dump_tool_list_fixes(frontmatter_text: str, tool_values: dict[str, str]) -> str | None:
+    """Retain the legacy helper as a delegate to the authored-document editor.
+
+    Returns:
+        Round-trip YAML text with only the requested tool fields replaced.
+    """
+    return _dump_frontmatter_fixes(frontmatter_text, tool_values)
 
 
 def _fix_unquoted_colons(frontmatter_text: str) -> tuple[str, list[str], list[str]]:
