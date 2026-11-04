@@ -1,0 +1,10 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testsuites name="skilllint" tests="1" failures="1" errors="0" skipped="0">
+  <testsuite name="skilllint" tests="1" failures="1" errors="0" skipped="0">
+    <testcase classname="examples/output/fixtures/demo-skill/SKILL.md" name="platform [1]">
+      <failure message="Validation failed" type="skilllint.validation">examples/output/fixtures/demo-skill/SKILL.md:2:1-2:5: error[FM010] name: Must use lowercase letters, numbers, and hyphens only
+Suggestion: Use format: lowercase-with-hyphens
+Help: skilllint rule FM010</failure>
+    </testcase>
+  </testsuite>
+</testsuites>
