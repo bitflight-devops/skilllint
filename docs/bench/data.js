@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793783188254,
+  "lastUpdate": 1793788742827,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -419,6 +419,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 524.054,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "stack@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "45c6f279cd6f3a2ea02085141621b29ec9c5186d",
+          "message": "Merge pull request #359 from bitflight-devops/perf/demand-driven-mcp-discovery\n\nperf(rules): make AS008 MCP discovery demand-driven",
+          "timestamp": "2026-11-04T10:33:47Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/45c6f279cd6f3a2ea02085141621b29ec9c5186d"
+        },
+        "date": 1793788741946,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 1884.261,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 2093.372,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 2509.492,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 478.176,
             "unit": "files/s"
           }
         ]
