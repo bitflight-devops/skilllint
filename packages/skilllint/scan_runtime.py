@@ -10,7 +10,7 @@ from __future__ import annotations
 import fnmatch
 import os
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field as dataclass_field, replace
 from pathlib import Path, PurePath
 from typing import TYPE_CHECKING, Any, NoReturn
 
@@ -1020,7 +1020,7 @@ def collect_validation_results(
     initially_ignored.update(index for index, path in enumerate(expanded_paths) if _should_skip(_ignore_path(path)))
     all_results: FileResults = {}
     all_fixes: list[AppliedFix] = []
-    collected_identities: dict[Path, Path] = {}
+    collected_sources = _CollectedSources()
     # Folders --fix renamed during this run (old -> new). Paths queued under an old folder follow it.
     moved_folders: dict[Path, Path] = {}
     folder_identities: dict[Path, Path] = {}
@@ -1051,18 +1051,21 @@ def collect_validation_results(
             path_run = _validate_path_with_fix_record(validate_single_path, path, check=check, fix=fix, verbose=verbose)
             all_fixes.extend(path_run.fixes)
             if fix:
-                collected_identities.update(_result_source_identities(path_run.results))
                 for file_path in path_run.results:
                     if (move := _folder_move(path, file_path, was_dir=was_dir)) is not None:
                         _record_folder_move(
                             moved_folders,
                             all_results,
                             all_fixes,
-                            collected_identities,
+                            collected_sources.identities,
                             move,
                             folder_identities=folder_identities,
+                            located_results=collected_sources.results,
                         )
-                _clear_changed_source_spans(all_results, path_run.fixes, collected_identities)
+                _clear_changed_source_spans(
+                    all_results, path_run.fixes, collected_sources.identities, located_results=collected_sources.results
+                )
+                collected_sources.add(all_results, path_run.results)
             for file_path, validator_results in path_run.results.items():
                 if file_path in all_results:
                     all_results[file_path].extend(validator_results)
@@ -1101,7 +1104,54 @@ def _result_source_identities(results: FileResults) -> dict[Path, Path]:
     return {path: _path_identity(path, follow_file_symlinks=True) for path in (*results, *sources)}
 
 
-def _clear_changed_source_spans(results: FileResults, fixes: list[AppliedFix], identities: dict[Path, Path]) -> None:
+# Result-list offsets preserve repeated validator names and merged result owners.
+_LocatedResults = dict[Path, dict[int, frozenset[Path]]]
+
+
+@dataclass
+class _CollectedSources:
+    """Track source identities and the result groups that contain them."""
+
+    identities: dict[Path, Path] = dataclass_field(default_factory=dict)
+    results: _LocatedResults = dataclass_field(default_factory=dict)
+
+    def add(self, collected: FileResults, fresh: FileResults) -> None:
+        """Index freshly validated groups before they are appended to prior results."""
+        self.identities.update(_result_source_identities(fresh))
+        for path, groups in fresh.items():
+            indices = _located_result_sources(groups)
+            if indices:
+                offset = len(collected.get(path, []))
+                self.results.setdefault(path, {}).update({
+                    offset + index: sources for index, sources in indices.items()
+                })
+
+
+def _result_sources(result: ValidationResult) -> frozenset[Path]:
+    """Return authored source routes, including file-only and aggregate findings."""
+    return frozenset(
+        issue.source_location.path
+        for issue in (*result.errors, *result.warnings, *result.info)
+        if issue.source_location is not None
+    )
+
+
+def _located_result_sources(validator_results: list[tuple[str, ValidationResult]]) -> dict[int, frozenset[Path]]:
+    """Return source-bearing result groups by their position in the owner's list."""
+    return {
+        index: sources
+        for index, (_name, result) in enumerate(validator_results)
+        if (sources := _result_sources(result))
+    }
+
+
+def _clear_changed_source_spans(
+    results: FileResults,
+    fixes: list[AppliedFix],
+    identities: dict[Path, Path],
+    *,
+    located_results: _LocatedResults | None = None,
+) -> None:
     """Drop obsolete coordinates in earlier findings for newly modified files.
 
     Fresh revalidation results have not been added to ``results`` yet. Clearing
@@ -1110,20 +1160,40 @@ def _clear_changed_source_spans(results: FileResults, fixes: list[AppliedFix], i
     """
     if not fixes:
         return
-    changed = {identities.get(fix.path, fix.path).absolute() for fix in fixes}
+    changed = {_path_identity(fix.path, follow_file_symlinks=True).absolute() for fix in fixes}
+    # A directory-level fix can repair a descendant symlink without naming it
+    # in AppliedFix. Compare saved routes before fresh findings replace them.
+    retargeted: set[Path] = set()
+    if any(fix.path.is_dir() or fix.path.is_symlink() for fix in fixes):
+        retargeted = {
+            path
+            for path, identity in identities.items()
+            if _path_identity(path, follow_file_symlinks=True).absolute() != identity.absolute()
+        }
 
     def clear(issue: ValidationIssue) -> ValidationIssue:
         location = issue.source_location
         if (
             location is None
             or location.start is None
-            or identities.get(location.path, location.path).absolute() not in changed
+            or (
+                identities.get(location.path, location.path).absolute() not in changed
+                and location.path not in retargeted
+            )
         ):
             return issue
         return issue.model_copy(update={"source_location": location.model_copy(update={"start": None, "end": None})})
 
-    for path, validator_results in results.items():
-        results[path] = [(name, _map_changed_issues(result, clear)) for name, result in validator_results]
+    if located_results is None:
+        located_results = {path: _located_result_sources(values) for path, values in results.items()}
+    for path, indices in located_results.items():
+        for index, sources in indices.items():
+            if not any(
+                source in retargeted or identities.get(source, source).absolute() in changed for source in sources
+            ):
+                continue
+            name, result = results[path][index]
+            results[path][index] = (name, _map_changed_issues(result, clear))
 
 
 def _map_changed_issues(
@@ -1175,6 +1245,7 @@ def _record_folder_move(
     move: tuple[Path, Path],
     *,
     folder_identities: dict[Path, Path],
+    located_results: _LocatedResults | None = None,
 ) -> None:
     """Track a rename under its supplied and canonical-parent spellings."""
     old, new = move
@@ -1182,7 +1253,9 @@ def _record_folder_move(
     canonical_old = _path_identity(old)
     moved_folders[old] = new
     folder_identities[old] = canonical_old
-    _rebase_collected(results, fixes, identities, old, new, canonical_old=canonical_old)
+    _rebase_collected(
+        results, fixes, identities, old, new, canonical_old=canonical_old, located_results=located_results
+    )
 
 
 def _rebased(path: Path, old: Path, new: Path) -> Path | None:
@@ -1207,24 +1280,39 @@ def _rebase_collected(
     new: Path,
     *,
     canonical_old: Path,
+    located_results: _LocatedResults | None = None,
 ) -> None:
     """Move results and fixes already collected under *old* to *new*, in place.
 
     Paths listed before the skill that renamed their folder were recorded under the old spelling.
     """
+    if located_results is None:
+        located_results = {path: _located_result_sources(values) for path, values in results.items()}
     for key in list(results):
         moved, identity = _rebase_path_identity(key, identities.get(key, key), old, new, canonical_old)
         identities[moved] = identity
-        validator_results = [
-            (name, _rebase_result_locations(result, identities, old, new, canonical_old=canonical_old))
-            for name, result in results[key]
-        ]
+        validator_results = results[key]
+        indices = located_results.get(key, {})
+        for index, sources in indices.items():
+            if not any(
+                str(_rebase_source_path(source, identities, old, new, canonical_old)[0]) != str(source)
+                for source in sources
+            ):
+                continue
+            name, result = validator_results[index]
+            relocated = _rebase_result_locations(result, identities, old, new, canonical_old=canonical_old)
+            validator_results[index] = (name, relocated)
+            indices[index] = _result_sources(relocated)
         if str(moved) != str(key):
             # Pop first: differently cased Windows paths compare as the same key.
             results.pop(key)
-            results.setdefault(moved, []).extend(validator_results)
-        else:
-            results[key] = validator_results
+            located_results.pop(key, None)
+            destination = results.setdefault(moved, [])
+            if indices:
+                located_results.setdefault(moved, {}).update({
+                    len(destination) + index: sources for index, sources in indices.items()
+                })
+            destination.extend(validator_results)
     for index, fix in enumerate(fixes):
         moved, identity = _rebase_path_identity(fix.path, identities.get(fix.path, fix.path), old, new, canonical_old)
         identities[moved] = identity
@@ -1248,11 +1336,7 @@ def _rebase_result_locations(
         # A plugin scan and a later explicit --fix input can use different
         # absolute/relative spellings. Compare saved identities on the same
         # absolute basis, retaining the spelled source route when it matches.
-        moved, identity = _rebase_path_identity(
-            location.path, identities.get(location.path, location.path).absolute(), old, new, canonical_old.absolute()
-        )
-        if not location.path.is_absolute() and moved.is_absolute():
-            moved = Path(os.path.relpath(moved))
+        moved, identity = _rebase_source_path(location.path, identities, old, new, canonical_old)
         if str(moved) == str(location.path):
             return issue
         # Do not change the existing result-key identity convention merely
@@ -1261,6 +1345,18 @@ def _rebase_result_locations(
         return issue.model_copy(update={"source_location": location.model_copy(update={"path": moved})})
 
     return _map_changed_issues(result, relocate)
+
+
+def _rebase_source_path(
+    path: Path, identities: dict[Path, Path], old: Path, new: Path, canonical_old: Path
+) -> tuple[Path, Path]:
+    """Return a source move using the same absolute identity basis for filtering and relocation."""
+    moved, identity = _rebase_path_identity(
+        path, identities.get(path, path).absolute(), old, new, canonical_old.absolute()
+    )
+    if not path.is_absolute() and moved.is_absolute():
+        moved = Path(os.path.relpath(moved))
+    return moved, identity
 
 
 def _rebase_path_identity(path: Path, identity: Path, old: Path, new: Path, canonical_old: Path) -> tuple[Path, Path]:

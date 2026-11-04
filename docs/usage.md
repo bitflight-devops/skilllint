@@ -133,7 +133,7 @@ Use `check --output-format json-lines` for a flat stream of findings:
 uv run skilllint check --output-format json-lines plugins/my-plugin
 ```
 
-Stdout contains one compact JSON object per line (LF, or CRLF on Windows), with no ANSI
+Stdout contains one compact UTF-8 JSON object per line (LF, or CRLF on Windows), with no ANSI
 colour, progress, summary, or envelope. `--show-progress` and `--show-summary`
 never add text to this stream. Info findings require `--verbose`, just as in
 human output. Records are ordered lexicographically by their serialized JSON;
