@@ -143,4 +143,9 @@ files retain the captured bytes. Only the known `vcs_versioning` shallow-checkou
 warning is ignored during capture; other stderr diagnostics still fail the check.
 The capture process pins `PYTHONIOENCODING=utf-8` for startup diagnostics as well
 as the report, without changing the caller's environment.
-Use the repository's locked dependencies to reproduce the preview.
+Use the repository's locked dependencies to reproduce the preview. The full
+capture pins `COLUMNS=100`, `LINES=24`, and `TERM=xterm-256color`; `--color always`
+ensures that its raw file contains the same terminal styles when redirected.
+The concise findings remain monochrome. JSONL, GitHub, GitLab, and JUnit SVGs add
+viewer-only colour; do not use their SVG text as a machine report. Consume the
+linked raw files, or run the corresponding CLI command directly.
