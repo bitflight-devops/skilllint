@@ -7,6 +7,11 @@
 
 Static analysis linter for AI agent plugins, skills, and agents — for Claude Code, Cursor, Codex, and any [agentskills.io](https://agentskills.io)-compatible platform.
 
+![Actual full-colour skilllint diagnostic](examples/output/full.svg)
+
+Source excerpts, highlights, and help with `skilllint check --output-format full`.
+[See the captured command and raw output](examples/output/README.md#full-human-diagnostics).
+
 ---
 
 ## What it does
@@ -86,8 +91,6 @@ from the same deliberately invalid skill; the command exits `1`.
 For source-aware human diagnostics, use `skilllint check --output-format full`.
 Colour defaults to terminal detection; choose `--color always` or `--color never`
 independently of the format. Existing defaults and `--no-color` are preserved.
-
-![Actual full-colour skilllint diagnostic](examples/output/full.svg)
 
 See the [complete six-format output gallery](examples/output/README.md) for
 reproducible captures, raw reports, commands, and consumer-specific examples.
