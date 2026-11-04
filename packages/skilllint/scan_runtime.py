@@ -1139,7 +1139,8 @@ class _CollectedSources:
     owners: dict[Path, set[Path]] = dataclass_field(default_factory=dict)
     owner_sources: dict[Path, set[Path]] = dataclass_field(default_factory=dict)
     fix_indices: dict[Path, set[int]] = dataclass_field(default_factory=dict)
-    owner_order: dict[Path, int] = dataclass_field(default_factory=dict)
+    # Store the original key as well as its rank: equal Windows inputs can have different spelling.
+    owner_order: dict[Path, tuple[int, Path]] = dataclass_field(default_factory=dict)
     next_order: int = 0
 
     def _index_route(self, path: Path) -> None:
@@ -1187,6 +1188,8 @@ class _CollectedSources:
 
     def refresh_owner(self, owner: Path) -> None:
         """Refresh reverse dependencies after source relocation or an owner collision."""
+        if (existing := self.owner_order.get(owner)) is not None:
+            owner = existing[1]
         previous = self.owner_sources.pop(owner, set())
         for source in previous:
             self.owners[source].remove(owner)
@@ -1202,7 +1205,7 @@ class _CollectedSources:
         for source in previous - sources:
             self._discard_route(source)
         if owner not in self.owner_order:
-            self.owner_order[owner] = self.next_order
+            self.owner_order[owner] = self.next_order, owner
             self.next_order += 1
 
     def move_owner(self, old: Path, new: Path) -> None:

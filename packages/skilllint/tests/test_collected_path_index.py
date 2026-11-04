@@ -139,6 +139,36 @@ def test_indexed_case_only_windows_move_preserves_diagnostics(monkeypatch: pytes
     assert [str(fix.path) for fix in fixes] == [str(fix.path) for fix in expected_fixes]
 
 
+@no_type_check  # PureWindowsPath deliberately models repeated Windows inputs on every host.
+def test_duplicate_windows_input_preserves_first_owner_spelling(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(scan_runtime, "os", SimpleNamespace(sep="\\", path=ntpath))
+    monkeypatch.setattr(scan_runtime, "_result_source_identities", lambda fresh: {path: path for path in fresh})
+    old = PureWindowsPath("skills", "bad--name")
+    new = PureWindowsPath("skills", "bad-name")
+    original = old / "Docs" / "CLAUDE.md"
+    duplicate = old / "docs" / "claude.md"
+    results = {original: [("first", _result())]}
+    collected = _CollectedSources()
+    collected.add({}, results)
+    fresh = {duplicate: [("second", _result())]}
+    collected.add(results, fresh)
+    results[duplicate].extend(fresh[duplicate])
+    expected, expected_identities = deepcopy((results, collected.identities))
+    _rebase_collected(expected, [], expected_identities, old, new, canonical_old=old)
+    _rebase_collected(
+        results,
+        [],
+        collected.identities,
+        old,
+        new,
+        canonical_old=old,
+        located_results=collected.results,
+        collected_sources=collected,
+    )
+    assert [str(path) for path in results] == [str(path) for path in expected]
+    assert results == expected
+
+
 def test_indexed_rewrite_clears_all_shared_source_spans(tmp_path: Path) -> None:
     source = tmp_path / "rewritten.md"
     other = tmp_path / "other.md"
