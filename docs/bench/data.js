@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793788742827,
+  "lastUpdate": 1793875238189,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -461,6 +461,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 478.176,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "jamie@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "db6dba5bd331de4a5f71e14315744d91fafea3c5",
+          "message": "perf(validation): collect platform core findings once (#369)",
+          "timestamp": "2026-11-05T10:30:23Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/db6dba5bd331de4a5f71e14315744d91fafea3c5"
+        },
+        "date": 1793875237397,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 2513.888,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 2811.243,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 3316.201,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 356.07,
             "unit": "files/s"
           }
         ]
