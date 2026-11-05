@@ -38,7 +38,7 @@ uv add skilllint          # add to a project
 uv tool install skilllint # install as a global tool
 ```
 
-**Requires Python 3.11–3.14.**
+**Requires Python 3.11–3.15.**
 
 ---
 
@@ -196,7 +196,7 @@ jobs:
 
 ## Pre-commit hook
 
-Install pre-commit, using Python 3.11–3.14 for the skilllint hook:
+Install pre-commit, using Python 3.11–3.15 for the skilllint hook:
 
 ```console
 python -m pip install pre-commit

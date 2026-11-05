@@ -122,7 +122,8 @@ def test_every_public_response_model_is_snapshotted() -> None:
 
 # --- round trips ------------------------------------------------------------------------------
 
-_CODES: Final = st.from_regex(r"[A-Z]{2}\d{3}", fullmatch=True)
+# Rule IDs use ASCII digits; Python and Pydantic can have different Unicode digit tables.
+_CODES: Final = st.from_regex(r"[A-Z]{2}[0-9]{3}", fullmatch=True)
 _ISSUES: Final = st.builds(
     ValidationIssue,
     field=st.text(),

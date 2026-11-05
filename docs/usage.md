@@ -9,7 +9,7 @@ python -m pip install skilllint
 skilllint --version
 ```
 
-Supported Python versions are 3.11–3.14. For an isolated executable, use `uv tool install skilllint`. For a project dependency, use `uv add skilllint` and prefix the commands below with `uv run`, for example `uv run skilllint check skills/`.
+Supported Python versions are 3.11–3.15. For an isolated executable, use `uv tool install skilllint`. For a project dependency, use `uv add skilllint` and prefix the commands below with `uv run`, for example `uv run skilllint check skills/`.
 
 ## Check, fix, and tokens
 
@@ -224,7 +224,7 @@ See the [JUnit reference](output-formats.md#junit-style-xml) and [example report
 
 ## Pre-commit
 
-Install pre-commit and use Python 3.11–3.14 for the skilllint hook:
+Install pre-commit and use Python 3.11–3.15 for the skilllint hook:
 
 ```console
 python -m pip install pre-commit
