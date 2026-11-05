@@ -633,7 +633,8 @@ def docs_json(
 
 _CACHED_SETUPS: Final = {
     "fresh": docs_cached(age=timedelta(0), content="# Cached\n"),
-    "stale": docs_cached(age=STALE_AGE, content="# Cached\n"),
+    "fresh-offline": docs_cached(age=timedelta(0), content="# Cached\n", offline=True),
+    "stale": docs_cached(age=STALE_AGE, content="# Cached\n", offline=True),
     "superseded": docs_cached(age=STALE_AGE, content="# Superseded\n"),
     "unchanged": docs_cached(age=STALE_AGE, content=SERVED_BODIES["/cached.md"].decode()),
 }
@@ -653,7 +654,7 @@ class FetchOutcome:
 
 _FETCH_OUTCOMES: Final = (
     FetchOutcome("new", SERVED_TOKEN, None, "new"),
-    FetchOutcome("fresh", CLOSED_TOKEN, "fresh", "fresh"),
+    FetchOutcome("fresh", CLOSED_TOKEN, "fresh-offline", "fresh"),
     FetchOutcome("refreshed", SERVED_TOKEN, "superseded", "refreshed"),
     FetchOutcome("unchanged", SERVED_TOKEN, "unchanged", "unchanged"),
     FetchOutcome("stale", CLOSED_TOKEN, "stale", "stale"),
@@ -684,8 +685,8 @@ def test_docs_fetch_reports_every_cache_status_as_a_field_not_a_stderr_line(
 def test_docs_fetch_path_equals_what_the_default_path_prints(tmp_path: Path) -> None:
     """For a fresh cache the file is fixed, so the default stdout line and the JSON ``path`` must agree."""
     url = f"{CLOSED_TOKEN}/cached.md"
-    _, run = docs_json(tmp_path, "fetch", url, setup=_CACHED_SETUPS["fresh"])
-    with_default = case(("docs", "fetch", url), _CACHED_SETUPS["fresh"], docs=True)
+    _, run = docs_json(tmp_path, "fetch", url, setup=_CACHED_SETUPS["fresh-offline"])
+    with_default = case(("docs", "fetch", url), _CACHED_SETUPS["fresh-offline"], docs=True)
     _, default = run_probe(tmp_path, with_default, root="default")
 
     response = parse(FetchResponse, run)

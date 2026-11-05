@@ -60,6 +60,8 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
 
+    from skilllint.boundary.vendor_sidecar_ingest import SidecarMetadata
+
 # ---------------------------------------------------------------------------
 # Enumerations
 # ---------------------------------------------------------------------------
@@ -200,6 +202,14 @@ _SAFE_CHAR_RE = re.compile(r"[^a-zA-Z0-9-]+")
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.+)$")
 _SLUG_STRIP_RE = re.compile(r"[^\w\s-]")
 _SLUG_COLLAPSE_RE = re.compile(r"[-\s]+")
+_CACHE_FILENAME_RE = re.compile(
+    r"(?P<page_name>.*)-(?P<timestamp>\d{4}-\d{2}-\d{2}-\d{4})(?:-(?P<source_key>[0-9a-f]{64}))?\.md"
+)
+
+# Keep both files within a portable 255-byte filename component budget.
+# Slugs are ASCII; reserve the minute timestamp, full SHA-256 hex, and the
+# longer metadata suffix. Only the presentation prefix may be shortened.
+_CACHE_SLUG_BUDGET = 255 - len("-YYYY-MM-DD-HHMM-") - 64 - len(".meta.json")
 
 
 def _heading_to_slug(heading: str) -> str:
@@ -299,9 +309,9 @@ def find_latest(page_name: str, *, sources_dir: Path | None = None) -> Path | No
 
     Scans *sources_dir* (defaults to :data:`~skilllint.vendor_io.SOURCES_DIR`)
     for files matching ``{page_name}-*.md`` (excluding ``*.meta.json`` files).
-    Returns the path whose filename sorts lexicographically last (timestamps
-    in ``YYYY-MM-DD-HHMM`` format sort correctly by lexicographic order), or
-    ``None`` if no matches exist.
+    Returns the path with the latest filename timestamp, preferring keyed files
+    over legacy files captured in the same minute, or ``None`` if no matches
+    exist. Shortened filename prefixes are resolved through source metadata.
 
     Args:
         page_name: Filesystem-safe page name, as returned by
@@ -313,10 +323,75 @@ def find_latest(page_name: str, *, sources_dir: Path | None = None) -> Path | No
         Path to the latest cached file, or None.
     """
     directory = sources_dir if sources_dir is not None else SOURCES_DIR
-    candidates = [p for p in directory.glob(f"{page_name}-*.md") if not p.name.endswith(".meta.json")]
-    if not candidates:
-        return None
-    return max(candidates, key=lambda p: p.name)
+    prefixes = {page_name, page_name[:_CACHE_SLUG_BUDGET]}
+    candidates = {path for prefix in prefixes for path in directory.glob(f"{prefix}-*.md")}
+    matches: list[Path] = []
+    for path in candidates:
+        match = _CACHE_FILENAME_RE.fullmatch(path.name)
+        if match is not None and match["source_key"] is not None:
+            # A shortened prefix can equal another page's complete name.
+            # Keyed files need the full label from provenance in both cases.
+            sidecar = load_sidecar(path)
+            if sidecar is None or derive_page_name(sidecar.url) != page_name:
+                continue
+        elif (match is not None and match["page_name"] != page_name) or not path.name.startswith(f"{page_name}-"):
+            continue
+        matches.append(path)
+    return max(matches, key=_cache_order) if matches else None
+
+
+def _cache_order(path: Path) -> tuple[str, bool, str]:
+    """Order legacy and keyed entries by capture time, preferring migration ties.
+
+    Returns:
+        Timestamp, keyed-entry preference, and a deterministic filename tie-break.
+    """
+    match = _CACHE_FILENAME_RE.fullmatch(path.name)
+    if match is None:
+        return path.stem, False, path.name
+    return match["timestamp"], match["source_key"] is not None, path.name
+
+
+def _source_identity(url: str) -> str:
+    """Use the HTTP client's URL normalization, excluding unsent fragments.
+
+    Scheme/host case and default ports follow HTTPX, as do request-path
+    normalization and escaping. Queries, credentials, non-default ports,
+    and HTTP versus HTTPS remain part of the identity.
+
+    Returns:
+        The normalized request URL, without a fragment.
+    """
+    return str(httpx.URL(url).copy_with(fragment=None))
+
+
+def _find_source_cache(url: str, source_key: str) -> tuple[Path, SidecarMetadata] | None:
+    """Find an identity-checked entry, including legacy path-only filenames.
+
+    Returns:
+        The newest matching file and its validated provenance, if present.
+    """
+    identity = _source_identity(url)
+    # New filenames carry the full source hash. Legacy path-only filenames
+    # need a compatibility lookup: a readable name never proves identity.
+    # Sort by timestamp, not slug; normalized aliases can have different slugs.
+    # Prefer a migrated entry when its timestamp matches the legacy original.
+    candidates: list[Path] = []
+    for path in SOURCES_DIR.glob("*.md"):
+        match = _CACHE_FILENAME_RE.fullmatch(path.name)
+        if match is not None and match["source_key"] in {None, source_key}:
+            candidates.append(path)
+    for path in sorted(candidates, key=_cache_order, reverse=True):
+        sidecar = load_sidecar(path)
+        if sidecar is None:
+            continue
+        try:
+            matches = _source_identity(sidecar.url) == identity
+        except httpx.InvalidURL:
+            continue
+        if matches:
+            return path, sidecar
+    return None
 
 
 def fetch_or_cached(url: str, *, ttl_hours: float = 4.0, force: bool = False) -> CacheResult:
@@ -324,8 +399,9 @@ def fetch_or_cached(url: str, *, ttl_hours: float = 4.0, force: bool = False) ->
 
     Flow:
 
-    1. Derive a filesystem-safe *page_name* from *url*.
-    2. Look up the most recent cached file for *page_name*.
+    1. Derive a readable *page_name* and a normalized source URL hash.
+    2. Look up the most recent cache entry with matching sidecar provenance,
+       including compatible legacy path-only filenames.
     3. If a cached file exists:
 
        a. Load its sidecar and check age against *ttl_hours*.
@@ -348,7 +424,7 @@ def fetch_or_cached(url: str, *, ttl_hours: float = 4.0, force: bool = False) ->
             :attr:`CacheStatus.NEW`.
           - Network failure → raise :exc:`NoCacheError`.
 
-    File naming convention: ``{page_name}-{YYYY-MM-DD-HHMM}.md`` inside
+    File naming convention: ``{page_name}-{YYYY-MM-DD-HHMM}-{source_hash}.md`` inside
     :data:`~skilllint.vendor_io.SOURCES_DIR`.
 
     Args:
@@ -364,21 +440,22 @@ def fetch_or_cached(url: str, *, ttl_hours: float = 4.0, force: bool = False) ->
     Raises:
         NoCacheError: If no cached copy exists and the network is unavailable.
     """
+    identity = _source_identity(url)
     page_name = derive_page_name(url)
-    cached_path = find_latest(page_name)
+    source_key = sha256_hex(identity)
+    cached = _find_source_cache(url, source_key)
 
     SOURCES_DIR.mkdir(parents=True, exist_ok=True)
 
     def _timestamp() -> str:
         return datetime.now(UTC).strftime("%Y-%m-%d-%H%M")
 
-    def _new_path() -> Path:
-        return SOURCES_DIR / f"{page_name}-{_timestamp()}.md"
+    def _new_path(capture_name: str) -> Path:
+        return SOURCES_DIR / f"{capture_name[:_CACHE_SLUG_BUDGET]}-{_timestamp()}-{source_key}.md"
 
-    if cached_path is not None:
-        sidecar = load_sidecar(cached_path)
-        fetched_at = sidecar.fetched_at if sidecar else None
-        age = _age_hours(fetched_at)
+    if cached is not None:
+        cached_path, sidecar = cached
+        age = _age_hours(sidecar.fetched_at)
         if not force and age < ttl_hours:
             return CacheResult(path=cached_path, status=CacheStatus.FRESH, page_name=page_name, url=url)
 
@@ -392,22 +469,22 @@ def fetch_or_cached(url: str, *, ttl_hours: float = 4.0, force: bool = False) ->
             raise
 
         if cached_path.read_bytes() == new_content.encode():
-            if (
-                sidecar is not None
-                and sidecar.url == url
-                and verify_integrity(cached_path).status is IntegrityStatus.INTACT
-            ):
+            # Keep the capture URL spelling so shortened display names remain
+            # discoverable after an equivalent alias refreshes this same file.
+            if verify_integrity(cached_path).status is IntegrityStatus.INTACT:
                 write_sidecar(
-                    cached_path, url=url, content=new_content, fetched_at=datetime.fromisoformat(utc_now_iso())
+                    cached_path, url=sidecar.url, content=new_content, fetched_at=datetime.fromisoformat(utc_now_iso())
                 )
             else:
-                write_sidecar(cached_path, url=url, content=new_content)
+                write_sidecar(cached_path, url=sidecar.url, content=new_content)
             return CacheResult(path=cached_path, status=CacheStatus.UNCHANGED, page_name=page_name, url=url)
 
-        # Content changed — write new file.
-        new_path = _new_path()
+        # Keep the source's capture spelling across aliases. Otherwise an alias
+        # can create a different slug in the same minute and sort behind the
+        # older content, even though both filenames have the same source key.
+        new_path = _new_path(derive_page_name(sidecar.url))
         new_path.write_bytes(new_content.encode())
-        write_sidecar(new_path, url=url, content=new_content)
+        write_sidecar(new_path, url=sidecar.url, content=new_content)
         return CacheResult(path=new_path, status=CacheStatus.REFRESHED, page_name=page_name, url=url)
 
     # Catch broadly; re-raise anything that isn't a network error.
@@ -415,13 +492,10 @@ def fetch_or_cached(url: str, *, ttl_hours: float = 4.0, force: bool = False) ->
         new_content = fetch_url_text(url)
     except Exception as exc:
         if _is_network_error(exc) or isinstance(exc, EmptyResponseError):
-            if cached_path is not None:
-                # force=True but network down; serve stale.
-                return CacheResult(path=cached_path, status=CacheStatus.STALE, page_name=page_name, url=url)
             raise NoCacheError(url, str(exc)) from exc
         raise
 
-    new_path = _new_path()
+    new_path = _new_path(page_name)
     new_path.write_bytes(new_content.encode())
     write_sidecar(new_path, url=url, content=new_content)
     return CacheResult(path=new_path, status=CacheStatus.NEW, page_name=page_name, url=url)

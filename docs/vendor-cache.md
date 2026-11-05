@@ -1,6 +1,6 @@
 # Vendor documentation cache
 
-Use `skilllint docs` to save vendor documentation, read individual sections, and check whether a cached copy has changed. A cached page remains available when a refresh cannot reach the source.
+Use `skilllint docs` to save vendor documentation, read individual sections, and check whether a cached copy has changed. A cached page with valid source metadata remains available when a refresh cannot reach the source.
 
 The examples use an installed `skilllint` command. In a skilllint source checkout, use `uv run skilllint` instead. See [installation](usage.md#install) if the command is unavailable.
 
@@ -46,7 +46,7 @@ skilllint docs fetch "$URL" --ttl 0
 - `REFRESHED`: the fetched text differs; the new content was saved.
 - `STALE`: the refresh failed; the existing cached file was returned.
 
-An empty successful HTTP response is treated as a failed fetch: an existing copy is returned as `STALE`, or the command fails if none exists. `FRESH` and `STALE` describe cache age and retrieval, not source selection or integrity. Use `verify` when you need to check the stored file.
+An empty successful HTTP response is treated as a failed fetch: an existing copy is returned as `STALE`, or the command fails if none exists. `FRESH` and `STALE` require matching source URL metadata, but do not verify file integrity. Use `verify` when you need to check the stored file.
 
 ## Find a previously cached page
 
@@ -57,7 +57,7 @@ LATEST_PATH="$(skilllint docs latest guide)"
 skilllint docs sections "$LATEST_PATH"
 ```
 
-Page names come from the URL path: common leading `en`, `docs`, and `api` segments and a final `.md` are removed, and remaining path segments are joined with `--`. For example, `/en/docs/claude-code/settings.md` becomes `claude-code--settings`. `latest` exits `1` when no matching cached file exists.
+Page names come from the URL path: common leading `en`, `docs`, and `api` segments and a final `.md` are removed, and remaining path segments are joined with `--`. For example, `/en/docs/claude-code/settings.md` becomes `claude-code--settings`. `latest` exits `1` when no matching cached file exists. Page names are display labels, not source identifiers: different URLs can have the same page name. `latest` selects the newest filename across those sources. Use `fetch` with the full URL for source-specific lookup.
 
 ## Fetch rule authority pages
 
@@ -71,7 +71,9 @@ The command prints one cached path per successful URL. It continues after a fail
 
 ## Cache location
 
-Pages are saved under `.claude/vendor/sources/` as `{page-name}-{YYYY-MM-DD-HHMM}.md`, alongside their metadata files.
+New pages are saved under `.claude/vendor/sources/` as `{page-name}-{YYYY-MM-DD-HHMM}-{source-hash}.md`, alongside their metadata files. Long filename prefixes are shortened to keep the Markdown and metadata names within a 255-byte component budget; the full display name is retained in results and remains searchable with `latest`. The source hash is the full SHA-256 of the request URL normalized by HTTPX, with its fragment removed. Scheme and host case, default ports, and HTTPX request-path normalization are equivalent; HTTP versus HTTPS, non-default ports, credentials, and query strings remain distinct.
+
+Existing `{page-name}-{YYYY-MM-DD-HHMM}.md` files remain usable when their validated sidecars identify the same normalized source URL. Changed content is saved with the new filename format; unchanged content can keep its legacy path. No cache entry is reused solely because its filename matches. Missing, malformed, incomplete, or mismatched sidecars are treated as cache misses and require a successful fetch to write a source-identified pair. Legacy files are not relabeled. Without a successful fetch or an identifiable cached copy, `fetch` reports `No Cache Available`.
 
 - A skilllint source checkout uses its own vendor directory. Linked worktrees share the primary checkout's vendor directory.
 - An installed wheel or `uvx` invocation uses the enclosing Git repository. Linked worktrees again share the primary checkout's directory.

@@ -252,13 +252,12 @@ def renamed_folder_workspace(sandbox: Sandbox, _endpoints: Endpoints) -> None:
     _write(sandbox.case, "violations--1/SKILL.md", _FIXABLE_SKILL.replace("fixme", "violations--1"))
 
 
-def docs_cached(*, age: timedelta, content: str) -> Callable[[Sandbox, Endpoints], None]:
+def docs_cached(*, age: timedelta, content: str, offline: bool = False) -> Callable[[Sandbox, Endpoints], None]:
     """Return a setup seeding page ``cached`` fetched *age* ago with *content*."""
 
     def setup(sandbox: Sandbox, endpoints: Endpoints) -> None:
-        _seed(
-            sandbox, "cached", content=content, fetched_at=datetime.now(UTC) - age, url=f"{endpoints.served}/cached.md"
-        )
+        source = endpoints.closed if offline else endpoints.served
+        _seed(sandbox, "cached", content=content, fetched_at=datetime.now(UTC) - age, url=f"{source}/cached.md")
 
     return setup
 
@@ -478,7 +477,7 @@ _DOCS_CASES: Final = (
     _docs(
         "docs-fetch-fresh",
         ("fetch", f"{CLOSED_TOKEN}/cached.md"),
-        setup=docs_cached(age=timedelta(0), content="# Cached\n"),
+        setup=docs_cached(age=timedelta(0), content="# Cached\n", offline=True),
     ),
     _docs(
         "docs-fetch-refreshed",
@@ -500,7 +499,7 @@ _DOCS_CASES: Final = (
     _docs(
         "docs-fetch-stale",
         ("fetch", f"{CLOSED_TOKEN}/cached.md"),
-        setup=docs_cached(age=STALE_AGE, content="# Cached\n"),
+        setup=docs_cached(age=STALE_AGE, content="# Cached\n", offline=True),
     ),
     _docs("docs-fetch-no-cache", ("fetch", f"{CLOSED_TOKEN}/new.md"), setup=empty_workspace),
     _docs("docs-fetch-http-404", ("fetch", f"{SERVED_TOKEN}/missing.md"), setup=empty_workspace),

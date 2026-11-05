@@ -342,5 +342,5 @@ def load_sidecar(md_path: Path) -> SidecarMetadata | None:
     sidecar_path = md_path.with_suffix(".meta.json")
     try:
         return parse_sidecar_metadata(sidecar_path.read_text(encoding="utf-8"))
-    except (FileNotFoundError, OSError):
+    except (FileNotFoundError, OSError, UnicodeDecodeError):
         return None
