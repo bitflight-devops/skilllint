@@ -5,7 +5,7 @@ Architectural note — adapter-backed series:
     originally owned by a platform adapter rather than the core validator.
     Per architect spec §3.3, the resolution is: this series module OWNS the
     validator logic and the @skilllint_rule registration; the cursor adapter
-    imports ``validate_mdc_frontmatter`` and converts its output to
+    imports ``validate_mdc_source`` and converts its output to
     ``list[dict]`` at the adapter boundary.
 
     CU001/CU002 were previously inlined in that adapter as raw dict
@@ -24,14 +24,20 @@ Rule IDs and default severities:
 
 from __future__ import annotations
 
+from pydantic import TypeAdapter, ValidationError
+
+from skilllint.frontmatter_core import extract_frontmatter
+from skilllint.frontmatter_yaml import safe_load_yaml_with_colon_fix
 from skilllint.models import ValidationIssue
 from skilllint.rule_registry import rule_reference, skilllint_rule
+from skilllint.rules.fm_series import _fm009_recovery_warnings
 
 # ---------------------------------------------------------------------------
 # Spec sources
 # ---------------------------------------------------------------------------
 
 _CURSOR_DOCS_URL = "https://docs.cursor.com/context/rules-for-ai"
+_MDC_FRONTMATTER = TypeAdapter(dict[str, object])
 
 
 # ---------------------------------------------------------------------------
@@ -176,4 +182,57 @@ def validate_mdc_frontmatter(frontmatter: dict[str, object], mdc_schema: dict[st
     return issues
 
 
-__all__ = ["check_cu001", "check_cu002", "validate_mdc_frontmatter"]
+def validate_mdc_source(content: str, mdc_schema: dict[str, object]) -> list[ValidationIssue]:
+    """Recover and validate Cursor source using the shared frontmatter parser.
+
+    Args:
+        content: Authored .mdc source, optionally containing frontmatter.
+        mdc_schema: The Cursor provider schema for .mdc frontmatter.
+
+    Returns:
+        Syntax/recovery findings and CU findings when parsing can continue.
+    """
+    # Longer hyphen runs are Markdown thematic breaks, not YAML delimiters.
+    if content.partition("\n")[0].rstrip(" \t") != "---":
+        return validate_mdc_frontmatter({}, mdc_schema)
+
+    # The shared extractor expects a newline after the closing delimiter;
+    # Cursor also accepts it at EOF.
+    frontmatter_text, _start, _end = extract_frontmatter(content + "\n")
+    if frontmatter_text is None:
+        return [
+            ValidationIssue(
+                field="(file)",
+                code="FM003",
+                severity="error",
+                message="YAML frontmatter block not closed with '---'",
+                docs_url=rule_reference("FM003"),
+            )
+        ]
+
+    fm, yaml_error, colon_fields, _used_text = safe_load_yaml_with_colon_fix(frontmatter_text)
+    issues = [
+        issue.model_copy(update={"suggestion": f"Quote the value of '{issue.field}'"})
+        for issue in _fm009_recovery_warnings(colon_fields)
+    ]
+    try:
+        frontmatter = _MDC_FRONTMATTER.validate_python(fm, strict=True)
+    except ValidationError as exc:
+        if yaml_error:
+            message = f"Invalid YAML syntax: {yaml_error}"
+        elif fm is None:
+            message = "Frontmatter must be a YAML mapping"
+        else:
+            message = f"Frontmatter keys must be strings: {exc}"
+        return [
+            *issues,
+            ValidationIssue(
+                field="(yaml)", code="FM002", severity="error", message=message, docs_url=rule_reference("FM002")
+            ),
+        ]
+
+    issues.extend(validate_mdc_frontmatter(frontmatter, mdc_schema))
+    return issues
+
+
+__all__ = ["check_cu001", "check_cu002", "validate_mdc_frontmatter", "validate_mdc_source"]

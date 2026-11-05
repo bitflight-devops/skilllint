@@ -451,6 +451,36 @@ def check_fm007(frontmatter: dict, path: Path, file_type: str) -> list[Validatio
 # ---------------------------------------------------------------------------
 
 
+def _fm009_recovery_warnings(colon_fields: list[str]) -> list[ValidationIssue]:
+    """Return one FM009 warning per field that only parsed after colon recovery.
+
+    ``safe_load_yaml_with_colon_fix`` quotes unquoted colon values in memory so
+    validation can continue, and returns ``yaml_err=None``. The source file is
+    unchanged and still breaks a plain YAML parse, so the recovery has to be
+    reported rather than swallowed.
+
+    Args:
+        colon_fields: Field names whose values required quoting to parse.
+
+    Returns:
+        One FM009 warning per field; empty when no recovery was needed.
+    """
+    return [
+        ValidationIssue(
+            field=field_name,
+            severity="warning",
+            message=(
+                f"Unquoted value containing a colon in field '{field_name}' breaks YAML parsing "
+                "(parsed here only after quoting it)"
+            ),
+            code="FM009",
+            docs_url=rule_reference("FM009"),
+            suggestion=f"Quote the value of '{field_name}', or run with --fix",
+        )
+        for field_name in colon_fields
+    ]
+
+
 @skilllint_rule(
     "FM009",
     severity="info",
@@ -480,7 +510,7 @@ def check_fm009(frontmatter: dict, path: Path, file_type: str) -> list[Validatio
     ```
 
     Returns:
-        Always an empty list. FM009 is emitted by `validators/frontmatter.py::_fm009_recovery_warnings`
+        Always an empty list. FM009 is emitted by `rules/fm_series.py::_fm009_recovery_warnings`
         on a check-only run and by ``validators/frontmatter.py::FrontmatterValidator._queue_fm009_info``
         after auto-fix; this function exists for rule metadata registration
         only.

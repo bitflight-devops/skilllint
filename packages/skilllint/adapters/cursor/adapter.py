@@ -11,8 +11,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from skilllint.adapters.protocol import PluginLayout
-from skilllint.frontmatter import load_frontmatter
-from skilllint.rules.cu_series import validate_mdc_frontmatter
+from skilllint.rules.cu_series import validate_mdc_source
 from skilllint.schemas import load_provider_schema
 
 if TYPE_CHECKING:
@@ -96,8 +95,5 @@ class CursorAdapter:
         if mdc_schema is None:
             return []
 
-        post = load_frontmatter(path)
-        fm: dict[str, object] = dict(post.metadata)
-
-        issues = validate_mdc_frontmatter(fm, mdc_schema)
+        issues = validate_mdc_source(path.read_text(encoding="utf-8"), mdc_schema)
         return [i.model_dump(exclude_none=True) for i in issues]
