@@ -35,6 +35,8 @@ import git
 import msgspec.json
 from git.exc import InvalidGitRepositoryError
 
+from skilllint.boundary.component_references import ComponentKind, ComponentReference, component_references_from_raw
+
 # Ensure UTF-8 output on Windows (cp1252 default cannot encode emoji/spinner chars).
 # reconfigure() is available on Python 3.7+ when stdout is a TextIOWrapper.
 if isinstance(sys.stdout, TextIOWrapper):
@@ -384,13 +386,11 @@ def _remove_component_from_array(data: dict[str, list[str] | str], field_name: s
     """
     if field_name not in data:
         return False
-    field_value = data[field_name]
-    if not isinstance(field_value, list):
+    references = component_references_from_raw(data[field_name]) or ()
+    remaining = [reference.path for reference in references if reference.relative_path != Path(comp_path)]
+    if len(remaining) == len(references):
         return False
-    relative_path = f"./{comp_path}"
-    if relative_path not in field_value:
-        return False
-    field_value.remove(relative_path)
+    data[field_name] = remaining
     return True
 
 
@@ -888,7 +888,7 @@ def _normalize_skill_ref(ref: str) -> str:
 
 
 def _reconcile_stale_only(
-    data: dict[str, list[str] | str], field_name: str, disk_items: list[str], plugin_name: str, *, dry_run: bool
+    data: dict[str, list[str] | str], field_name: ComponentKind, plugin_dir: Path, plugin_name: str, *, dry_run: bool
 ) -> bool:
     """Remove stale entries from a component array without adding new ones.
 
@@ -899,20 +899,15 @@ def _reconcile_stale_only(
     Args:
         data: Plugin.json data dictionary (mutated in place unless dry_run)
         field_name: Array field name (``skills``, ``agents``, ``commands``)
-        disk_items: All items discovered on disk (used to detect stale entries)
+        plugin_dir: Plugin root used to validate explicit target references
         plugin_name: Plugin name for logging
         dry_run: If True, only report
 
     Returns:
         True if any stale entries were found (or would be removed in dry_run)
     """
-    raw = data.get(field_name, [])
-    registered = list(raw) if isinstance(raw, list) else [raw] if isinstance(raw, str) else []
-    if not registered:
-        return False
-
-    normalize = field_name == "skills"
-    stale = _find_stale_items(registered, disk_items, normalize=normalize)
+    registered = [reference.path for reference in component_references_from_raw(data.get(field_name)) or ()]
+    stale = _find_stale_items(registered, plugin_dir, field_name)
 
     if not stale:
         return False
@@ -955,15 +950,7 @@ def _reconcile_one_plugin(plugin_name: str, plugins_root: Path, *, dry_run: bool
 
     data: dict[str, list[str] | str] = msgspec.json.decode(plugin_json_path.read_bytes())
 
-    disk_skills = _discover_skills(plugin_dir)
     disk_agents = _discover_agents(plugin_dir)
-    disk_commands = _discover_commands(plugin_dir)
-    invocable_skills = _discover_invocable_skills(plugin_dir)
-
-    # All invocable skills (both standard-path and non-standard) discovered on
-    # disk, combined with commands/ files, form the full commands authority set.
-    disk_commands_full = disk_commands + invocable_skills
-
     has_drift = False
 
     # --- Skills reconciliation ---
@@ -972,10 +959,10 @@ def _reconcile_one_plugin(plugin_name: str, plugins_root: Path, *, dry_run: bool
         pass
     else:
         # Mode B: explicit allowlist — only remove stale entries, never add new ones.
-        has_drift |= _reconcile_stale_only(data, "skills", disk_skills, plugin_name, dry_run=dry_run)
+        has_drift |= _reconcile_stale_only(data, "skills", plugin_dir, plugin_name, dry_run=dry_run)
 
     # --- Agents reconciliation (agents always require explicit registration) ---
-    has_drift |= _reconcile_component_array(data, "agents", disk_agents, plugin_name, dry_run=dry_run)
+    has_drift |= _reconcile_component_array(data, "agents", disk_agents, plugin_name, plugin_dir, dry_run=dry_run)
 
     # --- Commands reconciliation ---
     if "commands" not in data:
@@ -983,7 +970,7 @@ def _reconcile_one_plugin(plugin_name: str, plugins_root: Path, *, dry_run: bool
         pass
     else:
         # Mode B: explicit allowlist — only remove stale entries, never add new ones.
-        has_drift |= _reconcile_stale_only(data, "commands", disk_commands_full, plugin_name, dry_run=dry_run)
+        has_drift |= _reconcile_stale_only(data, "commands", plugin_dir, plugin_name, dry_run=dry_run)
 
     if has_drift and not dry_run:
         current_version = cast("str", data.get("version", "0.0.0"))
@@ -1024,21 +1011,15 @@ def _find_missing_items(disk_items: list[str], registered: list[str], *, normali
     return [item for item in disk_items if not any(_refs_match(reg, item, normalize=normalize) for reg in registered)]
 
 
-def _find_stale_items(registered: list[str], disk_items: list[str], *, normalize: bool) -> list[str]:
-    """Find registered items not present in the discovery list.
+def _find_stale_items(registered: list[str], plugin_dir: Path, field_name: ComponentKind) -> list[str]:
+    """Find declarations that no longer resolve to valid capability targets.
 
-    Discovery functions are the sole authority on what belongs in each
-    component array.  Any registered entry not matched by discovery is stale.
-
-    Args:
-        registered: Paths currently in the manifest
-        disk_items: Paths discovered on disk
-        normalize: If True, normalize skill paths before comparison
+    Conventional discovery suggests additions but cannot invalidate custom paths.
 
     Returns:
-        List of registered items with no matching discovered entry
+        References with missing, invalid, or out-of-plugin targets.
     """
-    return [reg for reg in registered if not any(_refs_match(reg, item, normalize=normalize) for item in disk_items)]
+    return [ref for ref in registered if not ComponentReference(ref).resolve(plugin_dir, field_name).valid]
 
 
 def _apply_drift_changes(
@@ -1072,21 +1053,18 @@ def _apply_drift_changes(
     if dry_run:
         return
 
-    if missing:
-        if field_name not in data:
-            data[field_name] = []
-        field_value = data[field_name]
-        if isinstance(field_value, list):
-            field_value.extend(missing)
-
-    if stale:
-        field_value = data.get(field_name, [])
-        if isinstance(field_value, list):
-            data[field_name] = [r for r in field_value if r not in stale]
+    references = component_references_from_raw(data.get(field_name)) or ()
+    data[field_name] = [reference.path for reference in references if reference.path not in stale] + missing
 
 
 def _reconcile_component_array(
-    data: dict[str, list[str] | str], field_name: str, disk_items: list[str], plugin_name: str, *, dry_run: bool
+    data: dict[str, list[str] | str],
+    field_name: ComponentKind,
+    disk_items: list[str],
+    plugin_name: str,
+    plugin_dir: Path,
+    *,
+    dry_run: bool,
 ) -> bool:
     """Reconcile a component array (skills/agents/commands) against disk.
 
@@ -1095,17 +1073,22 @@ def _reconcile_component_array(
         field_name: Array field name (``skills``, ``agents``, ``commands``)
         disk_items: Items discovered on disk
         plugin_name: Plugin name for logging
+        plugin_dir: Plugin root used to resolve explicit registrations
         dry_run: If True, only report
 
     Returns:
         True if drift was detected
     """
-    raw = data.get(field_name, [])
-    registered = list(raw) if isinstance(raw, list) else [raw] if isinstance(raw, str) else []
-    normalize = field_name == "skills"
-
-    missing = _find_missing_items(disk_items, registered, normalize=normalize)
-    stale = _find_stale_items(registered, disk_items, normalize=normalize)
+    references = component_references_from_raw(data.get(field_name)) or ()
+    registered = [reference.path for reference in references]
+    covered = registered + [
+        f"./{path.relative_to(plugin_dir).as_posix()}"
+        for reference in references
+        for path in reference.resolve(plugin_dir, field_name).paths
+    ]
+    valid_disk_items = [item for item in disk_items if ComponentReference(item).resolve(plugin_dir, field_name).valid]
+    missing = _find_missing_items(valid_disk_items, covered, normalize=field_name == "skills")
+    stale = _find_stale_items(registered, plugin_dir, field_name)
 
     if missing or stale:
         _apply_drift_changes(data, field_name, missing, stale, plugin_name, dry_run=dry_run)
