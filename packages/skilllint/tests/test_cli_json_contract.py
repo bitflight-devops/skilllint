@@ -564,7 +564,12 @@ def test_fixes_lists_what_fix_applied_and_the_file_matches_the_default_path(tmp_
             ["FM004", "FM007"],
             "Converted tools from YAML array to comma-separated string",
         ),
-        ("fixme/SKILL.md", "FrontmatterValidator", ["FM004", "FM007"], "Removed YAML multiline indicators"),
+        (
+            "fixme/SKILL.md",
+            "FrontmatterValidator",
+            ["FM004", "FM007"],
+            "Normalized multiline description to single line",
+        ),
     ]
     assert (sandbox.case / "fixme/SKILL.md").read_bytes() == (default_sandbox.case / "fixme/SKILL.md").read_bytes()
 

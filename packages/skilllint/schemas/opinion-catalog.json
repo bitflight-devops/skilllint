@@ -73,7 +73,7 @@
         "symbol": "_FM004_DESCRIPTION_BLOCK_SCALAR",
         "source_type": "python_constant"
       },
-      "expected_value": "(?m)^description\\s*:\\s*(?:\\|[-+]?|>[-+]?)(?:\\s+#.*)?\\s*$"
+      "expected_value": "(?m)^(?:description|'description'|\"description\")\\s*:\\s*[|>](?:[1-9][-+]?|[-+][1-9]?)?(?:\\s+#.*)?\\s*$"
     },
     "FM010.name_pattern": {
       "rule_code": "FM010",
