@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793875238189,
+  "lastUpdate": 1793932533747,
   "repoUrl": "https://github.com/bitflight-devops/skilllint",
   "entries": {
     "Benchmark": [
@@ -503,6 +503,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "files_per_second",
             "value": 356.07,
+            "unit": "files/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Jamie Nelson",
+            "username": "Jamie-BitFlight",
+            "email": "stack@bitflight.io"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "85813670fbaf8755cc81698497b992cb0a1d2b60",
+          "message": "Merge pull request #370 from bitflight-devops/fix/manifest-sync-recovery\n\nfix(sync): prepare manifest batches before applying changes",
+          "timestamp": "2026-11-06T02:30:22Z",
+          "url": "https://github.com/bitflight-devops/skilllint/commit/85813670fbaf8755cc81698497b992cb0a1d2b60"
+        },
+        "date": 1793932533021,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "scan_min_ms",
+            "value": 1942.797,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_mean_ms",
+            "value": 2155.964,
+            "unit": "ms"
+          },
+          {
+            "name": "scan_max_ms",
+            "value": 2579.438,
+            "unit": "ms"
+          },
+          {
+            "name": "files_per_second",
+            "value": 464.293,
             "unit": "files/s"
           }
         ]
