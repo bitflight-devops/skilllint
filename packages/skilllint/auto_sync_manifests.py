@@ -35,14 +35,6 @@ import git
 import msgspec.json
 from git.exc import InvalidGitRepositoryError
 
-from skilllint.boundary.manifest_sync_ingest import (
-    MarketplaceSyncDocument,
-    MarketplaceSyncPlugin,
-    decode_marketplace_sync_document,
-    decode_plugin_sync_document,
-)
-from skilllint.manifest_sync_plan import ManifestUpdate, apply_manifest_updates
-
 # Ensure UTF-8 output on Windows (cp1252 default cannot encode emoji/spinner chars).
 # reconfigure() is available on Python 3.7+ when stdout is a TextIOWrapper.
 if isinstance(sys.stdout, TextIOWrapper):
@@ -53,6 +45,14 @@ if isinstance(sys.stderr, TextIOWrapper):
 from collections import defaultdict
 from pathlib import Path
 from typing import Literal, TypedDict, cast
+
+from skilllint.boundary.manifest_sync_ingest import (
+    MarketplaceSyncDocument,
+    MarketplaceSyncPlugin,
+    decode_marketplace_sync_document,
+    decode_plugin_sync_document,
+)
+from skilllint.manifest_sync_plan import ManifestUpdate, apply_manifest_updates
 
 # Prettier formatting
 _NPX_PATH: str | None = shutil.which("npx")
