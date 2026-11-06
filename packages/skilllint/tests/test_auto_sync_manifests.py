@@ -465,10 +465,11 @@ class TestVersionComparisonGuard:
         # Act
         updated = auto_sync.update_marketplace_json(plugin_changes)
 
-        # Assert -- guard triggered, no modifications
-        assert updated is False
+        # A manual version bump must not suppress new marketplace registration.
+        assert updated is True
         loaded = msgspec.json.decode(marketplace_json.read_text(encoding="utf-8"))
         assert loaded["metadata"]["version"] == "2.1.0"
+        assert any(plugin["name"] == "new-plugin" for plugin in loaded["plugins"])
 
     def test_guard_returns_current_version_not_zero(self, tmp_path: Path, monkeypatch: Any) -> None:
         """Verify the guard returns the actual current version, not "0.0.0".
@@ -492,8 +493,8 @@ class TestVersionComparisonGuard:
         # Act
         updated, version = auto_sync.update_plugin_json(plugin_name, changes)
 
-        # Assert -- returns actual version "3.2.1", not "0.0.0"
-        assert updated is False
+        # Registration still completes, retaining the already bumped version.
+        assert updated is True
         assert version == "3.2.1"
 
     def test_guard_allows_bump_when_version_equals_head(self, tmp_path: Path, monkeypatch: Any) -> None:

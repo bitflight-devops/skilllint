@@ -48,6 +48,14 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Literal, TypedDict, cast
 
+from skilllint.boundary.manifest_sync_ingest import (
+    MarketplaceSyncDocument,
+    MarketplaceSyncPlugin,
+    decode_marketplace_sync_document,
+    decode_plugin_sync_document,
+)
+from skilllint.manifest_sync_plan import ManifestUpdate, apply_manifest_updates
+
 # Prettier formatting
 _NPX_PATH: str | None = shutil.which("npx")
 
@@ -373,7 +381,7 @@ def _is_standard_path_skill(field_name: str, comp_path: str) -> bool:
     return field_name == "skills" and comp_path.startswith("skills/") and not comp_path.endswith("/SKILL.md")
 
 
-def _remove_component_from_array(data: dict[str, list[str] | str], field_name: str, comp_path: str) -> bool:
+def _remove_component_from_array(data: dict[str, str | list[str] | None], field_name: str, comp_path: str) -> bool:
     """Remove a component path from a plugin.json array field.
 
     Args:
@@ -394,7 +402,7 @@ def _remove_component_from_array(data: dict[str, list[str] | str], field_name: s
     return True
 
 
-def _update_component_arrays(data: dict[str, list[str] | str], changes: ComponentChanges) -> bool:
+def _update_component_arrays(data: dict[str, str | list[str] | None], changes: ComponentChanges) -> bool:
     """Update component arrays in plugin.json.
 
     Args:
@@ -444,8 +452,8 @@ def _update_component_arrays(data: dict[str, list[str] | str], changes: Componen
     return modified
 
 
-def update_plugin_json(plugin_name: str, changes: ComponentChanges) -> tuple[bool, str]:
-    """Update plugin.json based on component changes.
+def _prepare_plugin_json(plugin_name: str, changes: ComponentChanges) -> tuple[ManifestUpdate | None, str]:
+    """Prepare plugin.json changes without writing or staging.
 
     Args:
         plugin_name: Name of the plugin
@@ -456,21 +464,19 @@ def update_plugin_json(plugin_name: str, changes: ComponentChanges) -> tuple[boo
         }
 
     Returns:
-        (updated: bool, new_version: str)
+        (prepared update, new_version)
     """
     plugin_json_path = Path(f"plugins/{plugin_name}/.claude-plugin/plugin.json")
 
     if not plugin_json_path.exists():
-        return False, "0.0.0"
+        return None, "0.0.0"
 
-    data: dict[str, list[str] | str] = msgspec.json.decode(plugin_json_path.read_bytes())
+    original_bytes = plugin_json_path.read_bytes()
+    data = decode_plugin_sync_document(original_bytes)
 
-    current_version = cast("str", data.get("version", "0.0.0"))
+    current_version = data.version
 
-    # Skip if the version was already bumped (e.g., user manually edited
-    # plugin.json in the same commit, or commit retry after hook failure).
-    if _version_already_bumped(str(plugin_json_path), ["version"]):
-        return False, current_version
+    already_bumped = _version_already_bumped(str(plugin_json_path), ["version"])
     bump_type: Literal["major", "minor", "patch"] = "patch"
     modified = False
 
@@ -481,27 +487,37 @@ def update_plugin_json(plugin_name: str, changes: ComponentChanges) -> tuple[boo
         bump_type = "minor"  # New feature
 
     # Update component arrays
-    modified = _update_component_arrays(data, changes)
+    components = data.component_declarations()
+    modified = _update_component_arrays(components, changes)
+    data.apply_component_declarations(components)
 
     # Bump version if changes were made
-    if modified or changes["modified"]:
-        new_version = bump_version(current_version, bump_type)
-        existing_content = plugin_json_path.read_text(encoding="utf-8")
+    if modified or (changes["modified"] and not already_bumped):
+        new_version = current_version if already_bumped else bump_version(current_version, bump_type)
+        existing_content = original_bytes.decode("utf-8")
 
-        data["version"] = new_version
-        new_content = msgspec.json.format(msgspec.json.encode(data), indent=2).decode() + "\n"
+        data.version = new_version
+        new_content = data.model_dump_json(exclude_unset=True, indent=2) + "\n"
 
-        # Skip write when the formatted output already matches the file.
-        # The primary double-bump defence is the _version_already_bumped
-        # guard above — this check provides an additional safety net.
+        # Version idempotency does not suppress unfinished registration work.
         if new_content == existing_content:
-            return False, current_version
+            return None, current_version
 
-        _write_json_lf(plugin_json_path, new_content)
+        return ManifestUpdate(plugin_json_path, original_bytes, new_content, new_version), new_version
 
-        return True, new_version
+    return None, current_version
 
-    return False, current_version
+
+def update_plugin_json(plugin_name: str, changes: ComponentChanges) -> tuple[bool, str]:
+    """Prepare and apply one plugin update for standalone callers.
+
+    Returns:
+        Whether the document changed and its resulting version.
+    """
+    update, version = _prepare_plugin_json(plugin_name, changes)
+    if update is not None:
+        apply_manifest_updates([update])
+    return update is not None, version
 
 
 def _read_plugin_name(plugin_dir_name: str) -> str:
@@ -529,16 +545,14 @@ def _read_plugin_name(plugin_dir_name: str) -> str:
     return plugin_dir_name
 
 
-def _update_marketplace_plugins(
-    data: dict[str, dict[str, str] | list[dict[str, str]]], plugin_changes: MarketplaceChanges
-) -> bool:
+def _update_marketplace_plugins(data: MarketplaceSyncDocument, plugin_changes: MarketplaceChanges) -> bool:
     """Add and remove plugins in the marketplace data structure.
 
     The ``"name"`` field in each marketplace entry is derived from plugin.json
     (authoritative), not from the directory name.
 
     Args:
-        data: Marketplace JSON data dictionary (mutated in place).
+        data: Validated marketplace document (mutated in place).
         plugin_changes: Changes describing added/deleted plugins.
 
     Returns:
@@ -548,29 +562,22 @@ def _update_marketplace_plugins(
 
     for plugin_dir_name in plugin_changes["added"]:
         canonical_name = _read_plugin_name(plugin_dir_name)
-        plugin_entry = {"name": canonical_name, "source": f"./plugins/{plugin_dir_name}"}
-
-        if "plugins" not in data:
-            data["plugins"] = []
-
-        plugins_list = cast("list[dict[str, str]]", data["plugins"])
-
-        if not any(p["name"] == canonical_name for p in plugins_list):
-            plugins_list.append(plugin_entry)
+        plugin_entry = MarketplaceSyncPlugin(name=canonical_name, source=f"./plugins/{plugin_dir_name}")
+        if not any(plugin.name == canonical_name for plugin in data.plugins):
+            data.plugins = [*data.plugins, plugin_entry]
             modified = True
 
     for plugin_dir_name in plugin_changes["deleted"]:
-        if "plugins" in data:
+        if "plugins" in data.model_fields_set:
             canonical_name = _read_plugin_name(plugin_dir_name)
-            plugins_list = cast("list[dict[str, str]]", data["plugins"])
-            data["plugins"] = [p for p in plugins_list if p["name"] != canonical_name]
+            data.plugins = [plugin for plugin in data.plugins if plugin.name != canonical_name]
             modified = True
 
     return modified
 
 
-def update_marketplace_json(plugin_changes: MarketplaceChanges) -> bool:
-    """Update marketplace.json based on plugin changes.
+def _prepare_marketplace_json(plugin_changes: MarketplaceChanges) -> ManifestUpdate | None:
+    """Prepare marketplace.json changes without writing or staging.
 
     Args:
         plugin_changes: {
@@ -580,23 +587,25 @@ def update_marketplace_json(plugin_changes: MarketplaceChanges) -> bool:
         }
 
     Returns:
-        updated: bool
+        Prepared update, or None when no document change is needed.
     """
     marketplace_json_path = Path(".claude-plugin/marketplace.json")
 
     if not marketplace_json_path.exists():
         print("Warning: marketplace.json not found")
-        return False
+        return None
 
-    data: dict[str, dict[str, str] | list[dict[str, str]]] = msgspec.json.decode(marketplace_json_path.read_bytes())
+    original_bytes = marketplace_json_path.read_bytes()
+    data = decode_marketplace_sync_document(original_bytes)
+    # Newly registered plugin documents also participate in preparation.
+    for plugin_name in plugin_changes["added"]:
+        plugin_path = Path(f"plugins/{plugin_name}/.claude-plugin/plugin.json")
+        if plugin_path.exists():
+            decode_plugin_sync_document(plugin_path.read_bytes())
 
-    metadata = cast("dict[str, str]", data.get("metadata", {}))
-    current_version = metadata.get("version", "0.0.0")
+    current_version = data.metadata.version
 
-    # Skip if the version was already bumped (e.g., user manually edited
-    # marketplace.json in the same commit, or commit retry after hook failure).
-    if _version_already_bumped(str(marketplace_json_path), ["metadata", "version"]):
-        return False
+    already_bumped = _version_already_bumped(str(marketplace_json_path), ["metadata", "version"])
     bump_type: Literal["major", "minor", "patch"] = "patch"
 
     # Determine bump type
@@ -609,26 +618,33 @@ def update_marketplace_json(plugin_changes: MarketplaceChanges) -> bool:
     modified = _update_marketplace_plugins(data, plugin_changes)
 
     # Bump marketplace version if any changes
-    if modified or plugin_changes["modified"]:
-        existing_content = marketplace_json_path.read_text(encoding="utf-8")
-        new_version = bump_version(current_version, bump_type)
+    if modified or (plugin_changes["modified"] and not already_bumped):
+        existing_content = original_bytes.decode("utf-8")
+        new_version = current_version if already_bumped else bump_version(current_version, bump_type)
 
-        if "metadata" not in data:
-            data["metadata"] = {}
-
-        metadata = cast("dict[str, str]", data["metadata"])
-        metadata["version"] = new_version
-
-        new_content = msgspec.json.format(msgspec.json.encode(data), indent=2).decode() + "\n"
+        metadata = data.metadata
+        metadata.version = new_version
+        data.metadata = metadata
+        new_content = data.model_dump_json(exclude_unset=True, indent=2) + "\n"
 
         if new_content == existing_content:
-            return False
+            return None
 
-        _write_json_lf(marketplace_json_path, new_content)
+        return ManifestUpdate(marketplace_json_path, original_bytes, new_content, new_version)
 
-        return True
+    return None
 
-    return False
+
+def update_marketplace_json(plugin_changes: MarketplaceChanges) -> bool:
+    """Prepare and apply one marketplace update for standalone callers.
+
+    Returns:
+        Whether the marketplace document changed.
+    """
+    update = _prepare_marketplace_json(plugin_changes)
+    if update is not None:
+        apply_manifest_updates([update])
+    return update is not None
 
 
 def _process_file_changes(status: dict[str, list[str]]) -> tuple[dict[str, ComponentChanges], MarketplaceChanges]:
@@ -691,19 +707,13 @@ def _process_file_changes(status: dict[str, list[str]]) -> tuple[dict[str, Compo
     return plugin_component_changes, marketplace_changes
 
 
-def _git_stage_file(filepath: str) -> None:
-    """Stage a file with git add, logging warnings on failure.
-
-    Args:
-        filepath: Relative path to stage.
-    """
+def _git_stage_files(filepaths: list[str]) -> None:
+    """Stage the entire manifest batch in a single atomic Git index write."""
     try:
         repo = git.Repo(search_parent_directories=True)
-        repo.index.add([filepath])
     except InvalidGitRepositoryError:
         return
-    except git.GitCommandError as exc:
-        sys.stderr.write(f"Warning: git add {filepath} failed: {exc}\n")
+    repo.index.add(filepaths)
 
 
 def _discover_skills(plugin_dir: Path) -> list[str]:
@@ -1241,37 +1251,41 @@ def _precommit_sync() -> int:
     status = get_git_status()
     plugin_component_changes, marketplace_changes = _process_file_changes(status)
 
-    plugins_updated = False
-    marketplace_updated = False
+    updates: list[ManifestUpdate] = []
+    stage_paths: list[str] = []
+    plugin_reports: list[tuple[str, str, ComponentChanges]] = []
 
     for plugin_name, changes in plugin_component_changes.items():
-        updated, new_version = update_plugin_json(plugin_name, changes)
+        update, new_version = _prepare_plugin_json(plugin_name, changes)
+        plugin_path = Path(f"plugins/{plugin_name}/.claude-plugin/plugin.json")
+        if not plugin_path.exists():
+            continue
+        # A previous bump only completes versioning, not marketplace sync or staging.
+        marketplace_changes["modified"].append((plugin_name, new_version))
+        stage_paths.append(str(plugin_path))
+        if update is not None:
+            updates.append(update)
+            plugin_reports.append((plugin_name, new_version, changes))
 
-        if updated:
-            plugins_updated = True
-            plugin_json_path = f"plugins/{plugin_name}/.claude-plugin/plugin.json"
-            _git_stage_file(plugin_json_path)
-            marketplace_changes["modified"].append((plugin_name, new_version))
-            _report_plugin_update(plugin_name, new_version, changes)
-
-    # Update marketplace.json
+    marketplace_update = None
     if marketplace_changes["added"] or marketplace_changes["deleted"] or marketplace_changes["modified"]:
-        marketplace_updated = update_marketplace_json(marketplace_changes)
+        marketplace_update = _prepare_marketplace_json(marketplace_changes)
+        marketplace_path = Path(".claude-plugin/marketplace.json")
+        if marketplace_path.exists():
+            stage_paths.append(str(marketplace_path))
+        if marketplace_update is not None:
+            updates.append(marketplace_update)
 
-        if marketplace_updated:
-            _git_stage_file(".claude-plugin/marketplace.json")
-
-            data = msgspec.json.decode(Path(".claude-plugin/marketplace.json").read_bytes())
-            new_version = data["metadata"]["version"]
-
-            print(f"Updated marketplace -> {new_version}")
-
-            if marketplace_changes["added"]:
-                print(f"   - Added plugins: {', '.join(marketplace_changes['added'])}")
-            if marketplace_changes["deleted"]:
-                print(f"   - Removed plugins: {', '.join(marketplace_changes['deleted'])}")
-
-    if not plugins_updated and not marketplace_updated:
+    apply_manifest_updates(updates, lambda: _git_stage_files(stage_paths) if stage_paths else None)
+    for plugin_name, version, changes in plugin_reports:
+        _report_plugin_update(plugin_name, version, changes)
+    if marketplace_update is not None:
+        print(f"Updated marketplace -> {marketplace_update.version}")
+        if marketplace_changes["added"]:
+            print(f"   - Added plugins: {', '.join(marketplace_changes['added'])}")
+        if marketplace_changes["deleted"]:
+            print(f"   - Removed plugins: {', '.join(marketplace_changes['deleted'])}")
+    if not updates:
         print("Info: No manifest updates needed")
 
     return 0
