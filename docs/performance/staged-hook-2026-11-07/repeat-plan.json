@@ -1,0 +1,14 @@
+{
+  "declared_at_utc": "2026-11-07T16:21:12.837822+00:00",
+  "warmup_pairs": 2,
+  "measured_pairs": 30,
+  "order": "AB/BA alternating continuously across warmup and measurement",
+  "workload": "Same prepared public ten-file staged source and Git index projection as initial A/B; no correction of the 14 upstream-tracked ignored paths.",
+  "harness_commit": "1e8278d68a54e757c0cdc8a742d97cf703cf54f5",
+  "runtime": "Same baseline/candidate wheel environments and prek executable as initial A/B.",
+  "analysis": "Separate session, no pooling; preserve original rows; report marginal wall/CPU distributions, paired ratios/deltas, IQR, wins, order and half-session splits.",
+  "initial_export_sha256": {
+    "ab-staged.json": "8e84047fec36db75fd4bf22c06d05284fc635e1ac6da29429f95ba5a67f4a6e9",
+    "aa-staged.json": "d78b7b40325515910c81b5eb988818f8f63f5922602489333760ef53fbbbda29"
+  }
+}

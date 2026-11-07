@@ -36,6 +36,7 @@ EXPECTED = {
     "docs/performance/import-diagnostic-2026-11-07/README.md",
     "docs/performance/primary-paired-2026-11-07/README.md",
     "docs/performance/secondary-paired-2026-11-07/README.md",
+    "docs/performance/staged-hook-2026-11-07/README.md",
     "plugins/agentskills-skilllint/README.md",
     "plugins/agentskills-skilllint/skills/skilllint/SKILL.md",
 }
