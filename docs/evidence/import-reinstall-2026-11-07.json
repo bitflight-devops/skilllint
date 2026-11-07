@@ -1,0 +1,1708 @@
+{
+  "kind": "fresh_reproduction_not_recovered",
+  "mode": "forced_reinstall",
+  "started_utc": "2026-11-07T16:22:05Z",
+  "finished_utc": "2026-11-07T16:23:37Z",
+  "expected_cells": 8,
+  "complete_cells": 8,
+  "failed_or_incomplete_cells": [],
+  "uv_version": "uv 0.13.5 (x86_64-unknown-linux-gnu)",
+  "python_build": "3.12.14 (main, Aug 25 2026, 14:00:49) [Clang 22.1.3 ]",
+  "host": {
+    "system": "Linux",
+    "release": "6.18.57",
+    "machine": "x86_64",
+    "logical_cpu_count": 9,
+    "cpu_affinity_count": 9
+  },
+  "dependencies": {
+    "mdurl": "0.1.2",
+    "hypothesis": "6.170.14",
+    "execnet": "2.1.2",
+    "vcs-versioning": "2.3.4",
+    "certifi": "2026.10.18",
+    "setuptools": "84.1.0",
+    "anyio": "4.15.1",
+    "urllib3": "2.8.0",
+    "gitdb": "4.0.12",
+    "charset-normalizer": "3.5.1",
+    "h11": "0.16.0",
+    "pytest": "9.2.0",
+    "smmap": "5.0.3",
+    "markdown-it-py": "4.0.0",
+    "annotated-doc": "0.0.5",
+    "coverage": "7.16.0",
+    "comrak": "0.0.16",
+    "ruamel.yaml": "0.19.1",
+    "requests": "2.34.2",
+    "typing-inspection": "0.4.4",
+    "nh3": "0.3.7",
+    "prek": "0.5.9",
+    "Pygments": "2.20.0",
+    "iniconfig": "2.3.0",
+    "regex": "2026.9.3",
+    "pytest-xdist": "3.8.0",
+    "shellingham": "1.5.4",
+    "pydantic": "2.14.2",
+    "docutils": "0.23",
+    "pytest-mock": "3.17.0",
+    "typer": "0.27.3",
+    "msgspec": "0.22.0",
+    "marko": "2.2.5",
+    "pydantic_core": "2.50.2",
+    "annotated-types": "0.8.0",
+    "idna": "3.19",
+    "ty": "0.0.95",
+    "httpx": "0.28.1",
+    "sortedcontainers": "2.4.0",
+    "httpcore": "1.0.9",
+    "hatchling": "1.33.0",
+    "ruff": "0.17.3",
+    "hatch-vcs": "0.5.0",
+    "rich": "15.0.0",
+    "trove-classifiers": "2026.6.1.19",
+    "pluggy": "1.6.0",
+    "typing_extensions": "4.16.0",
+    "readme_renderer": "46.0",
+    "packaging": "26.3",
+    "soupsieve": "2.9.2",
+    "tomlkit": "0.15.1",
+    "beautifulsoup4": "4.15.0",
+    "pytest-cov": "7.1.0",
+    "GitPython": "3.2.1",
+    "pathspec": "1.1.1",
+    "tiktoken": "0.14.0",
+    "setuptools-scm": "10.2.3"
+  },
+  "uv_lock_sha256": "7aec3594ef40e58f9e0f269c8d02b6043f16a0bf27b9a6cae14bdbace0503e2a",
+  "harness_sha256": "8247e424f78f0ab67a906503fdfdc379aead0f53d4a77db95732a0e9e1447455",
+  "recorder_sha256": "c1876adb1ffad82bbd2c593f3f54bc6edcc841fb3bb26ea7d9ac8f4e16097e11",
+  "protocol_executed": "#!/usr/bin/env bash\n# Same-source diagnostic; REPO, SOURCE, WORK and UV_CACHE_DIR must be explicit.\n# WORK must not exist, so existing experiments cannot be silently overwritten.\nset -euo pipefail\n: \"${REPO:?Set REPO to the full-history source checkout}\"\n: \"${SOURCE:?Set SOURCE to the immutable source commit}\"\n: \"${WORK:?Set WORK to a new output directory}\"\n: \"${UV_CACHE_DIR:?Set UV_CACHE_DIR to a populated cache for locked offline installs}\"\nmode=\"${MODE:-literal_sync}\"\ninstall_args=()\ncase \"$mode\" in\n    literal_sync) ;;\n    forced_reinstall) install_args=(--reinstall-package skilllint) ;;\n    *) echo \"MODE must be literal_sync or forced_reinstall\" >&2; exit 2 ;;\nesac\nmkdir \"$WORK\"\nmkdir \"$WORK/harness\" \"$WORK/results\"\ncp \"${BASH_SOURCE[0]}\" \"$WORK/harness/reproduce_import_lifecycle.sh\"\nprintf '%s\\n' \"$mode\" > \"$WORK/results/mode.txt\"\ncp \"$REPO/scripts/bench_import.py\" \"$REPO/scripts/capture_import_samples.py\" \"$WORK/harness/\"\ngit -C \"$REPO\" rev-parse \"$SOURCE:packages/skilllint\" > \"$WORK/results/product-tree.txt\"\ngit -C \"$REPO\" rev-parse \"$SOURCE\" > \"$WORK/results/source.txt\"\nuv --version > \"$WORK/results/uv-version.txt\"\ndate -u +%FT%TZ > \"$WORK/results/started.txt\"\n# Two replicas reverse factor traversal, and each cell runs both module orders.\n# Three measurements per module match the CI sample count, not a significance target.\nfor replica in 1 2; do\n    if [[ \"$replica\" == 1 ]]; then\n        histories=(full shallow)\n        bytecodes=(write disabled)\n        warmups=(0 1)\n        orders=(forward reverse)\n    else\n        histories=(shallow full)\n        bytecodes=(disabled write)\n        warmups=(1 0)\n        orders=(reverse forward)\n    fi\n    # Predeclared rebuild companion holds history and bytecode policy fixed.\n    if [[ \"$mode\" == forced_reinstall ]]; then\n        histories=(full)\n        bytecodes=(write)\n    fi\n    for history in \"${histories[@]}\"; do\n        for bytecode in \"${bytecodes[@]}\"; do\n            for warmup in \"${warmups[@]}\"; do\n                for order in \"${orders[@]}\"; do\n                    name=\"r${replica}-${history}-${bytecode}-w${warmup}-${order}\"\n                    checkout=\"$WORK/$name\"\n                    # Full clone is from the explicit source ref; shallow is cut to that same commit.\n                    git clone --quiet --no-hardlinks \"$REPO\" \"$checkout\"\n                    git -C \"$checkout\" checkout --quiet --detach \"$SOURCE\"\n                    if [[ \"$history\" == shallow ]]; then\n                        git -C \"$checkout\" rev-parse HEAD > \"$checkout/.git/shallow\"\n                        git -C \"$checkout\" tag -l | xargs -r git -C \"$checkout\" tag -d > /dev/null\n                    fi\n                    export PYTHONPYCACHEPREFIX=\"$checkout/bytecode\"\n                    export UV_LINK_MODE=copy\n                    unset PYTHONDONTWRITEBYTECODE\n                    if [[ \"$bytecode\" == disabled ]]; then export PYTHONDONTWRITEBYTECODE=1; fi\n                    args=()\n                    if [[ \"$order\" == reverse ]]; then args=(--reverse); fi\n                    for stage in 1 2; do\n                        (\n                            cd \"$checkout\"\n                            uv sync --locked --offline --python 3.12 \"${install_args[@]}\" > \"$WORK/$name-stage$stage-install.log\" 2>&1\n                            .venv/bin/python \"$WORK/harness/capture_import_samples.py\" --runs 3 --warmups \"$warmup\" \"${args[@]}\" > \"$WORK/results/$name-stage$stage.json\"\n                        )\n                    done\n                    # Identity probes run AFTER both stages so they cannot warm measured imports.\n                    (\n                        cd \"$checkout\"\n                        .venv/bin/python -c 'import hashlib,json,platform; from pathlib import Path; import skilllint,skilllint.rules; from skilllint.rule_registry import RULE_REGISTRY; print(json.dumps({\"python\":platform.python_version(),\"module_relative_path\":str(Path(skilllint.__file__).relative_to(Path.cwd())),\"module_sha256\":hashlib.sha256(Path(skilllint.__file__).read_bytes()).hexdigest(),\"runtime_version\":skilllint.__version__,\"rule_codes\":sorted(RULE_REGISTRY)},indent=2))' > \"$WORK/results/$name-identity.json\" 2> \"$WORK/$name-identity-stderr.log\"\n                        git rev-parse HEAD > \"$WORK/results/$name-head.txt\"\n                        git rev-parse --is-shallow-repository > \"$WORK/results/$name-shallow.txt\"\n                        git rev-list --count HEAD > \"$WORK/results/$name-history-count.txt\"\n                    )\n                    echo \"$name completed\"\n                done\n            done\n        done\n    done\ndone\ndate -u +%FT%TZ > \"$WORK/results/finished.txt\"\n",
+  "privacy_review": "No environment variables, hostnames, credentials, private corpus, or unsanitized local workspace paths. Install/warning paths replaced with symbolic roots.",
+  "cells": [
+    {
+      "name": "r1-full-write-w0-forward",
+      "timing_session": "companion",
+      "replica": 1,
+      "history": "full",
+      "bytecode": "write",
+      "warmups": 0,
+      "module_order": "forward",
+      "source_commit": "ae5c0dfcb5e36ef97e1de3861cf84db8345c1605",
+      "source_tree": "82d79d5a5666fe4484f7396371ef5f575919b874",
+      "product_tree": "224cff54dcc17343535cf9438497c25495c551a9",
+      "visible_commit_count": 663,
+      "is_shallow": false,
+      "identity": {
+        "python": "3.12.14",
+        "module_relative_path": "packages/skilllint/__init__.py",
+        "module_sha256": "fe1a6f420706d0c60125ec2fe90d1df0edcfe5add9152c87e16a1141f90d78d8",
+        "runtime_version": "1.22.3.dev14+gae5c0dfcb",
+        "rule_codes": [
+          "AG001",
+          "AG002",
+          "AG003",
+          "AS001",
+          "AS006",
+          "AS008",
+          "AS009",
+          "CU001",
+          "CU002",
+          "CX001",
+          "CX002",
+          "FM001",
+          "FM002",
+          "FM003",
+          "FM004",
+          "FM005",
+          "FM006",
+          "FM007",
+          "FM009",
+          "FM010",
+          "HK001",
+          "HK002",
+          "HK003",
+          "HK004",
+          "HK005",
+          "LK001",
+          "LK004",
+          "NR001",
+          "NR002",
+          "PA001",
+          "PD001",
+          "PD002",
+          "PD003",
+          "PL001",
+          "PL002",
+          "PL003",
+          "PL004",
+          "PL005",
+          "PL006",
+          "PR001",
+          "PR002",
+          "PR005",
+          "SK004",
+          "SK005",
+          "SK006",
+          "SK007",
+          "SK008",
+          "SL001",
+          "TC001"
+        ]
+      },
+      "installation_identity": {
+        "python_build": "3.12.14 (main, Aug 25 2026, 14:00:49) [Clang 22.1.3 ]",
+        "installed_version": "1.22.3.dev14+gae5c0dfcb"
+      },
+      "identity_stderr": "",
+      "stages": [
+        {
+          "stage": 1,
+          "capture": {
+            "harness_sha256": "8247e424f78f0ab67a906503fdfdc379aead0f53d4a77db95732a0e9e1447455",
+            "reverse_module_order": false,
+            "warmups": 0,
+            "aggregate": {
+              "runs": 3,
+              "import_package_min_ms": 206.423,
+              "import_package_mean_ms": 337.736,
+              "import_package_max_ms": 574.247,
+              "import_rules_min_ms": 389.383,
+              "import_rules_mean_ms": 637.854,
+              "import_rules_max_ms": 1057.875
+            },
+            "samples": [
+              {
+                "module": "skilllint",
+                "index": 0,
+                "role": "measured",
+                "seconds": 0.5742465759999504
+              },
+              {
+                "module": "skilllint",
+                "index": 1,
+                "role": "measured",
+                "seconds": 0.206422965999991
+              },
+              {
+                "module": "skilllint",
+                "index": 2,
+                "role": "measured",
+                "seconds": 0.23253792000014073
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 0,
+                "role": "measured",
+                "seconds": 1.0578749349997452
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 1,
+                "role": "measured",
+                "seconds": 0.4663040010000259
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 2,
+                "role": "measured",
+                "seconds": 0.3893831170003068
+              }
+            ]
+          },
+          "install_log": "Using CPython 3.12.14 interpreter at: $RUNTIME/dependencies/python/bin/python3.12\nCreating virtual environment at: .venv\nResolved 60 packages in 2ms\n   Building skilllint @ file://$WORK/r1-full-write-w0-forward\n      Built skilllint @ file://$WORK/r1-full-write-w0-forward\nPrepared 1 package in 1.33s\nInstalled 58 packages in 132ms\n + annotated-doc==0.0.5\n + annotated-types==0.8.0\n + anyio==4.15.1\n + beautifulsoup4==4.15.0\n + certifi==2026.10.18\n + charset-normalizer==3.5.1\n + comrak==0.0.16\n + coverage==7.16.0\n + docutils==0.23\n + execnet==2.1.2\n + gitdb==4.0.12\n + gitpython==3.2.1\n + h11==0.16.0\n + hatch-vcs==0.5.0\n + hatchling==1.33.0\n + httpcore==1.0.9\n + httpx==0.28.1\n + hypothesis==6.170.14\n + idna==3.19\n + iniconfig==2.3.0\n + markdown-it-py==4.0.0\n + marko==2.2.5\n + mdurl==0.1.2\n + msgspec==0.22.0\n + nh3==0.3.7\n + packaging==26.3\n + pathspec==1.1.1\n + pluggy==1.6.0\n + prek==0.5.9\n + pydantic==2.14.2\n + pydantic-core==2.50.2\n + pygments==2.20.0\n + pytest==9.2.0\n + pytest-cov==7.1.0\n + pytest-mock==3.17.0\n + pytest-xdist==3.8.0\n + readme-renderer==46.0\n + regex==2026.9.3\n + requests==2.34.2\n + rich==15.0.0\n + ruamel-yaml==0.19.1\n + ruff==0.17.3\n + setuptools==84.1.0\n + setuptools-scm==10.2.3\n + shellingham==1.5.4\n + skilllint==1.22.3.dev14+gae5c0dfcb (from file://$WORK/r1-full-write-w0-forward)\n + smmap==5.0.3\n + sortedcontainers==2.4.0\n + soupsieve==2.9.2\n + tiktoken==0.14.0\n + tomlkit==0.15.1\n + trove-classifiers==2026.6.1.19\n + ty==0.0.95\n + typer==0.27.3\n + typing-extensions==4.16.0\n + typing-inspection==0.4.4\n + urllib3==2.8.0\n + vcs-versioning==2.3.4\n"
+        },
+        {
+          "stage": 2,
+          "capture": {
+            "harness_sha256": "8247e424f78f0ab67a906503fdfdc379aead0f53d4a77db95732a0e9e1447455",
+            "reverse_module_order": false,
+            "warmups": 0,
+            "aggregate": {
+              "runs": 3,
+              "import_package_min_ms": 214.248,
+              "import_package_mean_ms": 260.498,
+              "import_package_max_ms": 341.635,
+              "import_rules_min_ms": 335.025,
+              "import_rules_mean_ms": 596.092,
+              "import_rules_max_ms": 962.727
+            },
+            "samples": [
+              {
+                "module": "skilllint",
+                "index": 0,
+                "role": "measured",
+                "seconds": 0.3416354669998327
+              },
+              {
+                "module": "skilllint",
+                "index": 1,
+                "role": "measured",
+                "seconds": 0.22561017700036246
+              },
+              {
+                "module": "skilllint",
+                "index": 2,
+                "role": "measured",
+                "seconds": 0.21424831000013
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 0,
+                "role": "measured",
+                "seconds": 0.4905223920000026
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 1,
+                "role": "measured",
+                "seconds": 0.9627270430000863
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 2,
+                "role": "measured",
+                "seconds": 0.33502534599983846
+              }
+            ]
+          },
+          "install_log": "Resolved 60 packages in 2ms\n   Building skilllint @ file://$WORK/r1-full-write-w0-forward\n      Built skilllint @ file://$WORK/r1-full-write-w0-forward\nPrepared 1 package in 925ms\nUninstalled 1 package in 1ms\nInstalled 1 package in 1ms\n ~ skilllint==1.22.3.dev14+gae5c0dfcb (from file://$WORK/r1-full-write-w0-forward)\n"
+        }
+      ]
+    },
+    {
+      "name": "r1-full-write-w0-reverse",
+      "timing_session": "companion",
+      "replica": 1,
+      "history": "full",
+      "bytecode": "write",
+      "warmups": 0,
+      "module_order": "reverse",
+      "source_commit": "ae5c0dfcb5e36ef97e1de3861cf84db8345c1605",
+      "source_tree": "82d79d5a5666fe4484f7396371ef5f575919b874",
+      "product_tree": "224cff54dcc17343535cf9438497c25495c551a9",
+      "visible_commit_count": 663,
+      "is_shallow": false,
+      "identity": {
+        "python": "3.12.14",
+        "module_relative_path": "packages/skilllint/__init__.py",
+        "module_sha256": "fe1a6f420706d0c60125ec2fe90d1df0edcfe5add9152c87e16a1141f90d78d8",
+        "runtime_version": "1.22.3.dev14+gae5c0dfcb",
+        "rule_codes": [
+          "AG001",
+          "AG002",
+          "AG003",
+          "AS001",
+          "AS006",
+          "AS008",
+          "AS009",
+          "CU001",
+          "CU002",
+          "CX001",
+          "CX002",
+          "FM001",
+          "FM002",
+          "FM003",
+          "FM004",
+          "FM005",
+          "FM006",
+          "FM007",
+          "FM009",
+          "FM010",
+          "HK001",
+          "HK002",
+          "HK003",
+          "HK004",
+          "HK005",
+          "LK001",
+          "LK004",
+          "NR001",
+          "NR002",
+          "PA001",
+          "PD001",
+          "PD002",
+          "PD003",
+          "PL001",
+          "PL002",
+          "PL003",
+          "PL004",
+          "PL005",
+          "PL006",
+          "PR001",
+          "PR002",
+          "PR005",
+          "SK004",
+          "SK005",
+          "SK006",
+          "SK007",
+          "SK008",
+          "SL001",
+          "TC001"
+        ]
+      },
+      "installation_identity": {
+        "python_build": "3.12.14 (main, Aug 25 2026, 14:00:49) [Clang 22.1.3 ]",
+        "installed_version": "1.22.3.dev14+gae5c0dfcb"
+      },
+      "identity_stderr": "",
+      "stages": [
+        {
+          "stage": 1,
+          "capture": {
+            "harness_sha256": "8247e424f78f0ab67a906503fdfdc379aead0f53d4a77db95732a0e9e1447455",
+            "reverse_module_order": true,
+            "warmups": 0,
+            "aggregate": {
+              "runs": 3,
+              "import_rules_min_ms": 347.443,
+              "import_rules_mean_ms": 743.67,
+              "import_rules_max_ms": 1506.367,
+              "import_package_min_ms": 193.785,
+              "import_package_mean_ms": 287.515,
+              "import_package_max_ms": 448.542
+            },
+            "samples": [
+              {
+                "module": "skilllint.rules",
+                "index": 0,
+                "role": "measured",
+                "seconds": 1.5063667009999335
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 1,
+                "role": "measured",
+                "seconds": 0.34744332400032363
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 2,
+                "role": "measured",
+                "seconds": 0.37720125599980747
+              },
+              {
+                "module": "skilllint",
+                "index": 0,
+                "role": "measured",
+                "seconds": 0.4485420420000992
+              },
+              {
+                "module": "skilllint",
+                "index": 1,
+                "role": "measured",
+                "seconds": 0.19378519300016706
+              },
+              {
+                "module": "skilllint",
+                "index": 2,
+                "role": "measured",
+                "seconds": 0.22021695200010072
+              }
+            ]
+          },
+          "install_log": "Using CPython 3.12.14 interpreter at: $RUNTIME/dependencies/python/bin/python3.12\nCreating virtual environment at: .venv\nResolved 60 packages in 4ms\n   Building skilllint @ file://$WORK/r1-full-write-w0-reverse\n      Built skilllint @ file://$WORK/r1-full-write-w0-reverse\nPrepared 1 package in 1.01s\nInstalled 58 packages in 113ms\n + annotated-doc==0.0.5\n + annotated-types==0.8.0\n + anyio==4.15.1\n + beautifulsoup4==4.15.0\n + certifi==2026.10.18\n + charset-normalizer==3.5.1\n + comrak==0.0.16\n + coverage==7.16.0\n + docutils==0.23\n + execnet==2.1.2\n + gitdb==4.0.12\n + gitpython==3.2.1\n + h11==0.16.0\n + hatch-vcs==0.5.0\n + hatchling==1.33.0\n + httpcore==1.0.9\n + httpx==0.28.1\n + hypothesis==6.170.14\n + idna==3.19\n + iniconfig==2.3.0\n + markdown-it-py==4.0.0\n + marko==2.2.5\n + mdurl==0.1.2\n + msgspec==0.22.0\n + nh3==0.3.7\n + packaging==26.3\n + pathspec==1.1.1\n + pluggy==1.6.0\n + prek==0.5.9\n + pydantic==2.14.2\n + pydantic-core==2.50.2\n + pygments==2.20.0\n + pytest==9.2.0\n + pytest-cov==7.1.0\n + pytest-mock==3.17.0\n + pytest-xdist==3.8.0\n + readme-renderer==46.0\n + regex==2026.9.3\n + requests==2.34.2\n + rich==15.0.0\n + ruamel-yaml==0.19.1\n + ruff==0.17.3\n + setuptools==84.1.0\n + setuptools-scm==10.2.3\n + shellingham==1.5.4\n + skilllint==1.22.3.dev14+gae5c0dfcb (from file://$WORK/r1-full-write-w0-reverse)\n + smmap==5.0.3\n + sortedcontainers==2.4.0\n + soupsieve==2.9.2\n + tiktoken==0.14.0\n + tomlkit==0.15.1\n + trove-classifiers==2026.6.1.19\n + ty==0.0.95\n + typer==0.27.3\n + typing-extensions==4.16.0\n + typing-inspection==0.4.4\n + urllib3==2.8.0\n + vcs-versioning==2.3.4\n"
+        },
+        {
+          "stage": 2,
+          "capture": {
+            "harness_sha256": "8247e424f78f0ab67a906503fdfdc379aead0f53d4a77db95732a0e9e1447455",
+            "reverse_module_order": true,
+            "warmups": 0,
+            "aggregate": {
+              "runs": 3,
+              "import_rules_min_ms": 386.934,
+              "import_rules_mean_ms": 480.368,
+              "import_rules_max_ms": 653.873,
+              "import_package_min_ms": 207.162,
+              "import_package_mean_ms": 245.196,
+              "import_package_max_ms": 301.795
+            },
+            "samples": [
+              {
+                "module": "skilllint.rules",
+                "index": 0,
+                "role": "measured",
+                "seconds": 0.6538731460000236
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 1,
+                "role": "measured",
+                "seconds": 0.40029718200003117
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 2,
+                "role": "measured",
+                "seconds": 0.38693362799995157
+              },
+              {
+                "module": "skilllint",
+                "index": 0,
+                "role": "measured",
+                "seconds": 0.20716167799992036
+              },
+              {
+                "module": "skilllint",
+                "index": 1,
+                "role": "measured",
+                "seconds": 0.3017946720001419
+              },
+              {
+                "module": "skilllint",
+                "index": 2,
+                "role": "measured",
+                "seconds": 0.22663073400008216
+              }
+            ]
+          },
+          "install_log": "Resolved 60 packages in 2ms\n   Building skilllint @ file://$WORK/r1-full-write-w0-reverse\n      Built skilllint @ file://$WORK/r1-full-write-w0-reverse\nPrepared 1 package in 567ms\nUninstalled 1 package in 0.58ms\nInstalled 1 package in 0.95ms\n ~ skilllint==1.22.3.dev14+gae5c0dfcb (from file://$WORK/r1-full-write-w0-reverse)\n"
+        }
+      ]
+    },
+    {
+      "name": "r1-full-write-w1-forward",
+      "timing_session": "companion",
+      "replica": 1,
+      "history": "full",
+      "bytecode": "write",
+      "warmups": 1,
+      "module_order": "forward",
+      "source_commit": "ae5c0dfcb5e36ef97e1de3861cf84db8345c1605",
+      "source_tree": "82d79d5a5666fe4484f7396371ef5f575919b874",
+      "product_tree": "224cff54dcc17343535cf9438497c25495c551a9",
+      "visible_commit_count": 663,
+      "is_shallow": false,
+      "identity": {
+        "python": "3.12.14",
+        "module_relative_path": "packages/skilllint/__init__.py",
+        "module_sha256": "fe1a6f420706d0c60125ec2fe90d1df0edcfe5add9152c87e16a1141f90d78d8",
+        "runtime_version": "1.22.3.dev14+gae5c0dfcb",
+        "rule_codes": [
+          "AG001",
+          "AG002",
+          "AG003",
+          "AS001",
+          "AS006",
+          "AS008",
+          "AS009",
+          "CU001",
+          "CU002",
+          "CX001",
+          "CX002",
+          "FM001",
+          "FM002",
+          "FM003",
+          "FM004",
+          "FM005",
+          "FM006",
+          "FM007",
+          "FM009",
+          "FM010",
+          "HK001",
+          "HK002",
+          "HK003",
+          "HK004",
+          "HK005",
+          "LK001",
+          "LK004",
+          "NR001",
+          "NR002",
+          "PA001",
+          "PD001",
+          "PD002",
+          "PD003",
+          "PL001",
+          "PL002",
+          "PL003",
+          "PL004",
+          "PL005",
+          "PL006",
+          "PR001",
+          "PR002",
+          "PR005",
+          "SK004",
+          "SK005",
+          "SK006",
+          "SK007",
+          "SK008",
+          "SL001",
+          "TC001"
+        ]
+      },
+      "installation_identity": {
+        "python_build": "3.12.14 (main, Aug 25 2026, 14:00:49) [Clang 22.1.3 ]",
+        "installed_version": "1.22.3.dev14+gae5c0dfcb"
+      },
+      "identity_stderr": "",
+      "stages": [
+        {
+          "stage": 1,
+          "capture": {
+            "harness_sha256": "8247e424f78f0ab67a906503fdfdc379aead0f53d4a77db95732a0e9e1447455",
+            "reverse_module_order": false,
+            "warmups": 1,
+            "aggregate": {
+              "runs": 3,
+              "warmups": 1,
+              "warm_cache_import_package_min_ms": 223.387,
+              "warm_cache_import_package_mean_ms": 243.996,
+              "warm_cache_import_package_max_ms": 269.333,
+              "warm_cache_import_rules_min_ms": 371.934,
+              "warm_cache_import_rules_mean_ms": 414.531,
+              "warm_cache_import_rules_max_ms": 440.655
+            },
+            "samples": [
+              {
+                "module": "skilllint",
+                "index": 0,
+                "role": "warmup",
+                "seconds": 0.6190258900001027
+              },
+              {
+                "module": "skilllint",
+                "index": 1,
+                "role": "measured",
+                "seconds": 0.22338686800003416
+              },
+              {
+                "module": "skilllint",
+                "index": 2,
+                "role": "measured",
+                "seconds": 0.23926717599988478
+              },
+              {
+                "module": "skilllint",
+                "index": 3,
+                "role": "measured",
+                "seconds": 0.2693328069999552
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 0,
+                "role": "warmup",
+                "seconds": 0.8546949000001405
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 1,
+                "role": "measured",
+                "seconds": 0.4310028939999029
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 2,
+                "role": "measured",
+                "seconds": 0.3719341139999415
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 3,
+                "role": "measured",
+                "seconds": 0.44065493500011144
+              }
+            ]
+          },
+          "install_log": "Using CPython 3.12.14 interpreter at: $RUNTIME/dependencies/python/bin/python3.12\nCreating virtual environment at: .venv\nResolved 60 packages in 2ms\n   Building skilllint @ file://$WORK/r1-full-write-w1-forward\n      Built skilllint @ file://$WORK/r1-full-write-w1-forward\nPrepared 1 package in 980ms\nInstalled 58 packages in 190ms\n + annotated-doc==0.0.5\n + annotated-types==0.8.0\n + anyio==4.15.1\n + beautifulsoup4==4.15.0\n + certifi==2026.10.18\n + charset-normalizer==3.5.1\n + comrak==0.0.16\n + coverage==7.16.0\n + docutils==0.23\n + execnet==2.1.2\n + gitdb==4.0.12\n + gitpython==3.2.1\n + h11==0.16.0\n + hatch-vcs==0.5.0\n + hatchling==1.33.0\n + httpcore==1.0.9\n + httpx==0.28.1\n + hypothesis==6.170.14\n + idna==3.19\n + iniconfig==2.3.0\n + markdown-it-py==4.0.0\n + marko==2.2.5\n + mdurl==0.1.2\n + msgspec==0.22.0\n + nh3==0.3.7\n + packaging==26.3\n + pathspec==1.1.1\n + pluggy==1.6.0\n + prek==0.5.9\n + pydantic==2.14.2\n + pydantic-core==2.50.2\n + pygments==2.20.0\n + pytest==9.2.0\n + pytest-cov==7.1.0\n + pytest-mock==3.17.0\n + pytest-xdist==3.8.0\n + readme-renderer==46.0\n + regex==2026.9.3\n + requests==2.34.2\n + rich==15.0.0\n + ruamel-yaml==0.19.1\n + ruff==0.17.3\n + setuptools==84.1.0\n + setuptools-scm==10.2.3\n + shellingham==1.5.4\n + skilllint==1.22.3.dev14+gae5c0dfcb (from file://$WORK/r1-full-write-w1-forward)\n + smmap==5.0.3\n + sortedcontainers==2.4.0\n + soupsieve==2.9.2\n + tiktoken==0.14.0\n + tomlkit==0.15.1\n + trove-classifiers==2026.6.1.19\n + ty==0.0.95\n + typer==0.27.3\n + typing-extensions==4.16.0\n + typing-inspection==0.4.4\n + urllib3==2.8.0\n + vcs-versioning==2.3.4\n"
+        },
+        {
+          "stage": 2,
+          "capture": {
+            "harness_sha256": "8247e424f78f0ab67a906503fdfdc379aead0f53d4a77db95732a0e9e1447455",
+            "reverse_module_order": false,
+            "warmups": 1,
+            "aggregate": {
+              "runs": 3,
+              "warmups": 1,
+              "warm_cache_import_package_min_ms": 192.014,
+              "warm_cache_import_package_mean_ms": 317.897,
+              "warm_cache_import_package_max_ms": 436.194,
+              "warm_cache_import_rules_min_ms": 405.261,
+              "warm_cache_import_rules_mean_ms": 550.341,
+              "warm_cache_import_rules_max_ms": 818.671
+            },
+            "samples": [
+              {
+                "module": "skilllint",
+                "index": 0,
+                "role": "warmup",
+                "seconds": 0.2071505230001094
+              },
+              {
+                "module": "skilllint",
+                "index": 1,
+                "role": "measured",
+                "seconds": 0.192014362000009
+              },
+              {
+                "module": "skilllint",
+                "index": 2,
+                "role": "measured",
+                "seconds": 0.32548345300028814
+              },
+              {
+                "module": "skilllint",
+                "index": 3,
+                "role": "measured",
+                "seconds": 0.4361939469999925
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 0,
+                "role": "warmup",
+                "seconds": 0.6514023429999725
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 1,
+                "role": "measured",
+                "seconds": 0.405260793999787
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 2,
+                "role": "measured",
+                "seconds": 0.42709082100009255
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 3,
+                "role": "measured",
+                "seconds": 0.8186711550001746
+              }
+            ]
+          },
+          "install_log": "Resolved 60 packages in 3ms\n   Building skilllint @ file://$WORK/r1-full-write-w1-forward\n      Built skilllint @ file://$WORK/r1-full-write-w1-forward\nPrepared 1 package in 554ms\nUninstalled 1 package in 0.33ms\nInstalled 1 package in 0.72ms\n ~ skilllint==1.22.3.dev14+gae5c0dfcb (from file://$WORK/r1-full-write-w1-forward)\n"
+        }
+      ]
+    },
+    {
+      "name": "r1-full-write-w1-reverse",
+      "timing_session": "companion",
+      "replica": 1,
+      "history": "full",
+      "bytecode": "write",
+      "warmups": 1,
+      "module_order": "reverse",
+      "source_commit": "ae5c0dfcb5e36ef97e1de3861cf84db8345c1605",
+      "source_tree": "82d79d5a5666fe4484f7396371ef5f575919b874",
+      "product_tree": "224cff54dcc17343535cf9438497c25495c551a9",
+      "visible_commit_count": 663,
+      "is_shallow": false,
+      "identity": {
+        "python": "3.12.14",
+        "module_relative_path": "packages/skilllint/__init__.py",
+        "module_sha256": "fe1a6f420706d0c60125ec2fe90d1df0edcfe5add9152c87e16a1141f90d78d8",
+        "runtime_version": "1.22.3.dev14+gae5c0dfcb",
+        "rule_codes": [
+          "AG001",
+          "AG002",
+          "AG003",
+          "AS001",
+          "AS006",
+          "AS008",
+          "AS009",
+          "CU001",
+          "CU002",
+          "CX001",
+          "CX002",
+          "FM001",
+          "FM002",
+          "FM003",
+          "FM004",
+          "FM005",
+          "FM006",
+          "FM007",
+          "FM009",
+          "FM010",
+          "HK001",
+          "HK002",
+          "HK003",
+          "HK004",
+          "HK005",
+          "LK001",
+          "LK004",
+          "NR001",
+          "NR002",
+          "PA001",
+          "PD001",
+          "PD002",
+          "PD003",
+          "PL001",
+          "PL002",
+          "PL003",
+          "PL004",
+          "PL005",
+          "PL006",
+          "PR001",
+          "PR002",
+          "PR005",
+          "SK004",
+          "SK005",
+          "SK006",
+          "SK007",
+          "SK008",
+          "SL001",
+          "TC001"
+        ]
+      },
+      "installation_identity": {
+        "python_build": "3.12.14 (main, Aug 25 2026, 14:00:49) [Clang 22.1.3 ]",
+        "installed_version": "1.22.3.dev14+gae5c0dfcb"
+      },
+      "identity_stderr": "",
+      "stages": [
+        {
+          "stage": 1,
+          "capture": {
+            "harness_sha256": "8247e424f78f0ab67a906503fdfdc379aead0f53d4a77db95732a0e9e1447455",
+            "reverse_module_order": true,
+            "warmups": 1,
+            "aggregate": {
+              "runs": 3,
+              "warmups": 1,
+              "warm_cache_import_rules_min_ms": 629.34,
+              "warm_cache_import_rules_mean_ms": 738.362,
+              "warm_cache_import_rules_max_ms": 894.649,
+              "warm_cache_import_package_min_ms": 235.053,
+              "warm_cache_import_package_mean_ms": 267.234,
+              "warm_cache_import_package_max_ms": 287.714
+            },
+            "samples": [
+              {
+                "module": "skilllint.rules",
+                "index": 0,
+                "role": "warmup",
+                "seconds": 1.442617141000028
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 1,
+                "role": "measured",
+                "seconds": 0.8946493930002362
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 2,
+                "role": "measured",
+                "seconds": 0.6293400519998613
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 3,
+                "role": "measured",
+                "seconds": 0.6910959040001217
+              },
+              {
+                "module": "skilllint",
+                "index": 0,
+                "role": "warmup",
+                "seconds": 0.29364908199977435
+              },
+              {
+                "module": "skilllint",
+                "index": 1,
+                "role": "measured",
+                "seconds": 0.28771424000024126
+              },
+              {
+                "module": "skilllint",
+                "index": 2,
+                "role": "measured",
+                "seconds": 0.2789360710003166
+              },
+              {
+                "module": "skilllint",
+                "index": 3,
+                "role": "measured",
+                "seconds": 0.2350528730003134
+              }
+            ]
+          },
+          "install_log": "Using CPython 3.12.14 interpreter at: $RUNTIME/dependencies/python/bin/python3.12\nCreating virtual environment at: .venv\nResolved 60 packages in 2ms\n   Building skilllint @ file://$WORK/r1-full-write-w1-reverse\n      Built skilllint @ file://$WORK/r1-full-write-w1-reverse\nPrepared 1 package in 2.04s\nInstalled 58 packages in 178ms\n + annotated-doc==0.0.5\n + annotated-types==0.8.0\n + anyio==4.15.1\n + beautifulsoup4==4.15.0\n + certifi==2026.10.18\n + charset-normalizer==3.5.1\n + comrak==0.0.16\n + coverage==7.16.0\n + docutils==0.23\n + execnet==2.1.2\n + gitdb==4.0.12\n + gitpython==3.2.1\n + h11==0.16.0\n + hatch-vcs==0.5.0\n + hatchling==1.33.0\n + httpcore==1.0.9\n + httpx==0.28.1\n + hypothesis==6.170.14\n + idna==3.19\n + iniconfig==2.3.0\n + markdown-it-py==4.0.0\n + marko==2.2.5\n + mdurl==0.1.2\n + msgspec==0.22.0\n + nh3==0.3.7\n + packaging==26.3\n + pathspec==1.1.1\n + pluggy==1.6.0\n + prek==0.5.9\n + pydantic==2.14.2\n + pydantic-core==2.50.2\n + pygments==2.20.0\n + pytest==9.2.0\n + pytest-cov==7.1.0\n + pytest-mock==3.17.0\n + pytest-xdist==3.8.0\n + readme-renderer==46.0\n + regex==2026.9.3\n + requests==2.34.2\n + rich==15.0.0\n + ruamel-yaml==0.19.1\n + ruff==0.17.3\n + setuptools==84.1.0\n + setuptools-scm==10.2.3\n + shellingham==1.5.4\n + skilllint==1.22.3.dev14+gae5c0dfcb (from file://$WORK/r1-full-write-w1-reverse)\n + smmap==5.0.3\n + sortedcontainers==2.4.0\n + soupsieve==2.9.2\n + tiktoken==0.14.0\n + tomlkit==0.15.1\n + trove-classifiers==2026.6.1.19\n + ty==0.0.95\n + typer==0.27.3\n + typing-extensions==4.16.0\n + typing-inspection==0.4.4\n + urllib3==2.8.0\n + vcs-versioning==2.3.4\n"
+        },
+        {
+          "stage": 2,
+          "capture": {
+            "harness_sha256": "8247e424f78f0ab67a906503fdfdc379aead0f53d4a77db95732a0e9e1447455",
+            "reverse_module_order": true,
+            "warmups": 1,
+            "aggregate": {
+              "runs": 3,
+              "warmups": 1,
+              "warm_cache_import_rules_min_ms": 645.049,
+              "warm_cache_import_rules_mean_ms": 700.296,
+              "warm_cache_import_rules_max_ms": 781.676,
+              "warm_cache_import_package_min_ms": 288.373,
+              "warm_cache_import_package_mean_ms": 336.145,
+              "warm_cache_import_package_max_ms": 397.285
+            },
+            "samples": [
+              {
+                "module": "skilllint.rules",
+                "index": 0,
+                "role": "warmup",
+                "seconds": 1.5628836289997707
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 1,
+                "role": "measured",
+                "seconds": 0.7816762469997229
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 2,
+                "role": "measured",
+                "seconds": 0.6741644740000083
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 3,
+                "role": "measured",
+                "seconds": 0.6450487100000828
+              },
+              {
+                "module": "skilllint",
+                "index": 0,
+                "role": "warmup",
+                "seconds": 0.46551252299968837
+              },
+              {
+                "module": "skilllint",
+                "index": 1,
+                "role": "measured",
+                "seconds": 0.3972846319998098
+              },
+              {
+                "module": "skilllint",
+                "index": 2,
+                "role": "measured",
+                "seconds": 0.28837343099985446
+              },
+              {
+                "module": "skilllint",
+                "index": 3,
+                "role": "measured",
+                "seconds": 0.32277746700037824
+              }
+            ]
+          },
+          "install_log": "Resolved 60 packages in 4ms\n   Building skilllint @ file://$WORK/r1-full-write-w1-reverse\n      Built skilllint @ file://$WORK/r1-full-write-w1-reverse\nPrepared 1 package in 1.81s\nUninstalled 1 package in 12ms\nInstalled 1 package in 23ms\n ~ skilllint==1.22.3.dev14+gae5c0dfcb (from file://$WORK/r1-full-write-w1-reverse)\n"
+        }
+      ]
+    },
+    {
+      "name": "r2-full-write-w0-forward",
+      "timing_session": "companion",
+      "replica": 2,
+      "history": "full",
+      "bytecode": "write",
+      "warmups": 0,
+      "module_order": "forward",
+      "source_commit": "ae5c0dfcb5e36ef97e1de3861cf84db8345c1605",
+      "source_tree": "82d79d5a5666fe4484f7396371ef5f575919b874",
+      "product_tree": "224cff54dcc17343535cf9438497c25495c551a9",
+      "visible_commit_count": 663,
+      "is_shallow": false,
+      "identity": {
+        "python": "3.12.14",
+        "module_relative_path": "packages/skilllint/__init__.py",
+        "module_sha256": "fe1a6f420706d0c60125ec2fe90d1df0edcfe5add9152c87e16a1141f90d78d8",
+        "runtime_version": "1.22.3.dev14+gae5c0dfcb",
+        "rule_codes": [
+          "AG001",
+          "AG002",
+          "AG003",
+          "AS001",
+          "AS006",
+          "AS008",
+          "AS009",
+          "CU001",
+          "CU002",
+          "CX001",
+          "CX002",
+          "FM001",
+          "FM002",
+          "FM003",
+          "FM004",
+          "FM005",
+          "FM006",
+          "FM007",
+          "FM009",
+          "FM010",
+          "HK001",
+          "HK002",
+          "HK003",
+          "HK004",
+          "HK005",
+          "LK001",
+          "LK004",
+          "NR001",
+          "NR002",
+          "PA001",
+          "PD001",
+          "PD002",
+          "PD003",
+          "PL001",
+          "PL002",
+          "PL003",
+          "PL004",
+          "PL005",
+          "PL006",
+          "PR001",
+          "PR002",
+          "PR005",
+          "SK004",
+          "SK005",
+          "SK006",
+          "SK007",
+          "SK008",
+          "SL001",
+          "TC001"
+        ]
+      },
+      "installation_identity": {
+        "python_build": "3.12.14 (main, Aug 25 2026, 14:00:49) [Clang 22.1.3 ]",
+        "installed_version": "1.22.3.dev14+gae5c0dfcb"
+      },
+      "identity_stderr": "",
+      "stages": [
+        {
+          "stage": 1,
+          "capture": {
+            "harness_sha256": "8247e424f78f0ab67a906503fdfdc379aead0f53d4a77db95732a0e9e1447455",
+            "reverse_module_order": false,
+            "warmups": 0,
+            "aggregate": {
+              "runs": 3,
+              "import_package_min_ms": 179.764,
+              "import_package_mean_ms": 291.212,
+              "import_package_max_ms": 483.007,
+              "import_rules_min_ms": 348.497,
+              "import_rules_mean_ms": 561.93,
+              "import_rules_max_ms": 932.399
+            },
+            "samples": [
+              {
+                "module": "skilllint",
+                "index": 0,
+                "role": "measured",
+                "seconds": 0.4830068649998793
+              },
+              {
+                "module": "skilllint",
+                "index": 1,
+                "role": "measured",
+                "seconds": 0.21086547200002315
+              },
+              {
+                "module": "skilllint",
+                "index": 2,
+                "role": "measured",
+                "seconds": 0.1797641130001466
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 0,
+                "role": "measured",
+                "seconds": 0.9323989740000798
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 1,
+                "role": "measured",
+                "seconds": 0.34849651600006837
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 2,
+                "role": "measured",
+                "seconds": 0.40489385799992306
+              }
+            ]
+          },
+          "install_log": "Using CPython 3.12.14 interpreter at: $RUNTIME/dependencies/python/bin/python3.12\nCreating virtual environment at: .venv\nResolved 60 packages in 2ms\n   Building skilllint @ file://$WORK/r2-full-write-w0-forward\n      Built skilllint @ file://$WORK/r2-full-write-w0-forward\nPrepared 1 package in 1.21s\nInstalled 58 packages in 198ms\n + annotated-doc==0.0.5\n + annotated-types==0.8.0\n + anyio==4.15.1\n + beautifulsoup4==4.15.0\n + certifi==2026.10.18\n + charset-normalizer==3.5.1\n + comrak==0.0.16\n + coverage==7.16.0\n + docutils==0.23\n + execnet==2.1.2\n + gitdb==4.0.12\n + gitpython==3.2.1\n + h11==0.16.0\n + hatch-vcs==0.5.0\n + hatchling==1.33.0\n + httpcore==1.0.9\n + httpx==0.28.1\n + hypothesis==6.170.14\n + idna==3.19\n + iniconfig==2.3.0\n + markdown-it-py==4.0.0\n + marko==2.2.5\n + mdurl==0.1.2\n + msgspec==0.22.0\n + nh3==0.3.7\n + packaging==26.3\n + pathspec==1.1.1\n + pluggy==1.6.0\n + prek==0.5.9\n + pydantic==2.14.2\n + pydantic-core==2.50.2\n + pygments==2.20.0\n + pytest==9.2.0\n + pytest-cov==7.1.0\n + pytest-mock==3.17.0\n + pytest-xdist==3.8.0\n + readme-renderer==46.0\n + regex==2026.9.3\n + requests==2.34.2\n + rich==15.0.0\n + ruamel-yaml==0.19.1\n + ruff==0.17.3\n + setuptools==84.1.0\n + setuptools-scm==10.2.3\n + shellingham==1.5.4\n + skilllint==1.22.3.dev14+gae5c0dfcb (from file://$WORK/r2-full-write-w0-forward)\n + smmap==5.0.3\n + sortedcontainers==2.4.0\n + soupsieve==2.9.2\n + tiktoken==0.14.0\n + tomlkit==0.15.1\n + trove-classifiers==2026.6.1.19\n + ty==0.0.95\n + typer==0.27.3\n + typing-extensions==4.16.0\n + typing-inspection==0.4.4\n + urllib3==2.8.0\n + vcs-versioning==2.3.4\n"
+        },
+        {
+          "stage": 2,
+          "capture": {
+            "harness_sha256": "8247e424f78f0ab67a906503fdfdc379aead0f53d4a77db95732a0e9e1447455",
+            "reverse_module_order": false,
+            "warmups": 0,
+            "aggregate": {
+              "runs": 3,
+              "import_package_min_ms": 195.01,
+              "import_package_mean_ms": 242.345,
+              "import_package_max_ms": 282.384,
+              "import_rules_min_ms": 322.619,
+              "import_rules_mean_ms": 354.227,
+              "import_rules_max_ms": 374.449
+            },
+            "samples": [
+              {
+                "module": "skilllint",
+                "index": 0,
+                "role": "measured",
+                "seconds": 0.24964153099972464
+              },
+              {
+                "module": "skilllint",
+                "index": 1,
+                "role": "measured",
+                "seconds": 0.282384249000188
+              },
+              {
+                "module": "skilllint",
+                "index": 2,
+                "role": "measured",
+                "seconds": 0.19501033300002746
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 0,
+                "role": "measured",
+                "seconds": 0.36561312100002397
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 1,
+                "role": "measured",
+                "seconds": 0.37444935000030455
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 2,
+                "role": "measured",
+                "seconds": 0.3226191979997566
+              }
+            ]
+          },
+          "install_log": "Resolved 60 packages in 2ms\n   Building skilllint @ file://$WORK/r2-full-write-w0-forward\n      Built skilllint @ file://$WORK/r2-full-write-w0-forward\nPrepared 1 package in 568ms\nUninstalled 1 package in 0.67ms\nInstalled 1 package in 0.64ms\n ~ skilllint==1.22.3.dev14+gae5c0dfcb (from file://$WORK/r2-full-write-w0-forward)\n"
+        }
+      ]
+    },
+    {
+      "name": "r2-full-write-w0-reverse",
+      "timing_session": "companion",
+      "replica": 2,
+      "history": "full",
+      "bytecode": "write",
+      "warmups": 0,
+      "module_order": "reverse",
+      "source_commit": "ae5c0dfcb5e36ef97e1de3861cf84db8345c1605",
+      "source_tree": "82d79d5a5666fe4484f7396371ef5f575919b874",
+      "product_tree": "224cff54dcc17343535cf9438497c25495c551a9",
+      "visible_commit_count": 663,
+      "is_shallow": false,
+      "identity": {
+        "python": "3.12.14",
+        "module_relative_path": "packages/skilllint/__init__.py",
+        "module_sha256": "fe1a6f420706d0c60125ec2fe90d1df0edcfe5add9152c87e16a1141f90d78d8",
+        "runtime_version": "1.22.3.dev14+gae5c0dfcb",
+        "rule_codes": [
+          "AG001",
+          "AG002",
+          "AG003",
+          "AS001",
+          "AS006",
+          "AS008",
+          "AS009",
+          "CU001",
+          "CU002",
+          "CX001",
+          "CX002",
+          "FM001",
+          "FM002",
+          "FM003",
+          "FM004",
+          "FM005",
+          "FM006",
+          "FM007",
+          "FM009",
+          "FM010",
+          "HK001",
+          "HK002",
+          "HK003",
+          "HK004",
+          "HK005",
+          "LK001",
+          "LK004",
+          "NR001",
+          "NR002",
+          "PA001",
+          "PD001",
+          "PD002",
+          "PD003",
+          "PL001",
+          "PL002",
+          "PL003",
+          "PL004",
+          "PL005",
+          "PL006",
+          "PR001",
+          "PR002",
+          "PR005",
+          "SK004",
+          "SK005",
+          "SK006",
+          "SK007",
+          "SK008",
+          "SL001",
+          "TC001"
+        ]
+      },
+      "installation_identity": {
+        "python_build": "3.12.14 (main, Aug 25 2026, 14:00:49) [Clang 22.1.3 ]",
+        "installed_version": "1.22.3.dev14+gae5c0dfcb"
+      },
+      "identity_stderr": "",
+      "stages": [
+        {
+          "stage": 1,
+          "capture": {
+            "harness_sha256": "8247e424f78f0ab67a906503fdfdc379aead0f53d4a77db95732a0e9e1447455",
+            "reverse_module_order": true,
+            "warmups": 0,
+            "aggregate": {
+              "runs": 3,
+              "import_rules_min_ms": 368.818,
+              "import_rules_mean_ms": 777.37,
+              "import_rules_max_ms": 1509.56,
+              "import_package_min_ms": 196.597,
+              "import_package_mean_ms": 203.122,
+              "import_package_max_ms": 213.331
+            },
+            "samples": [
+              {
+                "module": "skilllint.rules",
+                "index": 0,
+                "role": "measured",
+                "seconds": 1.509559769000134
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 1,
+                "role": "measured",
+                "seconds": 0.4537326029999349
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 2,
+                "role": "measured",
+                "seconds": 0.36881844299978184
+              },
+              {
+                "module": "skilllint",
+                "index": 0,
+                "role": "measured",
+                "seconds": 0.19659729999966657
+              },
+              {
+                "module": "skilllint",
+                "index": 1,
+                "role": "measured",
+                "seconds": 0.21333094999999958
+              },
+              {
+                "module": "skilllint",
+                "index": 2,
+                "role": "measured",
+                "seconds": 0.19943714300006832
+              }
+            ]
+          },
+          "install_log": "Using CPython 3.12.14 interpreter at: $RUNTIME/dependencies/python/bin/python3.12\nCreating virtual environment at: .venv\nResolved 60 packages in 2ms\n   Building skilllint @ file://$WORK/r2-full-write-w0-reverse\n      Built skilllint @ file://$WORK/r2-full-write-w0-reverse\nPrepared 1 package in 1.00s\nInstalled 58 packages in 148ms\n + annotated-doc==0.0.5\n + annotated-types==0.8.0\n + anyio==4.15.1\n + beautifulsoup4==4.15.0\n + certifi==2026.10.18\n + charset-normalizer==3.5.1\n + comrak==0.0.16\n + coverage==7.16.0\n + docutils==0.23\n + execnet==2.1.2\n + gitdb==4.0.12\n + gitpython==3.2.1\n + h11==0.16.0\n + hatch-vcs==0.5.0\n + hatchling==1.33.0\n + httpcore==1.0.9\n + httpx==0.28.1\n + hypothesis==6.170.14\n + idna==3.19\n + iniconfig==2.3.0\n + markdown-it-py==4.0.0\n + marko==2.2.5\n + mdurl==0.1.2\n + msgspec==0.22.0\n + nh3==0.3.7\n + packaging==26.3\n + pathspec==1.1.1\n + pluggy==1.6.0\n + prek==0.5.9\n + pydantic==2.14.2\n + pydantic-core==2.50.2\n + pygments==2.20.0\n + pytest==9.2.0\n + pytest-cov==7.1.0\n + pytest-mock==3.17.0\n + pytest-xdist==3.8.0\n + readme-renderer==46.0\n + regex==2026.9.3\n + requests==2.34.2\n + rich==15.0.0\n + ruamel-yaml==0.19.1\n + ruff==0.17.3\n + setuptools==84.1.0\n + setuptools-scm==10.2.3\n + shellingham==1.5.4\n + skilllint==1.22.3.dev14+gae5c0dfcb (from file://$WORK/r2-full-write-w0-reverse)\n + smmap==5.0.3\n + sortedcontainers==2.4.0\n + soupsieve==2.9.2\n + tiktoken==0.14.0\n + tomlkit==0.15.1\n + trove-classifiers==2026.6.1.19\n + ty==0.0.95\n + typer==0.27.3\n + typing-extensions==4.16.0\n + typing-inspection==0.4.4\n + urllib3==2.8.0\n + vcs-versioning==2.3.4\n"
+        },
+        {
+          "stage": 2,
+          "capture": {
+            "harness_sha256": "8247e424f78f0ab67a906503fdfdc379aead0f53d4a77db95732a0e9e1447455",
+            "reverse_module_order": true,
+            "warmups": 0,
+            "aggregate": {
+              "runs": 3,
+              "import_rules_min_ms": 326.824,
+              "import_rules_mean_ms": 374.611,
+              "import_rules_max_ms": 405.137,
+              "import_package_min_ms": 180.837,
+              "import_package_mean_ms": 205.664,
+              "import_package_max_ms": 247.039
+            },
+            "samples": [
+              {
+                "module": "skilllint.rules",
+                "index": 0,
+                "role": "measured",
+                "seconds": 0.3918728200001169
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 1,
+                "role": "measured",
+                "seconds": 0.4051372179997088
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 2,
+                "role": "measured",
+                "seconds": 0.3268240309998873
+              },
+              {
+                "module": "skilllint",
+                "index": 0,
+                "role": "measured",
+                "seconds": 0.24703900799977419
+              },
+              {
+                "module": "skilllint",
+                "index": 1,
+                "role": "measured",
+                "seconds": 0.18911593499979062
+              },
+              {
+                "module": "skilllint",
+                "index": 2,
+                "role": "measured",
+                "seconds": 0.18083718700017926
+              }
+            ]
+          },
+          "install_log": "Resolved 60 packages in 2ms\n   Building skilllint @ file://$WORK/r2-full-write-w0-reverse\n      Built skilllint @ file://$WORK/r2-full-write-w0-reverse\nPrepared 1 package in 584ms\nUninstalled 1 package in 0.55ms\nInstalled 1 package in 0.90ms\n ~ skilllint==1.22.3.dev14+gae5c0dfcb (from file://$WORK/r2-full-write-w0-reverse)\n"
+        }
+      ]
+    },
+    {
+      "name": "r2-full-write-w1-forward",
+      "timing_session": "companion",
+      "replica": 2,
+      "history": "full",
+      "bytecode": "write",
+      "warmups": 1,
+      "module_order": "forward",
+      "source_commit": "ae5c0dfcb5e36ef97e1de3861cf84db8345c1605",
+      "source_tree": "82d79d5a5666fe4484f7396371ef5f575919b874",
+      "product_tree": "224cff54dcc17343535cf9438497c25495c551a9",
+      "visible_commit_count": 663,
+      "is_shallow": false,
+      "identity": {
+        "python": "3.12.14",
+        "module_relative_path": "packages/skilllint/__init__.py",
+        "module_sha256": "fe1a6f420706d0c60125ec2fe90d1df0edcfe5add9152c87e16a1141f90d78d8",
+        "runtime_version": "1.22.3.dev14+gae5c0dfcb",
+        "rule_codes": [
+          "AG001",
+          "AG002",
+          "AG003",
+          "AS001",
+          "AS006",
+          "AS008",
+          "AS009",
+          "CU001",
+          "CU002",
+          "CX001",
+          "CX002",
+          "FM001",
+          "FM002",
+          "FM003",
+          "FM004",
+          "FM005",
+          "FM006",
+          "FM007",
+          "FM009",
+          "FM010",
+          "HK001",
+          "HK002",
+          "HK003",
+          "HK004",
+          "HK005",
+          "LK001",
+          "LK004",
+          "NR001",
+          "NR002",
+          "PA001",
+          "PD001",
+          "PD002",
+          "PD003",
+          "PL001",
+          "PL002",
+          "PL003",
+          "PL004",
+          "PL005",
+          "PL006",
+          "PR001",
+          "PR002",
+          "PR005",
+          "SK004",
+          "SK005",
+          "SK006",
+          "SK007",
+          "SK008",
+          "SL001",
+          "TC001"
+        ]
+      },
+      "installation_identity": {
+        "python_build": "3.12.14 (main, Aug 25 2026, 14:00:49) [Clang 22.1.3 ]",
+        "installed_version": "1.22.3.dev14+gae5c0dfcb"
+      },
+      "identity_stderr": "",
+      "stages": [
+        {
+          "stage": 1,
+          "capture": {
+            "harness_sha256": "8247e424f78f0ab67a906503fdfdc379aead0f53d4a77db95732a0e9e1447455",
+            "reverse_module_order": false,
+            "warmups": 1,
+            "aggregate": {
+              "runs": 3,
+              "warmups": 1,
+              "warm_cache_import_package_min_ms": 311.046,
+              "warm_cache_import_package_mean_ms": 475.502,
+              "warm_cache_import_package_max_ms": 605.372,
+              "warm_cache_import_rules_min_ms": 341.976,
+              "warm_cache_import_rules_mean_ms": 390.286,
+              "warm_cache_import_rules_max_ms": 470.868
+            },
+            "samples": [
+              {
+                "module": "skilllint",
+                "index": 0,
+                "role": "warmup",
+                "seconds": 0.5284083559999999
+              },
+              {
+                "module": "skilllint",
+                "index": 1,
+                "role": "measured",
+                "seconds": 0.5100866870002392
+              },
+              {
+                "module": "skilllint",
+                "index": 2,
+                "role": "measured",
+                "seconds": 0.6053720250001788
+              },
+              {
+                "module": "skilllint",
+                "index": 3,
+                "role": "measured",
+                "seconds": 0.31104597500007003
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 0,
+                "role": "warmup",
+                "seconds": 0.907208207000167
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 1,
+                "role": "measured",
+                "seconds": 0.47086786699992444
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 2,
+                "role": "measured",
+                "seconds": 0.35801349500025026
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 3,
+                "role": "measured",
+                "seconds": 0.34197580000000016
+              }
+            ]
+          },
+          "install_log": "Using CPython 3.12.14 interpreter at: $RUNTIME/dependencies/python/bin/python3.12\nCreating virtual environment at: .venv\nResolved 60 packages in 2ms\n   Building skilllint @ file://$WORK/r2-full-write-w1-forward\n      Built skilllint @ file://$WORK/r2-full-write-w1-forward\nPrepared 1 package in 1.32s\nInstalled 58 packages in 178ms\n + annotated-doc==0.0.5\n + annotated-types==0.8.0\n + anyio==4.15.1\n + beautifulsoup4==4.15.0\n + certifi==2026.10.18\n + charset-normalizer==3.5.1\n + comrak==0.0.16\n + coverage==7.16.0\n + docutils==0.23\n + execnet==2.1.2\n + gitdb==4.0.12\n + gitpython==3.2.1\n + h11==0.16.0\n + hatch-vcs==0.5.0\n + hatchling==1.33.0\n + httpcore==1.0.9\n + httpx==0.28.1\n + hypothesis==6.170.14\n + idna==3.19\n + iniconfig==2.3.0\n + markdown-it-py==4.0.0\n + marko==2.2.5\n + mdurl==0.1.2\n + msgspec==0.22.0\n + nh3==0.3.7\n + packaging==26.3\n + pathspec==1.1.1\n + pluggy==1.6.0\n + prek==0.5.9\n + pydantic==2.14.2\n + pydantic-core==2.50.2\n + pygments==2.20.0\n + pytest==9.2.0\n + pytest-cov==7.1.0\n + pytest-mock==3.17.0\n + pytest-xdist==3.8.0\n + readme-renderer==46.0\n + regex==2026.9.3\n + requests==2.34.2\n + rich==15.0.0\n + ruamel-yaml==0.19.1\n + ruff==0.17.3\n + setuptools==84.1.0\n + setuptools-scm==10.2.3\n + shellingham==1.5.4\n + skilllint==1.22.3.dev14+gae5c0dfcb (from file://$WORK/r2-full-write-w1-forward)\n + smmap==5.0.3\n + sortedcontainers==2.4.0\n + soupsieve==2.9.2\n + tiktoken==0.14.0\n + tomlkit==0.15.1\n + trove-classifiers==2026.6.1.19\n + ty==0.0.95\n + typer==0.27.3\n + typing-extensions==4.16.0\n + typing-inspection==0.4.4\n + urllib3==2.8.0\n + vcs-versioning==2.3.4\n"
+        },
+        {
+          "stage": 2,
+          "capture": {
+            "harness_sha256": "8247e424f78f0ab67a906503fdfdc379aead0f53d4a77db95732a0e9e1447455",
+            "reverse_module_order": false,
+            "warmups": 1,
+            "aggregate": {
+              "runs": 3,
+              "warmups": 1,
+              "warm_cache_import_package_min_ms": 194.984,
+              "warm_cache_import_package_mean_ms": 217.781,
+              "warm_cache_import_package_max_ms": 257.438,
+              "warm_cache_import_rules_min_ms": 376.876,
+              "warm_cache_import_rules_mean_ms": 499.25,
+              "warm_cache_import_rules_max_ms": 562.573
+            },
+            "samples": [
+              {
+                "module": "skilllint",
+                "index": 0,
+                "role": "warmup",
+                "seconds": 0.2827602559996194
+              },
+              {
+                "module": "skilllint",
+                "index": 1,
+                "role": "measured",
+                "seconds": 0.2009210740002345
+              },
+              {
+                "module": "skilllint",
+                "index": 2,
+                "role": "measured",
+                "seconds": 0.25743778200012457
+              },
+              {
+                "module": "skilllint",
+                "index": 3,
+                "role": "measured",
+                "seconds": 0.19498380400000315
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 0,
+                "role": "warmup",
+                "seconds": 0.6145495539999501
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 1,
+                "role": "measured",
+                "seconds": 0.37687647000029756
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 2,
+                "role": "measured",
+                "seconds": 0.5625726070002202
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 3,
+                "role": "measured",
+                "seconds": 0.5583017039998595
+              }
+            ]
+          },
+          "install_log": "Resolved 60 packages in 6ms\n   Building skilllint @ file://$WORK/r2-full-write-w1-forward\n      Built skilllint @ file://$WORK/r2-full-write-w1-forward\nPrepared 1 package in 654ms\nUninstalled 1 package in 0.37ms\nInstalled 1 package in 0.89ms\n ~ skilllint==1.22.3.dev14+gae5c0dfcb (from file://$WORK/r2-full-write-w1-forward)\n"
+        }
+      ]
+    },
+    {
+      "name": "r2-full-write-w1-reverse",
+      "timing_session": "companion",
+      "replica": 2,
+      "history": "full",
+      "bytecode": "write",
+      "warmups": 1,
+      "module_order": "reverse",
+      "source_commit": "ae5c0dfcb5e36ef97e1de3861cf84db8345c1605",
+      "source_tree": "82d79d5a5666fe4484f7396371ef5f575919b874",
+      "product_tree": "224cff54dcc17343535cf9438497c25495c551a9",
+      "visible_commit_count": 663,
+      "is_shallow": false,
+      "identity": {
+        "python": "3.12.14",
+        "module_relative_path": "packages/skilllint/__init__.py",
+        "module_sha256": "fe1a6f420706d0c60125ec2fe90d1df0edcfe5add9152c87e16a1141f90d78d8",
+        "runtime_version": "1.22.3.dev14+gae5c0dfcb",
+        "rule_codes": [
+          "AG001",
+          "AG002",
+          "AG003",
+          "AS001",
+          "AS006",
+          "AS008",
+          "AS009",
+          "CU001",
+          "CU002",
+          "CX001",
+          "CX002",
+          "FM001",
+          "FM002",
+          "FM003",
+          "FM004",
+          "FM005",
+          "FM006",
+          "FM007",
+          "FM009",
+          "FM010",
+          "HK001",
+          "HK002",
+          "HK003",
+          "HK004",
+          "HK005",
+          "LK001",
+          "LK004",
+          "NR001",
+          "NR002",
+          "PA001",
+          "PD001",
+          "PD002",
+          "PD003",
+          "PL001",
+          "PL002",
+          "PL003",
+          "PL004",
+          "PL005",
+          "PL006",
+          "PR001",
+          "PR002",
+          "PR005",
+          "SK004",
+          "SK005",
+          "SK006",
+          "SK007",
+          "SK008",
+          "SL001",
+          "TC001"
+        ]
+      },
+      "installation_identity": {
+        "python_build": "3.12.14 (main, Aug 25 2026, 14:00:49) [Clang 22.1.3 ]",
+        "installed_version": "1.22.3.dev14+gae5c0dfcb"
+      },
+      "identity_stderr": "",
+      "stages": [
+        {
+          "stage": 1,
+          "capture": {
+            "harness_sha256": "8247e424f78f0ab67a906503fdfdc379aead0f53d4a77db95732a0e9e1447455",
+            "reverse_module_order": true,
+            "warmups": 1,
+            "aggregate": {
+              "runs": 3,
+              "warmups": 1,
+              "warm_cache_import_rules_min_ms": 446.659,
+              "warm_cache_import_rules_mean_ms": 496.843,
+              "warm_cache_import_rules_max_ms": 557.892,
+              "warm_cache_import_package_min_ms": 188.02,
+              "warm_cache_import_package_mean_ms": 210.527,
+              "warm_cache_import_package_max_ms": 223.541
+            },
+            "samples": [
+              {
+                "module": "skilllint.rules",
+                "index": 0,
+                "role": "warmup",
+                "seconds": 1.3799529490001987
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 1,
+                "role": "measured",
+                "seconds": 0.5578918940000221
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 2,
+                "role": "measured",
+                "seconds": 0.4466588320001392
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 3,
+                "role": "measured",
+                "seconds": 0.48597720399993705
+              },
+              {
+                "module": "skilllint",
+                "index": 0,
+                "role": "warmup",
+                "seconds": 0.23399077100020804
+              },
+              {
+                "module": "skilllint",
+                "index": 1,
+                "role": "measured",
+                "seconds": 0.22002107300022544
+              },
+              {
+                "module": "skilllint",
+                "index": 2,
+                "role": "measured",
+                "seconds": 0.22354072400003133
+              },
+              {
+                "module": "skilllint",
+                "index": 3,
+                "role": "measured",
+                "seconds": 0.18801988399991387
+              }
+            ]
+          },
+          "install_log": "Using CPython 3.12.14 interpreter at: $RUNTIME/dependencies/python/bin/python3.12\nCreating virtual environment at: .venv\nResolved 60 packages in 4ms\n   Building skilllint @ file://$WORK/r2-full-write-w1-reverse\n      Built skilllint @ file://$WORK/r2-full-write-w1-reverse\nPrepared 1 package in 1.09s\nInstalled 58 packages in 146ms\n + annotated-doc==0.0.5\n + annotated-types==0.8.0\n + anyio==4.15.1\n + beautifulsoup4==4.15.0\n + certifi==2026.10.18\n + charset-normalizer==3.5.1\n + comrak==0.0.16\n + coverage==7.16.0\n + docutils==0.23\n + execnet==2.1.2\n + gitdb==4.0.12\n + gitpython==3.2.1\n + h11==0.16.0\n + hatch-vcs==0.5.0\n + hatchling==1.33.0\n + httpcore==1.0.9\n + httpx==0.28.1\n + hypothesis==6.170.14\n + idna==3.19\n + iniconfig==2.3.0\n + markdown-it-py==4.0.0\n + marko==2.2.5\n + mdurl==0.1.2\n + msgspec==0.22.0\n + nh3==0.3.7\n + packaging==26.3\n + pathspec==1.1.1\n + pluggy==1.6.0\n + prek==0.5.9\n + pydantic==2.14.2\n + pydantic-core==2.50.2\n + pygments==2.20.0\n + pytest==9.2.0\n + pytest-cov==7.1.0\n + pytest-mock==3.17.0\n + pytest-xdist==3.8.0\n + readme-renderer==46.0\n + regex==2026.9.3\n + requests==2.34.2\n + rich==15.0.0\n + ruamel-yaml==0.19.1\n + ruff==0.17.3\n + setuptools==84.1.0\n + setuptools-scm==10.2.3\n + shellingham==1.5.4\n + skilllint==1.22.3.dev14+gae5c0dfcb (from file://$WORK/r2-full-write-w1-reverse)\n + smmap==5.0.3\n + sortedcontainers==2.4.0\n + soupsieve==2.9.2\n + tiktoken==0.14.0\n + tomlkit==0.15.1\n + trove-classifiers==2026.6.1.19\n + ty==0.0.95\n + typer==0.27.3\n + typing-extensions==4.16.0\n + typing-inspection==0.4.4\n + urllib3==2.8.0\n + vcs-versioning==2.3.4\n"
+        },
+        {
+          "stage": 2,
+          "capture": {
+            "harness_sha256": "8247e424f78f0ab67a906503fdfdc379aead0f53d4a77db95732a0e9e1447455",
+            "reverse_module_order": true,
+            "warmups": 1,
+            "aggregate": {
+              "runs": 3,
+              "warmups": 1,
+              "warm_cache_import_rules_min_ms": 372.827,
+              "warm_cache_import_rules_mean_ms": 413.682,
+              "warm_cache_import_rules_max_ms": 443.911,
+              "warm_cache_import_package_min_ms": 282.812,
+              "warm_cache_import_package_mean_ms": 316.536,
+              "warm_cache_import_package_max_ms": 368.959
+            },
+            "samples": [
+              {
+                "module": "skilllint.rules",
+                "index": 0,
+                "role": "warmup",
+                "seconds": 0.334640703000332
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 1,
+                "role": "measured",
+                "seconds": 0.37282696700003726
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 2,
+                "role": "measured",
+                "seconds": 0.4439111749998119
+              },
+              {
+                "module": "skilllint.rules",
+                "index": 3,
+                "role": "measured",
+                "seconds": 0.4243080320002264
+              },
+              {
+                "module": "skilllint",
+                "index": 0,
+                "role": "warmup",
+                "seconds": 0.2882194620001428
+              },
+              {
+                "module": "skilllint",
+                "index": 1,
+                "role": "measured",
+                "seconds": 0.28281190299958325
+              },
+              {
+                "module": "skilllint",
+                "index": 2,
+                "role": "measured",
+                "seconds": 0.36895936200016877
+              },
+              {
+                "module": "skilllint",
+                "index": 3,
+                "role": "measured",
+                "seconds": 0.2978362960002414
+              }
+            ]
+          },
+          "install_log": "Resolved 60 packages in 2ms\n   Building skilllint @ file://$WORK/r2-full-write-w1-reverse\n      Built skilllint @ file://$WORK/r2-full-write-w1-reverse\nPrepared 1 package in 656ms\nUninstalled 1 package in 0.34ms\nInstalled 1 package in 0.99ms\n ~ skilllint==1.22.3.dev14+gae5c0dfcb (from file://$WORK/r2-full-write-w1-reverse)\n"
+        }
+      ]
+    }
+  ]
+}

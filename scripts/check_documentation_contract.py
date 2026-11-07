@@ -32,6 +32,7 @@ EXPECTED = {
     "docs/vendor-cache.md",
     "docs/architecture.md",
     "docs/import-benchmark-comparability.md",
+    "docs/evidence/import-lifecycle-2026-11-07.md",
     "plugins/agentskills-skilllint/README.md",
     "plugins/agentskills-skilllint/skills/skilllint/SKILL.md",
 }

@@ -23,10 +23,15 @@ Installed distribution metadata may survive a source checkout and therefore is
 not proof of source identity. The checked-out commit and actual imported source
 must be considered when interpreting results.
 
-The correction follows a same-source lifecycle experiment: repeating installation
-and imports in one environment made the second stage substantially faster even
-without a code change. Symmetric excluded imports reduced that setup-position
-effect. This does not establish product equivalence or erase residual regressions.
+[Fresh lifecycle and factor evidence](evidence/import-lifecycle-2026-11-07.md)
+reproduces setup-position differences without a product code change. It retains
+raw observations, reversed module/factor order, bytecode and history controls,
+and a separate forced-reinstall companion. One excluded import reduced the
+median rules-import setup-position effect in this experiment, but did not
+eliminate individual variation or uniformly normalize package imports. The
+report distinguishes its interrupted sessions and retained failed install from
+completed measurements. This does not establish product equivalence or erase
+startup costs or residual regressions.
 The separate masking evaluation and its controlled workload evidence are tracked
 in [PR 371](https://github.com/bitflight-devops/skilllint/pull/371).
 

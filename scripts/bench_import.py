@@ -7,9 +7,9 @@ warmup.
 
 ``import skilllint.rules`` is what ``packages/skilllint/plugin_validator.py``
 does eagerly at module load (see the ``import skilllint.rules`` line there)
-so that all 51 ``@skilllint_rule(...)`` decorator calls register into
+so that the ``@skilllint_rule(...)`` decorator calls register into
 ``RULE_REGISTRY``. Each call constructs a Pydantic ``RuleEntry`` (and, for
-most rules, a nested ``RuleAuthority``), so this import triggers 51 Pydantic
+most rules, a nested ``RuleAuthority``), so this import triggers Pydantic
 validation passes on every ``skilllint`` CLI cold start.
 
 For context/comparison, this script also measures ``import skilllint`` alone.
