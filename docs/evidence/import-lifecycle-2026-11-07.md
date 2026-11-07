@@ -63,7 +63,9 @@ The child timer begins immediately before the target import. It excludes
 interpreter startup, parent orchestration, installation, and process teardown.
 Zero warmups mixes the first application import with subsequent reuse; one
 warmup records that preparation separately and excludes it from the three-sample
-aggregate. Neither mode is an OS-cold measurement: filesystem caches were not
+aggregate. The timed source clones, environments, and bytecode prefixes were on tmpfs;
+absolute times also include the editable development environment's build packages,
+not just a runtime-only installed wheel. Neither mode is an OS-cold measurement: filesystem caches were not
 flushed, dependencies were cached, and all cells share one host. Other task-owned
 timing and heavy checks were paused during this run; host contention is still
 uncontrolled. No significance claim is supported by two replicas.
@@ -172,7 +174,28 @@ warmup's excluded work remains a real startup cost recorded in the raw samples.
 
 ## Validation status
 
-The focused fast profile passed all 12 import/recorder tests. Full hook validation
-passed after formatting the new shell script. The full suite is pending until
-the separately timed staged-workflow repeat finishes. This report does not claim
-that completion gate has passed.
+- Focused fast profile: all 12 import/recorder tests passed. Documentation
+  inventory/link validation passed. Full all-files prek passed, including the
+  evidence report's inventory registration.
+- Full local `uv run pytest -n 2` on published evidence head
+  `048ee492e589a0061179ddb42053fada81f6980a`: **3,130 passed, 15 failed, 14 skipped**
+  in 690.64 seconds. Worker count was capped; no tests were selected out.
+- All seven failures in the retained pre-change `ae5c0df` run recur: three HTTP
+  tests report an inherited SOCKS proxy without `socksio`; four installed-cache
+  checks conflict with the sandbox's synthetic `/tmp/.git` marker. A pure-function
+  probe reproduced the latter cache-root selection, and its owner is byte-identical
+  to baseline `85813670`.
+- Eight additional cases failed here, so this is **not exact baseline failure
+  parity**: one cross-root test cannot create a directory under read-only HOME,
+  and six hook traces cannot create default HOME caches. The remaining pre-commit
+  fix-hook test reports unchanged content without exposing subprocess stderr;
+  the same cache explanation is plausible but not directly proved for that case.
+  A bounded rerun of only those eight cases passed all eight using owned writable
+  HOME/cache directories, with product source and proxy/network settings unchanged.
+  This explains the additional setup failures without rewriting the original full
+  result. Relevant product, helper, and test files are unchanged from `85813670`;
+  a fresh pristine-baseline suite was not rerun. The local full gate is not green.
+- Hosted CI separately passed all five workflows at that evidence head, including
+  [Test run 42391807871](https://github.com/bitflight-devops/skilllint/actions/runs/42391807871).
+  This is not a claim of external review approval. No proxy bypass, marker removal,
+  unrelated product fix, or repeat full-suite run was used to hide local failures.
