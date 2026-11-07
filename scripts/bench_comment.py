@@ -45,6 +45,12 @@ _SMALLER_IS_BETTER: frozenset[str] = frozenset({
     "import_rules_min_ms",
     "import_rules_mean_ms",
     "import_rules_max_ms",
+    "warm_cache_import_package_min_ms",
+    "warm_cache_import_package_mean_ms",
+    "warm_cache_import_package_max_ms",
+    "warm_cache_import_rules_min_ms",
+    "warm_cache_import_rules_mean_ms",
+    "warm_cache_import_rules_max_ms",
 })
 
 # Hidden marker so sticky-pull-request-comment can find and update the comment.

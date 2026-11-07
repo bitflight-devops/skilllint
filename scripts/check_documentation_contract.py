@@ -31,6 +31,7 @@ EXPECTED = {
     "docs/output-formats.md",
     "docs/vendor-cache.md",
     "docs/architecture.md",
+    "docs/import-benchmark-comparability.md",
     "plugins/agentskills-skilllint/README.md",
     "plugins/agentskills-skilllint/skills/skilllint/SKILL.md",
 }
