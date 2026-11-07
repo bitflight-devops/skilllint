@@ -55,19 +55,28 @@ def _run_once(module: str) -> float:
     return float(result.stdout.strip().splitlines()[-1])
 
 
-def run_benchmark(runs: int = 3) -> dict[str, float | int]:
+def run_benchmark(runs: int = 3, warmups: int = 0) -> dict[str, float | int]:
     """Run the import-time benchmark and return aggregated timing data.
 
     Args:
         runs: Number of measurement repetitions per module.
+        warmups: Excluded fresh-process imports before each module is measured.
 
     Returns:
         Dictionary with ``{label}_min_ms``, ``{label}_mean_ms``, and
         ``{label}_max_ms`` keys for each module in :data:`_MODULES`, plus
         ``runs``.
     """
+    if warmups < 0:
+        raise ValueError("warmups must be >= 0")
     result: dict[str, float | int] = {"runs": runs}
+    if warmups:
+        result["warmups"] = warmups
     for label, module in _MODULES.items():
+        for _ in range(warmups):
+            _run_once(module)
+        if warmups:
+            label = f"warm_cache_{label}"
         timings = [_run_once(module) * 1000.0 for _ in range(runs)]
         result[f"{label}_min_ms"] = round(min(timings), 3)
         result[f"{label}_mean_ms"] = round(sum(timings) / len(timings), 3)
@@ -87,6 +96,8 @@ def build_gh_benchmark_array(result: dict[str, float | int]) -> list[dict[str, f
     """
     entries: list[dict[str, float | str]] = []
     for label in _MODULES:
+        if result.get("warmups"):
+            label = f"warm_cache_{label}"
         for stat in ("min", "mean", "max"):
             key = f"{label}_{stat}_ms"
             entries.append({"name": key, "value": float(result[key]), "unit": "ms"})
@@ -114,12 +125,20 @@ def main() -> None:
         metavar="N",
         help="Number of subprocess measurement repetitions per module (default: 3)",
     )
+    parser.add_argument(
+        "--warmups",
+        type=int,
+        default=0,
+        help="Excluded imports per module; enables a separate warm-cache metric series",
+    )
     args = parser.parse_args()
     if args.runs < 1:
         parser.error("--runs must be >= 1")
+    if args.warmups < 0:
+        parser.error("--warmups must be >= 0")
     output_path: Path | None = args.output
 
-    result = run_benchmark(runs=args.runs)
+    result = run_benchmark(runs=args.runs, warmups=args.warmups)
     print(json.dumps(result, indent=2))
 
     if output_path is not None:

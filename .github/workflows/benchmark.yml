@@ -327,10 +327,19 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name != 'release'
     steps:
+      - name: Checkout workflow harness
+        uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+
+      - name: Preserve comparison harness
+        run: cp scripts/bench_import.py /tmp/skilllint-bench-import.py
+
       - name: Checkout compare ref
         uses: actions/checkout@v7.0.1
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.compare_ref || github.sha }}
+          fetch-depth: 0
 
       - name: Install uv
         uses: astral-sh/setup-uv@v10.3.3
@@ -346,18 +355,15 @@ jobs:
       - name: Drop OS page cache (import benchmark)
         run: echo 3 | sudo tee /proc/sys/vm/drop_caches || true
 
-      - name: Run bench_import for github-action-benchmark output
-        run: |
-          source .venv/bin/activate
-          mkdir -p scripts/results
-          python scripts/bench_import.py --output scripts/results/bench_import_gh.json
+      - name: Run fresh-process warm-cache import benchmark
+        run: .venv/bin/python /tmp/skilllint-bench-import.py --warmups 1 --output scripts/results/bench_import_warm_cache_gh.json
 
       - name: Store import-time benchmark result
         if: github.ref == 'refs/heads/main'
         uses: benchmark-action/github-action-benchmark@v1.22.2
         with:
           tool: customSmallerIsBetter
-          output-file-path: scripts/results/bench_import_gh.json
+          output-file-path: scripts/results/bench_import_warm_cache_gh.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
           alert-threshold: '130%'
@@ -368,60 +374,36 @@ jobs:
       - name: Upload import compare benchmark results
         uses: actions/upload-artifact@v7.0.2
         with:
-          name: benchmark-results-import-compare
-          path: scripts/results/bench_import_gh.json
+          name: benchmark-results-import-warm-cache-compare
+          path: scripts/results/bench_import_warm_cache_gh.json
           retention-days: 30
 
-      - name: Compute base_ref
-        id: base_ref_import
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "ref=${{ github.event.pull_request.base.ref }}" >> "$GITHUB_OUTPUT"
-          elif [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.base_ref }}" ]; then
-            echo "ref=${{ inputs.base_ref }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "ref=" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Preserve bench_import.py before base-ref checkout
-        if: steps.base_ref_import.outputs.ref != ''
-        run: |
-          if [ -f scripts/bench_import.py ]; then
-            cp scripts/bench_import.py /tmp/bench_import.py
-          fi
-
       - name: Checkout base ref for import comparison
-        if: steps.base_ref_import.outputs.ref != ''
+        if: github.event_name == 'pull_request' || inputs.base_ref != ''
         uses: actions/checkout@v7.0.1
         with:
-          ref: ${{ steps.base_ref_import.outputs.ref }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || inputs.base_ref }}
           fetch-depth: 0
           clean: false
 
       - name: Reinstall dependencies for base ref
-        if: steps.base_ref_import.outputs.ref != ''
+        if: github.event_name == 'pull_request' || inputs.base_ref != ''
         run: uv sync --locked
 
       - name: Drop OS page cache (base import benchmark)
-        if: steps.base_ref_import.outputs.ref != ''
+        if: github.event_name == 'pull_request' || inputs.base_ref != ''
         run: echo 3 | sudo tee /proc/sys/vm/drop_caches || true
 
-      - name: Run base import benchmark
-        if: steps.base_ref_import.outputs.ref != ''
-        run: |
-          source .venv/bin/activate
-          BENCH_IMPORT=scripts/bench_import.py
-          if [ ! -f "$BENCH_IMPORT" ]; then
-            BENCH_IMPORT=/tmp/bench_import.py
-          fi
-          python "$BENCH_IMPORT" --output scripts/results/bench_import_base_gh.json
+      - name: Run base fresh-process warm-cache import benchmark
+        if: github.event_name == 'pull_request' || inputs.base_ref != ''
+        run: .venv/bin/python /tmp/skilllint-bench-import.py --warmups 1 --output scripts/results/bench_import_warm_cache_base_gh.json
 
       - name: Upload import base benchmark results
-        if: steps.base_ref_import.outputs.ref != ''
+        if: github.event_name == 'pull_request' || inputs.base_ref != ''
         uses: actions/upload-artifact@v7.0.2
         with:
-          name: benchmark-results-import-base
-          path: scripts/results/bench_import_base_gh.json
+          name: benchmark-results-import-warm-cache-base
+          path: scripts/results/bench_import_warm_cache_base_gh.json
           retention-days: 30
 
   post-pr-comment:
@@ -459,13 +441,13 @@ jobs:
       - name: Download import compare results
         uses: actions/download-artifact@v8.0.2
         with:
-          name: benchmark-results-import-compare
+          name: benchmark-results-import-warm-cache-compare
           path: scripts/results/
 
       - name: Download import base results
         uses: actions/download-artifact@v8.0.2
         with:
-          name: benchmark-results-import-base
+          name: benchmark-results-import-warm-cache-base
           path: scripts/results/base/
 
       - name: Install uv
@@ -485,7 +467,7 @@ jobs:
             --scenario "scan-violations:scripts/results/bench_io_violations_gh.json:scripts/results/base/bench_io_violations_base_gh.json" \
             --scenario "fix-violations:scripts/results/bench_io_fix_gh.json:scripts/results/base/bench_io_fix_base_gh.json" \
             --scenario "cpu:scripts/results/bench_cpu_gh.json:scripts/results/base/bench_cpu_base_gh.json" \
-            --scenario "import:scripts/results/bench_import_gh.json:scripts/results/base/bench_import_base_gh.json" \
+            --scenario "import-warm-cache:scripts/results/bench_import_warm_cache_gh.json:scripts/results/base/bench_import_warm_cache_base_gh.json" \
             --output /tmp/bench_comment.md \
             --threshold 1.30 \
             --pages-url "https://bitflight-devops.github.io/agentskills-linter/"
