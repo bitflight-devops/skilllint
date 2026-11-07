@@ -1,0 +1,8 @@
+{
+  "harness_commit": "fcbda8294e97aadc5d79f025f0891ff9125bccf4",
+  "harness_files": {
+    "scripts/bench_paired.py": "6da2e44a702762a5fade81857854f3488953a6ff66e4190efbed2c09871eebbd",
+    "scripts/bench_paired_ingest.py": "44f3e54f65ee981d0bf51ca7cc4f9efbebd8807bdc44bd05b6748abec5fddf6f"
+  },
+  "private_orchestrator_sha256": "613ddc458d0d7812044fbb1cd6005f19d98a69b16dc116768a0c9f9c95e2fc72"
+}
