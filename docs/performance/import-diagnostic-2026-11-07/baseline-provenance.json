@@ -1,0 +1,9 @@
+{
+  "pin": "85813670fbaf8755cc81698497b992cb0a1d2b60",
+  "clean": true,
+  "wheel_sha256": "88f9f6cf1f0a4c1a8f354a350a76c1e1bd1fb3c5c629b4c9c4375c020917cf9d",
+  "python_sha256": "fa67443527ed9647f760d807e2a38f26340757123e643c4639cf273ed15d5ea7",
+  "python": "3.12.14 (main, Aug 25 2026, 14:00:49) [Clang 22.1.3 ]",
+  "platform": "Linux-6.18.57-x86_64-with-glibc2.41",
+  "verified_package_files": 97
+}

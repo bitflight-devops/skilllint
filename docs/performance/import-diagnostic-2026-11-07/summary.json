@@ -1,0 +1,28 @@
+{
+  "package": {
+    "baseline_median_seconds": 0.048402189,
+    "candidate_median_seconds": 0.0489151595,
+    "paired_median_ratio": 0.9968520673975372,
+    "paired_ratio_quartiles": [
+      0.9534629173228255,
+      0.9968520673975372,
+      1.0345695299000557
+    ],
+    "candidate_wins": 16,
+    "AB_median_ratio": 0.9843665732415903,
+    "BA_median_ratio": 1.0070129423354848
+  },
+  "rules": {
+    "baseline_median_seconds": 0.15931070349999998,
+    "candidate_median_seconds": 0.161882346,
+    "paired_median_ratio": 1.0208440425497047,
+    "paired_ratio_quartiles": [
+      0.9804311275930964,
+      1.0208440425497047,
+      1.0893506108715476
+    ],
+    "candidate_wins": 10,
+    "AB_median_ratio": 1.0255261616801412,
+    "BA_median_ratio": 1.0077623695046392
+  }
+}
