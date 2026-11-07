@@ -30,6 +30,7 @@ EXPECTED = {
     "docs/usage.md",
     "docs/output-formats.md",
     "docs/paired-cli-evaluation.md",
+    "docs/staged-hook-evaluation.md",
     "docs/vendor-cache.md",
     "docs/architecture.md",
     "docs/performance/import-diagnostic-2026-11-07/README.md",

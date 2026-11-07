@@ -10,6 +10,7 @@
 "docs/usage.md" = "CLI, config, Action, and hook usage"
 "docs/output-formats.md" = "Output format and serialization contracts"
 "docs/paired-cli-evaluation.md" = "Paired CLI performance methodology and private evidence contract"
+"docs/staged-hook-evaluation.md" = "Staged hook performance methodology and Git index parity contract"
 "docs/vendor-cache.md" = "Vendor documentation cache"
 "docs/architecture.md" = "Current architecture and extension flow"
 "plugins/agentskills-skilllint/README.md" = "Plugin overview and activation"
