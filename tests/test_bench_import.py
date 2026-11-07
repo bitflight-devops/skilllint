@@ -49,8 +49,8 @@ def test_warmups_are_excluded_and_each_module_is_prepared(monkeypatch: pytest.Mo
     monkeypatch.setattr("scripts.bench_import._run_once", measure)
     result = run_benchmark(runs=2, warmups=1)
     assert calls == ["skilllint"] * 3 + ["skilllint.rules"] * 3
-    assert result["warm_cache_import_package_mean_ms"] == 200.0
-    assert result["warm_cache_import_rules_mean_ms"] == 300.0
+    assert result["warm_cache_import_package_mean_ms"] == pytest.approx(200.0)
+    assert result["warm_cache_import_rules_mean_ms"] == pytest.approx(300.0)
     assert result["warmups"] == 1
     assert "import_package_mean_ms" not in result
     entries = build_gh_benchmark_array(result)
@@ -69,7 +69,7 @@ def test_legacy_default_has_no_excluded_imports(monkeypatch: pytest.MonkeyPatch)
     result = run_benchmark(runs=1)
     assert calls == ["skilllint", "skilllint.rules"]
     assert "warmups" not in result
-    assert result["import_package_mean_ms"] == 100.0
+    assert result["import_package_mean_ms"] == pytest.approx(100.0)
 
 
 def test_negative_warmups_are_rejected() -> None:

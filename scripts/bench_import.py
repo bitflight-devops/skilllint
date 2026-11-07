@@ -75,12 +75,11 @@ def run_benchmark(runs: int = 3, warmups: int = 0) -> dict[str, float | int]:
     for label, module in _MODULES.items():
         for _ in range(warmups):
             _run_once(module)
-        if warmups:
-            label = f"warm_cache_{label}"
+        metric_label = f"warm_cache_{label}" if warmups else label
         timings = [_run_once(module) * 1000.0 for _ in range(runs)]
-        result[f"{label}_min_ms"] = round(min(timings), 3)
-        result[f"{label}_mean_ms"] = round(sum(timings) / len(timings), 3)
-        result[f"{label}_max_ms"] = round(max(timings), 3)
+        result[f"{metric_label}_min_ms"] = round(min(timings), 3)
+        result[f"{metric_label}_mean_ms"] = round(sum(timings) / len(timings), 3)
+        result[f"{metric_label}_max_ms"] = round(max(timings), 3)
     return result
 
 
@@ -96,10 +95,9 @@ def build_gh_benchmark_array(result: dict[str, float | int]) -> list[dict[str, f
     """
     entries: list[dict[str, float | str]] = []
     for label in _MODULES:
-        if result.get("warmups"):
-            label = f"warm_cache_{label}"
+        metric_label = f"warm_cache_{label}" if result.get("warmups") else label
         for stat in ("min", "mean", "max"):
-            key = f"{label}_{stat}_ms"
+            key = f"{metric_label}_{stat}_ms"
             entries.append({"name": key, "value": float(result[key]), "unit": "ms"})
     return entries
 
