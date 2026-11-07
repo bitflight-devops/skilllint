@@ -29,6 +29,7 @@ EXPECTED = {
     "docs/runtime-contracts/claude-code-agent-skills-2.1.251.md",
     "docs/usage.md",
     "docs/output-formats.md",
+    "docs/paired-cli-evaluation.md",
     "docs/vendor-cache.md",
     "docs/architecture.md",
     "docs/performance/import-diagnostic-2026-11-07/README.md",
