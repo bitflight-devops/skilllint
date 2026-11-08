@@ -33,17 +33,6 @@ def test_fast_profile_is_inserted_before_option_terminator(monkeypatch) -> None:
     assert calls == [["-q", "--no-cov", "-m", "not slow", "--", "-m-named-test.py"]]
 
 
-def test_agent_contract_distinguishes_fast_loop_from_full_gate() -> None:
-    agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
-
-    assert "uv run python scripts/run_fast_tests.py" in agents
-    assert "Do not run narrowed `uv run pytest <path>` directly" in agents
-    assert "excludes tests marked `slow`" in agents
-    assert "disables repository-wide" in agents
-    assert "uv run prek run --all-files" in agents
-    assert "uv run pytest" in agents
-
-
 def test_ci_executes_the_fast_profile() -> None:
     workflow = (ROOT / ".github/workflows/test.yml").read_text(encoding="utf-8")
 

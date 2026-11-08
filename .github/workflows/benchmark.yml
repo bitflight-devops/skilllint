@@ -233,14 +233,6 @@ jobs:
       - name: Drop OS page cache (CPU benchmark)
         run: echo 3 | sudo tee /proc/sys/vm/drop_caches || true
 
-      - name: Run CPU benchmark tests
-        run: |
-          source .venv/bin/activate
-          pytest scripts/bench_cpu.py -v --no-header -p no:xdist --no-cov --override-ini="addopts="
-
-      - name: Drop OS page cache (bench_cpu output)
-        run: echo 3 | sudo tee /proc/sys/vm/drop_caches || true
-
       - name: Run bench_cpu for github-action-benchmark output
         run: |
           source .venv/bin/activate

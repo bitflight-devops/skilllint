@@ -58,25 +58,7 @@ def built_artifacts(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, Pat
 
 @pytest.mark.slow
 @pytest.mark.xdist_group(name="installed_artifact_build")
-@pytest.mark.parametrize("artifact_index", [0, 1])
-def test_installed_artifact_contract(built_artifacts: tuple[Path, Path], artifact_index: int, tmp_path: Path) -> None:
-    artifact = built_artifacts[artifact_index]
-    environment = {key: value for key, value in os.environ.items() if key != "PYTHONPATH"}
-    result = subprocess.run(
-        [sys.executable, str(ASSERTION_SCRIPT), str(artifact)],
-        cwd=tmp_path,
-        capture_output=True,
-        text=True,
-        check=False,
-        env=environment,
-    )
-
-    assert result.returncode == 0, result.stderr
-
-
-@pytest.mark.slow
-@pytest.mark.xdist_group(name="installed_artifact_build")
-def test_installed_artifact_writes_observed_evidence(built_artifacts: tuple[Path, Path], tmp_path: Path) -> None:
+def test_installed_artifact_contract_and_observed_evidence(built_artifacts: tuple[Path, Path], tmp_path: Path) -> None:
     wheel, sdist = built_artifacts
     evidence_directory = tmp_path / "evidence"
     environment = {key: value for key, value in os.environ.items() if key != "PYTHONPATH"}

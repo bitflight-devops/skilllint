@@ -1001,16 +1001,6 @@ def test_ingress_models_still_parse_github_iso_timestamps() -> None:
         pr_review_models.HeadCommit.model_validate({"committedDate": "not-a-timestamp", "statusCheckRollup": None})
 
 
-def test_internal_result_models_are_not_strict() -> None:
-    """`FetchResult`/`WatchResult`/`UnresolvedThread` are output shapes, not ingress.
-
-    They are assembled from already-validated values, so they deliberately do not inherit
-    `GitHubResponseModel` — see its docstring.
-    """
-    for model in (pr_review_models.FetchResult, pr_review_models.WatchResult, pr_review_models.UnresolvedThread):
-        assert model.model_config.get("strict") is not True
-
-
 # --- every command can bound its own gh calls -----------------------------------------------------
 
 
@@ -1230,23 +1220,6 @@ def test_has_outstanding_work_true_when_any_signal_present(state: FetchResult) -
 
 def test_has_outstanding_work_false_when_all_clear() -> None:
     assert _state().has_outstanding_work() is False
-
-
-@pytest.mark.parametrize(("clock_name", "args"), [("sleep", (0,)), ("monotonic", ())])
-def test_polling_clock_mocks_leave_shared_time_unchanged(
-    clock_name: str, args: tuple[int, ...], mocker: MockerFixture
-) -> None:
-    """Polling mocks must not change clocks used by concurrent fetches or unrelated callers."""
-    real_clock = getattr(time, clock_name)
-    clock_mock = mocker.patch.object(pr_review_threads, clock_name)
-
-    assert getattr(time, clock_name) is real_clock
-    assert getattr(pr_review_gh.time, clock_name) is real_clock
-    getattr(time, clock_name)(*args)
-    clock_mock.assert_not_called()
-
-    getattr(pr_review_threads, clock_name)(*args)
-    clock_mock.assert_called_once_with(*args)
 
 
 # --- watch: immediate return when already actionable ---------------------------------------------

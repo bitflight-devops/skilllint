@@ -111,36 +111,3 @@ def test_io_scan_1000_skills_timing(extracted_plugin_dir: Path, plugin_file_coun
         f"Benchmark exceeded {_TIME_LIMIT_SECONDS}s limit: {duration:.2f}s "
         f"for {skill_count} skills ({skills_per_second:.1f} skills/sec)"
     )
-
-
-def test_io_scan_timing_report() -> None:
-    """Read the most recent benchmark result from the JSON file and log it.
-
-    This is a reporting-only test that always passes.  It reads the last
-    entry written by ``test_io_scan_1000_skills_timing`` (if the file
-    exists) and prints a human-readable summary for CI log inspection.
-    """
-    if not _RESULTS_FILE.exists():
-        print(f"\nNo benchmark results file found at: {_RESULTS_FILE}")
-        return
-
-    try:
-        data = json.loads(_RESULTS_FILE.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError) as exc:
-        print(f"\nCould not read benchmark results: {exc}")
-        return
-
-    if not isinstance(data, list) or not data:
-        print("\nBenchmark results file is empty or malformed.")
-        return
-
-    latest = data[-1]
-    print(
-        f"\nLATEST BENCHMARK RESULT:\n"
-        f"  timestamp      : {latest.get('timestamp', 'n/a')}\n"
-        f"  skill_count    : {latest.get('skill_count', 'n/a')}\n"
-        f"  duration       : {latest.get('duration_seconds', 'n/a')}s\n"
-        f"  skills/sec     : {latest.get('skills_per_second', 'n/a')}\n"
-        f"  git_sha        : {latest.get('git_sha', 'n/a')}\n"
-        f"  branch         : {latest.get('branch', 'n/a')}\n"
-    )
