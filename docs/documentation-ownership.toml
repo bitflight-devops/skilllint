@@ -9,15 +9,8 @@
 "docs/runtime-contracts/claude-code-agent-skills-2.1.251.md" = "Pinned Claude runtime contract"
 "docs/usage.md" = "CLI, config, Action, and hook usage"
 "docs/output-formats.md" = "Output format and serialization contracts"
-"docs/paired-cli-evaluation.md" = "Paired CLI performance methodology and private evidence contract"
-"docs/staged-hook-evaluation.md" = "Staged hook performance methodology and Git index parity contract"
+"docs/performance/link-mask-evaluation.md" = "Link-mask optimization evidence and measurement limits"
 "docs/vendor-cache.md" = "Vendor documentation cache"
 "docs/architecture.md" = "Current architecture and extension flow"
 "plugins/agentskills-skilllint/README.md" = "Plugin overview and activation"
 "plugins/agentskills-skilllint/skills/skilllint/SKILL.md" = "Agent skill invocation workflow"
-
-"docs/performance/import-diagnostic-2026-11-07/README.md" = "Pinned paired import diagnostic and measurement limitations"
-"docs/performance/primary-paired-2026-11-07/README.md" = "Fresh paired workload evidence and limitations"
-"docs/performance/secondary-paired-2026-11-07/README.md" = "Independent corpus and focused repeat evidence"
-
-"docs/performance/staged-hook-2026-11-07/README.md" = "Actual staged hook evidence, controls and limitations"
