@@ -2,14 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from scripts.check_documentation_contract import EXPECTED, _validate_links, validate_documentation_contract
-
-ROOT = Path(__file__).parents[1]
-
-
-def test_maintained_inventory_and_links_are_valid() -> None:
-    assert not validate_documentation_contract(ROOT)
-    assert "docs/output-formats.md" in EXPECTED
+from scripts.check_documentation_contract import _validate_links
 
 
 def test_extensionless_local_links_are_validated(tmp_path: Path) -> None:

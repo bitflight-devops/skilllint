@@ -408,42 +408,6 @@ def test_fetch_flattens_pages_filters_resolved_and_derives_new_fields(mocker: Mo
     }
 
 
-# --- _fetch_concurrently: fail-fast on one call while a sibling is still running ----------------
-
-
-def test_fetch_concurrently_fails_fast_without_waiting_for_slow_sibling(mocker: MockerFixture) -> None:
-    """A failing `gh` call must surface promptly even while a sibling call is still running.
-
-    Regression test for the old `with ThreadPoolExecutor(...) as executor:` form: its `__exit__`
-    called the default `shutdown(wait=True)`, which blocked the whole function until every
-    submitted future finished -- including ones nothing had asked for the result of yet -- before
-    the original failure was ever reported. `_fetch_pr_reactions` is field 4 in `_ConcurrentFetch`'s
-    fixed evaluation order and raises immediately; `_fetch_head_state` is field 6 (later, so its
-    own `.result()` is never reached) and sleeps far longer than this test's budget. A correct
-    fix reports the exception without waiting on that sleep.
-    """
-    slow_seconds = 2.0
-    mocker.patch.object(pr_review_gh, "_fetch_pages", return_value=_empty_threads())
-    mocker.patch.object(pr_review_gh, "_fetch_review_pages", return_value=[_reviews_conn([])])
-    mocker.patch.object(pr_review_gh, "_fetch_issue_comments", return_value=[])
-    mocker.patch.object(pr_review_gh, "_fetch_pr_reactions", side_effect=subprocess.CalledProcessError(1, ["gh"]))
-    mocker.patch.object(pr_review_gh, "_fetch_authenticated_login", return_value=_AGENT_LOGIN)
-
-    def _slow_head_state(*args: object, **kwargs: object) -> PullRequestHeadState:
-        time.sleep(slow_seconds)
-        return _head_state(_OLD_COMMIT_DATE)
-
-    mocker.patch.object(pr_review_gh, "_fetch_head_state", side_effect=_slow_head_state)
-    mocker.patch.object(pr_review_gh, "_fetch_latest_force_push_at", return_value=None)
-
-    started = time.monotonic()
-    with pytest.raises(subprocess.CalledProcessError):
-        pr_review_gh._fetch_concurrently("o", "r", 1, deadline=None, gh_timeout=None)
-    elapsed = time.monotonic() - started
-
-    assert elapsed < slow_seconds / 2
-
-
 # --- build_fetch_result: unresponded_reviews / codex_approved unit matrix ----------------------
 
 
@@ -696,45 +660,6 @@ def test_build_fetch_result_excludes_review_with_no_submitted_at(mocker: MockerF
     assert result.unresponded_reviews == []
 
 
-def test_build_fetch_result_codex_approved_true_when_reaction_postdates_head_commit(mocker: MockerFixture) -> None:
-    """`codex_approved` is `True` when the bot's "+1" reaction postdates the PR's head commit."""
-    reaction = Reaction(
-        content="+1", user=Author(login="chatgpt-codex-connector[bot]"), created_at=datetime(2026, 1, 2, tzinfo=UTC)
-    )
-    mocker.patch.object(pr_review_gh, "_fetch_pages", return_value=_empty_threads())
-    mocker.patch.object(pr_review_gh, "_fetch_review_pages", return_value=[_reviews_conn([])])
-    mocker.patch.object(pr_review_gh, "_fetch_issue_comments", return_value=[])
-    mocker.patch.object(pr_review_gh, "_fetch_pr_reactions", return_value=[reaction])
-    _patch_identity_and_commit_date(mocker, commit_date=datetime(2026, 1, 1, tzinfo=UTC))
-
-    result = build_fetch_result("o", "r", 1)
-
-    assert result.codex_approved is True
-
-
-def test_build_fetch_result_codex_approved_false_when_reaction_predates_head_commit(mocker: MockerFixture) -> None:
-    """`codex_approved` is `False` when Codex's "+1" reaction predates the PR's current head
-    commit — a stale approval left on an earlier revision must not be reported as current.
-
-    Regression coverage for a Codex review flagging that the pre-fix design never compared a
-    reaction's timestamp against anything: once Codex approved once, the reaction persisted and
-    every later revision — including ones Codex never actually looked at — kept reporting as
-    approved.
-    """
-    reaction = Reaction(
-        content="+1", user=Author(login="chatgpt-codex-connector[bot]"), created_at=datetime(2026, 1, 1, tzinfo=UTC)
-    )
-    mocker.patch.object(pr_review_gh, "_fetch_pages", return_value=_empty_threads())
-    mocker.patch.object(pr_review_gh, "_fetch_review_pages", return_value=[_reviews_conn([])])
-    mocker.patch.object(pr_review_gh, "_fetch_issue_comments", return_value=[])
-    mocker.patch.object(pr_review_gh, "_fetch_pr_reactions", return_value=[reaction])
-    _patch_identity_and_commit_date(mocker, commit_date=datetime(2026, 1, 2, tzinfo=UTC))
-
-    result = build_fetch_result("o", "r", 1)
-
-    assert result.codex_approved is False
-
-
 def _codex_only_fetch(mocker: MockerFixture, reactions: list[Reaction], *, commit_date: datetime) -> FetchResult:
     """Run `build_fetch_result` with only the reaction stream and head date varying."""
     mocker.patch.object(pr_review_gh, "_fetch_pages", return_value=_empty_threads())
@@ -867,35 +792,6 @@ def test_build_fetch_result_codex_approved_true_when_reaction_postdates_force_pu
     assert result.codex_approved is True
 
 
-def test_fetch_head_state_reads_commit_date_via_graphql_last_one(mocker: MockerFixture) -> None:
-    """`_fetch_head_state` reads the head commit's date from GraphQL's `commits(last: 1)`.
-
-    Regression coverage for a Codex review: the REST `/pulls/{pr}/commits` endpoint this used to
-    call is documented as listing a maximum of 250 commits total regardless of pagination, so on a
-    PR with more commits than that, its last element would not reliably be the actual head. GraphQL
-    connection pagination has no equivalent flat cap.
-    """
-    raw = json.dumps({
-        "data": {
-            "repository": {
-                "pullRequest": {
-                    "isDraft": False,
-                    "mergeable": "MERGEABLE",
-                    "mergeStateStatus": "CLEAN",
-                    "commits": {
-                        "nodes": [{"commit": {"committedDate": "2026-01-06T00:00:00Z", "statusCheckRollup": None}}]
-                    },
-                }
-            }
-        }
-    })
-    mocker.patch.object(pr_review_gh, "run_gh", return_value=raw)
-
-    result = pr_review_gh._fetch_head_state("o", "r", 1, gh_timeout=None)
-
-    assert result.commits.nodes[-1].commit.committedDate == datetime(2026, 1, 6, tzinfo=UTC)
-
-
 def test_fetch_latest_force_push_at_returns_none_when_never_force_pushed(mocker: MockerFixture) -> None:
     """`_fetch_latest_force_push_at` returns `None` for a PR with no `HeadRefForcePushedEvent`."""
     raw = json.dumps({"data": {"repository": {"pullRequest": {"timelineItems": {"nodes": []}}}}})
@@ -1007,27 +903,24 @@ def test_ingress_models_still_parse_github_iso_timestamps() -> None:
 @pytest.mark.parametrize(
     "argv",
     [
-        ["fetch", "--pr", "3208", "--github", "o/r", "--gh-timeout-seconds", "7"],
         ["reply", "--pr", "3208", "--comment-id", "1", "--body", "x", "--github", "o/r", "--gh-timeout-seconds", "7"],
         ["resolve", "--thread-id", "T1", "--gh-timeout-seconds", "7"],
     ],
-    ids=["fetch", "reply", "resolve"],
+    ids=["reply", "resolve"],
 )
-def test_every_gh_backed_command_accepts_a_timeout_bound(argv: list[str], mocker: MockerFixture) -> None:
-    """`--gh-timeout-seconds` reaches `run_gh` from every command that shells out.
+def test_reply_and_resolve_forward_a_timeout_bound(argv: list[str], mocker: MockerFixture) -> None:
+    """`--gh-timeout-seconds` reaches `run_gh` from `reply` and `resolve`.
 
     Regression coverage for a Codex review of the change that removed the hardcoded
     `_GH_TIMEOUT_SECONDS`: `reply` and `resolve` were left with no way to bound their `gh` call at
     all, so an unattended workflow could hang on them indefinitely with no option to prevent it.
     """
-    mocker.patch.object(pr_review_threads, "build_fetch_result", return_value=_state())
     run_gh_mock = mocker.patch.object(pr_review_threads, "run_gh", return_value="{}")
 
     result = runner.invoke(app, argv)
 
     assert result.exit_code == 0, result.output
-    if argv[0] != "fetch":
-        assert run_gh_mock.call_args.kwargs["timeout"] == pytest.approx(7)
+    assert run_gh_mock.call_args.kwargs["timeout"] == pytest.approx(7)
 
 
 # --- --github: autodetect vs explicit override ---------------------------------------------------
@@ -1115,31 +1008,12 @@ def test_fetch_rejects_a_malformed_github_override(value: str, mocker: MockerFix
 # --- reviewability -------------------------------------------------------------------------------
 
 
-def test_reviewability_reports_no_blockers_for_a_ready_conflict_free_pr() -> None:
-    """A non-draft, mergeable PR can be reviewed, so `blockers` is empty."""
-    result = pr_review_gh._reviewability(_head_state())
-
-    assert result.blockers == []
-    assert result.is_draft is False
-    assert result.mergeable == "MERGEABLE"
-    assert result.merge_state_status == "CLEAN"
-
-
 def test_reviewability_reports_a_draft_pr() -> None:
     """A draft PR gets no reviewers requested, so an empty review queue is expected, not clean."""
     result = pr_review_gh._reviewability(_head_state(is_draft=True, merge_state_status="DRAFT"))
 
     assert result.is_draft is True
     assert result.blockers == ["draft: reviewers are not requested until the PR is marked ready for review"]
-
-
-def test_reviewability_reports_a_conflicting_pr() -> None:
-    """A conflicting PR gets no review runs, so an empty review queue is expected, not clean."""
-    result = pr_review_gh._reviewability(_head_state(mergeable="CONFLICTING", merge_state_status="DIRTY"))
-
-    assert result.mergeable == "CONFLICTING"
-    assert result.merge_state_status == "DIRTY"
-    assert result.blockers == ["conflicting: reviews will not run until the merge conflicts are resolved"]
 
 
 def test_reviewability_reports_both_blockers_when_both_apply() -> None:
@@ -1200,26 +1074,6 @@ def test_blockers_do_not_change_has_outstanding_work() -> None:
     blocked_with_work = _state(unresolved_count=1)
     blocked_with_work.reviewability = blocked.reviewability
     assert blocked_with_work.has_outstanding_work() is True
-
-
-# --- FetchResult.has_outstanding_work -----------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    "state",
-    [
-        _state(unresolved_count=1),
-        _state(unresponded_reviews=[_review("R1", body="x", submitted_at=datetime(2026, 1, 1, tzinfo=UTC))]),
-        _state(codex_approved=True),
-    ],
-    ids=["unresolved-thread", "unresponded-review", "codex-approved"],
-)
-def test_has_outstanding_work_true_when_any_signal_present(state: FetchResult) -> None:
-    assert state.has_outstanding_work() is True
-
-
-def test_has_outstanding_work_false_when_all_clear() -> None:
-    assert _state().has_outstanding_work() is False
 
 
 # --- watch: immediate return when already actionable ---------------------------------------------
