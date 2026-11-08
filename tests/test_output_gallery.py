@@ -37,10 +37,3 @@ def test_gallery_links_real_reports_and_complete_svg(name, raw_name):
             assert clip.endswith(")")
             assert clip[5:-1] in ids
     assert "FM010" in "".join(root.itertext())
-
-
-def test_gallery_distinguishes_terminal_colour_from_ci_previews():
-    gallery = (OUTPUT / "README.md").read_text(encoding="utf-8")
-    assert "not screenshots of GitHub, GitLab, or a test UI" in gallery
-    assert "viewer-only colour" in gallery
-    assert "distinct from xUnit.net XML" in gallery

@@ -128,27 +128,6 @@ def test_skilllint_fix_hook_edits_once_then_is_idempotent(staged_repository: Pat
 
 
 @pytest.mark.slow
-def test_pre_commit_smoke_runs_published_check_hook(staged_repository: Path) -> None:
-    result = _run(
-        [
-            "uv",
-            "run",
-            "--with",
-            "pre-commit",
-            "pre-commit",
-            "try-repo",
-            str(REPO_ROOT),
-            "skilllint",
-            "--files",
-            "skills/my-skill/SKILL.md",
-        ],
-        staged_repository,
-    )
-
-    assert result.returncode == 0, result.stdout + result.stderr
-
-
-@pytest.mark.slow
 @pytest.mark.parametrize("runner", [("uv", "run", "prek"), ("uv", "run", "--with", "pre-commit", "pre-commit")])
 def test_documented_config_install_and_run_commands(staged_repository: Path, runner: tuple[str, ...]) -> None:
     """Execute the guide's config and install/check/fix flow in a disposable repo."""

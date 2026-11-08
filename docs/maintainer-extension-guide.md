@@ -76,8 +76,11 @@ A provenance claim must identify its rule, authority file/URL and heading (when 
 
 ## Verification checklist
 
-1. Add a source-coupled test for every documented symbol, heading, and code
-   block. Missing source or heading must fail.
+1. Trace required behavior and existing coverage before changing tests. Use
+   existing protection when it suffices; add a test only for an uncovered
+   requirement or demonstrated regression. Judge runnable examples and
+   machine-readable contracts by their observable behavior. Review explanatory
+   prose semantically rather than freezing its wording, headings, or source layout.
 2. Install/load any retained adapter sample and run both its passing and
    failing public CLI probes with `PYTHONPATH` cleared.
 3. Run `uv run skilllint rules` and `uv run skilllint rule CODE`, then exercise the affected public CLI path. For targeted feedback, use `uv run python scripts/run_fast_tests.py packages/skilllint/tests/test_public_rule_emitters.py` or the affected test file, such as `packages/skilllint/tests/test_plugin_registration_validator.py`. The fast profile excludes slow tests and does not replace the full gate.
