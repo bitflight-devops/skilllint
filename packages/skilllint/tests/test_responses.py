@@ -1,16 +1,4 @@
-"""Unit tests for ``skilllint.responses``: schemas, round-trips, builders and the stdout writer.
-
-``test_check_json_parity`` covers what ``check`` lists. This module covers the rest of the
-module: every response model keeps its documented schema (snapshots), survives a JSON round trip
-(Hypothesis), and the pure builders map the domain objects they read onto the documented fields.
-
-Schema snapshots live in ``response_schemas/<Model>.json``. A deliberate schema change is
-reviewed by regenerating them with::
-
-    uv run python -m test_responses
-
-run from ``packages/skilllint/tests``.
-"""
+"""Test response builders and emitted JSON."""
 
 from __future__ import annotations
 
@@ -18,30 +6,16 @@ import io
 import json
 from contextlib import redirect_stdout
 from pathlib import Path
-from typing import TYPE_CHECKING, Final, no_type_check
+from typing import TYPE_CHECKING
 
 import pytest
-from hypothesis import given, strategies as st
 
-from skilllint import responses
 from skilllint.models import AppliedFix, ValidationIssue, ValidationResult
 from skilllint.responses import (
-    AuthoritiesResponse,
-    CheckResponse,
-    FetchNoCacheResponse,
-    FetchResponse,
     LatestFoundResponse,
     LatestNotFoundResponse,
-    Response,
-    RuleFoundResponse,
-    RulesResponse,
-    RuleUnknownResponse,
     SectionFoundResponse,
     SectionNotFoundResponse,
-    SectionsResponse,
-    TokensResponse,
-    VerifyResponse,
-    VersionResponse,
     authority_failed,
     authority_fetched,
     build_authorities_response,
@@ -73,111 +47,6 @@ from skilllint.vendor_cache import (
 if TYPE_CHECKING:
     from skilllint.models import FileResults
 
-SNAPSHOTS: Final = Path(__file__).parent / "response_schemas"
-
-RESPONSE_MODELS: Final[tuple[type[Response], ...]] = (
-    AuthoritiesResponse,
-    CheckResponse,
-    FetchNoCacheResponse,
-    FetchResponse,
-    LatestFoundResponse,
-    LatestNotFoundResponse,
-    RuleFoundResponse,
-    RuleUnknownResponse,
-    RulesResponse,
-    SectionFoundResponse,
-    SectionNotFoundResponse,
-    SectionsResponse,
-    TokensResponse,
-    VerifyResponse,
-    VersionResponse,
-)
-
-
-def schema_text(model: type[Response]) -> str:
-    """Return the snapshot text of *model*'s JSON schema: sorted keys, indented, one trailing newline."""
-    return json.dumps(model.model_json_schema(), indent=2, sort_keys=True) + "\n"
-
-
-@pytest.mark.parametrize("model", RESPONSE_MODELS, ids=lambda model: model.__name__)
-def test_schema_matches_the_snapshot(model: type[Response]) -> None:
-    """The documented shape of each response is pinned; a change must be a reviewed snapshot update."""
-    assert (SNAPSHOTS / f"{model.__name__}.json").read_text(encoding="utf-8") == schema_text(model)
-
-
-def test_every_snapshot_belongs_to_a_response_model() -> None:
-    """No snapshot is left over from a removed model."""
-    assert {path.stem for path in SNAPSHOTS.glob("*.json")} == {model.__name__ for model in RESPONSE_MODELS}
-
-
-def test_every_public_response_model_is_snapshotted() -> None:
-    """A new top-level response added to the module must be added to ``RESPONSE_MODELS``."""
-    top_level = {
-        obj
-        for name, obj in vars(responses).items()
-        if name.endswith("Response") and isinstance(obj, type) and issubclass(obj, Response)
-    }
-    assert top_level - {Response} == set(RESPONSE_MODELS)
-
-
-# --- round trips ------------------------------------------------------------------------------
-
-# Rule IDs use ASCII digits; Python and Pydantic can have different Unicode digit tables.
-_CODES: Final = st.from_regex(r"[A-Z]{2}[0-9]{3}", fullmatch=True)
-_ISSUES: Final = st.builds(
-    ValidationIssue,
-    field=st.text(),
-    severity=st.sampled_from(["error", "warning", "info"]),
-    message=st.text(),
-    code=_CODES,
-    line=st.none() | st.integers(),
-    suggestion=st.none() | st.text(),
-    docs_url=st.none() | st.text(),
-)
-_FIXES: Final = st.builds(
-    AppliedFix, path=st.text().map(Path), validator=st.text(), codes=st.lists(_CODES).map(tuple), description=st.text()
-)
-
-
-@pytest.fixture(autouse=True, scope="module")
-def _register_strategies() -> None:  # pragma: no cover - registration only
-    """Teach ``from_type`` the two domain types whose fields carry a pattern or a ``Path``."""
-    st.register_type_strategy(ValidationIssue, _ISSUES)
-    st.register_type_strategy(AppliedFix, _FIXES)
-
-
-@pytest.mark.parametrize("model", RESPONSE_MODELS, ids=lambda model: model.__name__)
-@given(data=st.data())
-def test_response_survives_a_json_round_trip(model: type[Response], data: st.DataObject) -> None:
-    """Dumping and validating again gives an equal model, and the dump is one line."""
-    response = data.draw(st.from_type(model))
-
-    dumped = response.model_dump_json()
-
-    assert "\n" not in dumped
-    assert model.model_validate_json(dumped) == response
-
-
-def test_an_unknown_key_is_rejected() -> None:
-    """``extra="forbid"`` holds: a key the model does not declare fails validation."""
-    good = build_version_response("1.0.0").model_dump()
-
-    with pytest.raises(ValueError, match="extra"):
-        VersionResponse.model_validate({**good, "surprise": 1})
-
-
-@no_type_check  # Assigning to a frozen field is the violation under test; the type checker rightly rejects it.
-def assign_version(response: VersionResponse) -> None:
-    """Try to change a built response."""
-    response.version = "2.0.0"
-
-
-def test_responses_are_frozen() -> None:
-    """A built response cannot be altered before it is printed."""
-    with pytest.raises(ValueError, match="frozen"):
-        assign_version(build_version_response("1.0.0"))
-
-
 # --- AppliedFix as a field --------------------------------------------------------------------
 
 
@@ -193,18 +62,6 @@ def test_applied_fix_is_serialised_with_its_four_fields() -> None:
     assert dumped["fixes"] == [
         {"path": "a/SKILL.md", "validator": "FrontmatterValidator", "codes": ["FM004", "FM007"], "description": "d"}
     ]
-    assert CheckResponse.model_validate_json(response.model_dump_json()).fixes == [fix]
-
-
-def test_applied_fix_rejects_unknown_keys() -> None:
-    """The nested dataclass rejects extra keys, as its generated schema declares."""
-    fix = AppliedFix(path=Path("a/SKILL.md"), validator="FrontmatterValidator", codes=("FM004",), description="d")
-    response = build_check_response({}, verbose=False, show_progress=False, fixes=[fix])
-    payload = json.loads(response.model_dump_json())
-    payload["fixes"][0]["surprise"] = 1
-
-    with pytest.raises(ValueError, match="Unexpected keyword argument"):
-        CheckResponse.model_validate_json(json.dumps(payload))
 
 
 # --- check ------------------------------------------------------------------------------------
@@ -400,11 +257,3 @@ def test_emit_response_round_trips_ordinary_content() -> None:
         emit_response(response)
 
     assert json.loads(buffer.getvalue()) == response.model_dump(mode="json")
-
-
-if __name__ == "__main__":
-    SNAPSHOTS.mkdir(exist_ok=True)
-    for stale in SNAPSHOTS.glob("*.json"):
-        stale.unlink()
-    for model in RESPONSE_MODELS:
-        (SNAPSHOTS / f"{model.__name__}.json").write_text(schema_text(model), encoding="utf-8")

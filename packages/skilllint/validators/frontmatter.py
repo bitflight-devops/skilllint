@@ -929,8 +929,6 @@ class NameFormatValidator:
         """
         folder = skill_dir.resolve()
         manifest_paths = _plugin_manifest_paths()
-        # The frontmatter owner may not import scan orchestration (test_architecture_examples), so
-        # walk up to the adapter-declared plugin roots here instead of using scan_runtime.find_plugin_dir.
         # Every prefix must remain traversable, even when a later symlink resolves outside the folder.
         # The absolute (not resolved) spelling reaches manifests above a relative path's cwd.
         for plugin_dir in skill_dir.absolute().parents:
