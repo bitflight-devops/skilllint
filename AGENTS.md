@@ -267,13 +267,12 @@ Unit and integration tests for the `skilllint` package itself: validators, CLI, 
 ### `tests/` (root)
 Project-level tests that are not owned by any package:
 - `test_fetch_platform_docs.py` — tests `scripts/fetch_platform_docs.py`, a root-level project script
-- `tests/benchmarks/` — project-level performance benchmarks, including installed-CLI subprocess measurements
-- `tests/fixtures/` — shared zip archives used by the benchmark suite
+- `tests/fixtures/` — shared zip archives used by the benchmark scripts
 
 ### Rule: where does a new test go?
 - Tests of package behavior → `packages/skilllint/tests/`, whether in-process or through the CLI
 - Tests for root-level scripts (`scripts/*.py`) → `tests/`
-- Project-level performance benchmarks → `tests/benchmarks/`
+- Performance measurements → `scripts/bench_*.py`
 
 The `testpaths` setting in `pyproject.toml` collects both test trees through `**/tests` and also collects colocated agent-tooling tests through `.agents/skills/*/scripts`.
 

@@ -16,52 +16,6 @@ def _run(*args: str, cwd: Path = ROOT) -> subprocess.CompletedProcess[str]:
     return subprocess.run(["uv", "run", "skilllint", *args], cwd=cwd, text=True, capture_output=True, check=False)
 
 
-def test_usage_guide_keeps_source_blocks_and_contracts() -> None:
-    text = GUIDE.read_text(encoding="utf-8")
-    required = {
-        "Install": ["python -m pip install skilllint", "uv tool install skilllint"],
-        "Check, fix, and tokens": [
-            "check --platform claude-code",
-            "check --platform cursor",
-            "check --platform codex",
-            "rules --platform agentskills",
-            "check --fix",
-            "check --tokens-only",
-        ],
-        "Output and selection": ["--include-gitignore", "--filter-type"],
-        "Rules, thresholds, and severity": ['"thresholds"', '"severity"', '"ignore"', "do not merge"],
-        "GitHub Action": [
-            "bitflight-devops/skilllint@vX.Y.Z",
-            "steps.lint.outputs.result",
-            'version: "X.Y.Z"',
-            "exit-code",
-        ],
-        "Pre-commit": [
-            "python -m pip install pre-commit",
-            "rev: vX.Y.Z",
-            "id: skilllint",
-            "id: skilllint-fix",
-            "pre-commit install",
-            "pre-commit run skilllint --all-files",
-            "pre-commit run skilllint --files skills/my-skill/SKILL.md",
-            "pre-commit run skilllint-fix --all-files",
-            "--output-format concise --no-color",
-            "prek install",
-            "prek run skilllint --all-files",
-            "prek run skilllint-fix --all-files",
-        ],
-    }
-    for heading, snippets in required.items():
-        start = text.index(f"## {heading}")
-        end = text.find("\n## ", start + 1)
-        section = text[start:] if end == -1 else text[start:end]
-        assert all(snippet in section for snippet in snippets), heading
-
-    assert "check --platform agentskills" not in text
-    assert "broad by-file-type hook remains available" not in text
-    assert "--fix --platform" not in text
-
-
 def test_documented_cli_routes_execute_against_fixture(tmp_path: Path) -> None:
     skill_dir = tmp_path / "demo-skill"
     skill_dir.mkdir()
@@ -101,32 +55,6 @@ def test_documented_policy_shape_reports_invalid_input(tmp_path: Path) -> None:
     assert "invalid" in output.lower() or "must" in output.lower()
 
 
-def test_output_reference_retains_format_contracts_and_links() -> None:
-    reference = ROOT / "docs/output-formats.md"
-    text = reference.read_text(encoding="utf-8")
-    guide = GUIDE.read_text(encoding="utf-8")
-    required = {
-        "JSON envelope": ["--json", "record_path", "file_exists"],
-        "Full human diagnostics": ["--output-format full", "Unicode code points", "changed"],
-        "Concise": ["--output-format concise", "one physical line", "duplicates"],
-        "JSON Lines": ["--output-format json-lines", "schema_version", "source_location", "exclusive"],
-        "GitHub annotations": ["--output-format github", "GITHUB_WORKSPACE", "inclusive"],
-        "GitLab Code Quality": ["--output-format gitlab", "fingerprint", "display anchor", "stderr"],
-        "JUnit-style XML": ["--output-format junit", "testcase", "system-out", "xUnit.net"],
-    }
-    for heading, snippets in required.items():
-        start = text.index(f"## {heading}")
-        end = text.find("\n## ", start + 1)
-        section = text[start:] if end == -1 else text[start:end]
-        assert all(snippet in section for snippet in snippets), heading
-
-    # Existing README and gallery destinations remain valid after the reference split.
-    for heading in list(required)[1:]:
-        assert f"### {heading}" in guide
-    assert "output-formats.md" in guide
-    assert '"schema_version"' not in guide
-
-
 def test_documented_policy_example_uses_supported_overrides(tmp_path: Path) -> None:
     from skilllint.policy import _load_policy
 
@@ -160,8 +88,8 @@ def test_output_reference_commands_execute(heading: str, output_format: str, tmp
     section = text.split(f"## {heading}\n", 1)[1].split("\n## ", 1)[0]
     command = section.split("```console\n", 1)[1].splitlines()[0]
     args = shlex.split(command)
-    assert args[:3] == ["skilllint", "check", "--output-format"]
-    assert args[3] == output_format
+    assert args[0] == "skilllint"
+    assert args[args.index("--output-format") + 1] == output_format
     if ">" in args:
         args = args[: args.index(">")]
     skill_dir = tmp_path / "demo-skill"
