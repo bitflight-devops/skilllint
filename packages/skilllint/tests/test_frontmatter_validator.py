@@ -569,57 +569,9 @@ description: This has: a colon in it
         content = skill_md.read_text()
         assert 'description: "This has: a colon in it"' in content
 
-    def test_fix_raises_error_when_no_fixes_needed(self, tmp_path: Path) -> None:
-        """Test fix() raises error when file is already valid.
-
-        Tests: Valid frontmatter file with no fixable issues
-        How: Create valid file, attempt fix(), expect ValueError
-        Why: Ensure fix() only operates when fixes are actually needed
-        """
-        skill_md = tmp_path / "SKILL.md"
-        skill_md.write_text("""---
-description: Valid skill frontmatter
-tools: Read, Write
----
-
-# Content
-""")
-
-        validator = FrontmatterValidator()
-        result = validator.validate(skill_md)
-        assert result.passed is True
-
-        # Should not raise error when file is valid
-        fixes = validator.fix(skill_md)
-        # May return empty list or skip fixes - either is acceptable
-        assert isinstance(fixes, list)
-
 
 class TestFrontmatterFieldValidation:
     """Test field type and value validation."""
-
-    def test_invalid_field_type(self, tmp_path: Path) -> None:
-        """Test error when field has wrong type (FM005).
-
-        Tests: Frontmatter with integer instead of string
-        How: Create file with invalid field type, validate
-        Why: Ensure FM005 error raised for type mismatches
-        """
-        skill_md = tmp_path / "SKILL.md"
-        skill_md.write_text("""---
-description: 12345
----
-
-# Content
-""")
-
-        validator = FrontmatterValidator()
-        result = validator.validate(skill_md)
-
-        # Description should be string, not integer
-        # Pydantic may auto-convert or raise error
-        # Either behavior is acceptable for this test
-        assert isinstance(result.errors, list) or result.passed is True
 
     def test_name_pattern_validation(self, tmp_path: Path) -> None:
         """Test name field pattern validation (FM010).
@@ -712,28 +664,6 @@ description: Frontmatter only
 
         # Frontmatter-only is valid
         assert result.passed is True
-
-    def test_very_long_description(self, tmp_path: Path) -> None:
-        """Test validation handles very long descriptions.
-
-        Tests: Description field exceeding typical length
-        How: Create file with 2000+ character description, validate
-        Why: Ensure validator handles long fields without crashes
-        """
-        long_desc = "x" * 2000
-        skill_md = tmp_path / "SKILL.md"
-        skill_md.write_text(f"""---
-description: "{long_desc}"
----
-
-# Content
-""")
-
-        validator = FrontmatterValidator()
-        result = validator.validate(skill_md)
-
-        # Should validate without crashing
-        assert isinstance(result.passed, bool)
 
     def test_unicode_characters(self, tmp_path: Path) -> None:
         """Test validation handles Unicode characters.

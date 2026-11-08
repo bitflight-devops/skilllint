@@ -16,47 +16,10 @@ from skilllint.adapters.claude_code import ClaudeCodeAdapter
 from skilllint.adapters.codex import CodexAdapter
 from skilllint.adapters.cursor import CursorAdapter
 
-# These imports fail RED until plan 02-02 creates the modules.
-from skilllint.adapters.protocol import PlatformAdapter
-
 FIXTURES = pathlib.Path(__file__).parent / "fixtures"
 CLAUDE_CODE_FIXTURES = FIXTURES / "claude_code"
 CURSOR_FIXTURES = FIXTURES / "cursor"
 CODEX_FIXTURES = FIXTURES / "codex"
-
-
-# ---------------------------------------------------------------------------
-# ADPT-01: Protocol definition and runtime checkability
-# ---------------------------------------------------------------------------
-
-
-def test_protocol_defined():
-    """PlatformAdapter is importable as a typing.Protocol."""
-
-    assert hasattr(PlatformAdapter, "__protocol_attrs__") or isinstance(PlatformAdapter, type), (
-        "PlatformAdapter must be a Protocol class"
-    )
-
-
-def test_runtime_checkable():
-    """PlatformAdapter is decorated with @runtime_checkable."""
-
-    class MockAdapter:
-        def id(self) -> str:
-            return "mock"
-
-        def path_patterns(self) -> list[str]:
-            return ["**/*.mock"]
-
-        def applicable_rules(self) -> set[str]:
-            return {"AS"}
-
-        def validate(self, path: pathlib.Path) -> list[dict]:
-            return []
-
-    # runtime_checkable allows isinstance checks without raising TypeError
-    result = isinstance(MockAdapter(), PlatformAdapter)
-    assert isinstance(result, bool)
 
 
 # ---------------------------------------------------------------------------

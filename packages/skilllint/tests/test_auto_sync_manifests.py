@@ -115,52 +115,7 @@ def _changes_with_added_skill() -> _ComponentChangesDict:
 
 
 class TestJsonFormattingConflict:
-    """Test that json.dump output differs from prettier-formatted JSON.
-
-    The pre-commit hook writes JSON with ``json.dump(data, f, indent=2)`` (line 305).
-    The prettier pre-commit hook also runs on JSON files, reformatting short arrays
-    onto a single line.  When both modify the same file in the same pre-commit pass,
-    the stash/restore cycle produces conflicts.
-
-    These tests verify the formatting mismatch exists and quantify it.
-    """
-
-    def test_json_dump_expands_short_arrays_vertically(self) -> None:
-        """Verify json.dump(indent=2) expands arrays with one element onto multiple lines.
-
-        Tests: JSON serialisation format
-        How: Serialize a dict with a single-element list and inspect the output
-        Why: This vertical expansion is the root cause of the prettier conflict
-        """
-        # Arrange
-        data = {"name": "test-plugin", "version": "1.0.0", "skills": ["./skills/test-skill/"]}
-
-        # Act
-        output = msgspec.json.format(msgspec.json.encode(data), indent=2).decode() + "\n"
-
-        # Assert -- json.dump writes the array across 3 lines
-        assert '"skills": [\n    "./skills/test-skill/"\n  ]' in output
-
-    def test_prettier_format_keeps_short_arrays_inline(self) -> None:
-        """Verify prettier-style format collapses short arrays onto one line.
-
-        Tests: Expected prettier output format
-        How: Construct the prettier-equivalent string and compare to json.dump
-        Why: Demonstrates the exact formatting difference that causes stash conflicts
-        """
-        # Arrange
-        data = {"name": "test-plugin", "version": "1.0.0", "skills": ["./skills/test-skill/"]}
-        json_dump_output = msgspec.json.format(msgspec.json.encode(data), indent=2).decode() + "\n"
-
-        # The format prettier produces for the same data
-        prettier_output = (
-            '{\n  "name": "test-plugin",\n  "version": "1.0.0",\n  "skills": ["./skills/test-skill/"]\n}\n'
-        )
-
-        # Act & Assert -- the two formats differ
-        assert json_dump_output != prettier_output
-        # But they parse to the same data
-        assert msgspec.json.decode(json_dump_output) == msgspec.json.decode(prettier_output)
+    """Test manifest output after running the product update functions."""
 
     def test_update_plugin_json_writes_prettier_compatible_format(self, tmp_path: Path, monkeypatch: Any) -> None:
         """Verify update_plugin_json writes prettier-compatible JSON format.
@@ -303,38 +258,6 @@ class TestIdempotency:
         assert version_1 == version_2
         assert content_after_run1 == content_after_run2
 
-    def test_update_plugin_json_no_double_bump_on_retry(self, tmp_path: Path, monkeypatch: Any) -> None:
-        """Verify version does NOT double-bump when update runs twice.
-
-        Tests: Idempotent version bumping via version comparison guard
-        How: Run update_plugin_json twice; second run sees version already > HEAD
-        Why: On retry after a failed commit, the version in the file is already
-             bumped, so the version comparison guard prevents re-processing
-        """
-        # Arrange
-        monkeypatch.chdir(tmp_path)
-
-        plugin_name = "test-plugin"
-        original_data = {"name": "test-plugin", "version": "1.0.0", "skills": ["./skills/existing/"]}
-        _make_plugin_json(tmp_path, plugin_name, original_data)
-
-        changes = _changes_with_modified_skill()
-
-        # Simulate HEAD having the original version
-        monkeypatch.setattr(auto_sync, "_read_head_json", lambda _fp: dict(original_data))
-
-        # Act -- Run 1: HEAD version == file version, hook updates it
-        updated_1, version_1 = auto_sync.update_plugin_json(plugin_name, changes)
-
-        # Act -- Run 2: file version (1.0.1) > HEAD version (1.0.0), guard blocks
-        updated_2, version_2 = auto_sync.update_plugin_json(plugin_name, changes)
-
-        # Assert -- version bumped only once: 1.0.0 -> 1.0.1, second run blocked
-        assert updated_1 is True
-        assert version_1 == "1.0.1"
-        assert updated_2 is False
-        assert version_2 == "1.0.1"
-
     def test_update_marketplace_json_no_double_bump_on_retry(self, tmp_path: Path, monkeypatch: Any) -> None:
         """Verify marketplace version does NOT double-bump on retry.
 
@@ -349,7 +272,7 @@ class TestIdempotency:
             "metadata": {"version": "1.0.0"},
             "plugins": [{"name": "existing", "source": "./plugins/existing"}],
         }
-        _make_marketplace_json(tmp_path, original_data)
+        marketplace_json = _make_marketplace_json(tmp_path, original_data)
 
         plugin_changes: _MarketplaceChangesDict = {
             "added": set(),
@@ -362,6 +285,7 @@ class TestIdempotency:
 
         # Act -- Run 1: HEAD version == file version
         updated_1 = auto_sync.update_marketplace_json(plugin_changes)
+        content_after_run1 = marketplace_json.read_bytes()
 
         # Act -- Run 2: file version (1.0.1) > HEAD version (1.0.0), guard blocks
         updated_2 = auto_sync.update_marketplace_json(plugin_changes)
@@ -370,7 +294,7 @@ class TestIdempotency:
         assert updated_1 is True
         assert updated_2 is False
 
-        marketplace_json = tmp_path / ".claude-plugin" / "marketplace.json"
+        assert marketplace_json.read_bytes() == content_after_run1
         final_data = msgspec.json.decode(marketplace_json.read_text(encoding="utf-8"))
         assert final_data["metadata"]["version"] == "1.0.1"
 
@@ -604,74 +528,6 @@ class TestRetryScenario:
 
         # File content unchanged from run 1
         assert plugin_json.read_text(encoding="utf-8") == content_after_run1
-
-    def test_retry_guard_version_propagates_to_marketplace_changes(self) -> None:
-        """Verify that guard's return propagates correctly to marketplace tracking.
-
-        Tests: Interaction between guard return value and main() flow
-        How: Simulate the code in main() that appends (plugin_name, new_version)
-             to marketplace_changes when updated is True, and skips when False
-        Why: When the guard returns (False, current_version), main() correctly
-             skips appending to marketplace_changes["modified"]
-        """
-        # Arrange -- simulate what main() does
-        marketplace_changes: _MarketplaceChangesDict = {"added": set(), "deleted": set(), "modified": []}
-
-        # Run 1 result: hook updated plugin
-        updated_run1 = True
-        version_run1 = "1.0.1"
-
-        if updated_run1:
-            marketplace_changes["modified"].append(("my-plugin", version_run1))
-
-        # Run 2 result: guard blocked
-        updated_run2 = False
-        version_run2 = "1.0.1"  # Guard now returns actual version, not "0.0.0"
-
-        if updated_run2:
-            marketplace_changes["modified"].append(("my-plugin", version_run2))
-
-        # Assert -- only run 1's version appears (run 2 was blocked)
-        assert len(marketplace_changes["modified"]) == 1
-        assert marketplace_changes["modified"][0] == ("my-plugin", "1.0.1")
-
-    def test_full_retry_with_prettier_no_conflict(self, tmp_path: Path, monkeypatch: Any) -> None:
-        """Verify the hook writes prettier-compatible format, eliminating stash conflicts.
-
-        Tests: End-to-end conflict elimination
-        How: Run 1 writes prettier-compatible format. Prettier has nothing to change.
-             Run 2 (retry) encounters the version guard. File remains stable.
-        Why: With prettier-compatible output, the hook and prettier produce identical
-             content, so prek stash/restore never encounters conflicting diffs.
-        """
-        # Arrange
-        monkeypatch.chdir(tmp_path)
-
-        plugin_name = "my-plugin"
-        original_data = {"name": "my-plugin", "version": "1.0.0", "skills": ["./skills/existing/"]}
-        plugin_json = _make_plugin_json(tmp_path, plugin_name, original_data)
-
-        changes = _changes_with_modified_skill()
-
-        # Simulate HEAD having the original version
-        monkeypatch.setattr(auto_sync, "_read_head_json", lambda _fp: dict(original_data))
-
-        # --- Run 1: hook writes prettier-compatible format ---
-        updated_1, version_1 = auto_sync.update_plugin_json(plugin_name, changes)
-        assert updated_1 is True
-        assert version_1 == "1.0.1"
-        hook_output = plugin_json.read_text(encoding="utf-8")
-
-        # --- Run 2: version guard prevents re-processing ---
-        updated_2, version_2 = auto_sync.update_plugin_json(plugin_name, changes)
-
-        # Assert -- guard blocked re-processing
-        assert updated_2 is False
-        assert version_2 == "1.0.1"
-
-        # File content unchanged from run 1
-        final_content = plugin_json.read_text(encoding="utf-8")
-        assert final_content == hook_output
 
 
 # ============================================================================
@@ -1141,114 +997,6 @@ class TestVersionAlreadyBumped:
         monkeypatch.setattr(auto_sync, "_read_head_json", lambda _fp: {"metadata": {"version": "2.0.0"}})
 
         assert auto_sync._version_already_bumped(str(marketplace_json), ["metadata", "version"]) is True
-
-
-# ============================================================================
-# New behaviour: Idempotent writes (Bug 2 fix)
-# ============================================================================
-
-
-class TestIdempotentWrites:
-    """Test that the version-comparison guard prevents double-bumping on retry.
-
-    The primary defence against double-bumping is ``_version_already_bumped``.
-    When run 1 writes a bumped version, run 2 (retry) sees the file version >
-    HEAD version and returns early.  An additional ``new_content == existing_content``
-    check provides a secondary safety net.
-    """
-
-    def test_update_plugin_json_is_noop_on_second_run(self, tmp_path: Path, monkeypatch: Any) -> None:
-        """Verify second run is blocked by version comparison guard.
-
-        Tests: Version guard prevents double-bump for plugin.json
-        How: Run update twice; second run detects version already > HEAD
-        Why: Prevents version double-bump when commit fails and user retries
-        """
-        monkeypatch.chdir(tmp_path)
-
-        plugin_name = "test-plugin"
-        original_data = {"name": "test-plugin", "version": "1.0.0", "skills": ["./skills/existing/"]}
-        _make_plugin_json(tmp_path, plugin_name, original_data)
-
-        changes = _changes_with_modified_skill()
-
-        # Simulate HEAD having the original version
-        monkeypatch.setattr(auto_sync, "_read_head_json", lambda _fp: dict(original_data))
-
-        # Run 1: should update (1.0.0 == HEAD 1.0.0, so bump proceeds)
-        updated_1, version_1 = auto_sync.update_plugin_json(plugin_name, changes)
-        assert updated_1 is True
-        assert version_1 == "1.0.1"
-
-        # Run 2: version guard blocks (1.0.1 > HEAD 1.0.0)
-        updated_2, version_2 = auto_sync.update_plugin_json(plugin_name, changes)
-        assert updated_2 is False
-        assert version_2 == "1.0.1"
-
-    def test_update_marketplace_json_is_noop_on_second_run(self, tmp_path: Path, monkeypatch: Any) -> None:
-        """Verify second run is blocked by version comparison guard.
-
-        Tests: Version guard prevents double-bump for marketplace.json
-        How: Run update twice; second run detects version already > HEAD
-        Why: Prevents version double-bump in marketplace manifest
-        """
-        monkeypatch.chdir(tmp_path)
-
-        original_data = {
-            "metadata": {"version": "1.0.0"},
-            "plugins": [{"name": "existing", "source": "./plugins/existing"}],
-        }
-        _make_marketplace_json(tmp_path, original_data)
-
-        plugin_changes: _MarketplaceChangesDict = {
-            "added": set(),
-            "deleted": set(),
-            "modified": [("existing", "1.0.1")],
-        }
-
-        # Simulate HEAD having the original version
-        monkeypatch.setattr(auto_sync, "_read_head_json", lambda _fp: dict(original_data))
-
-        # Run 1: should update
-        updated_1 = auto_sync.update_marketplace_json(plugin_changes)
-        assert updated_1 is True
-
-        # Run 2: version guard blocks (1.0.1 > HEAD 1.0.0)
-        updated_2 = auto_sync.update_marketplace_json(plugin_changes)
-        assert updated_2 is False
-
-        # Verify version was only bumped once
-        marketplace_json = tmp_path / ".claude-plugin" / "marketplace.json"
-        final_data = msgspec.json.decode(marketplace_json.read_text(encoding="utf-8"))
-        assert final_data["metadata"]["version"] == "1.0.1"
-
-    def test_update_plugin_json_version_stays_at_single_bump(self, tmp_path: Path, monkeypatch: Any) -> None:
-        """Verify version guard prevents multiple bumps across retries.
-
-        Tests: Multiple consecutive runs with version guard
-        How: Run update once, then run two more times
-        Why: Stress test the double-bump prevention mechanism
-        """
-        monkeypatch.chdir(tmp_path)
-
-        plugin_name = "test-plugin"
-        original_data = {"name": "test-plugin", "version": "1.0.0", "skills": []}
-        plugin_json = _make_plugin_json(tmp_path, plugin_name, original_data)
-
-        changes = _changes_with_modified_skill()
-
-        # Simulate HEAD having the original version
-        monkeypatch.setattr(auto_sync, "_read_head_json", lambda _fp: dict(original_data))
-
-        # Run 1: bumps to 1.0.1
-        auto_sync.update_plugin_json(plugin_name, changes)
-        # Runs 2-3: version guard blocks (1.0.1 > HEAD 1.0.0)
-        auto_sync.update_plugin_json(plugin_name, changes)
-        auto_sync.update_plugin_json(plugin_name, changes)
-
-        # Final version should be 1.0.1, not 1.0.3
-        final_data = msgspec.json.decode(plugin_json.read_text(encoding="utf-8"))
-        assert final_data["version"] == "1.0.1"
 
 
 # ============================================================================

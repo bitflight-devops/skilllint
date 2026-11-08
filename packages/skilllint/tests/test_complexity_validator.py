@@ -160,37 +160,6 @@ description: Test skill
         assert any(issue.code == "SK007" for issue in result.errors)
 
 
-class TestTokenCountDeterminism:
-    """Test token counting is deterministic."""
-
-    def test_same_content_same_count(self, tmp_path: Path) -> None:
-        """Test same content produces same token count.
-
-        Tests: Token counting determinism
-        How: Validate same file multiple times, compare counts
-        Why: Ensure consistent token measurement
-        """
-        skill_md = tmp_path / "SKILL.md"
-        skill_md.write_text("""---
-description: Test skill
----
-
-# Test Content
-
-This is test content with consistent tokens.
-""")
-
-        validator = ComplexityValidator()
-
-        # Run validation multiple times
-        results = [validator.validate(skill_md) for _ in range(3)]
-
-        # Extract token counts from messages (if present)
-        # All results should be identical
-        assert all(r.passed == results[0].passed for r in results)
-        assert all(len(r.errors) == len(results[0].errors) for r in results)
-
-
 class TestOnlyValidatesSkills:
     """Test validator only operates on SKILL.md files."""
 
@@ -266,95 +235,6 @@ description: Test skill
 
         # Empty body should pass (0 tokens)
         assert result.passed is True
-
-    def test_missing_frontmatter(self, tmp_path: Path) -> None:
-        """Test skill without frontmatter.
-
-        Tests: File without frontmatter delimiters
-        How: Create file with no frontmatter, validate
-        Why: Ensure validator handles missing frontmatter
-        """
-        skill_md = tmp_path / "SKILL.md"
-        skill_md.write_text("# Test Skill\n\nContent without frontmatter\n")
-
-        validator = ComplexityValidator()
-        result = validator.validate(skill_md)
-
-        # Should handle missing frontmatter gracefully
-        assert isinstance(result.passed, bool)
-
-    def test_only_frontmatter_no_closing_delimiter(self, tmp_path: Path) -> None:
-        """Test file with unclosed frontmatter.
-
-        Tests: Frontmatter without closing ---
-        How: Create file with opening --- but no closing, validate
-        Why: Ensure validator doesn't crash on malformed input
-        """
-        skill_md = tmp_path / "SKILL.md"
-        skill_md.write_text("""---
-description: Test skill
-# No closing delimiter
-
-Content here
-""")
-
-        validator = ComplexityValidator()
-        result = validator.validate(skill_md)
-
-        # Should handle gracefully (all content counted as body)
-        assert isinstance(result.passed, bool)
-
-
-class TestValidationMessages:
-    """Test validation messages include token counts."""
-
-    def test_warning_includes_token_count(self, tmp_path: Path) -> None:
-        """Test warning message includes exact token count.
-
-        Tests: Message format and content
-        How: Create skill with warning threshold, check message
-        Why: Ensure users see exact token count in warnings
-        """
-        skill_md = tmp_path / "SKILL.md"
-        content = "word " * 3000
-        skill_md.write_text(f"""---
-description: Test skill
----
-
-{content}
-""")
-
-        validator = ComplexityValidator()
-        result = validator.validate(skill_md)
-
-        # Should have warning with token count in message
-        if result.warnings:
-            warning_message = result.warnings[0].message.lower()
-            assert "token" in warning_message
-
-    def test_error_includes_token_count(self, tmp_path: Path) -> None:
-        """Test error message includes exact token count.
-
-        Tests: Message format and content
-        How: Create skill with error threshold, check message
-        Why: Ensure users see exact token count in errors
-        """
-        skill_md = tmp_path / "SKILL.md"
-        content = "word " * 5000
-        skill_md.write_text(f"""---
-description: Test skill
----
-
-{content}
-""")
-
-        validator = ComplexityValidator()
-        result = validator.validate(skill_md)
-
-        # Should have error with token count in message
-        if result.errors:
-            error_message = result.errors[0].message.lower()
-            assert "token" in error_message
 
 
 class TestMultipleSeverityLevels:

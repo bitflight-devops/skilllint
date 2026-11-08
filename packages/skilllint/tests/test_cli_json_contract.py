@@ -180,20 +180,12 @@ _PROBE_PARAMS: Final = [pytest.param(probe, id=probe.id) for probe in PROBES]
 
 @pytest.mark.parametrize("probe", _PROBE_PARAMS)
 def test_each_command_prints_one_compact_json_line_of_the_documented_shape(probe: Probe, tmp_path: Path) -> None:
-    """Results exit 0 or 1 and print one compact JSON document with exactly the documented keys."""
+    """Results have the documented status and compact JSON shape, with no Rich output in either stream."""
     _, run = run_probe(tmp_path, probe.case)
 
     assert_flag_recognised(run)
     assert run.returncode == probe.exit_code
     parse(probe.model, run)
-
-
-@pytest.mark.parametrize("probe", _PROBE_PARAMS)
-def test_each_command_renders_nothing_with_rich_under_json(probe: Probe, tmp_path: Path) -> None:
-    """Neither stream carries an ANSI escape or a box-drawing character."""
-    _, run = run_probe(tmp_path, probe.case)
-
-    assert_flag_recognised(run)
     assert_plain(run)
 
 

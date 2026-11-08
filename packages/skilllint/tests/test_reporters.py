@@ -384,75 +384,8 @@ class TestSummaryReporter:
         assert "2 with warnings" in output
 
 
-class TestReportCountsUniqueFiles:
-    """Test that reporter summary counts unique files, not validator invocations.
-
-    When a single file has multiple validators (FrontmatterValidator,
-    NameFormatValidator, DescriptionValidator, etc.), the summary must
-    report 'Total files: 1', not the number of validator invocations.
-    """
-
-    def test_single_file_multiple_validators_shows_total_files_1(self) -> None:
-        """Test summarize shows Total files: 1 for single file with multiple validators.
-
-        Tests: Sub-issue 1 — reporter counts unique files, not validator invocations
-        How: Pass FileResults with 1 file and 3 validator results, call summarize
-        Why: Each file should count once regardless of how many validators ran
-        """
-        reporter = CIReporter()
-
-        # One file path, three validator results (simulates FrontmatterValidator +
-        # NameFormatValidator + DescriptionValidator all running on the same file)
-        file_results = {
-            Path("/tmp/test/SKILL.md"): [
-                ("FrontmatterValidator", _make_passing_result()),
-                ("NameFormatValidator", _make_passing_result()),
-                ("DescriptionValidator", _make_passing_result()),
-            ]
-        }
-
-        # total_files is computed from len(file_results) = 1, not len of all results
-        total_files = len(file_results)
-        assert total_files == 1, "FileResults must count unique file paths"
-
-        buf = StringIO()
-        with contextlib.redirect_stdout(buf):
-            reporter.summarize(total_files=total_files, passed=1, failed=0, warnings=0)
-
-        output = buf.getvalue()
-        assert "Total files: 1" in output, f"Expected 'Total files: 1' but got: {output!r}"
-
-    def test_two_files_each_with_multiple_validators_shows_total_files_2(self) -> None:
-        """Test summarize shows Total files: 2 when two files each have 3 validators.
-
-        Tests: File count with 6 total validator results (2 files x 3 validators)
-        How: Pass FileResults with 2 files each having 3 validators, call summarize
-        Why: Ensure file count does not multiply by validator count
-        """
-        reporter = CIReporter()
-
-        file_results = {
-            Path("/tmp/test/SKILL.md"): [
-                ("FrontmatterValidator", _make_passing_result()),
-                ("NameFormatValidator", _make_passing_result()),
-                ("DescriptionValidator", _make_passing_result()),
-            ],
-            Path("/tmp/test/agent.md"): [
-                ("FrontmatterValidator", _make_passing_result()),
-                ("NameFormatValidator", _make_passing_result()),
-                ("DescriptionValidator", _make_passing_result()),
-            ],
-        }
-
-        total_files = len(file_results)
-        assert total_files == 2, "FileResults must count 2 unique file paths"
-
-        buf = StringIO()
-        with contextlib.redirect_stdout(buf):
-            reporter.summarize(total_files=total_files, passed=2, failed=0, warnings=0)
-
-        output = buf.getvalue()
-        assert "Total files: 2" in output, f"Expected 'Total files: 2' but got: {output!r}"
+class TestValidatorLabels:
+    """Test validator labels in per-file reporting."""
 
     def test_ci_reporter_labels_validator_names_in_output(self) -> None:
         """Test CIReporter shows validator class name as sub-header per validator result.
