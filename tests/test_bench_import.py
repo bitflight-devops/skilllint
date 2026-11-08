@@ -9,6 +9,7 @@ def test_build_gh_benchmark_array_matches_customsmallerisbetter_shape() -> None:
     """Every entry has the name/value/unit keys github-action-benchmark expects."""
     result = run_benchmark(runs=1)
     entries = build_gh_benchmark_array(result)
+    assert entries
 
     for entry in entries:
         assert entry.keys() == {"name", "value", "unit"}
