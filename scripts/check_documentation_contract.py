@@ -29,6 +29,7 @@ EXPECTED = {
     "docs/runtime-contracts/claude-code-agent-skills-2.1.251.md",
     "docs/usage.md",
     "docs/output-formats.md",
+    "docs/performance/link-mask-evaluation.md",
     "docs/vendor-cache.md",
     "docs/architecture.md",
     "plugins/agentskills-skilllint/README.md",

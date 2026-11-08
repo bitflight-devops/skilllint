@@ -9,6 +9,7 @@
 "docs/runtime-contracts/claude-code-agent-skills-2.1.251.md" = "Pinned Claude runtime contract"
 "docs/usage.md" = "CLI, config, Action, and hook usage"
 "docs/output-formats.md" = "Output format and serialization contracts"
+"docs/performance/link-mask-evaluation.md" = "Link-mask optimization evidence and measurement limits"
 "docs/vendor-cache.md" = "Vendor documentation cache"
 "docs/architecture.md" = "Current architecture and extension flow"
 "plugins/agentskills-skilllint/README.md" = "Plugin overview and activation"

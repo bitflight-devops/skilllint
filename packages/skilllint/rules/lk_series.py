@@ -151,7 +151,7 @@ def _strip_code_blocks(content: str) -> str:
     # Strip fenced code blocks first (handles nested fences via greedy
     # backreference matching: a 4-backtick fence won't close on 3 backticks)
     def mask(match: re.Match[str]) -> str:
-        return re.sub(r"[^\r\n]", " ", match.group(0))
+        return re.sub(r"[^\r\n]+", lambda run: " " * len(run.group(0)), match.group(0))
 
     stripped = re.sub(CODE_FENCE_PATTERN, mask, content, flags=re.MULTILINE | re.DOTALL)
     # Backticks and comment delimiters in a destination are literal filename
