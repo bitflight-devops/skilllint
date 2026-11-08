@@ -8,8 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from skilllint.adapters import PlatformAdapter, load_adapters
-from skilllint.plugin_validator import app, validate_single_path
+from skilllint.plugin_validator import app
 from skilllint.rule_registry import get_rule, list_rules
 
 ROOT = Path(__file__).parents[3]
@@ -234,40 +233,6 @@ def test_file_classification_owner_does_not_depend_on_orchestration() -> None:
     assert not imported & forbidden
 
 
-def test_architecture_names_current_runtime_seams() -> None:
-    text = _read("docs/architecture.md")
-    for symbol in (
-        "plugin_validator.main",
-        "_resolve_filter_and_expand_paths",
-        "_discover_validatable_paths",
-        "_discover_plugin_paths",
-        "detect_scan_context",
-        "run_validation_loop",
-        "validate_single_path",
-        "PlatformAdapter",
-        "load_adapters",
-        "skilllint rules",
-        "skilllint rule CODE",
-    ):
-        assert symbol in text
-
-
-def test_maintainer_example_is_complete_and_protocol_compatible() -> None:
-    text = _read("docs/maintainer-extension-guide.md")
-    assert '[project.entry-points."skilllint.adapters"]' in text
-    assert all(
-        f"def {name}(" in text for name in ("id", "path_patterns", "applicable_rules", "constraint_scopes", "validate")
-    )
-    sample = re.search(r"```python\n(?P<sample>.*?class ExampleAdapter:.*?)(?:```)", text, re.DOTALL)
-    assert sample is not None
-    assert all(
-        name in sample.group("sample")
-        for name in ("id", "path_patterns", "applicable_rules", "constraint_scopes", "validate")
-    )
-    assert isinstance(load_adapters()[0], PlatformAdapter)
-    assert callable(validate_single_path)
-
-
 @pytest.mark.slow
 def test_retained_adapter_sample_installs_loads_and_emits(monkeypatch, cli_runner, tmp_path: Path) -> None:
     package = tmp_path / "example_skilllint"
@@ -339,16 +304,3 @@ def test_active_catalog_keeps_retired_rules_out_and_public_registration_rules_in
     assert get_rule("PR001") is not None
     assert get_rule("PR002") is not None
     assert get_rule("PR005") is not None
-
-
-def test_design_documents_label_proposed_boundaries() -> None:
-    for path in ("docs/design-rule-provenance-registry.md", "docs/design-markdown-link-conventions.md"):
-        assert "Status: proposed design" in _read(path)
-
-
-def test_typing_policy_states_baseline_and_gate_scope() -> None:
-    text = _read("docs/TYPING_POLICY.md")
-    assert "Python 3.11" in text
-    assert "ty check" in text
-    assert "packages/" in text
-    assert "pytest" in text

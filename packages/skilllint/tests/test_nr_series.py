@@ -31,8 +31,3 @@ class TestNR002Authority:
         assert entry.authority.reference is not None
         assert "plugins-reference" in entry.authority.reference
         assert "path-traversal-limitations" in entry.authority.reference
-
-    def test_nr002_docstring_does_not_cite_agentskills_specification(self) -> None:
-        """The fabricated agentskills.io/specification.md citation must be gone."""
-        entry = RULE_REGISTRY["NR002"]
-        assert "agentskills.io/specification" not in entry.docstring

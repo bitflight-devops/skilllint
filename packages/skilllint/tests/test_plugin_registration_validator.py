@@ -774,34 +774,6 @@ class TestFullyRegistered:
         pr001_warnings = [w for w in result.warnings if w.code == "PR001"]
         assert len(pr001_warnings) == 0
 
-    @pytest.mark.skip(reason="Superseded by additive skills contract")
-    def test_mixed_registered_and_unregistered_separates_correctly(self, tmp_path: Path) -> None:
-        """Test only the unregistered skill generates PR001, registered one does not.
-
-        Tests: Partial registration -- mix of registered and unregistered
-        How: Register one skill, leave another unregistered, validate
-        Why: Each skill must be evaluated independently
-        """
-        plugin_dir = _make_plugin(
-            tmp_path,
-            plugin_json_content=msgspec.json.encode({
-                "name": "test-plugin",
-                "skills": ["./skills/alpha-skill/"],
-            }).decode(),
-        )
-        _add_skill(plugin_dir, "alpha-skill")
-        _add_skill(plugin_dir, "beta-skill")
-
-        validator = PluginRegistrationValidator()
-        result = validator.validate(plugin_dir)
-
-        pr001_warnings = [w for w in result.warnings if w.code == "PR001"]
-        # Only the unregistered skill should produce PR001
-        assert len(pr001_warnings) >= 1
-        assert any("beta-skill" in w.message for w in pr001_warnings)
-        # The registered skill must not generate a PR001 warning
-        assert not any("alpha-skill" in w.message for w in pr001_warnings)
-
 
 class TestEmptyPlugin:
     """Test plugin with no skills, agents, or commands and empty arrays passes."""

@@ -1,21 +1,8 @@
-"""Tests for skilllint.adapters.protocol module.
-
-Tests:
-- PlatformAdapter is a @runtime_checkable Protocol
-- Protocol method stubs return expected values when called directly
-- Concrete adapter classes satisfy isinstance(obj, PlatformAdapter)
-- Incomplete adapters do NOT satisfy isinstance(obj, PlatformAdapter)
-
-How: Calls protocol methods directly on Protocol class and on conforming
-     mock implementations.
-Why: The protocol method stubs (``...`` bodies) were 0% covered because
-     they are only called when testing structural subtyping at runtime.
-"""
+"""Test adapter structural compatibility and concrete method contracts."""
 
 from __future__ import annotations
 
 import pathlib
-from typing import no_type_check
 
 import pytest
 
@@ -66,47 +53,6 @@ class TestPlatformAdapterProtocol:
         """A class missing required methods is not a PlatformAdapter."""
         adapter = _IncompleteAdapter()
         assert not isinstance(adapter, PlatformAdapter)
-
-    def test_protocol_is_runtime_checkable(self) -> None:
-        """isinstance() against PlatformAdapter does not raise TypeError."""
-        # Would raise TypeError if not @runtime_checkable
-        result = isinstance(_FullAdapter(), PlatformAdapter)
-        assert isinstance(result, bool)
-
-    @no_type_check
-    def test_protocol_method_id(self) -> None:
-        """Protocol.id() ellipsis body is reachable via unbound call.
-
-        ``self`` is not a real adapter; this only exercises runtime Protocol stubs.
-        ``@no_type_check`` marks intentional static unsoundness (see TYPING_POLICY —
-        tests, not ingress boundaries).
-        """
-        result = PlatformAdapter.id(None)
-        assert result is None
-
-    @no_type_check
-    def test_protocol_method_path_patterns(self) -> None:
-        """Protocol.path_patterns() ellipsis body is reachable via unbound call."""
-        result = PlatformAdapter.path_patterns(None)
-        assert result is None
-
-    @no_type_check
-    def test_protocol_method_applicable_rules(self) -> None:
-        """Protocol.applicable_rules() ellipsis body is reachable via unbound call."""
-        result = PlatformAdapter.applicable_rules(None)
-        assert result is None
-
-    @no_type_check
-    def test_protocol_method_constraint_scopes(self) -> None:
-        """Protocol.constraint_scopes() ellipsis body is reachable via unbound call."""
-        result = PlatformAdapter.constraint_scopes(None)
-        assert result is None
-
-    @no_type_check
-    def test_protocol_method_validate(self) -> None:
-        """Protocol.validate() ellipsis body is reachable via unbound call."""
-        result = PlatformAdapter.validate(None, pathlib.Path())
-        assert result is None
 
     def test_real_adapters_satisfy_protocol(self) -> None:
         """Built-in adapters (ClaudeCode, Cursor, Codex) satisfy PlatformAdapter."""

@@ -3,7 +3,7 @@
 Tests:
 - Directory existence checks (references/, assets/, scripts/)
 - INFO severity (not warnings or errors)
-- File counting in existing directories
+- Existing and empty directory handling
 """
 
 from __future__ import annotations
@@ -194,39 +194,6 @@ description: Test skill
         # Should have no info messages
         assert result.passed is True
         assert len(result.info) == 0
-
-
-class TestFileCountIncluded:
-    """Test file counts are included in messages."""
-
-    def test_file_count_in_message_when_directory_exists(self, tmp_path: Path) -> None:
-        """Test message includes file count when directory exists.
-
-        Tests: INFO message content
-        How: Create skill with references/ containing files, validate
-        Why: Ensure file count shown in messages per spec
-        """
-        skill_dir = tmp_path / "test-skill"
-        skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text("""---
-description: Test skill
----
-""")
-
-        # Create references with multiple files
-        refs_dir = skill_dir / "references"
-        refs_dir.mkdir()
-        (refs_dir / "ref1.md").write_text("# Ref 1\n")
-        (refs_dir / "ref2.md").write_text("# Ref 2\n")
-        (refs_dir / "ref3.md").write_text("# Ref 3\n")
-
-        validator = ProgressiveDisclosureValidator()
-        result = validator.validate(skill_dir / "SKILL.md")
-
-        # Should not have PD001 (references exists)
-        # But if there's any info about references, it should mention file count
-        # For now, we just verify validation passes
-        assert result.passed is True
 
 
 class TestInfoSeverity:
